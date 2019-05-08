@@ -4,7 +4,7 @@
   "logo": "/static/logo.png",
   "logoMask": true,
   "logoMargin": ".1em",
-  "redirectRootNoLogin": "/main/all",
+  "redirectRootNoLogin": "/kPherox",
   "redirectRootLogin": "/main/friends",
   "chatDisabled": false,
   "showInstanceSpecificPanel": false,
