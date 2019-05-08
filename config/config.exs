@@ -251,20 +251,20 @@ config :pleroma, :fe, false
 config :pleroma, :frontend_configurations,
   pleroma_fe: %{
     theme: "pleroma-dark",
+    background: "/static/aurora_borealis.jpg",
     logo: "/static/logo.png",
     logoMask: true,
     logoMargin: "0.1em",
-    background: "/static/aurora_borealis.jpg",
     redirectRootNoLogin: "/main/all",
     redirectRootLogin: "/main/friends",
     showInstanceSpecificPanel: true,
     formattingOptionsEnabled: false,
     collapseMessageWithSubject: false,
-    hidePostStats: false,
-    hideUserStats: false,
     scopeCopy: true,
     subjectLineBehavior: "email",
     alwaysShowSubjectInput: true,
+    hidePostStats: false,
+    hideUserStats: false,
     minimalScopesMode: false
   },
   masto_fe: %{
@@ -460,6 +460,8 @@ config :pleroma, Pleroma.ScheduledActivity,
 config :pleroma, :oauth2,
   token_expires_in: 600,
   issue_new_refresh_token: true
+
+import_config "custom.exs"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
