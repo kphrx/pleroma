@@ -20,6 +20,6 @@
   "webPushNotifications": false,
   "noAttachmentLinks": false,
   "nsfwCensorImage": "",
-  "showFeaturesPanel": true,
+  "showFeaturesPanel": false,
   "minimalScopesMode": false
 }
