@@ -9,3 +9,5 @@ config :pleroma, :frontend_configurations,
   masto_fe: %{
     showInstanceSpecificPanel: false
   }
+
+config :pleroma, :chat, enabled: false

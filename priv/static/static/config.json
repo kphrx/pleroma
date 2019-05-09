@@ -6,7 +6,7 @@
   "logoMargin": ".1em",
   "redirectRootNoLogin": "/kPherox",
   "redirectRootLogin": "/main/friends",
-  "chatDisabled": false,
+  "chatDisabled": true,
   "showInstanceSpecificPanel": false,
   "formattingOptionsEnabled": false,
   "collapseMessageWithSubject": false,
