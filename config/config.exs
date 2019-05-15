@@ -212,6 +212,11 @@ config :pleroma, :instance,
   registrations_open: true,
   federating: true,
   federation_reachability_timeout_days: 7,
+  federation_publisher_modules: [
+    Pleroma.Web.ActivityPub.Publisher,
+    Pleroma.Web.Websub,
+    Pleroma.Web.Salmon
+  ],
   allow_relay: true,
   rewrite_policy: Pleroma.Web.ActivityPub.MRF.NoOpPolicy,
   public: true,
@@ -234,6 +239,8 @@ config :pleroma, :instance,
   safe_dm_mentions: false,
   healthcheck: false
 
+config :pleroma, :app_account_creation, enabled: true, max_requests: 25, interval: 1800
+
 config :pleroma, :markup,
   # XXX - unfortunately, inline images must be enabled by default right now, because
   # of custom emoji.  Issue #275 discusses defanging that somehow.
@@ -245,8 +252,6 @@ config :pleroma, :markup,
     Pleroma.HTML.Transform.MediaProxy,
     Pleroma.HTML.Scrubber.Default
   ]
-
-config :pleroma, :fe, false
 
 config :pleroma, :frontend_configurations,
   pleroma_fe: %{
@@ -460,6 +465,9 @@ config :pleroma, Pleroma.ScheduledActivity,
 config :pleroma, :oauth2,
   token_expires_in: 600,
   issue_new_refresh_token: true
+
+config :http_signatures,
+  adapter: Pleroma.Signature
 
 import_config "custom.exs"
 
