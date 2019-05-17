@@ -703,6 +703,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_type(query, _), do: query
 
+  defp restrict_state(query, %{"state" => state}) do
+    from(activity in query, where: fragment("?->>'state' = ?", activity.data, ^state))
+  end
+
+  defp restrict_state(query, _), do: query
+
   defp restrict_favorited_by(query, %{"favorited_by" => ap_id}) do
     from(
       activity in query,
@@ -758,8 +764,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     blocks = info.blocks || []
     domain_blocks = info.domain_blocks || []
 
+    query =
+      if has_named_binding?(query, :object), do: query, else: Activity.with_joined_object(query)
+
     from(
-      activity in query,
+      [activity, object: o] in query,
       where: fragment("not (? = ANY(?))", activity.actor, ^blocks),
       where: fragment("not (? && ?)", activity.recipients, ^blocks),
       where:
@@ -769,7 +778,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
           activity.data,
           ^blocks
         ),
-      where: fragment("not (split_part(?, '/', 3) = ANY(?))", activity.actor, ^domain_blocks)
+      where: fragment("not (split_part(?, '/', 3) = ANY(?))", activity.actor, ^domain_blocks),
+      where: fragment("not (split_part(?->>'actor', '/', 3) = ANY(?))", o.data, ^domain_blocks)
     )
   end
 
@@ -851,6 +861,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> restrict_local(opts)
     |> restrict_actor(opts)
     |> restrict_type(opts)
+    |> restrict_state(opts)
     |> restrict_favorited_by(opts)
     |> restrict_blocked(opts)
     |> restrict_muted(opts)
@@ -973,5 +984,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   # do post-processing on a specific activity
   def contain_activity(%Activity{} = activity, %User{} = user) do
     contain_broken_threads(activity, user)
+  end
+
+  def fetch_direct_messages_query do
+    Activity
+    |> restrict_type(%{"type" => "Create"})
+    |> restrict_visibility(%{visibility: "direct"})
+    |> order_by([activity], asc: activity.id)
   end
 end
