@@ -71,6 +71,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Deps: Updated Ecto to 3.0.7
 - Don't ship finmoji by default, they can be installed as an emoji pack
 - Hide deactivated users and their statuses
+- Posts which are marked sensitive or tagged nsfw no longer have link previews.
 
 ### Fixed
 - Added an FTS index on objects. Running `vacuum analyze` and setting a larger `work_mem` is recommended.
@@ -102,6 +103,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Mastodon API: Correct `reblogged`, `favourited`, and `bookmarked` values in the reblog status JSON
 - Mastodon API: Exposing default scope of the user to anyone
 - Mastodon API: Make `irreversible` field default to `false` [`POST /api/v1/filters`]
+- User-Agent is now sent correctly for all HTTP requests.
 
 ## Removed
 - Configuration: `config :pleroma, :fe` in favor of the more flexible `config :pleroma, :frontend_configurations`
