@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Configuration: `report_uri` option
 - Pleroma API: User subscriptions
 - Pleroma API: Healthcheck endpoint
+- Pleroma API: `/api/v1/pleroma/mascot` per-user frontend mascot configuration endpoints
 - Admin API: Endpoints for listing/revoking invite tokens
 - Admin API: Endpoints for making users follow/unfollow each other
 - Admin API: added filters (role, tags, email, name) for users endpoint
@@ -72,6 +73,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Don't ship finmoji by default, they can be installed as an emoji pack
 - Hide deactivated users and their statuses
 - Posts which are marked sensitive or tagged nsfw no longer have link previews.
+- HTTP connection timeout is now set to 10 seconds.
 
 ### Fixed
 - Added an FTS index on objects. Running `vacuum analyze` and setting a larger `work_mem` is recommended.
