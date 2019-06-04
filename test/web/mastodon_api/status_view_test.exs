@@ -114,10 +114,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
           url: "/tag/#{note.data["object"]["tag"]}"
         }
       ],
-      application: %{
-        name: "Web",
-        website: nil
-      },
+      application: nil,
       language: nil,
       emojis: [
         %{
