@@ -124,10 +124,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       media_attachments: reblogged[:media_attachments] || [],
       mentions: mentions,
       tags: reblogged[:tags] || [],
-      application: %{
-        name: "Web",
-        website: nil
-      },
+      application: nil,
       language: nil,
       emojis: [],
       pleroma: %{
