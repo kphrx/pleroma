@@ -370,8 +370,8 @@ defmodule Pleroma.User do
     ap_followers = followed.follower_address
 
     cond do
-      following?(follower, followed) or info.deactivated ->
-        {:error, "Could not follow user: #{followed.nickname} is already on your list."}
+      info.deactivated ->
+        {:error, "Could not follow user: You are deactivated."}
 
       deny_follow_blocked and blocks?(followed, follower) ->
         {:error, "Could not follow user: #{followed.nickname} blocked you."}
@@ -1440,5 +1440,13 @@ defmodule Pleroma.User do
 
       update_and_set_cache(cng)
     end
+  end
+
+  def get_ap_ids_by_nicknames(nicknames) do
+    from(u in User,
+      where: u.nickname in ^nicknames,
+      select: u.ap_id
+    )
+    |> Repo.all()
   end
 end
