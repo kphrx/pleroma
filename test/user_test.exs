@@ -75,7 +75,7 @@ defmodule Pleroma.UserTest do
     Pleroma.Web.TwitterAPI.TwitterAPI.follow(pending_follower, %{"user_id" => locked.id})
     Pleroma.Web.TwitterAPI.TwitterAPI.follow(pending_follower, %{"user_id" => locked.id})
     Pleroma.Web.TwitterAPI.TwitterAPI.follow(accepted_follower, %{"user_id" => locked.id})
-    User.maybe_follow(accepted_follower, locked)
+    User.follow(accepted_follower, locked)
 
     assert {:ok, [activity]} = User.get_follow_requests(locked)
     assert activity
@@ -1055,7 +1055,7 @@ defmodule Pleroma.UserTest do
       u3 = insert(:user, %{name: "ebn", nickname: "lain@mastodon.social"})
       u4 = insert(:user, %{nickname: "lain@pleroma.soykaf.com"})
 
-      assert [u4.id, u3.id, u1.id] == Enum.map(User.search("lain@ple"), & &1.id)
+      assert [u4.id, u3.id, u1.id] == Enum.map(User.search("lain@ple", for_user: u1), & &1.id)
     end
 
     test "finds users, handling misspelled requests" do
@@ -1075,6 +1075,46 @@ defmodule Pleroma.UserTest do
 
       assert [friend.id, follower.id, u2.id] --
                Enum.map(User.search("doe", resolve: false, for_user: u1), & &1.id) == []
+    end
+
+    test "find local and remote users for authenticated users" do
+      u1 = insert(:user, %{name: "lain"})
+      u2 = insert(:user, %{name: "ebn", nickname: "lain@mastodon.social", local: false})
+      u3 = insert(:user, %{nickname: "lain@pleroma.soykaf.com", local: false})
+
+      results =
+        "lain"
+        |> User.search(for_user: u1)
+        |> Enum.map(& &1.id)
+        |> Enum.sort()
+
+      assert [u1.id, u2.id, u3.id] == results
+    end
+
+    test "find only local users for unauthenticated users" do
+      %{id: id} = insert(:user, %{name: "lain"})
+      insert(:user, %{name: "ebn", nickname: "lain@mastodon.social", local: false})
+      insert(:user, %{nickname: "lain@pleroma.soykaf.com", local: false})
+
+      assert [%{id: ^id}] = User.search("lain")
+    end
+
+    test "find all users for unauthenticated users when `limit_unauthenticated_to_local_content` is `false`" do
+      Pleroma.Config.put([:instance, :limit_unauthenticated_to_local_content], false)
+
+      u1 = insert(:user, %{name: "lain"})
+      u2 = insert(:user, %{name: "ebn", nickname: "lain@mastodon.social", local: false})
+      u3 = insert(:user, %{nickname: "lain@pleroma.soykaf.com", local: false})
+
+      results =
+        "lain"
+        |> User.search()
+        |> Enum.map(& &1.id)
+        |> Enum.sort()
+
+      assert [u1.id, u2.id, u3.id] == results
+
+      Pleroma.Config.put([:instance, :limit_unauthenticated_to_local_content], true)
     end
 
     test "finds a user whose name is nil" do
@@ -1097,7 +1137,11 @@ defmodule Pleroma.UserTest do
     end
 
     test "works with URIs" do
-      results = User.search("http://mastodon.example.org/users/admin", resolve: true)
+      user = insert(:user)
+
+      results =
+        User.search("http://mastodon.example.org/users/admin", resolve: true, for_user: user)
+
       result = results |> List.first()
 
       user = User.get_cached_by_ap_id("http://mastodon.example.org/users/admin")
