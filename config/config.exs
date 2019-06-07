@@ -502,6 +502,8 @@ config :pleroma, :oauth2,
 
 config :pleroma, :database, rum_enabled: false
 
+config :pleroma, :env, Mix.env()
+
 config :http_signatures,
   adapter: Pleroma.Signature
 
