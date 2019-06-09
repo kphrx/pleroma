@@ -19,7 +19,7 @@ config :pleroma, Pleroma.Web.Endpoint,
   url: [host: "pl.kpherox.dev", scheme: "https", port: 443]
 
 # Do not print debug messages in production
-config :logger, level: :info
+config :logger, level: :warn
 
 # ## SSL Support
 #
