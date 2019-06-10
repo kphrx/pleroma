@@ -18,6 +18,8 @@ config :pleroma, Pleroma.Web.Endpoint,
   protocol: "http",
   url: [host: "pl.kpherox.dev", scheme: "https", port: 443]
 
+config :phoenix, serve_endpoints: true
+
 # Do not print debug messages in production
 config :logger, level: :warn
 
