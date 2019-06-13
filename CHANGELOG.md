@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Configuration: `notify_email` option
 - Configuration: Media proxy `whitelist` option
 - Configuration: `report_uri` option
-- Configuration: `limit_unauthenticated_to_local_content` option
+- Configuration: `limit_to_local_content` option
 - Pleroma API: User subscriptions
 - Pleroma API: Healthcheck endpoint
 - Pleroma API: `/api/v1/pleroma/mascot` per-user frontend mascot configuration endpoints
@@ -54,9 +54,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - MRF: Support for stripping avatars and banner images from specific instances (`mrf_simple`)
 - MRF: Support for running subchains.
 - Configuration: `skip_thread_containment` option
+- Configuration: `rate_limit` option. See `Pleroma.Plugs.RateLimiter` documentation for details.
 
 ### Changed
 - **Breaking:** Configuration: move from Pleroma.Mailer to Pleroma.Emails.Mailer
+- Thread containment / test for complete visibility will be skipped by default.
 - Enforcement of OAuth scopes
 - Add multiple use/time expiring invite token
 - Restyled OAuth pages to fit with Pleroma's default theme
