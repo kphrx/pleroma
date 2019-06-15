@@ -136,6 +136,14 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIController do
           _ -> :error
         end
       end)
+      |> add_if_present(params, "pleroma_background_image", :background, fn value ->
+        with %Plug.Upload{} <- value,
+             {:ok, object} <- ActivityPub.upload(value, type: :background) do
+          {:ok, object.data}
+        else
+          _ -> :error
+        end
+      end)
       |> Map.put(:emoji, user_info_emojis)
 
     info_cng = User.Info.profile_update(user.info, info_params)
@@ -160,8 +168,15 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIController do
   end
 
   def verify_credentials(%{assigns: %{user: user}} = conn, _) do
+    chat_token = Phoenix.Token.sign(conn, "user socket", user.id)
+
     account =
-      AccountView.render("account.json", %{user: user, for: user, with_pleroma_settings: true})
+      AccountView.render("account.json", %{
+        user: user,
+        for: user,
+        with_pleroma_settings: true,
+        with_chat_token: chat_token
+      })
 
     json(conn, account)
   end
