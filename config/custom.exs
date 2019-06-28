@@ -13,3 +13,11 @@ config :pleroma, :frontend_configurations,
   }
 
 config :pleroma, :chat, enabled: false
+
+config :pleroma, Pleroma.Upload,
+  uploader: Pleroma.Uploaders.S3
+
+config :pleroma, Pleroma.Uploaders.S3,
+  bucket: "pleroma-kpherox",
+  public_endpoint: "https://d3ujwlgxaznbng.cloudfront.net",
+  truncated_namespace: ""
