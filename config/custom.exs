@@ -19,5 +19,5 @@ config :pleroma, Pleroma.Upload,
 
 config :pleroma, Pleroma.Uploaders.S3,
   bucket: "pleroma-kpherox",
-  public_endpoint: "https://d3ujwlgxaznbng.cloudfront.net",
+  public_endpoint: "https://media.pl.kpherox.dev",
   truncated_namespace: ""
