@@ -22,6 +22,12 @@ config :pleroma, Pleroma.Uploaders.S3,
   public_endpoint: "https://media.pl.kpherox.dev",
   truncated_namespace: ""
 
+config :pleroma, Pleroma.Web.Federator.RetryQueue,
+  enabled: true
+
+config :pleroma_job_queue, :queues,
+  background: 10
+
 config :pleroma, :fetch_initial_posts,
   enabled: true,
   pages: 3
