@@ -21,3 +21,6 @@ config :pleroma, Pleroma.Uploaders.S3,
   bucket: "pleroma-kpherox",
   public_endpoint: "https://media.pl.kpherox.dev",
   truncated_namespace: ""
+
+config :pleroma, Pleroma.Web.Federator.RetryQueue,
+  enabled: true
