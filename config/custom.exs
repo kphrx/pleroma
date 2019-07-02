@@ -21,3 +21,7 @@ config :pleroma, Pleroma.Uploaders.S3,
   bucket: "pleroma-kpherox",
   public_endpoint: "https://media.pl.kpherox.dev",
   truncated_namespace: ""
+
+config :pleroma, :fetch_initial_posts,
+  enabled: true,
+  pages: 3
