@@ -24,3 +24,6 @@ config :pleroma, Pleroma.Uploaders.S3,
 
 config :pleroma, Pleroma.Web.Federator.RetryQueue,
   enabled: true
+
+config :pleroma_job_queue, :queues,
+  background: 10
