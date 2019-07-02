@@ -28,7 +28,3 @@ config :pleroma, Pleroma.Web.Federator.RetryQueue,
 
 config :pleroma_job_queue, :queues,
   background: 10
-
-config :pleroma, :fetch_initial_posts,
-  enabled: true,
-  pages: 3
