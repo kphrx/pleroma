@@ -2,6 +2,7 @@ use Mix.Config
 
 config :pleroma, :instance,
   registrations_open: false,
+  no_attachment_links: true,
   managed_config: false
 
 # なんか知らんけどこれ無効化出来なくなってない？
