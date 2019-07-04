@@ -12,9 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - Not being able to pin unlisted posts
+- Mastodon API: Handling of search timeouts (`/api/v1/search` and `/api/v2/search`)
 
 ### Changed
 - Configuration: Filter.AnonymizeFilename added ability to retain file extension with custom text
+
+### Changed
+- NodeInfo: Return `skipThreadContainment` in `metadata` for the `skip_thread_containment` option
 
 ## [1.0.0] - 2019-06-29
 ### Security
