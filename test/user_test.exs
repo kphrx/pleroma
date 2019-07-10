@@ -14,6 +14,7 @@ defmodule Pleroma.UserTest do
   use Pleroma.DataCase
 
   import Pleroma.Factory
+  import Mock
 
   setup_all do
     Tesla.Mock.mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
@@ -915,49 +916,80 @@ defmodule Pleroma.UserTest do
     end
   end
 
-  test ".delete_user_activities deletes all create activities" do
-    user = insert(:user)
+  describe "delete" do
+    setup do
+      {:ok, user} = insert(:user) |> User.set_cache()
 
-    {:ok, activity} = CommonAPI.post(user, %{"status" => "2hu"})
+      [user: user]
+    end
 
-    {:ok, _} = User.delete_user_activities(user)
+    test ".delete_user_activities deletes all create activities", %{user: user} do
+      {:ok, activity} = CommonAPI.post(user, %{"status" => "2hu"})
 
-    # TODO: Remove favorites, repeats, delete activities.
-    refute Activity.get_by_id(activity.id)
-  end
+      {:ok, _} = User.delete_user_activities(user)
 
-  test ".delete deactivates a user, all follow relationships and all activities" do
-    user = insert(:user)
-    follower = insert(:user)
+      # TODO: Remove favorites, repeats, delete activities.
+      refute Activity.get_by_id(activity.id)
+    end
 
-    {:ok, follower} = User.follow(follower, user)
+    test "it deletes a user, all follow relationships and all activities", %{user: user} do
+      follower = insert(:user)
+      {:ok, follower} = User.follow(follower, user)
 
-    {:ok, activity} = CommonAPI.post(user, %{"status" => "2hu"})
-    {:ok, activity_two} = CommonAPI.post(follower, %{"status" => "3hu"})
+      object = insert(:note, user: user)
+      activity = insert(:note_activity, user: user, note: object)
 
-    {:ok, like, _} = CommonAPI.favorite(activity_two.id, user)
-    {:ok, like_two, _} = CommonAPI.favorite(activity.id, follower)
-    {:ok, repeat, _} = CommonAPI.repeat(activity_two.id, user)
+      object_two = insert(:note, user: follower)
+      activity_two = insert(:note_activity, user: follower, note: object_two)
 
-    {:ok, _} = User.delete(user)
+      {:ok, like, _} = CommonAPI.favorite(activity_two.id, user)
+      {:ok, like_two, _} = CommonAPI.favorite(activity.id, follower)
+      {:ok, repeat, _} = CommonAPI.repeat(activity_two.id, user)
 
-    follower = User.get_cached_by_id(follower.id)
+      {:ok, _} = User.delete(user)
 
-    refute User.following?(follower, user)
-    refute User.get_by_id(user.id)
+      follower = User.get_cached_by_id(follower.id)
 
-    user_activities =
-      user.ap_id
-      |> Activity.query_by_actor()
-      |> Repo.all()
-      |> Enum.map(fn act -> act.data["type"] end)
+      refute User.following?(follower, user)
+      refute User.get_by_id(user.id)
+      assert {:ok, nil} == Cachex.get(:user_cache, "ap_id:#{user.ap_id}")
 
-    assert Enum.all?(user_activities, fn act -> act in ~w(Delete Undo) end)
+      user_activities =
+        user.ap_id
+        |> Activity.query_by_actor()
+        |> Repo.all()
+        |> Enum.map(fn act -> act.data["type"] end)
 
-    refute Activity.get_by_id(activity.id)
-    refute Activity.get_by_id(like.id)
-    refute Activity.get_by_id(like_two.id)
-    refute Activity.get_by_id(repeat.id)
+      assert Enum.all?(user_activities, fn act -> act in ~w(Delete Undo) end)
+
+      refute Activity.get_by_id(activity.id)
+      refute Activity.get_by_id(like.id)
+      refute Activity.get_by_id(like_two.id)
+      refute Activity.get_by_id(repeat.id)
+    end
+
+    test_with_mock "it sends out User Delete activity",
+                   %{user: user},
+                   Pleroma.Web.ActivityPub.Publisher,
+                   [:passthrough],
+                   [] do
+      config_path = [:instance, :federating]
+      initial_setting = Pleroma.Config.get(config_path)
+      Pleroma.Config.put(config_path, true)
+
+      {:ok, follower} = User.get_or_fetch_by_ap_id("http://mastodon.example.org/users/admin")
+      {:ok, _} = User.follow(follower, user)
+
+      {:ok, _user} = User.delete(user)
+
+      assert called(
+               Pleroma.Web.ActivityPub.Publisher.publish_one(%{
+                 inbox: "http://mastodon.example.org/inbox"
+               })
+             )
+
+      Pleroma.Config.put(config_path, initial_setting)
+    end
   end
 
   test "get_public_key_for_ap_id fetches a user that's not in the db" do
@@ -1181,6 +1213,123 @@ defmodule Pleroma.UserTest do
       assert length(ap_ids) == 2
       assert user.ap_id in ap_ids
       assert user_two.ap_id in ap_ids
+    end
+  end
+
+  describe "sync followers count" do
+    setup do
+      user1 = insert(:user, local: false, ap_id: "http://localhost:4001/users/masto_closed")
+      user2 = insert(:user, local: false, ap_id: "http://localhost:4001/users/fuser2")
+      insert(:user, local: true)
+      insert(:user, local: false, info: %{deactivated: true})
+      {:ok, user1: user1, user2: user2}
+    end
+
+    test "external_users/1 external active users with limit", %{user1: user1, user2: user2} do
+      [fdb_user1] = User.external_users(limit: 1)
+
+      assert fdb_user1.ap_id
+      assert fdb_user1.ap_id == user1.ap_id
+      assert fdb_user1.id == user1.id
+
+      [fdb_user2] = User.external_users(max_id: fdb_user1.id, limit: 1)
+
+      assert fdb_user2.ap_id
+      assert fdb_user2.ap_id == user2.ap_id
+      assert fdb_user2.id == user2.id
+
+      assert User.external_users(max_id: fdb_user2.id, limit: 1) == []
+    end
+
+    test "sync_follow_counters/1", %{user1: user1, user2: user2} do
+      {:ok, _pid} = Agent.start_link(fn -> %{} end, name: :domain_errors)
+
+      :ok = User.sync_follow_counters()
+
+      %{follower_count: followers, following_count: following} = User.get_cached_user_info(user1)
+      assert followers == 437
+      assert following == 152
+
+      %{follower_count: followers, following_count: following} = User.get_cached_user_info(user2)
+
+      assert followers == 527
+      assert following == 267
+
+      Agent.stop(:domain_errors)
+    end
+
+    test "sync_follow_counters/1 in separate batches", %{user1: user1, user2: user2} do
+      {:ok, _pid} = Agent.start_link(fn -> %{} end, name: :domain_errors)
+
+      :ok = User.sync_follow_counters(limit: 1)
+
+      %{follower_count: followers, following_count: following} = User.get_cached_user_info(user1)
+      assert followers == 437
+      assert following == 152
+
+      %{follower_count: followers, following_count: following} = User.get_cached_user_info(user2)
+
+      assert followers == 527
+      assert following == 267
+
+      Agent.stop(:domain_errors)
+    end
+
+    test "perform/1 with :sync_follow_counters", %{user1: user1, user2: user2} do
+      :ok = User.perform(:sync_follow_counters)
+      %{follower_count: followers, following_count: following} = User.get_cached_user_info(user1)
+      assert followers == 437
+      assert following == 152
+
+      %{follower_count: followers, following_count: following} = User.get_cached_user_info(user2)
+
+      assert followers == 527
+      assert following == 267
+    end
+  end
+
+  describe "set_info_cache/2" do
+    setup do
+      user = insert(:user)
+      {:ok, user: user}
+    end
+
+    test "update from args", %{user: user} do
+      User.set_info_cache(user, %{following_count: 15, follower_count: 18})
+
+      %{follower_count: followers, following_count: following} = User.get_cached_user_info(user)
+      assert followers == 18
+      assert following == 15
+    end
+
+    test "without args", %{user: user} do
+      User.set_info_cache(user, %{})
+
+      %{follower_count: followers, following_count: following} = User.get_cached_user_info(user)
+      assert followers == 0
+      assert following == 0
+    end
+  end
+
+  describe "user_info/2" do
+    setup do
+      user = insert(:user)
+      {:ok, user: user}
+    end
+
+    test "update from args", %{user: user} do
+      %{follower_count: followers, following_count: following} =
+        User.user_info(user, %{following_count: 15, follower_count: 18})
+
+      assert followers == 18
+      assert following == 15
+    end
+
+    test "without args", %{user: user} do
+      %{follower_count: followers, following_count: following} = User.user_info(user)
+
+      assert followers == 0
+      assert following == 0
     end
   end
 end

@@ -249,7 +249,14 @@ config :pleroma, :instance,
   remote_post_retention_days: 90,
   skip_thread_containment: true,
   limit_to_local_content: :unauthenticated,
-  dynamic_configuration: false
+  dynamic_configuration: false,
+  external_user_synchronization: [
+    enabled: false,
+    # every 2 hours
+    interval: 60 * 60 * 2,
+    max_retries: 3,
+    limit: 500
+  ]
 
 config :pleroma, :markup,
   # XXX - unfortunately, inline images must be enabled by default right now, because
@@ -361,7 +368,11 @@ config :pleroma, :gopher,
   port: 9999
 
 config :pleroma, Pleroma.Web.Metadata,
-  providers: [Pleroma.Web.Metadata.Providers.RelMe],
+  providers: [
+    Pleroma.Web.Metadata.Providers.OpenGraph,
+    Pleroma.Web.Metadata.Providers.TwitterCard,
+    Pleroma.Web.Metadata.Providers.RelMe
+  ],
   unfurl_nsfw: false
 
 config :pleroma, :suggestions,
@@ -492,7 +503,7 @@ config :ueberauth,
 
 config :pleroma, :auth, oauth_consumer_strategies: oauth_consumer_strategies
 
-config :pleroma, Pleroma.Emails.Mailer, adapter: Swoosh.Adapters.Sendmail
+config :pleroma, Pleroma.Emails.Mailer, adapter: Swoosh.Adapters.Sendmail, enabled: false
 
 config :prometheus, Pleroma.Web.Endpoint.MetricsExporter, path: "/api/pleroma/app_metrics"
 

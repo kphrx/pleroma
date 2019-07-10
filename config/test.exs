@@ -23,12 +23,13 @@ config :pleroma, Pleroma.Upload, filters: [], link_name: false
 
 config :pleroma, Pleroma.Uploaders.Local, uploads: "test/uploads"
 
-config :pleroma, Pleroma.Emails.Mailer, adapter: Swoosh.Adapters.Test
+config :pleroma, Pleroma.Emails.Mailer, adapter: Swoosh.Adapters.Test, enabled: true
 
 config :pleroma, :instance,
   email: "admin@example.com",
   notify_email: "noreply@example.com",
-  skip_thread_containment: false
+  skip_thread_containment: false,
+  federating: false
 
 # Configure your database
 config :pleroma, Pleroma.Repo,
@@ -73,6 +74,8 @@ config :pleroma, :http, send_user_agent: false
 rum_enabled = System.get_env("RUM_ENABLED") == "true"
 config :pleroma, :database, rum_enabled: rum_enabled
 IO.puts("RUM enabled: #{rum_enabled}")
+
+config :pleroma, Pleroma.ReverseProxy.Client, Pleroma.ReverseProxy.ClientMock
 
 try do
   import_config "test.secret.exs"
