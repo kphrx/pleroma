@@ -38,13 +38,6 @@ defmodule Pleroma.Notification do
       |> where(
         [n, a],
         fragment(
-          "EXISTS (SELECT ap_id FROM users WHERE ap_id = ?)",
-          a.actor
-        )
-      )
-      |> where(
-        [n, a],
-        fragment(
           "? not in (SELECT ap_id FROM users WHERE info->'deactivated' @> 'true')",
           a.actor
         )
