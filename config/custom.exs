@@ -29,3 +29,17 @@ config :pleroma, Pleroma.Web.Federator.RetryQueue,
 
 config :pleroma_job_queue, :queues,
   background: 10
+
+config :pleroma, Pleroma.Upload,
+  link_name: false,
+  filters: [
+    Pleroma.Upload.Filter.Dedupe,
+    Pleroma.Upload.Filter.AnonymizeFilename,
+    Pleroma.Upload.Filter.Mogrify
+  ]
+
+config :pleroma, Pleroma.Upload.Filter.AnonymizeFilename,
+  text: "media.{extension}"
+
+config :pleroma, Pleroma.Upload.Filter.Mogrify,
+  args: ["strip", "auto-orient", {"quality", 100}]
