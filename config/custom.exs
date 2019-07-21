@@ -1,9 +1,22 @@
 use Mix.Config
 
 config :pleroma, :instance,
+  name: "pl.kpherox.dev",
+  email: "admin@mail.kr-kp.com",
+  notify_email: "admin@mail.kr-kp.com",
+  description: "kPherox server",
+  max_pinned_statuses: 1,
   registrations_open: false,
   no_attachment_links: true,
   managed_config: false
+  allow_relay: false,
+  rewrite_policy: Pleroma.Web.ActivityPub.MRF.SimplePolicy
+
+config :pleroma, :mrf_simple,
+  media_nsfw: [
+    "pawoo.net"
+  ]
+
 
 # なんか知らんけどこれ無効化出来なくなってない？
 #config :pleroma, :app_account_creation, enabled: false
