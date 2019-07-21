@@ -8,7 +8,7 @@ config :pleroma, :instance,
   max_pinned_statuses: 1,
   registrations_open: false,
   no_attachment_links: true,
-  managed_config: false
+  managed_config: false,
   allow_relay: false,
   rewrite_policy: Pleroma.Web.ActivityPub.MRF.SimplePolicy
 
