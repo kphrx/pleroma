@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Federation: Return 403 errors when trying to request pages from a user's follower/following collections if they have `hide_followers`/`hide_follows` set
 - NodeInfo: Return `skipThreadContainment` in `metadata` for the `skip_thread_containment` option
 - Mastodon API: Unsubscribe followers when they unfollow a user
+- AdminAPI: Add "godmode" while fetching user statuses (i.e. admin can see private statuses)
 
 ### Fixed
 - Not being able to pin unlisted posts
@@ -23,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - ActivityPub C2S: follower/following collection pages being inaccessible even when authentifucated if `hide_followers`/ `hide_follows` was set
 - Existing user id not being preserved on insert conflict
 - Rich Media: Parser failing when no TTL can be found by image TTL setters
+- Rich Media: The crawled URL is now spliced into the rich media data.
 - ActivityPub S2S: sharedInbox usage has been mostly aligned with the rules in the AP specification.
 
 ### Added
@@ -39,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Mastodon API: Add support for categories for custom emojis by reusing the group feature. <https://github.com/tootsuite/mastodon/pull/11196>
 - Mastodon API: Add support for muting/unmuting notifications
 - Mastodon API: Add support for the `blocked_by` attribute in the relationship API (`GET /api/v1/accounts/relationships`). <https://github.com/tootsuite/mastodon/pull/10373>
+- Mastodon API: Add support for the `domain_blocking` attribute in the relationship API (`GET /api/v1/accounts/relationships`).
 - Mastodon API: Add `pleroma.deactivated` to the Account entity
 - Mastodon API: added `/auth/password` endpoint for password reset with rate limit.
 - Mastodon API: /api/v1/accounts/:id/statuses now supports nicknames or user id
@@ -53,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Twitter API: added rate limit for `/api/account/password_reset` endpoint.
 - ActivityPub: Add an internal service actor for fetching ActivityPub objects.
 - ActivityPub: Optional signing of ActivityPub object fetches.
+- Admin API: Endpoint for fetching latest user's statuses
 
 ### Changed
 - Configuration: Filter.AnonymizeFilename added ability to retain file extension with custom text
