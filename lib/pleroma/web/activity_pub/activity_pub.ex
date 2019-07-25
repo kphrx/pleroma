@@ -839,7 +839,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     )
   end
 
-  defp restrict_pinned(query, %{"pinned" => "true", "pinned_activity_ids" => ids}) do
+  defp restrict_pinned(query, %{"pinned" => pinned, "pinned_activity_ids" => ids}) when pinned not in ["false", "f", "0", ""] do
     from(activity in query, where: activity.id in ^ids)
   end
 
