@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Rich Media: Parser failing when no TTL can be found by image TTL setters
 - Rich Media: The crawled URL is now spliced into the rich media data.
 - ActivityPub S2S: sharedInbox usage has been mostly aligned with the rules in the AP specification.
+- ActivityPub S2S: remote user deletions now work the same as local user deletions.
 
 ### Added
 - MRF: Support for priming the mediaproxy cache (`Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicy`)
@@ -58,6 +59,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - ActivityPub: Add an internal service actor for fetching ActivityPub objects.
 - ActivityPub: Optional signing of ActivityPub object fetches.
 - Admin API: Endpoint for fetching latest user's statuses
+- Pleroma API: Add `/api/v1/pleroma/accounts/confirmation_resend?email=<email>` for resending account confirmation.
 
 ### Changed
 - Configuration: Filter.AnonymizeFilename added ability to retain file extension with custom text
