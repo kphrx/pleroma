@@ -541,5 +541,5 @@ config :pleroma, :rate_limit,
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
-import_config "custom.exs"
+if Mix.env() != :test, do: import_config "custom.exs"
 import_config "#{Mix.env()}.exs"
