@@ -248,7 +248,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       poll: render("poll.json", %{object: object, for: opts[:for]}),
       mentions: mentions,
       tags: build_tags(tags),
-      application: nil,
+      application: %{
+        name: "Web",
+        website: nil
+      },
       language: nil,
       emojis: build_emojis(object.data["emoji"]),
       pleroma: %{
