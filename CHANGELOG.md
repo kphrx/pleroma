@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Not being able to access the Mastodon FE login page on private instances
 - Invalid SemVer version generation, when the current branch does not have commits ahead of tag/checked out on a tag
 - Pleroma.Upload base_url was not automatically whitelisted by MediaProxy. Now your custom CDN or file hosting will be accessed directly as expected.
+- Report email not being sent to admins when the reporter is a remote user
 
 ### Added
 - MRF: Support for priming the mediaproxy cache (`Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicy`)
@@ -69,6 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - ActivityPub: Optional signing of ActivityPub object fetches.
 - Admin API: Endpoint for fetching latest user's statuses
 - Pleroma API: Add `/api/v1/pleroma/accounts/confirmation_resend?email=<email>` for resending account confirmation.
+- Relays: Added a task to list relay subscriptions.
 
 ### Changed
 - Configuration: Filter.AnonymizeFilename added ability to retain file extension with custom text
@@ -78,6 +80,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Removed
 - Emoji: Remove longfox emojis.
+- Remove `Reply-To` header from report emails for admins.
 
 ## [1.0.1] - 2019-07-14
 ### Security
