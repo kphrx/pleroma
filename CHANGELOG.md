@@ -44,9 +44,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - MRF: ensure that subdomain_match calls are case-insensitive
 
 ### Added
+- **Breaking:** MRF describe API, which adds support for exposing configuration information about MRF policies to NodeInfo.
+  Custom modules will need to be updated by adding, at the very least, `def describe, do: {:ok, %{}}` to the MRF policy modules.
 - MRF: Support for priming the mediaproxy cache (`Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicy`)
 - MRF: Support for excluding specific domains from Transparency.
 - MRF: Support for filtering posts based on who they mention (`Pleroma.Web.ActivityPub.MRF.MentionPolicy`)
+- MRF: Support for filtering posts based on ActivityStreams vocabulary (`Pleroma.Web.ActivityPub.MRF.VocabularyPolicy`)
 - MRF (Simple Policy): Support for wildcard domains.
 - Support for wildcard domains in user domain blocks setting.
 - Configuration: `quarantined_instances` support wildcard domains.
@@ -69,6 +72,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added synchronization of following/followers counters for external users
 - Configuration: `enabled` option for `Pleroma.Emails.Mailer`, defaulting to `false`.
 - Configuration: Pleroma.Plugs.RateLimiter `bucket_name`, `params` options.
+- Configuration: `user_bio_length` and `user_name_length` options.
 - Addressable lists
 - Twitter API: added rate limit for `/api/account/password_reset` endpoint.
 - ActivityPub: Add an internal service actor for fetching ActivityPub objects.
