@@ -21,6 +21,7 @@ defmodule Pleroma.User do
   alias Pleroma.Web
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Utils
+  alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.CommonAPI.Utils, as: CommonUtils
   alias Pleroma.Web.OAuth
   alias Pleroma.Web.OStatus
@@ -749,6 +750,7 @@ defmodule Pleroma.User do
     |> update_and_set_cache()
   end
 
+  @spec maybe_fetch_follow_information(User.t()) :: User.t()
   def maybe_fetch_follow_information(user) do
     with {:ok, user} <- fetch_follow_information(user) do
       user
@@ -806,9 +808,10 @@ defmodule Pleroma.User do
     end
   end
 
+  @spec maybe_update_following_count(User.t()) :: User.t()
   def maybe_update_following_count(%User{local: false} = user) do
     if Pleroma.Config.get([:instance, :external_user_synchronization]) do
-      {:ok, maybe_fetch_follow_information(user)}
+      maybe_fetch_follow_information(user)
     else
       user
     end
@@ -912,6 +915,13 @@ defmodule Pleroma.User do
         blocker
       else
         blocker
+      end
+
+    # clear any requested follows as well
+    blocked =
+      case CommonAPI.reject_follow_request(blocked, blocker) do
+        {:ok, %User{} = updated_blocked} -> updated_blocked
+        nil -> blocked
       end
 
     blocker =
