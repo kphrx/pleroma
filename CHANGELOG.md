@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - NodeInfo: Return `mailerEnabled` in `metadata`
 - Mastodon API: Unsubscribe followers when they unfollow a user
 - AdminAPI: Add "godmode" while fetching user statuses (i.e. admin can see private statuses)
+- Improve digest email template
 
 ### Fixed
 - Not being able to pin unlisted posts
@@ -43,6 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Pleroma.Upload base_url was not automatically whitelisted by MediaProxy. Now your custom CDN or file hosting will be accessed directly as expected.
 - Report email not being sent to admins when the reporter is a remote user
 - MRF: ensure that subdomain_match calls are case-insensitive
+- Reverse Proxy limiting `max_body_length` was incorrectly defined and only checked `Content-Length` headers which may not be sufficient in some circumstances
 - MRF: fix use of unserializable keyword lists in describe() implementations
 
 ### Added
@@ -67,6 +69,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Mastodon API: Add `pleroma.deactivated` to the Account entity
 - Mastodon API: added `/auth/password` endpoint for password reset with rate limit.
 - Mastodon API: /api/v1/accounts/:id/statuses now supports nicknames or user id
+- Mastodon API: Improve support for the user profile custom fields
 - Admin API: Return users' tags when querying reports
 - Admin API: Return avatar and display name when querying users
 - Admin API: Allow querying user by ID
