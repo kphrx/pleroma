@@ -276,21 +276,19 @@ config :pleroma, :markup,
 config :pleroma, :frontend_configurations,
   pleroma_fe: %{
     theme: "pleroma-dark",
-    background: "/static/aurora_borealis.jpg",
     logo: "/static/logo.png",
-    logoMask: true,
-    logoMargin: "0.1em",
+    background: "/images/city.jpg",
     redirectRootNoLogin: "/main/all",
     redirectRootLogin: "/main/friends",
     showInstanceSpecificPanel: true,
+    scopeOptionsEnabled: false,
     formattingOptionsEnabled: false,
     collapseMessageWithSubject: false,
-    scopeCopy: true,
-    subjectLineBehavior: "email",
-    alwaysShowSubjectInput: true,
     hidePostStats: false,
     hideUserStats: false,
-    minimalScopesMode: false
+    scopeCopy: true,
+    subjectLineBehavior: "email",
+    alwaysShowSubjectInput: true
   },
   masto_fe: %{
     showInstanceSpecificPanel: true
