@@ -6,7 +6,6 @@
   "logoMargin": ".1em",
   "redirectRootNoLogin": "/main/all",
   "redirectRootLogin": "/main/friends",
-  "chatDisabled": true,
   "showInstanceSpecificPanel": false,
   "collapseMessageWithSubject": false,
   "scopeCopy": true,
