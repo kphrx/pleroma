@@ -241,24 +241,7 @@ defmodule Pleroma.User.Info do
     |> validate_required([:keys])
   end
 
-  defp fields_changeset(info, params, remote) do
-    cng = info
-      |> cast(params, [:fields])
-      |> validate_fields(true)
-    if remote && !cng.valid? do
-      {msg, _} = cng.errors[:fields]
-      change(info, fields: [%{
-        "name" => "Invalid fields",
-        "value" => msg
-      }])
-    else
-      cng
-    end
-  end
-
   def remote_user_creation(info, params) do
-    fields_cng = fields_changeset(info, params, true)
-
     info
     |> cast(params, [
       :ap_enabled,
@@ -273,14 +256,13 @@ defmodule Pleroma.User.Info do
       :hide_followers,
       :hide_follows,
       :follower_count,
+      :fields,
       :following_count
     ])
-    |> merge(fields_cng)
+    |> validate_fields(true)
   end
 
   def user_upgrade(info, params, remote? \\ false) do
-    fields_cng = fields_changeset(info, params, remote?)
-
     info
     |> cast(params, [
       :ap_enabled,
@@ -291,9 +273,10 @@ defmodule Pleroma.User.Info do
       :follower_count,
       :following_count,
       :hide_follows,
+      :fields,
       :hide_followers
     ])
-    |> merge(fields_cng)
+    |> validate_fields(remote?)
   end
 
   def profile_update(info, params) do
@@ -326,28 +309,22 @@ defmodule Pleroma.User.Info do
       if Enum.all?(fields, &valid_field?/1) do
         []
       else
-        [fields: "property hasn't name or value"]
-      end
-    end)
-    |> validate_change(:fields, fn :fields, fields ->
-      if Enum.all?(fields, &valid_field_length?/1) do
-        []
-      else
-        [fields: "too many long"]
+        [fields: "invalid"]
       end
     end)
   end
 
-  defp valid_field?(%{"name" => name, "value" => value}), do: is_binary(name) && is_binary(value)
-
-  defp valid_field?(_), do: false
-
-  defp valid_field_length?(%{"name" => name, "value" => value}) do
+  defp valid_field?(%{"name" => name, "value" => value}) do
     name_limit = Pleroma.Config.get([:instance, :account_field_name_length], 255)
     value_limit = Pleroma.Config.get([:instance, :account_field_value_length], 255)
 
-    String.length(name) <= name_limit && String.length(value) <= value_limit
+    is_binary(name) &&
+      is_binary(value) &&
+      String.length(name) <= name_limit &&
+      String.length(value) <= value_limit
   end
+
+  defp valid_field?(_), do: false
 
   @spec confirmation_changeset(Info.t(), keyword()) :: Changeset.t()
   def confirmation_changeset(info, opts) do
