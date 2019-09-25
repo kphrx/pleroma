@@ -8,7 +8,6 @@ config :pleroma, :instance,
   max_pinned_statuses: 1,
   registrations_open: false,
   no_attachment_links: true,
-  managed_config: false,
   allow_relay: false,
   rewrite_policy: Pleroma.Web.ActivityPub.MRF.SimplePolicy
 
@@ -17,12 +16,7 @@ config :pleroma, :mrf_simple,
     "pawoo.net"
   ]
 
-
-# なんか知らんけどこれ無効化出来なくなってない？
-#config :pleroma, :app_account_creation, enabled: false
-
 config :pleroma, :frontend_configurations,
-  pleroma_fe: false,
   masto_fe: %{
     showInstanceSpecificPanel: false
   }
@@ -37,11 +31,10 @@ config :pleroma, Pleroma.Uploaders.S3,
   public_endpoint: "https://media.pl.kpherox.dev",
   truncated_namespace: ""
 
-config :pleroma, Pleroma.Web.Federator.RetryQueue,
-  enabled: true
-
-config :pleroma_job_queue, :queues,
-  background: 10
+config :pleroma, Oban,
+  queues: [
+    background: 10
+  ]
 
 config :pleroma, Pleroma.Upload,
   link_name: false,
