@@ -12,14 +12,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Pleroma API: `POST /api/v1/pleroma/subscription_notifications/clear` to clear all subscription notifications
 - Pleroma API: `POST /api/v1/pleroma/subscription_notifications/dismiss` to clear a subscription notification
 - Pleroma API: `DELETE /api/v1/pleroma/subscription_notifications/destroy_multiple` to clear multiple subscription notifications
+- Mastodon API: Account entities now include `follow_requests_count` (planned Mastodon 3.x addition)
 
 ### Changed
 - **Breaking:** Elixir >=1.8 is now required (was >= 1.7)
+- **Breaking:** Admin API: Return link alongside with token on password reset
 - Replaced [pleroma_job_queue](https://git.pleroma.social/pleroma/pleroma_job_queue) and `Pleroma.Web.Federator.RetryQueue` with [Oban](https://github.com/sorentwo/oban) (see [`docs/config.md`](docs/config.md) on migrating customized worker / retry settings)
 - Introduced [quantum](https://github.com/quantum-elixir/quantum-core) job scheduler
 - Admin API: Return `total` when querying for reports
 - Mastodon API: Return `pleroma.direct_conversation_id` when creating a direct message (`POST /api/v1/statuses`)
-- Admin API: Return link alongside with token on password reset
 - Mastodon API: notifications no longer include subscription notifications - they are now served from new endpoints in Pleroma API
 ### Fixed
 - Mastodon API: Fix private and direct statuses not being filtered out from the public timeline for an authenticated user (`GET /api/v1/timelines/public`)

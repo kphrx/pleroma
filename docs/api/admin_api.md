@@ -312,8 +312,8 @@ Note: Available `:permission_group` is currently moderator and admin. 404 is ret
 
 ```json
 {
-  "token": "U13DX6muOvpRsj35_ij9wLxUbkU-eFvfKttxs6gIajo=", // password reset token (base64 string)
-  "link": "https://pleroma.social/api/pleroma/password_reset/U13DX6muOvpRsj35_ij9wLxUbkU-eFvfKttxs6gIajo%3D"
+  "token": "base64 reset token",
+  "link": "https://pleroma.social/api/pleroma/password_reset/url-encoded-base64-token"
 }
 ```
 
@@ -330,10 +330,10 @@ Note: Available `:permission_group` is currently moderator and admin. 404 is ret
 ### Get a list of reports
 - Method `GET`
 - Params:
-  - `state`: optional, the state of reports. Valid values are `open`, `closed` and `resolved`
-  - `limit`: optional, the number of records to retrieve
-  - `since_id`: optional, returns results that are more recent than the specified id
-  - `max_id`: optional, returns results that are older than the specified id
+  - *optional* `state`: **string** the state of reports. Valid values are `open`, `closed` and `resolved`
+  - *optional* `limit`: **integer** the number of records to retrieve
+  - *optional* `page`: **integer** page number
+  - *optional* `page_size`: **integer** number of log entries per page (default is `50`)
 - Response:
   - On failure: 403 Forbidden error `{"error": "error_msg"}` when requested by anonymous or non-admin
   - On success: JSON, returns a list of reports, where:
