@@ -108,7 +108,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       id: to_string(activity.id),
       uri: activity_object.data["id"],
       url: activity_object.data["id"],
-      account: AccountView.render("account.json", %{user: user, for: opts[:for]}),
+      account: AccountView.render("show.json", %{user: user, for: opts[:for]}),
       in_reply_to_id: nil,
       in_reply_to_account_id: nil,
       reblog: reblogged,
@@ -255,7 +255,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       id: to_string(activity.id),
       uri: object.data["id"],
       url: url,
-      account: AccountView.render("account.json", %{user: user, for: opts[:for]}),
+      account: AccountView.render("show.json", %{user: user, for: opts[:for]}),
       in_reply_to_id: reply_to && to_string(reply_to.id),
       in_reply_to_account_id: reply_to_user && to_string(reply_to_user.id),
       reblog: nil,
@@ -360,6 +360,27 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       description: attachment["name"],
       pleroma: %{mime_type: media_type}
     }
+  end
+
+  def render("listen.json", %{activity: %Activity{data: %{"type" => "Listen"}} = activity} = opts) do
+    object = Object.normalize(activity)
+
+    user = get_user(activity.data["actor"])
+    created_at = Utils.to_masto_date(activity.data["published"])
+
+    %{
+      id: activity.id,
+      account: AccountView.render("show.json", %{user: user, for: opts[:for]}),
+      created_at: created_at,
+      title: object.data["title"] |> HTML.strip_tags(),
+      artist: object.data["artist"] |> HTML.strip_tags(),
+      album: object.data["album"] |> HTML.strip_tags(),
+      length: object.data["length"]
+    }
+  end
+
+  def render("listens.json", opts) do
+    safe_render_many(opts.activities, StatusView, "listen.json", opts)
   end
 
   def render("poll.json", %{object: object} = opts) do

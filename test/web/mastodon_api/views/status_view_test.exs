@@ -103,7 +103,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
       id: to_string(note.id),
       uri: object_data["id"],
       url: Pleroma.Web.Router.Helpers.o_status_url(Pleroma.Web.Endpoint, :notice, note),
-      account: AccountView.render("account.json", %{user: user}),
+      account: AccountView.render("show.json", %{user: user}),
       in_reply_to_id: nil,
       in_reply_to_account_id: nil,
       card: nil,
@@ -604,5 +604,14 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     status = StatusView.render("show.json", activity: activity)
 
     assert status.visibility == "list"
+  end
+
+  test "successfully renders a Listen activity (pleroma extension)" do
+    listen_activity = insert(:listen)
+
+    status = StatusView.render("listen.json", activity: listen_activity)
+
+    assert status.length == listen_activity.data["object"]["length"]
+    assert status.title == listen_activity.data["object"]["title"]
   end
 end

@@ -13,7 +13,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Object.Fetcher
   alias Pleroma.Pagination
   alias Pleroma.Repo
-  alias Pleroma.SubscriptionNotification
   alias Pleroma.Upload
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.MRF
@@ -152,7 +151,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       BackgroundWorker.enqueue("fetch_data_for_activity", %{"activity_id" => activity.id})
 
       Notification.create_notifications(activity)
-      SubscriptionNotification.create_notifications(activity)
 
       participations =
         activity
@@ -245,6 +243,26 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       {:fake, true, activity} ->
         {:ok, activity}
 
+      {:error, message} ->
+        {:error, message}
+    end
+  end
+
+  def listen(%{to: to, actor: actor, context: context, object: object} = params) do
+    additional = params[:additional] || %{}
+    # only accept false as false value
+    local = !(params[:local] == false)
+    published = params[:published]
+
+    with listen_data <-
+           make_listen_data(
+             %{to: to, actor: actor, published: published, context: context, object: object},
+             additional
+           ),
+         {:ok, activity} <- insert(listen_data, local),
+         :ok <- maybe_federate(activity) do
+      {:ok, activity}
+    else
       {:error, message} ->
         {:error, message}
     end
@@ -589,6 +607,23 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   defp restrict_thread_visibility(query, _, _), do: query
+
+  def fetch_user_abstract_activities(user, reading_user, params \\ %{}) do
+    params =
+      params
+      |> Map.put("user", reading_user)
+      |> Map.put("actor_id", user.ap_id)
+      |> Map.put("whole_db", true)
+
+    recipients =
+      user_activities_recipients(%{
+        "godmode" => params["godmode"],
+        "reading_user" => reading_user
+      })
+
+    fetch_activities(recipients, params)
+    |> Enum.reverse()
+  end
 
   def fetch_user_activities(user, reading_user, params \\ %{}) do
     params =
