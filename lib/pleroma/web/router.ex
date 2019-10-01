@@ -373,7 +373,7 @@ defmodule Pleroma.Web.Router do
 
       get("/filters", FilterController, :index)
 
-      get("/suggestions", MastodonAPIController, :suggestions)
+      get("/suggestions", SuggestionController, :index)
 
       get("/conversations", ConversationController, :index)
       post("/conversations/:id/read", ConversationController, :read)
@@ -403,10 +403,10 @@ defmodule Pleroma.Web.Router do
       put("/scheduled_statuses/:id", ScheduledActivityController, :update)
       delete("/scheduled_statuses/:id", ScheduledActivityController, :delete)
 
-      post("/polls/:id/votes", MastodonAPIController, :poll_vote)
+      post("/polls/:id/votes", PollController, :vote)
 
-      post("/media", MastodonAPIController, :upload)
-      put("/media/:id", MastodonAPIController, :update_media)
+      post("/media", MediaController, :create)
+      put("/media/:id", MediaController, :update)
 
       delete("/lists/:id", ListController, :delete)
       post("/lists", ListController, :create)
@@ -464,8 +464,8 @@ defmodule Pleroma.Web.Router do
 
     get("/instance", MastodonAPIController, :masto_instance)
     get("/instance/peers", MastodonAPIController, :peers)
-    post("/apps", MastodonAPIController, :create_app)
-    get("/apps/verify_credentials", MastodonAPIController, :verify_app_credentials)
+    post("/apps", AppController, :create)
+    get("/apps/verify_credentials", AppController, :verify_credentials)
     get("/custom_emojis", MastodonAPIController, :custom_emojis)
 
     get("/statuses/:id/card", StatusController, :card)
@@ -488,7 +488,7 @@ defmodule Pleroma.Web.Router do
       get("/statuses/:id", StatusController, :show)
       get("/statuses/:id/context", StatusController, :context)
 
-      get("/polls/:id", MastodonAPIController, :get_poll)
+      get("/polls/:id", PollController, :show)
 
       get("/accounts/:id/statuses", AccountController, :statuses)
       get("/accounts/:id/followers", AccountController, :followers)

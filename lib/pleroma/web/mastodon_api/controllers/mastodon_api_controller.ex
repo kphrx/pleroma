@@ -7,28 +7,20 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIController do
 
   import Pleroma.Web.ControllerHelper, only: [add_link_headers: 2]
 
-  alias Pleroma.Activity
   alias Pleroma.Bookmark
   alias Pleroma.Config
-  alias Pleroma.HTTP
-  alias Pleroma.Object
   alias Pleroma.Pagination
   alias Pleroma.Plugs.RateLimiter
-  alias Pleroma.Repo
   alias Pleroma.Stats
   alias Pleroma.User
   alias Pleroma.Web
   alias Pleroma.Web.ActivityPub.ActivityPub
-  alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.MastodonAPI.AccountView
-  alias Pleroma.Web.MastodonAPI.AppView
   alias Pleroma.Web.MastodonAPI.MastodonView
   alias Pleroma.Web.MastodonAPI.StatusView
-  alias Pleroma.Web.MediaProxy
   alias Pleroma.Web.OAuth.App
   alias Pleroma.Web.OAuth.Authorization
-  alias Pleroma.Web.OAuth.Scopes
   alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.TwitterAPI.TwitterAPI
 
@@ -36,35 +28,9 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIController do
 
   plug(RateLimiter, :password_reset when action == :password_reset)
 
-  @local_mastodon_name "Mastodon-Local"
-
   action_fallback(Pleroma.Web.MastodonAPI.FallbackController)
 
-  def create_app(conn, params) do
-    scopes = Scopes.fetch_scopes(params, ["read"])
-
-    app_attrs =
-      params
-      |> Map.drop(["scope", "scopes"])
-      |> Map.put("scopes", scopes)
-
-    with cs <- App.register_changeset(%App{}, app_attrs),
-         false <- cs.changes[:client_name] == @local_mastodon_name,
-         {:ok, app} <- Repo.insert(cs) do
-      conn
-      |> put_view(AppView)
-      |> render("show.json", %{app: app})
-    end
-  end
-
-  def verify_app_credentials(%{assigns: %{user: _user, token: token}} = conn, _) do
-    with %Token{app: %App{} = app} <- Repo.preload(token, :app) do
-      conn
-      |> put_view(AppView)
-      |> render("short.json", %{app: app})
-    end
-  end
-
+  @local_mastodon_name "Mastodon-Local"
   @mastodon_api_level "2.7.2"
 
   def masto_instance(conn, _params) do
@@ -115,89 +81,6 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIController do
   def custom_emojis(conn, _params) do
     mastodon_emoji = mastodonized_emoji()
     json(conn, mastodon_emoji)
-  end
-
-  def get_poll(%{assigns: %{user: user}} = conn, %{"id" => id}) do
-    with %Object{} = object <- Object.get_by_id_and_maybe_refetch(id, interval: 60),
-         %Activity{} = activity <- Activity.get_create_by_object_ap_id(object.data["id"]),
-         true <- Visibility.visible_for_user?(activity, user) do
-      conn
-      |> put_view(StatusView)
-      |> try_render("poll.json", %{object: object, for: user})
-    else
-      error when is_nil(error) or error == false ->
-        render_error(conn, :not_found, "Record not found")
-    end
-  end
-
-  defp get_cached_vote_or_vote(user, object, choices) do
-    idempotency_key = "polls:#{user.id}:#{object.data["id"]}"
-
-    {_, res} =
-      Cachex.fetch(:idempotency_cache, idempotency_key, fn _ ->
-        case CommonAPI.vote(user, object, choices) do
-          {:error, _message} = res -> {:ignore, res}
-          res -> {:commit, res}
-        end
-      end)
-
-    res
-  end
-
-  def poll_vote(%{assigns: %{user: user}} = conn, %{"id" => id, "choices" => choices}) do
-    with %Object{} = object <- Object.get_by_id(id),
-         true <- object.data["type"] == "Question",
-         %Activity{} = activity <- Activity.get_create_by_object_ap_id(object.data["id"]),
-         true <- Visibility.visible_for_user?(activity, user),
-         {:ok, _activities, object} <- get_cached_vote_or_vote(user, object, choices) do
-      conn
-      |> put_view(StatusView)
-      |> try_render("poll.json", %{object: object, for: user})
-    else
-      nil ->
-        render_error(conn, :not_found, "Record not found")
-
-      false ->
-        render_error(conn, :not_found, "Record not found")
-
-      {:error, message} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{error: message})
-    end
-  end
-
-  def update_media(
-        %{assigns: %{user: user}} = conn,
-        %{"id" => id, "description" => description} = _
-      )
-      when is_binary(description) do
-    with %Object{} = object <- Repo.get(Object, id),
-         true <- Object.authorize_mutation(object, user),
-         {:ok, %Object{data: data}} <- Object.update_data(object, %{"name" => description}) do
-      attachment_data = Map.put(data, "id", object.id)
-
-      conn
-      |> put_view(StatusView)
-      |> render("attachment.json", %{attachment: attachment_data})
-    end
-  end
-
-  def update_media(_conn, _data), do: {:error, :bad_request}
-
-  def upload(%{assigns: %{user: user}} = conn, %{"file" => file} = data) do
-    with {:ok, object} <-
-           ActivityPub.upload(
-             file,
-             actor: User.ap_id(user),
-             description: Map.get(data, "description")
-           ) do
-      attachment_data = Map.put(object.data, "id", object.id)
-
-      conn
-      |> put_view(StatusView)
-      |> render("attachment.json", %{attachment: attachment_data})
-    end
   end
 
   def follows(%{assigns: %{user: follower}} = conn, %{"uri" => uri}) do
@@ -448,53 +331,6 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIController do
     json(conn, %{})
   end
 
-  def suggestions(%{assigns: %{user: user}} = conn, _) do
-    suggestions = Config.get(:suggestions)
-
-    if Keyword.get(suggestions, :enabled, false) do
-      api = Keyword.get(suggestions, :third_party_engine, "")
-      timeout = Keyword.get(suggestions, :timeout, 5000)
-      limit = Keyword.get(suggestions, :limit, 23)
-
-      host = Config.get([Pleroma.Web.Endpoint, :url, :host])
-
-      user = user.nickname
-
-      url =
-        api
-        |> String.replace("{{host}}", host)
-        |> String.replace("{{user}}", user)
-
-      with {:ok, %{status: 200, body: body}} <-
-             HTTP.get(url, [], adapter: [recv_timeout: timeout, pool: :default]),
-           {:ok, data} <- Jason.decode(body) do
-        data =
-          data
-          |> Enum.slice(0, limit)
-          |> Enum.map(fn x ->
-            x
-            |> Map.put("id", fetch_suggestion_id(x))
-            |> Map.put("avatar", MediaProxy.url(x["avatar"]))
-            |> Map.put("avatar_static", MediaProxy.url(x["avatar_static"]))
-          end)
-
-        json(conn, data)
-      else
-        e ->
-          Logger.error("Could not retrieve suggestions at fetch #{url}, #{inspect(e)}")
-      end
-    else
-      json(conn, [])
-    end
-  end
-
-  defp fetch_suggestion_id(attrs) do
-    case User.get_or_fetch(attrs["acct"]) do
-      {:ok, %User{id: id}} -> id
-      _ -> 0
-    end
-  end
-
   def password_reset(conn, params) do
     nickname_or_email = params["email"] || params["nickname"]
 
@@ -509,18 +345,6 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIController do
       {:error, _} ->
         send_resp(conn, :bad_request, "")
     end
-  end
-
-  def try_render(conn, target, params)
-      when is_binary(target) do
-    case render(conn, target, params) do
-      nil -> render_error(conn, :not_implemented, "Can't display this activity")
-      res -> res
-    end
-  end
-
-  def try_render(conn, _, _) do
-    render_error(conn, :not_implemented, "Can't display this activity")
   end
 
   defp present?(nil), do: false
