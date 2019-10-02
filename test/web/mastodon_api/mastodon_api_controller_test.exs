@@ -5,16 +5,12 @@
 defmodule Pleroma.Web.MastodonAPI.MastodonAPIControllerTest do
   use Pleroma.Web.ConnCase
 
-  alias Ecto.Changeset
-  alias Pleroma.Config
   alias Pleroma.Notification
   alias Pleroma.Repo
-  alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
   alias Pleroma.Web.CommonAPI
 
   import Pleroma.Factory
-  import Swoosh.TestAssertions
   import Tesla.Mock
 
   setup do
@@ -22,7 +18,6 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIControllerTest do
     :ok
   end
 
-  clear_config([:instance, :public])
   clear_config([:rich_media, :enabled])
 
   test "getting a list of mutes", %{conn: conn} do
@@ -116,90 +111,6 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIControllerTest do
     assert [] = json_response(third_conn, 200)
   end
 
-  test "get instance information", %{conn: conn} do
-    conn = get(conn, "/api/v1/instance")
-    assert result = json_response(conn, 200)
-
-    email = Config.get([:instance, :email])
-    # Note: not checking for "max_toot_chars" since it's optional
-    assert %{
-             "uri" => _,
-             "title" => _,
-             "description" => _,
-             "version" => _,
-             "email" => from_config_email,
-             "urls" => %{
-               "streaming_api" => _
-             },
-             "stats" => _,
-             "thumbnail" => _,
-             "languages" => _,
-             "registrations" => _,
-             "poll_limits" => _
-           } = result
-
-    assert email == from_config_email
-  end
-
-  test "get instance stats", %{conn: conn} do
-    user = insert(:user, %{local: true})
-
-    user2 = insert(:user, %{local: true})
-    {:ok, _user2} = User.deactivate(user2, !user2.info.deactivated)
-
-    insert(:user, %{local: false, nickname: "u@peer1.com"})
-    insert(:user, %{local: false, nickname: "u@peer2.com"})
-
-    {:ok, _} = CommonAPI.post(user, %{"status" => "cofe"})
-
-    # Stats should count users with missing or nil `info.deactivated` value
-
-    {:ok, _user} =
-      user.id
-      |> User.get_cached_by_id()
-      |> User.update_info(&Changeset.change(&1, %{deactivated: nil}))
-
-    Pleroma.Stats.force_update()
-
-    conn = get(conn, "/api/v1/instance")
-
-    assert result = json_response(conn, 200)
-
-    stats = result["stats"]
-
-    assert stats
-    assert stats["user_count"] == 1
-    assert stats["status_count"] == 1
-    assert stats["domain_count"] == 2
-  end
-
-  test "get peers", %{conn: conn} do
-    insert(:user, %{local: false, nickname: "u@peer1.com"})
-    insert(:user, %{local: false, nickname: "u@peer2.com"})
-
-    Pleroma.Stats.force_update()
-
-    conn = get(conn, "/api/v1/instance/peers")
-
-    assert result = json_response(conn, 200)
-
-    assert ["peer1.com", "peer2.com"] == Enum.sort(result)
-  end
-
-  test "put settings", %{conn: conn} do
-    user = insert(:user)
-
-    conn =
-      conn
-      |> assign(:user, user)
-      |> put("/api/web/settings", %{"data" => %{"programming" => "socks"}})
-
-    assert _result = json_response(conn, 200)
-
-    user = User.get_cached_by_ap_id(user.ap_id)
-    assert user.info.settings == %{"programming" => "socks"}
-  end
-
   describe "link headers" do
     test "preserves parameters in link headers", %{conn: conn} do
       user = insert(:user)
@@ -229,168 +140,6 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPIControllerTest do
       assert link_header =~ ~r/media_only=true/
       assert link_header =~ ~r/min_id=#{notification2.id}/
       assert link_header =~ ~r/max_id=#{notification1.id}/
-    end
-  end
-
-  describe "custom emoji" do
-    test "with tags", %{conn: conn} do
-      [emoji | _body] =
-        conn
-        |> get("/api/v1/custom_emojis")
-        |> json_response(200)
-
-      assert Map.has_key?(emoji, "shortcode")
-      assert Map.has_key?(emoji, "static_url")
-      assert Map.has_key?(emoji, "tags")
-      assert is_list(emoji["tags"])
-      assert Map.has_key?(emoji, "category")
-      assert Map.has_key?(emoji, "url")
-      assert Map.has_key?(emoji, "visible_in_picker")
-    end
-  end
-
-  describe "index/2 redirections" do
-    setup %{conn: conn} do
-      session_opts = [
-        store: :cookie,
-        key: "_test",
-        signing_salt: "cooldude"
-      ]
-
-      conn =
-        conn
-        |> Plug.Session.call(Plug.Session.init(session_opts))
-        |> fetch_session()
-
-      test_path = "/web/statuses/test"
-      %{conn: conn, path: test_path}
-    end
-
-    test "redirects not logged-in users to the login page", %{conn: conn, path: path} do
-      conn = get(conn, path)
-
-      assert conn.status == 302
-      assert redirected_to(conn) == "/web/login"
-    end
-
-    test "redirects not logged-in users to the login page on private instances", %{
-      conn: conn,
-      path: path
-    } do
-      Config.put([:instance, :public], false)
-
-      conn = get(conn, path)
-
-      assert conn.status == 302
-      assert redirected_to(conn) == "/web/login"
-    end
-
-    test "does not redirect logged in users to the login page", %{conn: conn, path: path} do
-      token = insert(:oauth_token)
-
-      conn =
-        conn
-        |> assign(:user, token.user)
-        |> put_session(:oauth_token, token.token)
-        |> get(path)
-
-      assert conn.status == 200
-    end
-
-    test "saves referer path to session", %{conn: conn, path: path} do
-      conn = get(conn, path)
-      return_to = Plug.Conn.get_session(conn, :return_to)
-
-      assert return_to == path
-    end
-
-    test "redirects to the saved path after log in", %{conn: conn, path: path} do
-      app = insert(:oauth_app, client_name: "Mastodon-Local", redirect_uris: ".")
-      auth = insert(:oauth_authorization, app: app)
-
-      conn =
-        conn
-        |> put_session(:return_to, path)
-        |> get("/web/login", %{code: auth.token})
-
-      assert conn.status == 302
-      assert redirected_to(conn) == path
-    end
-
-    test "redirects to the getting-started page when referer is not present", %{conn: conn} do
-      app = insert(:oauth_app, client_name: "Mastodon-Local", redirect_uris: ".")
-      auth = insert(:oauth_authorization, app: app)
-
-      conn = get(conn, "/web/login", %{code: auth.token})
-
-      assert conn.status == 302
-      assert redirected_to(conn) == "/web/getting-started"
-    end
-  end
-
-  describe "POST /auth/password, with valid parameters" do
-    setup %{conn: conn} do
-      user = insert(:user)
-      conn = post(conn, "/auth/password?email=#{user.email}")
-      %{conn: conn, user: user}
-    end
-
-    test "it returns 204", %{conn: conn} do
-      assert json_response(conn, :no_content)
-    end
-
-    test "it creates a PasswordResetToken record for user", %{user: user} do
-      token_record = Repo.get_by(Pleroma.PasswordResetToken, user_id: user.id)
-      assert token_record
-    end
-
-    test "it sends an email to user", %{user: user} do
-      ObanHelpers.perform_all()
-      token_record = Repo.get_by(Pleroma.PasswordResetToken, user_id: user.id)
-
-      email = Pleroma.Emails.UserEmail.password_reset_email(user, token_record.token)
-      notify_email = Config.get([:instance, :notify_email])
-      instance_name = Config.get([:instance, :name])
-
-      assert_email_sent(
-        from: {instance_name, notify_email},
-        to: {user.name, user.email},
-        html_body: email.html_body
-      )
-    end
-  end
-
-  describe "POST /auth/password, with invalid parameters" do
-    setup do
-      user = insert(:user)
-      {:ok, user: user}
-    end
-
-    test "it returns 404 when user is not found", %{conn: conn, user: user} do
-      conn = post(conn, "/auth/password?email=nonexisting_#{user.email}")
-      assert conn.status == 404
-      assert conn.resp_body == ""
-    end
-
-    test "it returns 400 when user is not local", %{conn: conn, user: user} do
-      {:ok, user} = Repo.update(Changeset.change(user, local: false))
-      conn = post(conn, "/auth/password?email=#{user.email}")
-      assert conn.status == 400
-      assert conn.resp_body == ""
-    end
-  end
-
-  describe "DELETE /auth/sign_out" do
-    test "redirect to root page", %{conn: conn} do
-      user = insert(:user)
-
-      conn =
-        conn
-        |> assign(:user, user)
-        |> delete("/auth/sign_out")
-
-      assert conn.status == 302
-      assert redirected_to(conn) == "/"
     end
   end
 
