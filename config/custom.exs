@@ -23,9 +23,6 @@ config :pleroma, :frontend_configurations,
 
 config :pleroma, :chat, enabled: false
 
-config :pleroma, Pleroma.Upload,
-  uploader: Pleroma.Uploaders.S3
-
 config :pleroma, Pleroma.Uploaders.S3,
   bucket: "pleroma-kpherox",
   public_endpoint: "https://media.pl.kpherox.dev",
@@ -42,10 +39,9 @@ config :pleroma, Pleroma.Upload,
     Pleroma.Upload.Filter.Dedupe,
     Pleroma.Upload.Filter.AnonymizeFilename,
     Pleroma.Upload.Filter.Mogrify
-  ]
+  ],
+  uploader: Pleroma.Uploaders.S3
 
-config :pleroma, Pleroma.Upload.Filter.AnonymizeFilename,
-  text: "media.{extension}"
+config :pleroma, Pleroma.Upload.Filter.AnonymizeFilename, text: "media.{extension}"
 
-config :pleroma, Pleroma.Upload.Filter.Mogrify,
-  args: ["strip", "auto-orient", {"quality", 100}]
+config :pleroma, Pleroma.Upload.Filter.Mogrify, args: ["strip", "auto-orient", {"quality", 100}]
