@@ -266,6 +266,7 @@ defmodule Pleroma.Web.Router do
 
       get("/conversations/:id/statuses", PleromaAPIController, :conversation_statuses)
       get("/conversations/:id", PleromaAPIController, :conversation)
+      post("/conversations/read", PleromaAPIController, :read_conversations)
     end
 
     scope [] do
@@ -589,6 +590,12 @@ defmodule Pleroma.Web.Router do
 
   scope "/nodeinfo", Pleroma.Web do
     get("/:version", Nodeinfo.NodeinfoController, :nodeinfo)
+  end
+
+  scope "/", Pleroma.Web do
+    pipe_through(:api)
+
+    get("/web/manifest.json", MastoFEController, :manifest)
   end
 
   scope "/", Pleroma.Web do
