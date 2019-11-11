@@ -7,7 +7,6 @@ config :pleroma, :instance,
   description: "kPherox server",
   max_pinned_statuses: 1,
   registrations_open: false,
-  no_attachment_links: true,
   allow_relay: false,
   rewrite_policy: Pleroma.Web.ActivityPub.MRF.SimplePolicy
 
@@ -34,7 +33,6 @@ config :pleroma, Oban,
   ]
 
 config :pleroma, Pleroma.Upload,
-  link_name: false,
   filters: [
     Pleroma.Upload.Filter.Dedupe,
     Pleroma.Upload.Filter.AnonymizeFilename,
