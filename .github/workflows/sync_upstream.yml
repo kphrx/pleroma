@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - uses: actions/checkout@v1
+ 
     - name: setup config
       run: |
         git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
