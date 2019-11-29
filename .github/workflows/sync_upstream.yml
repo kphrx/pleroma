@@ -21,8 +21,8 @@ jobs:
 
     - name: fetch upstream
       run: |
-        git fetch upstream/stable:stable
-        git fetch upstream/develop:develop
+        git fetch upstream stable:stable
+        git fetch upstream develop:develop
         git push origin --all
         git fetch --tags
         git push origin --tags
