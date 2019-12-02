@@ -86,6 +86,7 @@ defmodule Pleroma.Web.OStatus.OStatusController do
 
         activity.data["type"] == "Create" ->
           %Object{} = object = Object.normalize(activity)
+          put_resp_header(conn, "link", "<#{object.id}>; rel=\"alternate\"; type=\"application/activity+json\"")
 
           RedirectController.redirector_with_meta(
             conn,
