@@ -21,11 +21,6 @@ defmodule Pleroma.Plugs.StaticFEPlug do
   defp enabled?, do: Pleroma.Config.get([:static_fe, :enabled], false)
 
   defp accepts_html?(conn) do
-    accept =
-      conn
-      |> get_req_header("accept")
-      |> List.first()
-
-    is_nil(accept) or String.contains?(accept, "text/html")
+    conn |> get_req_header("accept") |> List.first() |> String.contains?("text/html")
   end
 end
