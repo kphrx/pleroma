@@ -48,6 +48,11 @@ defmodule Pleroma.Web.Endpoint do
 
   plug(Plug.Static,
     at: "/pleroma/admin/",
+    from: "#{Pleroma.Config.get([:instance, :static_dir], "instance/static")}/adminfe/"
+  )
+
+  plug(Plug.Static,
+    at: "/pleroma/admin/",
     from: {:pleroma, "priv/static/adminfe/"}
   )
 
