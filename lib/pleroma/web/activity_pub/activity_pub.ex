@@ -749,6 +749,15 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> Map.put("whole_db", true)
       |> Map.put("pinned_activity_ids", user.pinned_activities)
 
+    params =
+      if User.blocks?(reading_user, user) do
+        params
+      else
+        params
+        |> Map.put("blocking_user", reading_user)
+        |> Map.put("muting_user", reading_user)
+      end
+
     recipients =
       user_activities_recipients(%{
         "godmode" => params["godmode"],
@@ -941,6 +950,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     blocked_ap_ids = opts["blocked_users_ap_ids"] || User.blocked_users_ap_ids(user)
     domain_blocks = user.domain_blocks || []
 
+    following_ap_ids = User.get_friends_ap_ids(user)
+
     query =
       if has_named_binding?(query, :object), do: query, else: Activity.with_joined_object(query)
 
@@ -955,8 +966,22 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
           activity.data,
           ^blocked_ap_ids
         ),
-      where: fragment("not (split_part(?, '/', 3) = ANY(?))", activity.actor, ^domain_blocks),
-      where: fragment("not (split_part(?->>'actor', '/', 3) = ANY(?))", o.data, ^domain_blocks)
+      where:
+        fragment(
+          "(not (split_part(?, '/', 3) = ANY(?))) or ? = ANY(?)",
+          activity.actor,
+          ^domain_blocks,
+          activity.actor,
+          ^following_ap_ids
+        ),
+      where:
+        fragment(
+          "(not (split_part(?->>'actor', '/', 3) = ANY(?))) or (?->>'actor') = ANY(?)",
+          o.data,
+          ^domain_blocks,
+          o.data,
+          ^following_ap_ids
+        )
     )
   end
 
@@ -1209,6 +1234,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     data = Transmogrifier.maybe_fix_user_object(data)
     discoverable = data["discoverable"] || false
     invisible = data["invisible"] || false
+    actor_type = data["type"] || "Person"
 
     user_data = %{
       ap_id: data["id"],
@@ -1224,6 +1250,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       follower_address: data["followers"],
       following_address: data["following"],
       bio: data["summary"],
+      actor_type: actor_type,
       also_known_as: Map.get(data, "alsoKnownAs", [])
     }
 
