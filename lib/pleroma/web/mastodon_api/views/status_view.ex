@@ -172,9 +172,11 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
 
     expires_at =
       with true <- client_posted_this_activity,
-           expiration when not is_nil(expiration) <-
+           %ActivityExpiration{scheduled_at: scheduled_at} <-
              ActivityExpiration.get_by_activity_id(activity.id) do
-        expiration.scheduled_at
+        scheduled_at
+      else
+        _ -> nil
       end
 
     thread_muted? =
@@ -315,11 +317,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
         nil
       end
 
-    site_name = rich_media[:site_name] || page_url_data.host
-
     %{
       type: "link",
-      provider_name: site_name,
+      provider_name: page_url_data.host,
       provider_url: page_url_data.scheme <> "://" <> page_url_data.host,
       url: page_url,
       image: image_url |> MediaProxy.url(),

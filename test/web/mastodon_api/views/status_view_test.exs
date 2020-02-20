@@ -488,7 +488,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
         title: "Example website"
       }
 
-      %{provider_name: "Example site name"} =
+      %{provider_name: "example.com"} =
         StatusView.render("card.json", %{page_url: page_url, rich_media: card})
     end
 
@@ -503,7 +503,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
         description: "Example description"
       }
 
-      %{provider_name: "Example site name"} =
+      %{provider_name: "example.com"} =
         StatusView.render("card.json", %{page_url: page_url, rich_media: card})
     end
   end
