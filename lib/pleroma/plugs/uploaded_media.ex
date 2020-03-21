@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Plugs.UploadedMedia do
@@ -14,9 +14,14 @@ defmodule Pleroma.Plugs.UploadedMedia do
   # no slashes
   @path "media"
 
+  @default_cache_control_header "public, max-age=1209600"
+
   def init(_opts) do
     static_plug_opts =
-      []
+      [
+        headers: %{"cache-control" => @default_cache_control_header},
+        cache_control_for_etags: @default_cache_control_header
+      ]
       |> Keyword.put(:from, "__unconfigured_media_plug")
       |> Keyword.put(:at, "/__unconfigured_media_plug")
       |> Plug.Static.init()

@@ -117,7 +117,6 @@ The `type` value is `pleroma:emoji_reaction`. Has these fields:
 Accepts additional parameters:
 
 - `exclude_visibilities`: will exclude the notifications for activities with the given visibilities. The parameter accepts an array of visibility types (`public`, `unlisted`, `private`, `direct`). Usage example: `GET /api/v1/notifications?exclude_visibilities[]=direct&exclude_visibilities[]=private`.
-- `with_move`: boolean, when set to `true` will include Move notifications. `false` by default.
 
 ## POST `/api/v1/statuses`
 
@@ -180,7 +179,7 @@ Post here request with grant_type=refresh_token to obtain new access token. Retu
 ## Account Registration
 `POST /api/v1/accounts`
 
-Has theses additionnal parameters (which are the same as in Pleroma-API):
+Has theses additional parameters (which are the same as in Pleroma-API):
     * `fullname`: optional
     * `bio`: optional
     * `captcha_solution`: optional, contains provider-specific captcha solution,

@@ -2,9 +2,11 @@
 
 This is a cheat sheet for Pleroma configuration file, any setting possible to configure should be listed here.
 
-Pleroma configuration works by first importing the base config (`config/config.exs` on source installs, compiled-in on OTP releases), then overriding it by the environment config (`config/$MIX_ENV.exs` on source installs, N/A to OTP releases) and then overriding it by user config (`config/$MIX_ENV.secret.exs` on source installs, typically `/etc/pleroma/config.exs` on OTP releases).
+For OTP installations the configuration is typically stored in `/etc/pleroma/config.exs`.
 
-You shouldn't edit the base config directly to avoid breakages and merge conflicts, but it can be used as a reference if you don't understand how an option is supposed to be formatted, the latest version of it can be viewed [here](https://git.pleroma.social/pleroma/pleroma/blob/develop/config/config.exs).
+For from source installations Pleroma configuration works by first importing the base config `config/config.exs`, then overriding it by the environment config `config/$MIX_ENV.exs` and then overriding it by user config `config/$MIX_ENV.secret.exs`. In from source installations you should always make the changes to the user config and NEVER to the base config to avoid breakages and merge conflicts. So for production you change/add configuration to `config/prod.secret.exs`.
+
+To add configuration to your config file, you can copy it from the base config. The latest version of it can be viewed [here](https://git.pleroma.social/pleroma/pleroma/blob/develop/config/config.exs). You can also use this file if you don't know how an option is supposed to be formatted.
 
 ## :instance
 * `name`: The instance’s name.
@@ -136,21 +138,19 @@ config :pleroma, :mrf_user_allowlist,
 ```
 
 #### :mrf_object_age
-* `threshold`: Required age (in seconds) of a post before actions are taken.
+* `threshold`: Required time offset (in seconds) compared to your server clock of an incoming post before actions are taken.
+  e.g., A value of 900 results in any post with a timestamp older than 15 minutes will be acted upon.
 * `actions`: A list of actions to apply to the post:
   * `:delist` removes the post from public timelines
   * `:strip_followers` removes followers from the ActivityPub recipient list, ensuring they won't be delivered to home timelines
   * `:reject` rejects the message entirely
 
 ### :activitypub
-* ``unfollow_blocked``: Whether blocks result in people getting unfollowed
-* ``outgoing_blocks``: Whether to federate blocks to other instances
-* ``deny_follow_blocked``: Whether to disallow following an account that has blocked the user in question
-* ``sign_object_fetches``: Sign object fetches with HTTP signatures
-
-### :fetch_initial_posts
-* `enabled`: if enabled, when a new user is federated with, fetch some of their latest posts
-* `pages`: the amount of pages to fetch
+* `unfollow_blocked`: Whether blocks result in people getting unfollowed
+* `outgoing_blocks`: Whether to federate blocks to other instances
+* `deny_follow_blocked`: Whether to disallow following an account that has blocked the user in question
+* `sign_object_fetches`: Sign object fetches with HTTP signatures
+* `authorized_fetch_mode`: Require HTTP signatures for AP fetches
 
 ## Pleroma.ScheduledActivity
 
@@ -342,6 +342,7 @@ Means that:
 Supported rate limiters:
 
 * `:search` - Account/Status search.
+* `:timeline` - Timeline requests (each timeline has it's own limiter).
 * `:app_account_creation` - Account registration from the API.
 * `:relations_actions` - Following/Unfollowing in general.
 * `:relation_id_action` - Following/Unfollowing for a specific user.
@@ -500,6 +501,10 @@ Email notifications settings.
 
 - `:logo` - a path to a custom logo. Set it to `nil` to use the default Pleroma logo.
 - `:styling` - a map with color settings for email templates.
+
+### Pleroma.Emails.NewUsersDigestEmail
+
+- `:enabled` - a boolean, enables new users admin digest email when `true`. Defaults to `false`.
 
 ## Background jobs
 

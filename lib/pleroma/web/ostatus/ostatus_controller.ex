@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.OStatus.OStatusController do
@@ -15,6 +15,10 @@ defmodule Pleroma.Web.OStatus.OStatusController do
   alias Pleroma.Web.Endpoint
   alias Pleroma.Web.Metadata.PlayerView
   alias Pleroma.Web.Router
+
+  plug(Pleroma.Plugs.EnsureAuthenticatedPlug,
+    unless_func: &Pleroma.Web.FederatingPlug.federating?/0
+  )
 
   plug(
     RateLimiter,
@@ -135,13 +139,13 @@ defmodule Pleroma.Web.OStatus.OStatusController do
     end
   end
 
-  def errors(conn, {:error, :not_found}) do
+  defp errors(conn, {:error, :not_found}) do
     render_error(conn, :not_found, "Not found")
   end
 
-  def errors(conn, {:fetch_user, nil}), do: errors(conn, {:error, :not_found})
+  defp errors(conn, {:fetch_user, nil}), do: errors(conn, {:error, :not_found})
 
-  def errors(conn, _) do
+  defp errors(conn, _) do
     render_error(conn, :internal_server_error, "Something went wrong")
   end
 end

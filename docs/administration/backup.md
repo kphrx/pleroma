@@ -18,6 +18,7 @@
 6. Run `sudo -Hu postgres pg_restore -d <pleroma_db> -v -1 </path/to/backup_location/pleroma.pgdump>`
 7. If you installed a newer Pleroma version, you should run `mix ecto.migrate`[^1]. This task performs database migrations, if there were any.
 8. Restart the Pleroma service.
+9. Run `sudo -Hu postgres vacuumdb --all --analyze-in-stages`. This will quickly generate the statistics so that postgres can properly plan queries.
 
 [^1]: Prefix with `MIX_ENV=prod` to run it using the production config file.
 

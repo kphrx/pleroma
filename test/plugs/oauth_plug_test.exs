@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Plugs.OAuthPlugTest do
@@ -38,7 +38,7 @@ defmodule Pleroma.Plugs.OAuthPlugTest do
     assert conn.assigns[:user] == opts[:user]
   end
 
-  test "with valid token(downcase) in url parameters, it assings the user", opts do
+  test "with valid token(downcase) in url parameters, it assigns the user", opts do
     conn =
       :get
       |> build_conn("/?access_token=#{opts[:token]}")

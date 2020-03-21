@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.Utils do
@@ -45,8 +45,8 @@ defmodule Pleroma.Web.ActivityPub.Utils do
     Map.put(params, "actor", get_ap_id(params["actor"]))
   end
 
-  @spec determine_explicit_mentions(map()) :: map()
-  def determine_explicit_mentions(%{"tag" => tag} = _) when is_list(tag) do
+  @spec determine_explicit_mentions(map()) :: [any]
+  def determine_explicit_mentions(%{"tag" => tag}) when is_list(tag) do
     Enum.flat_map(tag, fn
       %{"type" => "Mention", "href" => href} -> [href]
       _ -> []
@@ -427,7 +427,7 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   @doc """
   Updates a follow activity's state (for locked accounts).
   """
-  @spec update_follow_state_for_all(Activity.t(), String.t()) :: {:ok, Activity} | {:error, any()}
+  @spec update_follow_state_for_all(Activity.t(), String.t()) :: {:ok, Activity | nil}
   def update_follow_state_for_all(
         %Activity{data: %{"actor" => actor, "object" => object}} = activity,
         state
@@ -783,45 +783,6 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   end
 
   defp build_flag_object(_), do: []
-
-  @doc """
-  Fetches the OrderedCollection/OrderedCollectionPage from `from`, limiting the amount of pages fetched after
-  the first one to `pages_left` pages.
-  If the amount of pages is higher than the collection has, it returns whatever was there.
-  """
-  def fetch_ordered_collection(from, pages_left, acc \\ []) do
-    with {:ok, response} <- Tesla.get(from),
-         {:ok, collection} <- Jason.decode(response.body) do
-      case collection["type"] do
-        "OrderedCollection" ->
-          # If we've encountered the OrderedCollection and not the page,
-          # just call the same function on the page address
-          fetch_ordered_collection(collection["first"], pages_left)
-
-        "OrderedCollectionPage" ->
-          if pages_left > 0 do
-            # There are still more pages
-            if Map.has_key?(collection, "next") do
-              # There are still more pages, go deeper saving what we have into the accumulator
-              fetch_ordered_collection(
-                collection["next"],
-                pages_left - 1,
-                acc ++ collection["orderedItems"]
-              )
-            else
-              # No more pages left, just return whatever we already have
-              acc ++ collection["orderedItems"]
-            end
-          else
-            # Got the amount of pages needed, add them all to the accumulator
-            acc ++ collection["orderedItems"]
-          end
-
-        _ ->
-          {:error, "Not an OrderedCollection or OrderedCollectionPage"}
-      end
-    end
-  end
 
   #### Report-related helpers
   def get_reports(params, page, page_size) do

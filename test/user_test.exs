@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.UserTest do
@@ -297,15 +297,7 @@ defmodule Pleroma.UserTest do
   end
 
   describe "unfollow/2" do
-    setup do
-      setting = Pleroma.Config.get([:instance, :external_user_synchronization])
-
-      on_exit(fn ->
-        Pleroma.Config.put([:instance, :external_user_synchronization], setting)
-      end)
-
-      :ok
-    end
+    clear_config([:instance, :external_user_synchronization])
 
     test "unfollow with syncronizes external user" do
       Pleroma.Config.put([:instance, :external_user_synchronization], true)
@@ -383,6 +375,7 @@ defmodule Pleroma.UserTest do
       password_confirmation: "test",
       email: "email@example.com"
     }
+
     clear_config([:instance, :autofollowed_nicknames])
     clear_config([:instance, :welcome_message])
     clear_config([:instance, :welcome_user_nickname])
@@ -419,7 +412,11 @@ defmodule Pleroma.UserTest do
       assert activity.actor == welcome_user.ap_id
     end
 
-    test "it requires an email, name, nickname and password, bio is optional" do
+    clear_config([:instance, :account_activation_required])
+
+    test "it requires an email, name, nickname and password, bio is optional when account_activation_required is enabled" do
+      Pleroma.Config.put([:instance, :account_activation_required], true)
+
       @full_user_data
       |> Map.keys()
       |> Enum.each(fn key ->
@@ -427,6 +424,19 @@ defmodule Pleroma.UserTest do
         changeset = User.register_changeset(%User{}, params)
 
         assert if key == :bio, do: changeset.valid?, else: not changeset.valid?
+      end)
+    end
+
+    test "it requires an name, nickname and password, bio and email are optional when account_activation_required is disabled" do
+      Pleroma.Config.put([:instance, :account_activation_required], false)
+
+      @full_user_data
+      |> Map.keys()
+      |> Enum.each(fn key ->
+        params = Map.delete(@full_user_data, key)
+        changeset = User.register_changeset(%User{}, params)
+
+        assert if key in [:bio, :email], do: changeset.valid?, else: not changeset.valid?
       end)
     end
 
@@ -1754,16 +1764,13 @@ defmodule Pleroma.UserTest do
 
   describe "get_cached_by_nickname_or_id" do
     setup do
-      limit_to_local_content = Pleroma.Config.get([:instance, :limit_to_local_content])
       local_user = insert(:user)
       remote_user = insert(:user, nickname: "nickname@example.com", local: false)
 
-      on_exit(fn ->
-        Pleroma.Config.put([:instance, :limit_to_local_content], limit_to_local_content)
-      end)
-
       [local_user: local_user, remote_user: remote_user]
     end
+
+    clear_config([:instance, :limit_to_local_content])
 
     test "allows getting remote users by id no matter what :limit_to_local_content is set to", %{
       remote_user: remote_user

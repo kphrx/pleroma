@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.CommonAPITest do
@@ -68,6 +68,7 @@ defmodule Pleroma.Web.CommonAPITest do
     har = insert(:user)
     jafnhar = insert(:user)
     tridi = insert(:user)
+
     Pleroma.Config.put([:instance, :safe_dm_mentions], true)
 
     {:ok, activity} =
@@ -201,13 +202,15 @@ defmodule Pleroma.Web.CommonAPITest do
                CommonAPI.post(user, %{"status" => ""})
     end
 
-    test "it returns error when character limit is exceeded" do
+    test "it validates character limits are correctly enforced" do
       Pleroma.Config.put([:instance, :limit], 5)
 
       user = insert(:user)
 
       assert {:error, "The status is over the character limit"} =
                CommonAPI.post(user, %{"status" => "foobar"})
+
+      assert {:ok, activity} = CommonAPI.post(user, %{"status" => "12345"})
     end
 
     test "it can handle activities that expire" do

@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Application do
@@ -31,6 +31,7 @@ defmodule Pleroma.Application do
   # See http://elixir-lang.org/docs/stable/elixir/Application.html
   # for more information on OTP Applications
   def start(_type, _args) do
+    Pleroma.Config.Holder.save_default()
     Pleroma.HTML.compile_scrubbers()
     Pleroma.Config.DeprecationWarnings.warn()
     Pleroma.Plugs.HTTPSecurityPlug.warn_if_disabled()

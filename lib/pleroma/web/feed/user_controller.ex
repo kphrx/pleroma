@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.Feed.UserController do
@@ -25,7 +25,12 @@ defmodule Pleroma.Web.Feed.UserController do
 
   def feed_redirect(%{assigns: %{format: format}} = conn, _params)
       when format in ["json", "activity+json"] do
-    ActivityPubController.call(conn, :user)
+    with %{halted: false} = conn <-
+           Pleroma.Plugs.EnsureAuthenticatedPlug.call(conn,
+             unless_func: &Pleroma.Web.FederatingPlug.federating?/0
+           ) do
+      ActivityPubController.call(conn, :user)
+    end
   end
 
   def feed_redirect(conn, %{"nickname" => nickname}) do

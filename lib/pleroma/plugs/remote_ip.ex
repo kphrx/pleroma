@@ -1,11 +1,13 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Plugs.RemoteIp do
   @moduledoc """
   This is a shim to call [`RemoteIp`](https://git.pleroma.social/pleroma/remote_ip) but with runtime configuration.
   """
+
+  import Plug.Conn
 
   @behaviour Plug
 
@@ -26,11 +28,12 @@ defmodule Pleroma.Plugs.RemoteIp do
 
   def init(_), do: nil
 
-  def call(conn, _) do
+  def call(%{remote_ip: original_remote_ip} = conn, _) do
     config = Pleroma.Config.get(__MODULE__, [])
 
     if Keyword.get(config, :enabled, false) do
-      RemoteIp.call(conn, remote_ip_opts(config))
+      %{remote_ip: new_remote_ip} = conn = RemoteIp.call(conn, remote_ip_opts(config))
+      assign(conn, :remote_ip_found, original_remote_ip != new_remote_ip)
     else
       conn
     end

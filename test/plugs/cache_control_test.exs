@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.CacheControlTest do
@@ -9,7 +9,7 @@ defmodule Pleroma.Web.CacheControlTest do
   test "Verify Cache-Control header on static assets", %{conn: conn} do
     conn = get(conn, "/index.html")
 
-    assert Conn.get_resp_header(conn, "cache-control") == ["public max-age=86400 must-revalidate"]
+    assert Conn.get_resp_header(conn, "cache-control") == ["public, no-cache"]
   end
 
   test "Verify Cache-Control header on the API", %{conn: conn} do

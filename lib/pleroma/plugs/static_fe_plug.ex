@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Plugs.StaticFEPlug do
@@ -21,6 +21,9 @@ defmodule Pleroma.Plugs.StaticFEPlug do
   defp enabled?, do: Pleroma.Config.get([:static_fe, :enabled], false)
 
   defp accepts_html?(conn) do
-    conn |> get_req_header("accept") |> List.first() |> String.contains?(["*/*", "text/html"])
+    case get_req_header(conn, "accept") do
+      [accept | _] -> String.contains?(accept, "text/html")
+      _ -> false
+    end
   end
 end

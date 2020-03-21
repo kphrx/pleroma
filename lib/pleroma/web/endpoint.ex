@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.Endpoint do
@@ -12,7 +12,7 @@ defmodule Pleroma.Web.Endpoint do
   plug(Pleroma.Plugs.HTTPSecurityPlug)
   plug(Pleroma.Plugs.UploadedMedia)
 
-  @static_cache_control "public max-age=86400 must-revalidate"
+  @static_cache_control "public, no-cache"
 
   # InstanceStatic needs to be before Plug.Static to be able to override shipped-static files
   # If you're adding new paths to `only:` you'll need to configure them in InstanceStatic as well

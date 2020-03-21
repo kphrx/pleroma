@@ -288,10 +288,11 @@ Pleroma Conversations have the same general structure that Mastodon Conversation
 2. Pleroma Conversations statuses can be requested by Conversation id.
 3. Pleroma Conversations can be replied to.
 
-Conversations have the additional field "recipients" under the "pleroma" key. This holds a list of all the accounts that will receive a message in this conversation.
+Conversations have the additional field `recipients` under the `pleroma` key. This holds a list of all the accounts that will receive a message in this conversation.
 
 The status posting endpoint takes an additional parameter, `in_reply_to_conversation_id`, which, when set, will set the visiblity to direct and address only the people who are the recipients of that Conversation.
 
+⚠ Conversation IDs can be found in direct messages with the `pleroma.direct_conversation_id` key, do not confuse it with `pleroma.conversation_id`.
 
 ## `GET /api/v1/pleroma/conversations/:id/statuses`
 ### Timeline for a given conversation
@@ -457,5 +458,18 @@ Emoji reactions work a lot like favourites do. They make it possible to react to
 [
   {"name": "😀", "count": 2, "me": true, "accounts": [{"id" => "xyz.."...}, {"id" => "zyx..."}]},
   {"name": "☕", "count": 1, "me": false, "accounts": [{"id" => "abc..."}]}
+]
+```
+
+## `GET /api/v1/pleroma/statuses/:id/reactions/:emoji`
+### Get an object of emoji to account mappings with accounts that reacted to the post for a specific emoji`
+* Method: `GET`
+* Authentication: optional
+* Params: None
+* Response: JSON, a list of emoji/account list tuples
+* Example Response:
+```json
+[
+  {"name": "😀", "count": 2, "me": true, "accounts": [{"id" => "xyz.."...}, {"id" => "zyx..."}]}
 ]
 ```

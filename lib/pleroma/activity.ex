@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Activity do
@@ -308,9 +308,16 @@ defmodule Pleroma.Activity do
     |> where([a], fragment("? ->> 'state' = 'pending'", a.data))
   end
 
+  def following_requests_for_actor(%Pleroma.User{ap_id: ap_id}) do
+    Queries.by_type("Follow")
+    |> where([a], fragment("?->>'state' = 'pending'", a.data))
+    |> where([a], a.actor == ^ap_id)
+    |> Repo.all()
+  end
+
   def restrict_deactivated_users(query) do
     deactivated_users =
-      from(u in User.Query.build(deactivated: true), select: u.ap_id)
+      from(u in User.Query.build(%{deactivated: true}), select: u.ap_id)
       |> Repo.all()
 
     Activity.Queries.exclude_authors(query, deactivated_users)

@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.PleromaAPI.PleromaAPIController do
@@ -41,24 +41,29 @@ defmodule Pleroma.Web.PleromaAPI.PleromaAPIController do
 
   plug(Pleroma.Plugs.EnsurePublicOrAuthenticatedPlug)
 
-  def emoji_reactions_by(%{assigns: %{user: user}} = conn, %{"id" => activity_id}) do
+  def emoji_reactions_by(%{assigns: %{user: user}} = conn, %{"id" => activity_id} = params) do
     with %Activity{} = activity <- Activity.get_by_id_with_object(activity_id),
          %Object{data: %{"reactions" => emoji_reactions}} when is_list(emoji_reactions) <-
            Object.normalize(activity) do
       reactions =
         emoji_reactions
         |> Enum.map(fn [emoji, user_ap_ids] ->
-          users =
-            Enum.map(user_ap_ids, &User.get_cached_by_ap_id/1)
-            |> Enum.filter(& &1)
+          if params["emoji"] && params["emoji"] != emoji do
+            nil
+          else
+            users =
+              Enum.map(user_ap_ids, &User.get_cached_by_ap_id/1)
+              |> Enum.filter(& &1)
 
-          %{
-            name: emoji,
-            count: length(users),
-            accounts: AccountView.render("index.json", %{users: users, for: user, as: :user}),
-            me: !!(user && user.ap_id in user_ap_ids)
-          }
+            %{
+              name: emoji,
+              count: length(users),
+              accounts: AccountView.render("index.json", %{users: users, for: user, as: :user}),
+              me: !!(user && user.ap_id in user_ap_ids)
+            }
+          end
         end)
+        |> Enum.filter(& &1)
 
       conn
       |> json(reactions)
@@ -96,6 +101,11 @@ defmodule Pleroma.Web.PleromaAPI.PleromaAPIController do
       conn
       |> put_view(ConversationView)
       |> render("participation.json", %{participation: participation, for: user})
+    else
+      _error ->
+        conn
+        |> put_status(404)
+        |> json(%{"error" => "Unknown conversation id"})
     end
   end
 
@@ -103,9 +113,9 @@ defmodule Pleroma.Web.PleromaAPI.PleromaAPIController do
         %{assigns: %{user: user}} = conn,
         %{"id" => participation_id} = params
       ) do
-    participation = Participation.get(participation_id, preload: [:conversation])
-
-    if user.id == participation.user_id do
+    with %Participation{} = participation <-
+           Participation.get(participation_id, preload: [:conversation]),
+         true <- user.id == participation.user_id do
       params =
         params
         |> Map.put("blocking_user", user)
@@ -121,6 +131,11 @@ defmodule Pleroma.Web.PleromaAPI.PleromaAPIController do
       |> add_link_headers(activities)
       |> put_view(StatusView)
       |> render("index.json", %{activities: activities, for: user, as: :activity})
+    else
+      _error ->
+        conn
+        |> put_status(404)
+        |> json(%{"error" => "Unknown conversation id"})
     end
   end
 
@@ -128,15 +143,22 @@ defmodule Pleroma.Web.PleromaAPI.PleromaAPIController do
         %{assigns: %{user: user}} = conn,
         %{"id" => participation_id, "recipients" => recipients}
       ) do
-    participation =
-      participation_id
-      |> Participation.get()
-
-    with true <- user.id == participation.user_id,
+    with %Participation{} = participation <- Participation.get(participation_id),
+         true <- user.id == participation.user_id,
          {:ok, participation} <- Participation.set_recipients(participation, recipients) do
       conn
       |> put_view(ConversationView)
       |> render("participation.json", %{participation: participation, for: user})
+    else
+      {:error, message} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{"error" => message})
+
+      _error ->
+        conn
+        |> put_status(404)
+        |> json(%{"error" => "Unknown conversation id"})
     end
   end
 

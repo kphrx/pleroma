@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
@@ -120,7 +120,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     old_user = refresh_record(old_user)
     new_user = refresh_record(new_user)
 
-    [notification] = Notification.for_user(follower, %{with_move: true})
+    [notification] = Notification.for_user(follower)
 
     expected = %{
       id: to_string(notification.id),

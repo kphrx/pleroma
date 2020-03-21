@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.MastodonAPI.AuthController do
@@ -86,6 +86,6 @@ defmodule Pleroma.Web.MastodonAPI.AuthController do
   @spec get_or_make_app() :: {:ok, App.t()} | {:error, Ecto.Changeset.t()}
   defp get_or_make_app do
     %{client_name: @local_mastodon_name, redirect_uris: "."}
-    |> App.get_or_make(["read", "write", "follow", "push"])
+    |> App.get_or_make(["read", "write", "follow", "push", "admin"])
   end
 end

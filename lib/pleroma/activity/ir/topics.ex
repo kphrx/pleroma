@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2019 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2020 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Activity.Ir.Topics do
@@ -39,7 +39,7 @@ defmodule Pleroma.Activity.Ir.Topics do
     end
   end
 
-  defp item_creation_tags(tags, %{data: %{"type" => "Create"}} = object, activity) do
+  defp item_creation_tags(tags, object, %{data: %{"type" => "Create"}} = activity) do
     tags ++ hashtags_to_topics(object) ++ attachment_topics(object, activity)
   end
 
