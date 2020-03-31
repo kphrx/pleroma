@@ -436,7 +436,7 @@ defmodule Pleroma.User do
     |> validate_format(:nickname, local_nickname_regex())
     |> validate_length(:bio, max: bio_limit)
     |> validate_length(:name, min: 1, max: name_limit)
-    |> put_fields()
+    |> put_fields(struct)
     |> put_change_if_present(:bio, &{:ok, parse_bio(&1, struct)})
     |> put_change_if_present(:avatar, &put_upload(&1, :avatar))
     |> put_change_if_present(:banner, &put_upload(&1, :banner))
@@ -448,7 +448,7 @@ defmodule Pleroma.User do
     |> validate_fields(false)
   end
 
-  defp put_fields(changeset) do
+  defp put_fields(changeset, user) do
     if raw_fields = get_change(changeset, :raw_fields) do
       raw_fields =
         raw_fields
@@ -456,7 +456,7 @@ defmodule Pleroma.User do
 
       fields =
         raw_fields
-        |> Enum.map(fn f -> Map.update!(f, "value", &AutoLinker.link(&1)) end)
+        |> Enum.map(fn f -> Map.update!(f, "value", &parse_fields(&1, user)) end)
 
       changeset
       |> put_change(:raw_fields, raw_fields)
@@ -464,6 +464,17 @@ defmodule Pleroma.User do
     else
       changeset
     end
+  end
+
+  defp parse_fields(value, user) do
+    profile_urls = [user.ap_id]
+
+    value
+    |> CommonUtils.format_input("text/html",
+      mentions_format: :full,
+      rel: &RelMe.maybe_put_rel_me(&1, profile_urls)
+    )
+    |> elem(0)
   end
 
   defp put_change_if_present(changeset, map_field, value_function) do
