@@ -61,7 +61,6 @@ defmodule Pleroma.Application do
         end
       else
         raise "
-          #{:code.root_dir()}
           !!!OTP VERSION WARNING!!!
           To support correct handling of unordered certificates chains - OTP version must be > 22.2.
           "
