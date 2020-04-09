@@ -392,6 +392,19 @@ Note: Available `:permission_group` is currently moderator and admin. 404 is ret
   - `email`
   - `name`, optional
 
+- Response:
+  - On success: `204`, empty response
+  - On failure:
+    - 400 Bad Request, JSON:
+
+    ```json
+      [
+        {
+          "error": "Appropriate error message here"
+        }
+      ]
+    ```
+
 ## `GET /api/pleroma/admin/users/:nickname/password_reset`
 
 ### Get a password reset token for a given nickname
@@ -841,6 +854,8 @@ Some modifications are necessary to save the config settings correctly:
 Most of the settings will be applied in `runtime`, this means that you don't need to restart the instance. But some settings are applied in `compile time` and require a reboot of the instance, such as:
 - all settings inside these keys:
   - `:hackney_pools`
+  - `:connections_pool`
+  - `:pools`
   - `:chat`
 - partially settings inside these keys:
   - `:seconds_valid` in `Pleroma.Captcha`

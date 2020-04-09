@@ -625,6 +625,39 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
 
       assert json_response(conn, :forbidden)
     end
+
+    test "email with +", %{conn: conn, admin: admin} do
+      recipient_email = "foo+bar@baz.com"
+
+      conn
+      |> put_req_header("content-type", "application/json;charset=utf-8")
+      |> post("/api/pleroma/admin/users/email_invite", %{email: recipient_email})
+      |> json_response(:no_content)
+
+      token_record =
+        Pleroma.UserInviteToken
+        |> Repo.all()
+        |> List.last()
+
+      assert token_record
+      refute token_record.used
+
+      notify_email = Config.get([:instance, :notify_email])
+      instance_name = Config.get([:instance, :name])
+
+      email =
+        Pleroma.Emails.UserEmail.user_invitation_email(
+          admin,
+          token_record,
+          recipient_email
+        )
+
+      Swoosh.TestAssertions.assert_email_sent(
+        from: {instance_name, notify_email},
+        to: recipient_email,
+        html_body: email.html_body
+      )
+    end
   end
 
   describe "POST /api/pleroma/admin/users/email_invite, with invalid config" do
@@ -637,7 +670,8 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
 
       conn = post(conn, "/api/pleroma/admin/users/email_invite?email=foo@bar.com&name=JD")
 
-      assert json_response(conn, :internal_server_error)
+      assert json_response(conn, :bad_request) ==
+               "To send invites you need to set the `invites_enabled` option to true."
     end
 
     test "it returns 500 if `registrations_open` is enabled", %{conn: conn} do
@@ -646,7 +680,8 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
 
       conn = post(conn, "/api/pleroma/admin/users/email_invite?email=foo@bar.com&name=JD")
 
-      assert json_response(conn, :internal_server_error)
+      assert json_response(conn, :bad_request) ==
+               "To send invites you need to set the `registrations_open` option to false."
     end
   end
 
@@ -2369,9 +2404,6 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
     end
 
     test "common config example", %{conn: conn} do
-      adapter = Application.get_env(:tesla, :adapter)
-      on_exit(fn -> Application.put_env(:tesla, :adapter, adapter) end)
-
       conn =
         post(conn, "/api/pleroma/admin/config", %{
           configs: [
@@ -2384,23 +2416,16 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
                 %{"tuple" => [":seconds_valid", 60]},
                 %{"tuple" => [":path", ""]},
                 %{"tuple" => [":key1", nil]},
-                %{"tuple" => [":partial_chain", "&:hackney_connect.partial_chain/1"]},
                 %{"tuple" => [":regex1", "~r/https:\/\/example.com/"]},
                 %{"tuple" => [":regex2", "~r/https:\/\/example.com/u"]},
                 %{"tuple" => [":regex3", "~r/https:\/\/example.com/i"]},
                 %{"tuple" => [":regex4", "~r/https:\/\/example.com/s"]},
                 %{"tuple" => [":name", "Pleroma"]}
               ]
-            },
-            %{
-              "group" => ":tesla",
-              "key" => ":adapter",
-              "value" => "Tesla.Adapter.Httpc"
             }
           ]
         })
 
-      assert Application.get_env(:tesla, :adapter) == Tesla.Adapter.Httpc
       assert Config.get([Pleroma.Captcha.NotReal, :name]) == "Pleroma"
 
       assert json_response(conn, 200) == %{
@@ -2414,7 +2439,6 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
                      %{"tuple" => [":seconds_valid", 60]},
                      %{"tuple" => [":path", ""]},
                      %{"tuple" => [":key1", nil]},
-                     %{"tuple" => [":partial_chain", "&:hackney_connect.partial_chain/1"]},
                      %{"tuple" => [":regex1", "~r/https:\\/\\/example.com/"]},
                      %{"tuple" => [":regex2", "~r/https:\\/\\/example.com/u"]},
                      %{"tuple" => [":regex3", "~r/https:\\/\\/example.com/i"]},
@@ -2427,19 +2451,12 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
                      ":seconds_valid",
                      ":path",
                      ":key1",
-                     ":partial_chain",
                      ":regex1",
                      ":regex2",
                      ":regex3",
                      ":regex4",
                      ":name"
                    ]
-                 },
-                 %{
-                   "group" => ":tesla",
-                   "key" => ":adapter",
-                   "value" => "Tesla.Adapter.Httpc",
-                   "db" => [":adapter"]
                  }
                ]
              }
