@@ -78,13 +78,13 @@ defmodule Pleroma.Web.Federator do
     else
       %Activity{} ->
         Logger.debug("Already had #{params["id"]}")
-        {:error, {:already_had_activity, params}}
+        :error
 
-      e ->
+      _e ->
         # Just drop those for now
         Logger.debug("Unhandled activity")
         Logger.debug(Jason.encode!(params, pretty: true))
-        {:error, e}
+        :error
     end
   end
 
