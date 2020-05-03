@@ -48,6 +48,33 @@ defmodule Pleroma.Web.CommonAPITest do
     assert object.data["like_count"] == 20
   end
 
+  test "repeating race condition" do
+    user = insert(:user)
+    users_serial = insert_list(10, :user)
+    users = insert_list(10, :user)
+
+    {:ok, activity} = CommonAPI.post(user, %{"status" => "."})
+
+    users_serial
+    |> Enum.map(fn user ->
+      CommonAPI.repeat(activity.id, user)
+    end)
+
+    object = Object.get_by_ap_id(activity.data["object"])
+    assert object.data["announcement_count"] == 10
+
+    users
+    |> Enum.map(fn user ->
+      Task.async(fn ->
+        CommonAPI.repeat(activity.id, user)
+      end)
+    end)
+    |> Enum.map(&Task.await/1)
+
+    object = Object.get_by_ap_id(activity.data["object"])
+    assert object.data["announcement_count"] == 20
+  end
+
   test "when replying to a conversation / participation, it will set the correct context id even if no explicit reply_to is given" do
     user = insert(:user)
     {:ok, activity} = CommonAPI.post(user, %{"status" => ".", "visibility" => "direct"})
@@ -458,9 +485,9 @@ defmodule Pleroma.Web.CommonAPITest do
       comment = "foobar"
 
       report_data = %{
-        "account_id" => target_user.id,
-        "comment" => comment,
-        "status_ids" => [activity.id]
+        account_id: target_user.id,
+        comment: comment,
+        status_ids: [activity.id]
       }
 
       note_obj = %{
@@ -490,9 +517,9 @@ defmodule Pleroma.Web.CommonAPITest do
 
       {:ok, %Activity{id: report_id}} =
         CommonAPI.report(reporter, %{
-          "account_id" => target_user.id,
-          "comment" => "I feel offended",
-          "status_ids" => [activity.id]
+          account_id: target_user.id,
+          comment: "I feel offended",
+          status_ids: [activity.id]
         })
 
       {:ok, report} = CommonAPI.update_report_state(report_id, "resolved")
@@ -511,9 +538,9 @@ defmodule Pleroma.Web.CommonAPITest do
 
       {:ok, %Activity{id: report_id}} =
         CommonAPI.report(reporter, %{
-          "account_id" => target_user.id,
-          "comment" => "I feel offended",
-          "status_ids" => [activity.id]
+          account_id: target_user.id,
+          comment: "I feel offended",
+          status_ids: [activity.id]
         })
 
       assert CommonAPI.update_report_state(report_id, "test") == {:error, "Unsupported state"}
@@ -525,16 +552,16 @@ defmodule Pleroma.Web.CommonAPITest do
 
       {:ok, %Activity{id: first_report_id}} =
         CommonAPI.report(reporter, %{
-          "account_id" => target_user.id,
-          "comment" => "I feel offended",
-          "status_ids" => [activity.id]
+          account_id: target_user.id,
+          comment: "I feel offended",
+          status_ids: [activity.id]
         })
 
       {:ok, %Activity{id: second_report_id}} =
         CommonAPI.report(reporter, %{
-          "account_id" => target_user.id,
-          "comment" => "I feel very offended!",
-          "status_ids" => [activity.id]
+          account_id: target_user.id,
+          comment: "I feel very offended!",
+          status_ids: [activity.id]
         })
 
       {:ok, report_ids} =
@@ -669,6 +696,14 @@ defmodule Pleroma.Web.CommonAPITest do
       assert Repo.get(Activity, follow_activity.id).data["state"] == "reject"
       assert Repo.get(Activity, follow_activity_two.id).data["state"] == "reject"
       assert Repo.get(Activity, follow_activity_three.id).data["state"] == "pending"
+    end
+
+    test "doesn't create a following relationship if the corresponding follow request doesn't exist" do
+      user = insert(:user, locked: true)
+      not_follower = insert(:user)
+      CommonAPI.accept_follow_request(not_follower, user)
+
+      assert Pleroma.FollowingRelationship.following?(not_follower, user) == false
     end
   end
 
