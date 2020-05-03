@@ -94,7 +94,12 @@ defmodule Pleroma.Web.StaticFE.StaticFEController do
         |> Enum.reverse()
         |> Enum.map(&represent(&1, &1.object.id == activity.object.id))
 
-      render(conn, "conversation.html", %{activities: timeline, meta: meta})
+      conn
+      |> put_resp_header(
+        "link",
+        "<#{activity.object.data["id"]}>; rel=\"alternate\"; type=\"application/activity+json\""
+      )
+      |> render("conversation.html", %{activities: timeline, meta: meta})
     else
       %Activity{object: %Object{data: data}} ->
         conn

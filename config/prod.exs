@@ -15,7 +15,8 @@ use Mix.Config
 # which you typically run after static files are built.
 config :pleroma, Pleroma.Web.Endpoint,
   http: [port: 4000],
-  protocol: "http"
+  protocol: "http",
+  url: [host: "pl.kpherox.dev", scheme: "https", port: 443]
 
 config :phoenix, serve_endpoints: true
 
