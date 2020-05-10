@@ -28,7 +28,8 @@ config :pleroma, :config_description, [
       %{
         key: :filters,
         type: {:list, :module},
-        description: "List of filter modules for uploads",
+        description:
+          "List of filter modules for uploads. Module names are shortened (removed leading `Pleroma.Upload.Filter.` part), but on adding custom MRF module you need to use full name.",
         suggestions:
           Generator.list_modules_in_dir(
             "lib/pleroma/upload/filter",
@@ -681,7 +682,8 @@ config :pleroma, :config_description, [
       %{
         key: :federation_publisher_modules,
         type: {:list, :module},
-        description: "List of modules for federation publishing",
+        description:
+          "List of modules for federation publishing. Module names are shortened (removed leading `Pleroma.Web.` part), but on adding custom MRF module you need to use full name.",
         suggestions: [
           Pleroma.Web.ActivityPub.Publisher
         ]
@@ -694,7 +696,8 @@ config :pleroma, :config_description, [
       %{
         key: :rewrite_policy,
         type: [:module, {:list, :module}],
-        description: "A list of MRF policies enabled",
+        description:
+          "A list of enabled MRF policies. Module names are shortened (removed leading `Pleroma.Web.ActivityPub.MRF.` part), but on adding custom MRF module you need to use full name.",
         suggestions:
           Generator.list_modules_in_dir(
             "lib/pleroma/web/activity_pub/mrf",
@@ -712,7 +715,7 @@ config :pleroma, :config_description, [
         key: :quarantined_instances,
         type: {:list, :string},
         description:
-          "List of ActivityPub instances where private (DMs, followers-only) activities will not be send",
+          "List of ActivityPub instances where private (DMs, followers-only) activities will not be sent",
         suggestions: [
           "quarantined.com",
           "*.quarantined.com"
@@ -919,6 +922,62 @@ config :pleroma, :config_description, [
         key: :external_user_synchronization,
         type: :boolean,
         description: "Enabling following/followers counters synchronization for external users"
+      },
+      %{
+        key: :multi_factor_authentication,
+        type: :keyword,
+        description: "Multi-factor authentication settings",
+        suggestions: [
+          [
+            totp: [digits: 6, period: 30],
+            backup_codes: [number: 5, length: 16]
+          ]
+        ],
+        children: [
+          %{
+            key: :totp,
+            type: :keyword,
+            description: "TOTP settings",
+            suggestions: [digits: 6, period: 30],
+            children: [
+              %{
+                key: :digits,
+                type: :integer,
+                suggestions: [6],
+                description:
+                  "Determines the length of a one-time pass-code, in characters. Defaults to 6 characters."
+              },
+              %{
+                key: :period,
+                type: :integer,
+                suggestions: [30],
+                description:
+                  "a period for which the TOTP code will be valid, in seconds. Defaults to 30 seconds."
+              }
+            ]
+          },
+          %{
+            key: :backup_codes,
+            type: :keyword,
+            description: "MFA backup codes settings",
+            suggestions: [number: 5, length: 16],
+            children: [
+              %{
+                key: :number,
+                type: :integer,
+                suggestions: [5],
+                description: "number of backup codes to generate."
+              },
+              %{
+                key: :length,
+                type: :integer,
+                suggestions: [16],
+                description:
+                  "Determines the length of backup one-time pass-codes, in characters. Defaults to 16 characters."
+              }
+            ]
+          }
+        ]
       }
     ]
   },
@@ -1975,7 +2034,8 @@ config :pleroma, :config_description, [
       %{
         key: :parsers,
         type: {:list, :module},
-        description: "List of Rich Media parsers.",
+        description:
+          "List of Rich Media parsers. Module names are shortened (removed leading `Pleroma.Web.RichMedia.Parsers.` part), but on adding custom MRF module you need to use full name.",
         suggestions: [
           Pleroma.Web.RichMedia.Parsers.MetaTagsParser,
           Pleroma.Web.RichMedia.Parsers.OEmbed,
@@ -1987,7 +2047,8 @@ config :pleroma, :config_description, [
         key: :ttl_setters,
         label: "TTL setters",
         type: {:list, :module},
-        description: "List of rich media TTL setters.",
+        description:
+          "List of rich media TTL setters. Module names are shortened (removed leading `Pleroma.Web.RichMedia.Parser.` part), but on adding custom MRF module you need to use full name.",
         suggestions: [
           Pleroma.Web.RichMedia.Parser.TTL.AwsSignedUrl
         ]
@@ -2247,6 +2308,7 @@ config :pleroma, :config_description, [
         children: [
           %{
             key: :active,
+            label: "Enabled",
             type: :boolean,
             description: "Globally enable or disable digest emails"
           },
@@ -2660,6 +2722,8 @@ config :pleroma, :config_description, [
       %{
         key: :scrub_policy,
         type: {:list, :module},
+        description:
+          "Module names are shortened (removed leading `Pleroma.HTML.` part), but on adding custom MRF module you need to use full name.",
         suggestions: [Pleroma.HTML.Transform.MediaProxy, Pleroma.HTML.Scrubber.Default]
       }
     ]
@@ -3192,6 +3256,20 @@ config :pleroma, :config_description, [
             description: "Disallow view remote statuses."
           }
         ]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Web.ApiSpec.CastAndValidate,
+    type: :group,
+    children: [
+      %{
+        key: :strict,
+        type: :boolean,
+        description:
+          "Enables strict input validation (useful in development, not recommended in production)",
+        suggestions: [false]
       }
     ]
   }
