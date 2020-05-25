@@ -40,7 +40,7 @@ RUN echo "http://nl.alpinelinux.org/alpine/latest-stable/community" >> /etc/apk/
 	mkdir -p ${DATA}/static &&\
 	mkdir -p /etc/pleroma
 
-COPY --from=build --chown=pleroma:pleroma /release ${HOME}
+COPY --from=build --chown=pleroma: /release ${HOME}
 
 COPY ./config/docker.exs /etc/pleroma/config.exs
 COPY ./docker-entrypoint.sh ${HOME}
