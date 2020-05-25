@@ -216,24 +216,25 @@ defmodule Pleroma.Web.Router do
     scope "/packs" do
       pipe_through(:admin_api)
 
-      get("/import", EmojiAPIController, :import_from_filesystem)
-      get("/remote", EmojiAPIController, :remote)
-      post("/download", EmojiAPIController, :download)
+      get("/import", EmojiPackController, :import_from_filesystem)
+      get("/remote", EmojiPackController, :remote)
+      post("/download", EmojiPackController, :download)
 
-      post("/:name", EmojiAPIController, :create)
-      patch("/:name", EmojiAPIController, :update)
-      delete("/:name", EmojiAPIController, :delete)
+      post("/:name", EmojiPackController, :create)
+      patch("/:name", EmojiPackController, :update)
+      delete("/:name", EmojiPackController, :delete)
 
-      post("/:name/files", EmojiAPIController, :add_file)
-      patch("/:name/files", EmojiAPIController, :update_file)
-      delete("/:name/files", EmojiAPIController, :delete_file)
+      post("/:name/files", EmojiPackController, :add_file)
+      patch("/:name/files", EmojiPackController, :update_file)
+      delete("/:name/files", EmojiPackController, :delete_file)
     end
 
     # Pack info / downloading
     scope "/packs" do
-      get("/", EmojiAPIController, :list)
-      get("/:name", EmojiAPIController, :show)
-      get("/:name/archive", EmojiAPIController, :archive)
+      pipe_through(:api)
+      get("/", EmojiPackController, :index)
+      get("/:name", EmojiPackController, :show)
+      get("/:name/archive", EmojiPackController, :archive)
     end
   end
 
@@ -297,26 +298,22 @@ defmodule Pleroma.Web.Router do
   scope "/api/v1/pleroma", Pleroma.Web.PleromaAPI do
     pipe_through(:api)
 
-    get("/statuses/:id/reactions/:emoji", PleromaAPIController, :emoji_reactions_by)
-    get("/statuses/:id/reactions", PleromaAPIController, :emoji_reactions_by)
+    get("/statuses/:id/reactions/:emoji", EmojiReactionController, :index)
+    get("/statuses/:id/reactions", EmojiReactionController, :index)
   end
 
   scope "/api/v1/pleroma", Pleroma.Web.PleromaAPI do
     scope [] do
       pipe_through(:authenticated_api)
 
-      get("/conversations/:id/statuses", PleromaAPIController, :conversation_statuses)
-      get("/conversations/:id", PleromaAPIController, :conversation)
-      post("/conversations/read", PleromaAPIController, :mark_conversations_as_read)
-    end
+      get("/conversations/:id/statuses", ConversationController, :statuses)
+      get("/conversations/:id", ConversationController, :show)
+      post("/conversations/read", ConversationController, :mark_as_read)
+      patch("/conversations/:id", ConversationController, :update)
 
-    scope [] do
-      pipe_through(:authenticated_api)
-
-      patch("/conversations/:id", PleromaAPIController, :update_conversation)
-      put("/statuses/:id/reactions/:emoji", PleromaAPIController, :react_with_emoji)
-      delete("/statuses/:id/reactions/:emoji", PleromaAPIController, :unreact_with_emoji)
-      post("/notifications/read", PleromaAPIController, :mark_notifications_as_read)
+      put("/statuses/:id/reactions/:emoji", EmojiReactionController, :create)
+      delete("/statuses/:id/reactions/:emoji", EmojiReactionController, :delete)
+      post("/notifications/read", NotificationController, :mark_as_read)
 
       patch("/accounts/update_avatar", AccountController, :update_avatar)
       patch("/accounts/update_banner", AccountController, :update_banner)
@@ -325,7 +322,7 @@ defmodule Pleroma.Web.Router do
       get("/mascot", MascotController, :show)
       put("/mascot", MascotController, :update)
 
-      post("/scrobble", ScrobbleController, :new_scrobble)
+      post("/scrobble", ScrobbleController, :create)
     end
 
     scope [] do
@@ -345,7 +342,7 @@ defmodule Pleroma.Web.Router do
 
   scope "/api/v1/pleroma", Pleroma.Web.PleromaAPI do
     pipe_through(:api)
-    get("/accounts/:id/scrobbles", ScrobbleController, :user_scrobbles)
+    get("/accounts/:id/scrobbles", ScrobbleController, :index)
   end
 
   scope "/api/v1", Pleroma.Web.MastodonAPI do
@@ -403,6 +400,7 @@ defmodule Pleroma.Web.Router do
     post("/markers", MarkerController, :upsert)
 
     post("/media", MediaController, :create)
+    get("/media/:id", MediaController, :show)
     put("/media/:id", MediaController, :update)
 
     get("/notifications", NotificationController, :index)
@@ -497,6 +495,8 @@ defmodule Pleroma.Web.Router do
   scope "/api/v2", Pleroma.Web.MastodonAPI do
     pipe_through(:api)
     get("/search", SearchController, :search2)
+
+    post("/media", MediaController, :create2)
   end
 
   scope "/api", Pleroma.Web do
@@ -555,6 +555,10 @@ defmodule Pleroma.Web.Router do
     get("/activities/:uuid", OStatus.OStatusController, :activity)
     get("/notice/:id", OStatus.OStatusController, :notice)
     get("/notice/:id/embed_player", OStatus.OStatusController, :notice_player)
+
+    # Mastodon compatibility routes
+    get("/users/:nickname/statuses/:id", OStatus.OStatusController, :object)
+    get("/users/:nickname/statuses/:id/activity", OStatus.OStatusController, :activity)
 
     get("/users/:nickname/feed", Feed.UserController, :feed, as: :user_feed)
     get("/users/:nickname", Feed.UserController, :feed_redirect, as: :user_feed)

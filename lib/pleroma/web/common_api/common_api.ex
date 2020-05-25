@@ -25,10 +25,21 @@ defmodule Pleroma.Web.CommonAPI do
   require Logger
 
   def unblock(blocker, blocked) do
-    with %Activity{} = block <- Utils.fetch_latest_block(blocker, blocked),
+    with {_, %Activity{} = block} <- {:fetch_block, Utils.fetch_latest_block(blocker, blocked)},
          {:ok, unblock_data, _} <- Builder.undo(blocker, block),
          {:ok, unblock, _} <- Pipeline.common_pipeline(unblock_data, local: true) do
       {:ok, unblock}
+    else
+      {:fetch_block, nil} ->
+        if User.blocks?(blocker, blocked) do
+          User.unblock(blocker, blocked)
+          {:ok, :no_activity}
+        else
+          {:error, :not_blocking}
+        end
+
+      e ->
+        e
     end
   end
 
@@ -116,19 +127,19 @@ defmodule Pleroma.Web.CommonAPI do
   end
 
   def repeat(id, user, params \\ %{}) do
-    with {_, %Activity{data: %{"type" => "Create"}} = activity} <-
-           {:find_activity, Activity.get_by_id(id)},
-         object <- Object.normalize(activity),
-         announce_activity <- Utils.get_existing_announce(user.ap_id, object),
-         public <- public_announce?(object, params) do
-      if announce_activity do
-        {:ok, announce_activity, object}
-      else
-        ActivityPub.announce(user, object, nil, true, public)
-      end
+    with %Activity{data: %{"type" => "Create"}} = activity <- Activity.get_by_id(id),
+         object = %Object{} <- Object.normalize(activity, false),
+         {_, nil} <- {:existing_announce, Utils.get_existing_announce(user.ap_id, object)},
+         public = public_announce?(object, params),
+         {:ok, announce, _} <- Builder.announce(user, object, public: public),
+         {:ok, activity, _} <- Pipeline.common_pipeline(announce, local: true) do
+      {:ok, activity}
     else
-      {:find_activity, _} -> {:error, :not_found}
-      _ -> {:error, dgettext("errors", "Could not repeat")}
+      {:existing_announce, %Activity{} = announce} ->
+        {:ok, announce}
+
+      _ ->
+        {:error, :not_found}
     end
   end
 
@@ -286,7 +297,7 @@ defmodule Pleroma.Web.CommonAPI do
     end
   end
 
-  def public_announce?(_, %{"visibility" => visibility})
+  def public_announce?(_, %{visibility: visibility})
       when visibility in ~w{public unlisted private direct},
       do: visibility in ~w(public unlisted)
 
@@ -296,11 +307,11 @@ defmodule Pleroma.Web.CommonAPI do
 
   def get_visibility(_, _, %Participation{}), do: {"direct", "direct"}
 
-  def get_visibility(%{"visibility" => visibility}, in_reply_to, _)
+  def get_visibility(%{visibility: visibility}, in_reply_to, _)
       when visibility in ~w{public unlisted private direct},
       do: {visibility, get_replied_to_visibility(in_reply_to)}
 
-  def get_visibility(%{"visibility" => "list:" <> list_id}, in_reply_to, _) do
+  def get_visibility(%{visibility: "list:" <> list_id}, in_reply_to, _) do
     visibility = {:list, String.to_integer(list_id)}
     {visibility, get_replied_to_visibility(in_reply_to)}
   end
@@ -337,11 +348,14 @@ defmodule Pleroma.Web.CommonAPI do
     |> check_expiry_date()
   end
 
-  def listen(user, %{"title" => _} = data) do
-    with visibility <- data["visibility"] || "public",
-         {to, cc} <- get_to_and_cc(user, [], nil, visibility, nil),
+  def listen(user, data) do
+    visibility = Map.get(data, :visibility, "public")
+
+    with {to, cc} <- get_to_and_cc(user, [], nil, visibility, nil),
          listen_data <-
-           Map.take(data, ["album", "artist", "title", "length"])
+           data
+           |> Map.take([:album, :artist, :title, :length])
+           |> Map.new(fn {key, value} -> {to_string(key), value} end)
            |> Map.put("type", "Audio")
            |> Map.put("to", to)
            |> Map.put("cc", cc)
@@ -358,7 +372,7 @@ defmodule Pleroma.Web.CommonAPI do
     end
   end
 
-  def post(user, %{"status" => _} = data) do
+  def post(user, %{status: _} = data) do
     with {:ok, draft} <- Pleroma.Web.CommonAPI.ActivityDraft.create(user, data) do
       draft.changes
       |> ActivityPub.create(draft.preview?)
@@ -467,11 +481,11 @@ defmodule Pleroma.Web.CommonAPI do
     end
   end
 
-  defp toggle_sensitive(activity, %{"sensitive" => sensitive}) when sensitive in ~w(true false) do
-    toggle_sensitive(activity, %{"sensitive" => String.to_existing_atom(sensitive)})
+  defp toggle_sensitive(activity, %{sensitive: sensitive}) when sensitive in ~w(true false) do
+    toggle_sensitive(activity, %{sensitive: String.to_existing_atom(sensitive)})
   end
 
-  defp toggle_sensitive(%Activity{object: object} = activity, %{"sensitive" => sensitive})
+  defp toggle_sensitive(%Activity{object: object} = activity, %{sensitive: sensitive})
        when is_boolean(sensitive) do
     new_data = Map.put(object.data, "sensitive", sensitive)
 
@@ -485,7 +499,7 @@ defmodule Pleroma.Web.CommonAPI do
 
   defp toggle_sensitive(activity, _), do: {:ok, activity}
 
-  defp set_visibility(activity, %{"visibility" => visibility}) do
+  defp set_visibility(activity, %{visibility: visibility}) do
     Utils.update_activity_visibility(activity, visibility)
   end
 

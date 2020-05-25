@@ -9,7 +9,6 @@ defmodule Pleroma.User do
   import Ecto.Query
   import Ecto, only: [assoc: 2]
 
-  alias Comeonin.Pbkdf2
   alias Ecto.Multi
   alias Pleroma.Activity
   alias Pleroma.Config
@@ -306,8 +305,13 @@ defmodule Pleroma.User do
 
   def avatar_url(user, options \\ []) do
     case user.avatar do
-      %{"url" => [%{"href" => href} | _]} -> href
-      _ -> !options[:no_default] && "#{Web.base_url()}/images/avi.png"
+      %{"url" => [%{"href" => href} | _]} ->
+        href
+
+      _ ->
+        unless options[:no_default] do
+          Config.get([:assets, :default_user_avatar], "#{Web.base_url()}/images/avi.png")
+        end
     end
   end
 
@@ -750,7 +754,19 @@ defmodule Pleroma.User do
     {:error, "Not subscribed!"}
   end
 
+  @spec unfollow(User.t(), User.t()) :: {:ok, User.t(), Activity.t()} | {:error, String.t()}
   def unfollow(%User{} = follower, %User{} = followed) do
+    case do_unfollow(follower, followed) do
+      {:ok, follower, followed} ->
+        {:ok, follower, Utils.fetch_latest_follow(follower, followed)}
+
+      error ->
+        error
+    end
+  end
+
+  @spec do_unfollow(User.t(), User.t()) :: {:ok, User.t(), User.t()} | {:error, String.t()}
+  defp do_unfollow(%User{} = follower, %User{} = followed) do
     case get_follow_state(follower, followed) do
       state when state in [:follow_pending, :follow_accept] ->
         FollowingRelationship.unfollow(follower, followed)
@@ -761,7 +777,7 @@ defmodule Pleroma.User do
           |> update_following_count()
           |> set_cache()
 
-        {:ok, follower, Utils.fetch_latest_follow(follower, followed)}
+        {:ok, follower, followed}
 
       nil ->
         {:error, "Not subscribed!"}
@@ -1205,7 +1221,9 @@ defmodule Pleroma.User do
   def get_recipients_from_activity(%Activity{recipients: to, actor: actor}) do
     to = [actor | to]
 
-    User.Query.build(%{recipients_from_activity: to, local: true, deactivated: false})
+    query = User.Query.build(%{recipients_from_activity: to, local: true, deactivated: false})
+
+    query
     |> Repo.all()
   end
 
@@ -1401,15 +1419,13 @@ defmodule Pleroma.User do
       user
       |> get_followers()
       |> Enum.filter(& &1.local)
-      |> Enum.each(fn follower ->
-        follower |> update_following_count() |> set_cache()
-      end)
+      |> Enum.each(&set_cache(update_following_count(&1)))
 
       # Only update local user counts, remote will be update during the next pull.
       user
       |> get_friends()
       |> Enum.filter(& &1.local)
-      |> Enum.each(&update_follower_count/1)
+      |> Enum.each(&do_unfollow(user, &1))
 
       {:ok, user}
     end
@@ -1429,6 +1445,25 @@ defmodule Pleroma.User do
 
   def delete(%User{} = user) do
     BackgroundWorker.enqueue("delete_user", %{"user_id" => user.id})
+  end
+
+  defp delete_and_invalidate_cache(%User{} = user) do
+    invalidate_cache(user)
+    Repo.delete(user)
+  end
+
+  defp delete_or_deactivate(%User{local: false} = user), do: delete_and_invalidate_cache(user)
+
+  defp delete_or_deactivate(%User{local: true} = user) do
+    status = account_status(user)
+
+    if status == :confirmation_pending do
+      delete_and_invalidate_cache(user)
+    else
+      user
+      |> change(%{deactivated: true, email: nil})
+      |> update_and_set_cache()
+    end
   end
 
   def perform(:force_password_reset, user), do: force_password_reset(user)
@@ -1452,14 +1487,7 @@ defmodule Pleroma.User do
 
     delete_user_activities(user)
 
-    if user.local do
-      user
-      |> change(%{deactivated: true, email: nil})
-      |> update_and_set_cache()
-    else
-      invalidate_cache(user)
-      Repo.delete(user)
-    end
+    delete_or_deactivate(user)
   end
 
   def perform(:deactivate_async, user, status), do: deactivate(user, status)
@@ -1926,7 +1954,7 @@ defmodule Pleroma.User do
   defp put_password_hash(
          %Ecto.Changeset{valid?: true, changes: %{password: password}} = changeset
        ) do
-    change(changeset, password_hash: Pbkdf2.hashpwsalt(password))
+    change(changeset, password_hash: Pbkdf2.hash_pwd_salt(password))
   end
 
   defp put_password_hash(changeset), do: changeset

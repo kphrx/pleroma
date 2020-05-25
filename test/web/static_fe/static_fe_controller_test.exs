@@ -33,8 +33,8 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
     end
 
     test "profile does not include private messages", %{conn: conn, user: user} do
-      CommonAPI.post(user, %{"status" => "public"})
-      CommonAPI.post(user, %{"status" => "private", "visibility" => "private"})
+      CommonAPI.post(user, %{status: "public"})
+      CommonAPI.post(user, %{status: "private", visibility: "private"})
 
       conn = get(conn, "/users/#{user.nickname}")
 
@@ -45,7 +45,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
     end
 
     test "pagination", %{conn: conn, user: user} do
-      Enum.map(1..30, fn i -> CommonAPI.post(user, %{"status" => "test#{i}"}) end)
+      Enum.map(1..30, fn i -> CommonAPI.post(user, %{status: "test#{i}"}) end)
 
       conn = get(conn, "/users/#{user.nickname}")
 
@@ -58,7 +58,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
     end
 
     test "pagination, page 2", %{conn: conn, user: user} do
-      activities = Enum.map(1..30, fn i -> CommonAPI.post(user, %{"status" => "test#{i}"}) end)
+      activities = Enum.map(1..30, fn i -> CommonAPI.post(user, %{status: "test#{i}"}) end)
       {:ok, a11} = Enum.at(activities, 11)
 
       conn = get(conn, "/users/#{user.nickname}?max_id=#{a11.id}")
@@ -78,8 +78,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
 
   describe "notice html" do
     test "single notice page", %{conn: conn, user: user} do
-      {:ok, activity} = CommonAPI.post(user, %{"status" => "testing a thing!"})
-      object_url = Object.normalize(activity).data["id"]
+      {:ok, activity} = CommonAPI.post(user, %{status: "testing a thing!"})
 
       conn = get(conn, "/notice/#{activity.id}")
 
@@ -88,6 +87,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
       assert html =~ user.nickname
       assert html =~ "testing a thing!"
 
+      object_url = Object.normalize(activity).data["id"]
       assert [link_header] = get_resp_header(conn, "link")
       assert link_header =~ ~r/<#{object_url}>/
       assert link_header =~ ~r/rel="alternate"/
@@ -96,7 +96,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
 
     test "filters HTML tags", %{conn: conn} do
       user = insert(:user)
-      {:ok, activity} = CommonAPI.post(user, %{"status" => "<script>alert('xss')</script>"})
+      {:ok, activity} = CommonAPI.post(user, %{status: "<script>alert('xss')</script>"})
 
       conn =
         conn
@@ -108,11 +108,11 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
     end
 
     test "shows the whole thread", %{conn: conn, user: user} do
-      {:ok, activity} = CommonAPI.post(user, %{"status" => "space: the final frontier"})
+      {:ok, activity} = CommonAPI.post(user, %{status: "space: the final frontier"})
 
       CommonAPI.post(user, %{
-        "status" => "these are the voyages or something",
-        "in_reply_to_status_id" => activity.id
+        status: "these are the voyages or something",
+        in_reply_to_status_id: activity.id
       })
 
       conn = get(conn, "/notice/#{activity.id}")
@@ -124,7 +124,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
 
     test "redirect by AP object ID", %{conn: conn, user: user} do
       {:ok, %Activity{data: %{"object" => object_url}}} =
-        CommonAPI.post(user, %{"status" => "beam me up"})
+        CommonAPI.post(user, %{status: "beam me up"})
 
       conn = get(conn, URI.parse(object_url).path)
 
@@ -133,7 +133,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
 
     test "redirect by activity ID", %{conn: conn, user: user} do
       {:ok, %Activity{data: %{"id" => id}}} =
-        CommonAPI.post(user, %{"status" => "I'm a doctor, not a devops!"})
+        CommonAPI.post(user, %{status: "I'm a doctor, not a devops!"})
 
       conn = get(conn, URI.parse(id).path)
 
@@ -147,8 +147,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
     end
 
     test "404 for private status", %{conn: conn, user: user} do
-      {:ok, activity} =
-        CommonAPI.post(user, %{"status" => "don't show me!", "visibility" => "private"})
+      {:ok, activity} = CommonAPI.post(user, %{status: "don't show me!", visibility: "private"})
 
       conn = get(conn, "/notice/#{activity.id}")
 
@@ -178,7 +177,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
     end
 
     test "it requires authentication if instance is NOT federating", %{conn: conn, user: user} do
-      {:ok, activity} = CommonAPI.post(user, %{"status" => "testing a thing!"})
+      {:ok, activity} = CommonAPI.post(user, %{status: "testing a thing!"})
 
       ensure_federating_or_authenticated(conn, "/notice/#{activity.id}", user)
     end
