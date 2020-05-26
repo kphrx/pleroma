@@ -90,7 +90,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidatorTest do
     end
   end
 
-  describe "deletes" do
+  describe "Deletes" do
     setup do
       user = insert(:user)
       {:ok, post_activity} = CommonAPI.post(user, %{status: "cancel me daddy"})
@@ -182,7 +182,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidatorTest do
     end
   end
 
-  describe "likes" do
+  describe "Likes" do
     setup do
       user = insert(:user)
       {:ok, post_activity} = CommonAPI.post(user, %{status: "uguu"})
@@ -281,7 +281,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidatorTest do
     end
   end
 
-  describe "announces" do
+  describe "Announces" do
     setup do
       user = insert(:user)
       announcer = insert(:user)
@@ -353,19 +353,19 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidatorTest do
       object = Object.normalize(post_activity, false)
 
       # Another user can't announce it
-      {:ok, announce, []} = Builder.announce(announcer, object, public: false)
+      {:ok, announce, []} = Builder.announce(announcer, object, visibility: "private")
 
       {:error, cng} = ObjectValidator.validate(announce, [])
 
       assert {:actor, {"can not announce this object", []}} in cng.errors
 
       # The actor of the object can announce it
-      {:ok, announce, []} = Builder.announce(user, object, public: false)
+      {:ok, announce, []} = Builder.announce(user, object, visibility: "private")
 
       assert {:ok, _, _} = ObjectValidator.validate(announce, [])
 
       # The actor of the object can not announce it publicly
-      {:ok, announce, []} = Builder.announce(user, object, public: true)
+      {:ok, announce, []} = Builder.announce(user, object, visibility: "public")
 
       {:error, cng} = ObjectValidator.validate(announce, [])
 
