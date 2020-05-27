@@ -7,7 +7,6 @@ defmodule Pleroma.Web.ActivityPub.Builder do
 
   alias Pleroma.Object
   alias Pleroma.User
-  alias Pleroma.Web.ActivityPub.Relay
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.ActivityPub.Visibility
 
@@ -86,39 +85,15 @@ defmodule Pleroma.Web.ActivityPub.Builder do
     end
   end
 
-  @spec announce(User.t(), Object.t(), keyword()) :: {:ok, map(), keyword()}
   def announce(actor, object, options \\ []) do
-    visibility = Keyword.get(options, :visibility, Visibility.get_visibility(object))
+    public? = Keyword.get(options, :public, false)
+    to = [actor.follower_address, object.data["actor"]]
 
     to =
-      case visibility do
-        "public" ->
-          [Pleroma.Constants.as_public()]
-
-        v when v in ["unlisted", "private"] ->
-          [actor.follower_address]
-
-        _ ->
-          []
-      end
-
-    cc =
-      case visibility do
-        "public" ->
-          [actor.follower_address]
-
-        "unlisted" ->
-          [Pleroma.Constants.as_public()]
-
-        _ ->
-          []
-      end
-
-    to =
-      if actor.ap_id == Relay.relay_ap_id() do
-        to
+      if public? do
+        [Pleroma.Constants.as_public() | to]
       else
-        [object.data["actor"] | to]
+        to
       end
 
     {:ok,
@@ -127,7 +102,6 @@ defmodule Pleroma.Web.ActivityPub.Builder do
        "actor" => actor.ap_id,
        "object" => object.data["id"],
        "to" => to,
-       "cc" => cc,
        "context" => object.data["context"],
        "type" => "Announce",
        "published" => Utils.make_date()
