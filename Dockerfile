@@ -42,6 +42,8 @@ RUN echo "http://nl.alpinelinux.org/alpine/latest-stable/community" >> /etc/apk/
 
 COPY --from=build --chown=pleroma:pleroma /release ${HOME}
 
+VOLUME ["/var/lib/pleroma"]
+
 COPY ./config/docker.exs /etc/pleroma/config.exs
 COPY ./docker-entrypoint.sh ${HOME}
 
