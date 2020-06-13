@@ -5,6 +5,7 @@
 defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Activity
   alias Pleroma.Activity.Ir.Topics
+  alias Pleroma.ActivityExpiration
   alias Pleroma.Config
   alias Pleroma.Constants
   alias Pleroma.Conversation
@@ -30,25 +31,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   require Logger
   require Pleroma.Constants
-
-  # For Announce activities, we filter the recipients based on following status for any actors
-  # that match actual users.  See issue #164 for more information about why this is necessary.
-  defp get_recipients(%{"type" => "Announce"} = data) do
-    to = Map.get(data, "to", [])
-    cc = Map.get(data, "cc", [])
-    bcc = Map.get(data, "bcc", [])
-    actor = User.get_cached_by_ap_id(data["actor"])
-
-    recipients =
-      Enum.filter(Enum.concat([to, cc, bcc]), fn recipient ->
-        case User.get_cached_by_ap_id(recipient) do
-          nil -> true
-          user -> User.following?(user, actor)
-        end
-      end)
-
-    {recipients, to, cc}
-  end
 
   defp get_recipients(%{"type" => "Create"} = data) do
     to = Map.get(data, "to", [])
@@ -112,7 +94,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp increase_poll_votes_if_vote(_create_data), do: :noop
 
+  @object_types ["ChatMessage"]
   @spec persist(map(), keyword()) :: {:ok, Activity.t() | Object.t()}
+  def persist(%{"type" => type} = object, meta) when type in @object_types do
+    with {:ok, object} <- Object.create(object) do
+      {:ok, object, meta}
+    end
+  end
+
   def persist(object, meta) do
     with local <- Keyword.fetch!(meta, :local),
          {recipients, _, _} <- get_recipients(object),
@@ -139,12 +128,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
          {:containment, :ok} <- {:containment, Containment.contain_child(map)},
          {:ok, map, object} <- insert_full_object(map) do
       {:ok, activity} =
-        Repo.insert(%Activity{
+        %Activity{
           data: map,
           local: local,
           actor: map["actor"],
           recipients: recipients
-        })
+        }
+        |> Repo.insert()
+        |> maybe_create_activity_expiration()
 
       # Splice in the child object if we have one.
       activity = Maps.put_if_present(activity, :object, object)
@@ -181,6 +172,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     stream_out(activity)
     stream_out_participations(participations)
   end
+
+  defp maybe_create_activity_expiration({:ok, %{data: %{"expires_at" => expires_at}} = activity}) do
+    with {:ok, _} <- ActivityExpiration.create(activity, expires_at) do
+      {:ok, activity}
+    end
+  end
+
+  defp maybe_create_activity_expiration(result), do: result
 
   defp create_or_bump_conversation(activity, actor) do
     with {:ok, conversation} <- Conversation.create_or_bump_for(activity),
@@ -344,20 +343,21 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
-  @spec follow(User.t(), User.t(), String.t() | nil, boolean()) ::
+  @spec follow(User.t(), User.t(), String.t() | nil, boolean(), keyword()) ::
           {:ok, Activity.t()} | {:error, any()}
-  def follow(follower, followed, activity_id \\ nil, local \\ true) do
+  def follow(follower, followed, activity_id \\ nil, local \\ true, opts \\ []) do
     with {:ok, result} <-
-           Repo.transaction(fn -> do_follow(follower, followed, activity_id, local) end) do
+           Repo.transaction(fn -> do_follow(follower, followed, activity_id, local, opts) end) do
       result
     end
   end
 
-  defp do_follow(follower, followed, activity_id, local) do
+  defp do_follow(follower, followed, activity_id, local, opts) do
+    skip_notify_and_stream = Keyword.get(opts, :skip_notify_and_stream, false)
     data = make_follow_data(follower, followed, activity_id)
 
     with {:ok, activity} <- insert(data, local),
-         _ <- notify_and_stream(activity),
+         _ <- skip_notify_and_stream || notify_and_stream(activity),
          :ok <- maybe_federate(activity) do
       {:ok, activity}
     else
@@ -702,6 +702,26 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
+  defp restrict_announce_object_actor(_query, %{announce_filtering_user: _, skip_preload: true}) do
+    raise "Can't use the child object without preloading!"
+  end
+
+  defp restrict_announce_object_actor(query, %{announce_filtering_user: %{ap_id: actor}}) do
+    from(
+      [activity, object] in query,
+      where:
+        fragment(
+          "?->>'type' != ? or ?->>'actor' != ?",
+          activity.data,
+          "Announce",
+          object.data,
+          ^actor
+        )
+    )
+  end
+
+  defp restrict_announce_object_actor(query, _), do: query
+
   defp restrict_since(query, %{since_id: ""}), do: query
 
   defp restrict_since(query, %{since_id: since_id}) do
@@ -1000,6 +1020,18 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
+  defp exclude_chat_messages(query, %{include_chat_messages: true}), do: query
+
+  defp exclude_chat_messages(query, _) do
+    if has_named_binding?(query, :object) do
+      from([activity, object: o] in query,
+        where: fragment("not(?->>'type' = ?)", o.data, "ChatMessage")
+      )
+    else
+      query
+    end
+  end
+
   defp exclude_invisible_actors(query, %{invisible_actors: true}), do: query
 
   defp exclude_invisible_actors(query, _opts) do
@@ -1113,8 +1145,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> restrict_pinned(opts)
     |> restrict_muted_reblogs(restrict_muted_reblogs_opts)
     |> restrict_instance(opts)
+    |> restrict_announce_object_actor(opts)
     |> Activity.restrict_deactivated_users()
     |> exclude_poll_votes(opts)
+    |> exclude_chat_messages(opts)
     |> exclude_invisible_actors(opts)
     |> exclude_visibility(opts)
   end
