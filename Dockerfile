@@ -33,17 +33,14 @@ ARG DATA=/var/lib/pleroma
 
 RUN echo "http://nl.alpinelinux.org/alpine/latest-stable/community" >> /etc/apk/repositories &&\
 	apk update &&\
-	apk add imagemagick ncurses postgresql-client &&\
-	adduser --system --shell /bin/false --home ${HOME} pleroma &&\
+	apk add --no-cache imagemagick ncurses postgresql-client shadow su-exec &&\
+	addgroup --system pleroma &&\
+	adduser --system --shell /bin/false --home ${HOME} -G pleroma pleroma &&\
 	mkdir -p ${DATA}/uploads &&\
 	mkdir -p ${DATA}/static &&\
-	chown -R pleroma ${DATA} &&\
-	mkdir -p /etc/pleroma &&\
-	chown -R pleroma /etc/pleroma
+	mkdir -p /etc/pleroma
 
-USER pleroma
-
-COPY --from=build --chown=pleroma:0 /release ${HOME}
+COPY --from=build --chown=pleroma:pleroma /release ${HOME}
 
 COPY ./config/docker.exs /etc/pleroma/config.exs
 COPY ./docker-entrypoint.sh ${HOME}

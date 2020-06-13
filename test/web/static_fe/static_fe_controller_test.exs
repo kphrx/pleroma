@@ -3,6 +3,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
 
   alias Pleroma.Activity
   alias Pleroma.Config
+  alias Pleroma.Object
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.CommonAPI
 
@@ -85,6 +86,12 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
       assert html =~ "<header>"
       assert html =~ user.nickname
       assert html =~ "testing a thing!"
+
+      object_url = Object.normalize(activity).data["id"]
+      assert [link_header] = get_resp_header(conn, "link")
+      assert link_header =~ ~r/<#{object_url}>/
+      assert link_header =~ ~r/rel="alternate"/
+      assert link_header =~ ~r/type="application\/activity\+json"/
     end
 
     test "filters HTML tags", %{conn: conn} do
