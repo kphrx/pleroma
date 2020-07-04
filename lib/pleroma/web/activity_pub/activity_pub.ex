@@ -210,7 +210,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       conversation = Repo.preload(conversation, :participations)
 
       last_activity_id =
-        fetch_latest_activity_id_for_context(conversation.ap_id, %{
+        fetch_latest_direct_activity_id_for_context(conversation.ap_id, %{
           user: user,
           blocking_user: user
         })
@@ -321,28 +321,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
-  @spec update(map()) :: {:ok, Activity.t()} | {:error, any()}
-  def update(%{to: to, cc: cc, actor: actor, object: object} = params) do
-    local = !(params[:local] == false)
-    activity_id = params[:activity_id]
-
-    data =
-      %{
-        "to" => to,
-        "cc" => cc,
-        "type" => "Update",
-        "actor" => actor,
-        "object" => object
-      }
-      |> Maps.put_if_present("id", activity_id)
-
-    with {:ok, activity} <- insert(data, local),
-         _ <- notify_and_stream(activity),
-         :ok <- maybe_federate(activity) do
-      {:ok, activity}
-    end
-  end
-
   @spec follow(User.t(), User.t(), String.t() | nil, boolean(), keyword()) ::
           {:ok, Activity.t()} | {:error, any()}
   def follow(follower, followed, activity_id \\ nil, local \\ true, opts \\ []) do
@@ -384,33 +362,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       {:ok, activity}
     else
       nil -> nil
-      {:error, error} -> Repo.rollback(error)
-    end
-  end
-
-  @spec block(User.t(), User.t(), String.t() | nil, boolean()) ::
-          {:ok, Activity.t()} | {:error, any()}
-  def block(blocker, blocked, activity_id \\ nil, local \\ true) do
-    with {:ok, result} <-
-           Repo.transaction(fn -> do_block(blocker, blocked, activity_id, local) end) do
-      result
-    end
-  end
-
-  defp do_block(blocker, blocked, activity_id, local) do
-    unfollow_blocked = Config.get([:activitypub, :unfollow_blocked])
-
-    if unfollow_blocked and fetch_latest_follow(blocker, blocked) do
-      unfollow(blocker, blocked, nil, local)
-    end
-
-    block_data = make_block_data(blocker, blocked, activity_id)
-
-    with {:ok, activity} <- insert(block_data, local),
-         _ <- notify_and_stream(activity),
-         :ok <- maybe_federate(activity) do
-      {:ok, activity}
-    else
       {:error, error} -> Repo.rollback(error)
     end
   end
@@ -517,11 +468,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> Repo.all()
   end
 
-  @spec fetch_latest_activity_id_for_context(String.t(), keyword() | map()) ::
+  @spec fetch_latest_direct_activity_id_for_context(String.t(), keyword() | map()) ::
           FlakeId.Ecto.CompatType.t() | nil
-  def fetch_latest_activity_id_for_context(context, opts \\ %{}) do
+  def fetch_latest_direct_activity_id_for_context(context, opts \\ %{}) do
     context
     |> fetch_activities_for_context_query(Map.merge(%{skip_preload: true}, opts))
+    |> restrict_visibility(%{visibility: "direct"})
     |> limit(1)
     |> select([a], a.id)
     |> Repo.one()
@@ -833,7 +785,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_media(query, %{only_media: true}) do
     from(
-      [_activity, object] in query,
+      [activity, object] in query,
+      where: fragment("(?)->>'type' = ?", activity.data, "Create"),
       where: fragment("not (?)->'attachment' = (?)", object.data, ^[])
     )
   end
@@ -1172,12 +1125,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> Activity.Queries.by_type("Like")
     |> Activity.with_joined_object()
     |> Object.with_joined_activity()
-    |> select([_like, object, activity], %{activity | object: object})
+    |> select([like, object, activity], %{activity | object: object, pagination_id: like.id})
     |> order_by([like, _, _], desc_nulls_last: like.id)
     |> Pagination.fetch_paginated(
       Map.merge(params, %{skip_order: true}),
-      pagination,
-      :object_activity
+      pagination
     )
   end
 
@@ -1419,6 +1371,16 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
+  def maybe_handle_clashing_nickname(nickname) do
+    with %User{} = old_user <- User.get_by_nickname(nickname) do
+      Logger.info("Found an old user for #{nickname}, ap id is #{old_user.ap_id}, renaming.")
+
+      old_user
+      |> User.remote_user_changeset(%{nickname: "#{old_user.id}.#{old_user.nickname}"})
+      |> User.update_and_set_cache()
+    end
+  end
+
   def make_user_from_ap_id(ap_id) do
     user = User.get_cached_by_ap_id(ap_id)
 
@@ -1431,6 +1393,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
           |> User.remote_user_changeset(data)
           |> User.update_and_set_cache()
         else
+          maybe_handle_clashing_nickname(data[:nickname])
+
           data
           |> User.remote_user_changeset()
           |> Repo.insert()

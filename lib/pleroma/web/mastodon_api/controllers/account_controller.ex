@@ -20,6 +20,8 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   alias Pleroma.Plugs.RateLimiter
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.ActivityPub
+  alias Pleroma.Web.ActivityPub.Builder
+  alias Pleroma.Web.ActivityPub.Pipeline
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.MastodonAPI.ListView
   alias Pleroma.Web.MastodonAPI.MastodonAPI
@@ -165,6 +167,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
       end)
       |> Maps.put_if_present(:name, params[:display_name])
       |> Maps.put_if_present(:bio, params[:note])
+      |> Maps.put_if_present(:raw_bio, params[:note])
       |> Maps.put_if_present(:avatar, params[:avatar])
       |> Maps.put_if_present(:banner, params[:header])
       |> Maps.put_if_present(:background, params[:pleroma_background_image])
@@ -176,34 +179,42 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
       |> Maps.put_if_present(:pleroma_settings_store, params[:pleroma_settings_store])
       |> Maps.put_if_present(:default_scope, params[:default_scope])
       |> Maps.put_if_present(:default_scope, params["source"]["privacy"])
+      |> Maps.put_if_present(:actor_type, params[:bot], fn bot ->
+        if bot, do: {:ok, "Service"}, else: {:ok, "Person"}
+      end)
       |> Maps.put_if_present(:actor_type, params[:actor_type])
 
-    changeset = User.update_changeset(user, user_params)
-
-    with {:ok, user} <- User.update_and_set_cache(changeset) do
-      user
-      |> build_update_activity_params()
-      |> ActivityPub.update()
-
-      render(conn, "show.json", user: user, for: user, with_pleroma_settings: true)
+    # What happens here:
+    #
+    # We want to update the user through the pipeline, but the ActivityPub
+    # update information is not quite enough for this, because this also
+    # contains local settings that don't federate and don't even appear
+    # in the Update activity.
+    #
+    # So we first build the normal local changeset, then apply it to the
+    # user data, but don't persist it. With this, we generate the object
+    # data for our update activity. We feed this and the changeset as meta
+    # inforation into the pipeline, where they will be properly updated and
+    # federated.
+    with changeset <- User.update_changeset(user, user_params),
+         {:ok, unpersisted_user} <- Ecto.Changeset.apply_action(changeset, :update),
+         updated_object <-
+           Pleroma.Web.ActivityPub.UserView.render("user.json", user: user)
+           |> Map.delete("@context"),
+         {:ok, update_data, []} <- Builder.update(user, updated_object),
+         {:ok, _update, _} <-
+           Pipeline.common_pipeline(update_data,
+             local: true,
+             user_update_changeset: changeset
+           ) do
+      render(conn, "show.json",
+        user: unpersisted_user,
+        for: unpersisted_user,
+        with_pleroma_settings: true
+      )
     else
       _e -> render_error(conn, :forbidden, "Invalid request")
     end
-  end
-
-  # Hotfix, handling will be redone with the pipeline
-  defp build_update_activity_params(user) do
-    object =
-      Pleroma.Web.ActivityPub.UserView.render("user.json", user: user)
-      |> Map.delete("@context")
-
-    %{
-      local: true,
-      to: [user.follower_address],
-      cc: [],
-      object: object,
-      actor: user.ap_id
-    }
   end
 
   defp normalize_fields_attributes(fields) do
@@ -230,17 +241,17 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   @doc "GET /api/v1/accounts/:id"
   def show(%{assigns: %{user: for_user}} = conn, %{id: nickname_or_id}) do
     with %User{} = user <- User.get_cached_by_nickname_or_id(nickname_or_id, for: for_user),
-         true <- User.visible_for?(user, for_user) do
+         :visible <- User.visible_for(user, for_user) do
       render(conn, "show.json", user: user, for: for_user)
     else
-      _e -> render_error(conn, :not_found, "Can't find user")
+      error -> user_visibility_error(conn, error)
     end
   end
 
   @doc "GET /api/v1/accounts/:id/statuses"
   def statuses(%{assigns: %{user: reading_user}} = conn, params) do
     with %User{} = user <- User.get_cached_by_nickname_or_id(params.id, for: reading_user),
-         true <- User.visible_for?(user, reading_user) do
+         :visible <- User.visible_for(user, reading_user) do
       params =
         params
         |> Map.delete(:tagged)
@@ -257,7 +268,17 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
         as: :activity
       )
     else
-      _e -> render_error(conn, :not_found, "Can't find user")
+      error -> user_visibility_error(conn, error)
+    end
+  end
+
+  defp user_visibility_error(conn, error) do
+    case error do
+      :restrict_unauthenticated ->
+        render_error(conn, :unauthorized, "This API requires an authenticated user")
+
+      _ ->
+        render_error(conn, :not_found, "Can't find user")
     end
   end
 
@@ -364,8 +385,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
 
   @doc "POST /api/v1/accounts/:id/block"
   def block(%{assigns: %{user: blocker, account: blocked}} = conn, _params) do
-    with {:ok, _user_block} <- User.block(blocker, blocked),
-         {:ok, _activity} <- ActivityPub.block(blocker, blocked) do
+    with {:ok, _activity} <- CommonAPI.block(blocker, blocked) do
       render(conn, "relationship.json", user: blocker, target: blocked)
     else
       {:error, message} -> json_response(conn, :forbidden, %{error: message})

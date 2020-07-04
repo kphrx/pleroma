@@ -22,6 +22,16 @@ defmodule Pleroma.NotificationTest do
   alias Pleroma.Web.Streamer
 
   describe "create_notifications" do
+    test "never returns nil" do
+      user = insert(:user)
+      other_user = insert(:user, %{invisible: true})
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "yeah"})
+      {:ok, activity} = CommonAPI.react_with_emoji(activity.id, other_user, "☕")
+
+      refute {:ok, [nil]} == Notification.create_notifications(activity)
+    end
+
     test "creates a notification for an emoji reaction" do
       user = insert(:user)
       other_user = insert(:user)
@@ -305,6 +315,14 @@ defmodule Pleroma.NotificationTest do
       {:ok, status} = CommonAPI.post(user, %{status: "inwisible", visibility: "direct"})
 
       assert {:ok, []} == Notification.create_notifications(status)
+    end
+
+    test "it disables notifications from people who are invisible" do
+      author = insert(:user, invisible: true)
+      user = insert(:user)
+
+      {:ok, status} = CommonAPI.post(author, %{status: "hey @#{user.nickname}"})
+      refute Notification.create_notification(status, user)
     end
   end
 

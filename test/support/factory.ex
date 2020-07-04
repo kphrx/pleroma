@@ -42,7 +42,8 @@ defmodule Pleroma.Factory do
       user
       | ap_id: User.ap_id(user),
         follower_address: User.ap_followers(user),
-        following_address: User.ap_following(user)
+        following_address: User.ap_following(user),
+        raw_bio: user.bio
     }
   end
 
@@ -66,6 +67,7 @@ defmodule Pleroma.Factory do
     data = %{
       "type" => "Note",
       "content" => text,
+      "source" => text,
       "id" => Pleroma.Web.ActivityPub.Utils.generate_object_id(),
       "actor" => user.ap_id,
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
@@ -396,24 +398,17 @@ defmodule Pleroma.Factory do
     }
   end
 
-  def config_factory do
+  def config_factory(attrs \\ %{}) do
     %Pleroma.ConfigDB{
-      key:
-        sequence(:key, fn key ->
-          # Atom dynamic registration hack in tests
-          "some_key_#{key}"
-          |> String.to_atom()
-          |> inspect()
-        end),
-      group: ":pleroma",
+      key: sequence(:key, &String.to_atom("some_key_#{&1}")),
+      group: :pleroma,
       value:
         sequence(
           :value,
-          fn key ->
-            :erlang.term_to_binary(%{another_key: "#{key}somevalue", another: "#{key}somevalue"})
-          end
+          &%{another_key: "#{&1}somevalue", another: "#{&1}somevalue"}
         )
     }
+    |> merge_attributes(attrs)
   end
 
   def marker_factory do

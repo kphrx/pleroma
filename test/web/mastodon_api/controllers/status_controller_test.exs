@@ -760,13 +760,18 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
     test "when you created it" do
       %{user: author, conn: conn} = oauth_access(["write:statuses"])
       activity = insert(:note_activity, user: author)
+      object = Object.normalize(activity)
 
-      conn =
+      content = object.data["content"]
+      source = object.data["source"]
+
+      result =
         conn
         |> assign(:user, author)
         |> delete("/api/v1/statuses/#{activity.id}")
+        |> json_response_and_validate_schema(200)
 
-      assert %{} = json_response_and_validate_schema(conn, 200)
+      assert match?(%{"content" => ^content, "text" => ^source}, result)
 
       refute Activity.get_by_id(activity.id)
     end
@@ -789,7 +794,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       conn = delete(conn, "/api/v1/statuses/#{activity.id}")
 
-      assert %{"error" => _} = json_response_and_validate_schema(conn, 403)
+      assert %{"error" => "Record not found"} == json_response_and_validate_schema(conn, 404)
 
       assert Activity.get_by_id(activity.id) == activity
     end
@@ -1541,14 +1546,49 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
            } = response
   end
 
+  test "favorites paginate correctly" do
+    %{user: user, conn: conn} = oauth_access(["read:favourites"])
+    other_user = insert(:user)
+    {:ok, first_post} = CommonAPI.post(other_user, %{status: "bla"})
+    {:ok, second_post} = CommonAPI.post(other_user, %{status: "bla"})
+    {:ok, third_post} = CommonAPI.post(other_user, %{status: "bla"})
+
+    {:ok, _first_favorite} = CommonAPI.favorite(user, third_post.id)
+    {:ok, _second_favorite} = CommonAPI.favorite(user, first_post.id)
+    {:ok, third_favorite} = CommonAPI.favorite(user, second_post.id)
+
+    result =
+      conn
+      |> get("/api/v1/favourites?limit=1")
+
+    assert [%{"id" => post_id}] = json_response_and_validate_schema(result, 200)
+    assert post_id == second_post.id
+
+    # Using the header for pagination works correctly
+    [next, _] = get_resp_header(result, "link") |> hd() |> String.split(", ")
+    [_, max_id] = Regex.run(~r/max_id=([^&]+)/, next)
+
+    assert max_id == third_favorite.id
+
+    result =
+      conn
+      |> get("/api/v1/favourites?max_id=#{max_id}")
+
+    assert [%{"id" => first_post_id}, %{"id" => third_post_id}] =
+             json_response_and_validate_schema(result, 200)
+
+    assert first_post_id == first_post.id
+    assert third_post_id == third_post.id
+  end
+
   test "returns the favorites of a user" do
     %{user: user, conn: conn} = oauth_access(["read:favourites"])
     other_user = insert(:user)
 
     {:ok, _} = CommonAPI.post(other_user, %{status: "bla"})
-    {:ok, activity} = CommonAPI.post(other_user, %{status: "traps are happy"})
+    {:ok, activity} = CommonAPI.post(other_user, %{status: "trees are happy"})
 
-    {:ok, _} = CommonAPI.favorite(user, activity.id)
+    {:ok, last_like} = CommonAPI.favorite(user, activity.id)
 
     first_conn = get(conn, "/api/v1/favourites")
 
@@ -1566,9 +1606,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     {:ok, _} = CommonAPI.favorite(user, second_activity.id)
 
-    last_like = status["id"]
-
-    second_conn = get(conn, "/api/v1/favourites?since_id=#{last_like}")
+    second_conn = get(conn, "/api/v1/favourites?since_id=#{last_like.id}")
 
     assert [second_status] = json_response_and_validate_schema(second_conn, 200)
     assert second_status["id"] == to_string(second_activity.id)
