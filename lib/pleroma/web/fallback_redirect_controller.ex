@@ -28,7 +28,7 @@ defmodule Fallback.RedirectController do
       redirector_with_meta(conn, %{user: user})
     else
       nil ->
-        redirector(conn, params)
+        redirector_with_preload(conn, params)
     end
   end
 
