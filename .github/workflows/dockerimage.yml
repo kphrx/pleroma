@@ -16,11 +16,9 @@ jobs:
       uses: actions/checkout@v1
 
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag docker.pkg.github.com/${GITHUB_REPOSITORY,,}/pleroma-kpherox:$(git rev-parse --short HEAD)
+      run: docker build . --file Dockerfile --tag docker.pkg.github.com/${GITHUB_REPOSITORY,,}/pleroma-kpherox:$(git rev-parse --short HEAD) --tag docker.pkg.github.com/${GITHUB_REPOSITORY,,}/pleroma-kpherox:latest
 
     - name: Push the Docker image
       run: |
         docker login docker.pkg.github.com -u ${GITHUB_ACTOR,,} -p ${{ secrets.GITHUB_TOKEN }}
-        docker push docker.pkg.github.com/${GITHUB_REPOSITORY,,}/pleroma-kpherox
-        docker tag latest docker.pkg.github.com/${GITHUB_REPOSITORY,,}/pleroma-kpherox
         docker push docker.pkg.github.com/${GITHUB_REPOSITORY,,}/pleroma-kpherox
