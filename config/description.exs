@@ -23,18 +23,14 @@ config :pleroma, :config_description, [
         key: :uploader,
         type: :module,
         description: "Module which will be used for uploads",
-        suggestions: [Pleroma.Uploaders.Local, Pleroma.Uploaders.S3]
+        suggestions: {:list_behaviour_implementations, Pleroma.Uploaders.Uploader}
       },
       %{
         key: :filters,
         type: {:list, :module},
         description:
           "List of filter modules for uploads. Module names are shortened (removed leading `Pleroma.Upload.Filter.` part), but on adding custom module you need to use full name.",
-        suggestions:
-          Generator.list_modules_in_dir(
-            "lib/pleroma/upload/filter",
-            "Elixir.Pleroma.Upload.Filter."
-          )
+        suggestions: {:list_behaviour_implementations, Pleroma.Upload.Filter}
       },
       %{
         key: :link_name,
@@ -1071,6 +1067,7 @@ config :pleroma, :config_description, [
       },
       %{
         key: :webhook_url,
+        label: "Webhook URL",
         type: :string,
         description: "Configure the Slack incoming webhook",
         suggestions: ["https://hooks.slack.com/services/YOUR-KEY-HERE"]
@@ -1404,11 +1401,7 @@ config :pleroma, :config_description, [
         type: [:module, {:list, :module}],
         description:
           "A list of MRF policies enabled. Module names are shortened (removed leading `Pleroma.Web.ActivityPub.MRF.` part), but on adding custom module you need to use full name.",
-        suggestions:
-          Generator.list_modules_in_dir(
-            "lib/pleroma/web/activity_pub/mrf",
-            "Elixir.Pleroma.Web.ActivityPub.MRF."
-          )
+        suggestions: {:list_behaviour_implementations, Pleroma.Web.ActivityPub.MRF}
       },
       %{
         key: :transparency,
@@ -1523,7 +1516,7 @@ config :pleroma, :config_description, [
     children: [
       %{
         key: :match_actor,
-        type: :map,
+        type: {:map, {:list, :string}},
         description: "Matches a series of regular expressions against the actor field",
         suggestions: [
           %{
@@ -1589,21 +1582,21 @@ config :pleroma, :config_description, [
     children: [
       %{
         key: :reject,
-        type: [:string, :regex],
+        type: {:list, :string},
         description:
           "A list of patterns which result in message being rejected. Each pattern can be a string or a regular expression.",
         suggestions: ["foo", ~r/foo/iu]
       },
       %{
         key: :federated_timeline_removal,
-        type: [:string, :regex],
+        type: {:list, :string},
         description:
           "A list of patterns which result in message being removed from federated timelines (a.k.a unlisted). Each pattern can be a string or a regular expression.",
         suggestions: ["foo", ~r/foo/iu]
       },
       %{
         key: :replace,
-        type: [{:tuple, :string, :string}, {:tuple, :regex, :string}],
+        type: {:list, :tuple},
         description:
           "A list of tuples containing {pattern, replacement}. Each pattern can be a string or a regular expression.",
         suggestions: [{"foo", "bar"}, {~r/foo/iu, "bar"}]
@@ -1775,8 +1768,8 @@ config :pleroma, :config_description, [
       %{
         key: :whitelist,
         type: {:list, :string},
-        description: "List of domains to bypass the mediaproxy",
-        suggestions: ["example.com"]
+        description: "List of hosts with scheme to bypass the mediaproxy",
+        suggestions: ["http://example.com"]
       }
     ]
   },
@@ -1793,15 +1786,20 @@ config :pleroma, :config_description, [
       },
       %{
         key: :headers,
-        type: {:list, :tuple},
-        description: "HTTP headers of request.",
+        type: {:keyword, :string},
+        description: "HTTP headers of request",
         suggestions: [{"x-refresh", 1}]
       },
       %{
         key: :options,
         type: :keyword,
-        description: "Request options.",
-        suggestions: [params: %{ts: "xxx"}]
+        description: "Request options",
+        children: [
+          %{
+            key: :params,
+            type: {:map, :string}
+          }
+        ]
       }
     ]
   },
@@ -2010,13 +2008,15 @@ config :pleroma, :config_description, [
     label: "Pleroma Admin Token",
     type: :group,
     description:
-      "Allows to set a token that can be used to authenticate with the admin api without using an actual user by giving it as the `admin_token` parameter",
+      "Allows setting a token that can be used to authenticate requests with admin privileges without a normal user account token. Append the `admin_token` parameter to requests to utilize it. (Please reconsider using HTTP Basic Auth or OAuth-based authentication if possible)",
     children: [
       %{
         key: :admin_token,
         type: :string,
         description: "Admin token",
-        suggestions: ["We recommend a secure random string or UUID"]
+        suggestions: [
+          "Please use a high entropy string or UUID"
+        ]
       }
     ]
   },
@@ -2034,17 +2034,10 @@ config :pleroma, :config_description, [
     """,
     children: [
       %{
-        key: :verbose,
+        key: :log,
         type: {:dropdown, :atom},
         description: "Logs verbose mode",
         suggestions: [false, :error, :warn, :info, :debug]
-      },
-      %{
-        key: :prune,
-        type: [:atom, :tuple],
-        description:
-          "Non-retryable jobs [pruning settings](https://github.com/sorentwo/oban#pruning)",
-        suggestions: [:disabled, {:maxlen, 1500}, {:maxage, 60 * 60}]
       },
       %{
         key: :queues,
@@ -2524,7 +2517,7 @@ config :pleroma, :config_description, [
       %{
         key: :styling,
         type: :map,
-        description: "a map with color settings for email templates.",
+        description: "A map with color settings for email templates.",
         suggestions: [
           %{
             link_color: "#d8a070",
@@ -2579,8 +2572,7 @@ config :pleroma, :config_description, [
       %{
         key: :enabled,
         type: :boolean,
-        description: "Enables new users admin digest email when `true`",
-        suggestions: [false]
+        description: "Enables new users admin digest email when `true`"
       }
     ]
   },
@@ -2630,7 +2622,7 @@ config :pleroma, :config_description, [
       },
       %{
         key: :groups,
-        type: {:keyword, :string, {:list, :string}},
+        type: {:keyword, {:list, :string}},
         description:
           "Emojis are ordered in groups (tags). This is an array of key-value pairs where the key is the group name" <>
             " and the value is the location or array of locations. * can be used as a wildcard.",
@@ -3169,10 +3161,18 @@ config :pleroma, :config_description, [
     description: "Advanced settings for `gun` connections pool",
     children: [
       %{
-        key: :checkin_timeout,
+        key: :connection_acquisition_wait,
         type: :integer,
-        description: "Timeout to checkin connection from pool. Default: 250ms.",
+        description:
+          "Timeout to acquire a connection from pool.The total max time is this value multiplied by the number of retries. Default: 250ms.",
         suggestions: [250]
+      },
+      %{
+        key: :connection_acquisition_retries,
+        type: :integer,
+        description:
+          "Number of attempts to acquire the connection from the pool if it is overloaded. Default: 5",
+        suggestions: [5]
       },
       %{
         key: :max_connections,
@@ -3181,24 +3181,17 @@ config :pleroma, :config_description, [
         suggestions: [250]
       },
       %{
-        key: :retry,
-        type: :integer,
-        description:
-          "Number of retries, while `gun` will try to reconnect if connection goes down. Default: 1.",
-        suggestions: [1]
-      },
-      %{
-        key: :retry_timeout,
-        type: :integer,
-        description:
-          "Time between retries when `gun` will try to reconnect in milliseconds. Default: 1000ms.",
-        suggestions: [1000]
-      },
-      %{
         key: :await_up_timeout,
         type: :integer,
         description: "Timeout while `gun` will wait until connection is up. Default: 5000ms.",
         suggestions: [5000]
+      },
+      %{
+        key: :reclaim_multiplier,
+        type: :integer,
+        description:
+          "Multiplier for the number of idle connection to be reclaimed if the pool is full. For example if the pool maxes out at 250 connections and this setting is set to 0.3, the pool will reclaim at most 75 idle connections if it's overloaded. Default: 0.1",
+        suggestions: [0.1]
       }
     ]
   },
@@ -3207,108 +3200,29 @@ config :pleroma, :config_description, [
     key: :pools,
     type: :group,
     description: "Advanced settings for `gun` workers pools",
-    children: [
-      %{
-        key: :federation,
-        type: :keyword,
-        description: "Settings for federation pool.",
-        children: [
-          %{
-            key: :size,
-            type: :integer,
-            description: "Number workers in the pool.",
-            suggestions: [50]
-          },
-          %{
-            key: :max_overflow,
-            type: :integer,
-            description: "Number of additional workers if pool is under load.",
-            suggestions: [10]
-          },
-          %{
-            key: :timeout,
-            type: :integer,
-            description: "Timeout while `gun` will wait for response.",
-            suggestions: [150_000]
-          }
-        ]
-      },
-      %{
-        key: :media,
-        type: :keyword,
-        description: "Settings for media pool.",
-        children: [
-          %{
-            key: :size,
-            type: :integer,
-            description: "Number workers in the pool.",
-            suggestions: [50]
-          },
-          %{
-            key: :max_overflow,
-            type: :integer,
-            description: "Number of additional workers if pool is under load.",
-            suggestions: [10]
-          },
-          %{
-            key: :timeout,
-            type: :integer,
-            description: "Timeout while `gun` will wait for response.",
-            suggestions: [150_000]
-          }
-        ]
-      },
-      %{
-        key: :upload,
-        type: :keyword,
-        description: "Settings for upload pool.",
-        children: [
-          %{
-            key: :size,
-            type: :integer,
-            description: "Number workers in the pool.",
-            suggestions: [25]
-          },
-          %{
-            key: :max_overflow,
-            type: :integer,
-            description: "Number of additional workers if pool is under load.",
-            suggestions: [5]
-          },
-          %{
-            key: :timeout,
-            type: :integer,
-            description: "Timeout while `gun` will wait for response.",
-            suggestions: [300_000]
-          }
-        ]
-      },
-      %{
-        key: :default,
-        type: :keyword,
-        description: "Settings for default pool.",
-        children: [
-          %{
-            key: :size,
-            type: :integer,
-            description: "Number workers in the pool.",
-            suggestions: [10]
-          },
-          %{
-            key: :max_overflow,
-            type: :integer,
-            description: "Number of additional workers if pool is under load.",
-            suggestions: [2]
-          },
-          %{
-            key: :timeout,
-            type: :integer,
-            description: "Timeout while `gun` will wait for response.",
-            suggestions: [10_000]
-          }
-        ]
-      }
-    ]
+    children:
+      Enum.map([:federation, :media, :upload, :default], fn pool_name ->
+        %{
+          key: pool_name,
+          type: :keyword,
+          description: "Settings for #{pool_name} pool.",
+          children: [
+            %{
+              key: :size,
+              type: :integer,
+              description: "Maximum number of concurrent requests in the pool.",
+              suggestions: [50]
+            },
+            %{
+              key: :max_waiting,
+              type: :integer,
+              description:
+                "Maximum number of requests waiting for other requests to finish. After this number is reached, the pool will start returning errrors when a new request is made",
+              suggestions: [10]
+            }
+          ]
+        }
+      end)
   },
   %{
     group: :pleroma,
@@ -3444,8 +3358,46 @@ config :pleroma, :config_description, [
         key: :strict,
         type: :boolean,
         description:
-          "Enables strict input validation (useful in development, not recommended in production)",
-        suggestions: [false]
+          "Enables strict input validation (useful in development, not recommended in production)"
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: :instances_favicons,
+    type: :group,
+    description: "Control favicons for instances",
+    children: [
+      %{
+        key: :enabled,
+        type: :boolean,
+        description: "Allow/disallow displaying and getting instances favicons"
+      }
+    ]
+  },
+  %{
+    group: :ex_aws,
+    key: :s3,
+    type: :group,
+    descriptions: "S3 service related settings",
+    children: [
+      %{
+        key: :access_key_id,
+        type: :string,
+        description: "S3 access key ID",
+        suggestions: ["AKIAQ8UKHTGIYN7DMWWJ"]
+      },
+      %{
+        key: :secret_access_key,
+        type: :string,
+        description: "Secret access key",
+        suggestions: ["JFGt+fgH1UQ7vLUQjpW+WvjTdV/UNzVxcwn7DkaeFKtBS5LvoXvIiME4NQBsT6ZZ"]
+      },
+      %{
+        key: :host,
+        type: :string,
+        description: "S3 host",
+        suggestions: ["s3.eu-central-1.amazonaws.com"]
       }
     ]
   }

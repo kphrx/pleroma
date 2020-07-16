@@ -184,36 +184,43 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       assert User.invisible?(user)
     end
 
-    test "it fetches the appropriate tag-restricted posts" do
-      user = insert(:user)
+    test "it returns a user that accepts chat messages" do
+      user_id = "http://mastodon.example.org/users/admin"
+      {:ok, user} = ActivityPub.make_user_from_ap_id(user_id)
 
-      {:ok, status_one} = CommonAPI.post(user, %{status: ". #test"})
-      {:ok, status_two} = CommonAPI.post(user, %{status: ". #essais"})
-      {:ok, status_three} = CommonAPI.post(user, %{status: ". #test #reject"})
-
-      fetch_one = ActivityPub.fetch_activities([], %{type: "Create", tag: "test"})
-
-      fetch_two = ActivityPub.fetch_activities([], %{type: "Create", tag: ["test", "essais"]})
-
-      fetch_three =
-        ActivityPub.fetch_activities([], %{
-          type: "Create",
-          tag: ["test", "essais"],
-          tag_reject: ["reject"]
-        })
-
-      fetch_four =
-        ActivityPub.fetch_activities([], %{
-          type: "Create",
-          tag: ["test"],
-          tag_all: ["test", "reject"]
-        })
-
-      assert fetch_one == [status_one, status_three]
-      assert fetch_two == [status_one, status_two, status_three]
-      assert fetch_three == [status_one, status_two]
-      assert fetch_four == [status_three]
+      assert user.accepts_chat_messages
     end
+  end
+
+  test "it fetches the appropriate tag-restricted posts" do
+    user = insert(:user)
+
+    {:ok, status_one} = CommonAPI.post(user, %{status: ". #test"})
+    {:ok, status_two} = CommonAPI.post(user, %{status: ". #essais"})
+    {:ok, status_three} = CommonAPI.post(user, %{status: ". #test #reject"})
+
+    fetch_one = ActivityPub.fetch_activities([], %{type: "Create", tag: "test"})
+
+    fetch_two = ActivityPub.fetch_activities([], %{type: "Create", tag: ["test", "essais"]})
+
+    fetch_three =
+      ActivityPub.fetch_activities([], %{
+        type: "Create",
+        tag: ["test", "essais"],
+        tag_reject: ["reject"]
+      })
+
+    fetch_four =
+      ActivityPub.fetch_activities([], %{
+        type: "Create",
+        tag: ["test"],
+        tag_all: ["test", "reject"]
+      })
+
+    assert fetch_one == [status_one, status_three]
+    assert fetch_two == [status_one, status_two, status_three]
+    assert fetch_three == [status_one, status_two]
+    assert fetch_four == [status_three]
   end
 
   describe "insertion" do
@@ -669,7 +676,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     refute activity in activities
 
     followed_user = insert(:user)
-    ActivityPub.follow(user, followed_user)
+    CommonAPI.follow(user, followed_user)
     {:ok, repeat_activity} = CommonAPI.repeat(activity.id, followed_user)
 
     activities = ActivityPub.fetch_activities([], %{blocking_user: user, skip_preload: true})
@@ -1013,24 +1020,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     end
   end
 
-  describe "following / unfollowing" do
-    test "it reverts follow activity" do
-      follower = insert(:user)
-      followed = insert(:user)
-
-      with_mock(Utils, [:passthrough], maybe_federate: fn _ -> {:error, :reverted} end) do
-        assert {:error, :reverted} = ActivityPub.follow(follower, followed)
-      end
-
-      assert Repo.aggregate(Activity, :count, :id) == 0
-      assert Repo.aggregate(Object, :count, :id) == 0
-    end
-
+  describe "unfollowing" do
     test "it reverts unfollow activity" do
       follower = insert(:user)
       followed = insert(:user)
 
-      {:ok, follow_activity} = ActivityPub.follow(follower, followed)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, followed)
 
       with_mock(Utils, [:passthrough], maybe_federate: fn _ -> {:error, :reverted} end) do
         assert {:error, :reverted} = ActivityPub.unfollow(follower, followed)
@@ -1043,21 +1038,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       assert activity.data["object"] == followed.ap_id
     end
 
-    test "creates a follow activity" do
-      follower = insert(:user)
-      followed = insert(:user)
-
-      {:ok, activity} = ActivityPub.follow(follower, followed)
-      assert activity.data["type"] == "Follow"
-      assert activity.data["actor"] == follower.ap_id
-      assert activity.data["object"] == followed.ap_id
-    end
-
     test "creates an undo activity for the last follow" do
       follower = insert(:user)
       followed = insert(:user)
 
-      {:ok, follow_activity} = ActivityPub.follow(follower, followed)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, followed)
       {:ok, activity} = ActivityPub.unfollow(follower, followed)
 
       assert activity.data["type"] == "Undo"
@@ -1074,7 +1059,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       follower = insert(:user)
       followed = insert(:user, %{locked: true})
 
-      {:ok, follow_activity} = ActivityPub.follow(follower, followed)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, followed)
       {:ok, activity} = ActivityPub.unfollow(follower, followed)
 
       assert activity.data["type"] == "Undo"
@@ -1459,7 +1444,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
 
       assert_enqueued(worker: Pleroma.Workers.BackgroundWorker, args: params)
 
-      Pleroma.Workers.BackgroundWorker.perform(params, nil)
+      Pleroma.Workers.BackgroundWorker.perform(%Oban.Job{args: params})
 
       refute User.following?(follower, old_user)
       assert User.following?(follower, new_user)
@@ -2069,6 +2054,48 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       {:ok, _follow} = ActivityBuilder.insert(%{"type" => "Follow", "context" => "3hu"})
 
       assert [%{activity_id: ^id_create}] = Pleroma.ActivityExpiration |> Repo.all()
+    end
+  end
+
+  describe "handling of clashing nicknames" do
+    test "renames an existing user with a clashing nickname and a different ap id" do
+      orig_user =
+        insert(
+          :user,
+          local: false,
+          nickname: "admin@mastodon.example.org",
+          ap_id: "http://mastodon.example.org/users/harinezumigari"
+        )
+
+      %{
+        nickname: orig_user.nickname,
+        ap_id: orig_user.ap_id <> "part_2"
+      }
+      |> ActivityPub.maybe_handle_clashing_nickname()
+
+      user = User.get_by_id(orig_user.id)
+
+      assert user.nickname == "#{orig_user.id}.admin@mastodon.example.org"
+    end
+
+    test "does nothing with a clashing nickname and the same ap id" do
+      orig_user =
+        insert(
+          :user,
+          local: false,
+          nickname: "admin@mastodon.example.org",
+          ap_id: "http://mastodon.example.org/users/harinezumigari"
+        )
+
+      %{
+        nickname: orig_user.nickname,
+        ap_id: orig_user.ap_id
+      }
+      |> ActivityPub.maybe_handle_clashing_nickname()
+
+      user = User.get_by_id(orig_user.id)
+
+      assert user.nickname == orig_user.nickname
     end
   end
 end

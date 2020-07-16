@@ -322,28 +322,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
-  @spec follow(User.t(), User.t(), String.t() | nil, boolean(), keyword()) ::
-          {:ok, Activity.t()} | {:error, any()}
-  def follow(follower, followed, activity_id \\ nil, local \\ true, opts \\ []) do
-    with {:ok, result} <-
-           Repo.transaction(fn -> do_follow(follower, followed, activity_id, local, opts) end) do
-      result
-    end
-  end
-
-  defp do_follow(follower, followed, activity_id, local, opts) do
-    skip_notify_and_stream = Keyword.get(opts, :skip_notify_and_stream, false)
-    data = make_follow_data(follower, followed, activity_id)
-
-    with {:ok, activity} <- insert(data, local),
-         _ <- skip_notify_and_stream || notify_and_stream(activity),
-         :ok <- maybe_federate(activity) do
-      {:ok, activity}
-    else
-      {:error, error} -> Repo.rollback(error)
-    end
-  end
-
   @spec unfollow(User.t(), User.t(), String.t() | nil, boolean()) ::
           {:ok, Activity.t()} | nil | {:error, any()}
   def unfollow(follower, followed, activity_id \\ nil, local \\ true) do
@@ -1248,6 +1226,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       end)
 
     locked = data["manuallyApprovesFollowers"] || false
+    capabilities = data["capabilities"] || %{}
+    accepts_chat_messages = capabilities["acceptsChatMessages"]
     data = Transmogrifier.maybe_fix_user_object(data)
     discoverable = data["discoverable"] || false
     invisible = data["invisible"] || false
@@ -1286,7 +1266,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       also_known_as: Map.get(data, "alsoKnownAs", []),
       public_key: public_key,
       inbox: data["inbox"],
-      shared_inbox: shared_inbox
+      shared_inbox: shared_inbox,
+      accepts_chat_messages: accepts_chat_messages
     }
 
     # nickname can be nil because of virtual actors
@@ -1395,13 +1376,28 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
-  def maybe_handle_clashing_nickname(nickname) do
-    with %User{} = old_user <- User.get_by_nickname(nickname) do
-      Logger.info("Found an old user for #{nickname}, ap id is #{old_user.ap_id}, renaming.")
+  def maybe_handle_clashing_nickname(data) do
+    nickname = data[:nickname]
+
+    with %User{} = old_user <- User.get_by_nickname(nickname),
+         {_, false} <- {:ap_id_comparison, data[:ap_id] == old_user.ap_id} do
+      Logger.info(
+        "Found an old user for #{nickname}, the old ap id is #{old_user.ap_id}, new one is #{
+          data[:ap_id]
+        }, renaming."
+      )
 
       old_user
       |> User.remote_user_changeset(%{nickname: "#{old_user.id}.#{old_user.nickname}"})
       |> User.update_and_set_cache()
+    else
+      {:ap_id_comparison, true} ->
+        Logger.info(
+          "Found an old user for #{nickname}, but the ap id #{data[:ap_id]} is the same as the new user. Race condition? Not changing anything."
+        )
+
+      _ ->
+        nil
     end
   end
 
@@ -1417,7 +1413,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
           |> User.remote_user_changeset(data)
           |> User.update_and_set_cache()
         else
-          maybe_handle_clashing_nickname(data[:nickname])
+          maybe_handle_clashing_nickname(data)
 
           data
           |> User.remote_user_changeset()
