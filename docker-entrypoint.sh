@@ -14,7 +14,7 @@ while ! pg_isready -U ${DB_USER:-pleroma} -d postgres://${DB_HOST:-db}:5432/${DB
 done
 
 echo "-- Running migrations..."
-su-exec pleroma ~pleroma/bin/pleroma_ctl migrate
+su-exec pleroma $HOME/bin/pleroma_ctl migrate
 
 echo "-- Starting!"
-exec su-exec pleroma ~pleroma/bin/pleroma start
+exec su-exec pleroma $HOME/bin/pleroma start
