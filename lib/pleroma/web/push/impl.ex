@@ -16,7 +16,7 @@ defmodule Pleroma.Web.Push.Impl do
   require Logger
   import Ecto.Query
 
-  @types ["Create", "Follow", "Announce", "Like", "Move"]
+  @types ["Create", "Follow", "Announce", "Like", "Move", "EmojiReact"]
 
   @doc "Performs sending notifications for user subscriptions"
   @spec perform(Notification.t()) :: list(any) | :error
