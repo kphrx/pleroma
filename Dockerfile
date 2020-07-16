@@ -35,7 +35,7 @@ RUN echo "http://nl.alpinelinux.org/alpine/latest-stable/community" >> /etc/apk/
 	apk update &&\
 	apk add --no-cache imagemagick ncurses postgresql-client shadow su-exec &&\
 	addgroup --system pleroma &&\
-	adduser --system --shell /bin/false --home ${HOME} -G pleroma pleroma &&\
+	adduser --system --shell /bin/false --home ${HOME} pleroma pleroma &&\
 	mkdir -p ${DATA}/uploads &&\
 	mkdir -p ${DATA}/static &&\
 	mkdir -p /etc/pleroma
