@@ -19,6 +19,7 @@ Configuration options:
     - `local`: only local users
     - `external`: only external users
     - `active`: only active users
+    - `need_approval`: only unapproved users
     - `deactivated`: only deactivated users
     - `is_admin`: users with admin role
     - `is_moderator`: users with moderator role
@@ -46,7 +47,10 @@ Configuration options:
       "local": bool,
       "tags": array,
       "avatar": string,
-      "display_name": string
+      "display_name": string,
+      "confirmation_pending": bool,
+      "approval_pending": bool,
+      "registration_reason": string,
     },
     ...
   ]
@@ -227,6 +231,24 @@ Note: Available `:permission_group` is currently moderator and admin. 404 is ret
 ## `PATCH /api/pleroma/admin/users/deactivate`
 
 ### Deactivate user
+
+- Params:
+  - `nicknames`: nicknames array
+- Response:
+
+```json
+{
+  users: [
+    {
+      // user object
+    }
+  ]
+}
+```
+
+## `PATCH /api/pleroma/admin/users/approve`
+
+### Approve user
 
 - Params:
   - `nicknames`: nicknames array
@@ -1244,11 +1266,14 @@ Loads json generated from `config/descriptions.exs`.
 - Params:
 - *optional* `page`: **integer** page number
 - *optional* `page_size`: **integer** number of log entries per page (default is `50`)
+- *optional* `query`: **string** search term
 
 - Response:
 
 ``` json
 {
+  "page_size": integer,
+  "count": integer,
   "urls": [
     "http://example.com/media/a688346.jpg",
     "http://example.com/media/fb1f4d.jpg"
@@ -1268,12 +1293,7 @@ Loads json generated from `config/descriptions.exs`.
 - Response:
 
 ``` json
-{
-  "urls": [
-    "http://example.com/media/a688346.jpg",
-    "http://example.com/media/fb1f4d.jpg"
-  ]
-}
+{ }
 
 ```
 
@@ -1289,11 +1309,6 @@ Loads json generated from `config/descriptions.exs`.
 - Response:
 
 ``` json
-{
-  "urls": [
-    "http://example.com/media/a688346.jpg",
-    "http://example.com/media/fb1f4d.jpg"
-  ]
-}
+{ }
 
 ```

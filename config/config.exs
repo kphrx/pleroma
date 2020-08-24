@@ -72,7 +72,8 @@ config :pleroma, Pleroma.Upload,
       pool: :upload
     ]
   ],
-  filename_display_max_length: 30
+  filename_display_max_length: 30,
+  default_description: nil
 
 config :pleroma, Pleroma.Uploaders.Local, uploads: "uploads"
 
@@ -172,7 +173,7 @@ config :mime, :types, %{
   "application/ld+json" => ["activity+json"]
 }
 
-config :tesla, adapter: Tesla.Adapter.Gun
+config :tesla, adapter: Tesla.Adapter.Hackney
 
 # Configures http settings, upstream proxy etc.
 config :pleroma, :http,
@@ -205,6 +206,7 @@ config :pleroma, :instance,
   registrations_open: true,
   invites_enabled: false,
   account_activation_required: false,
+  account_approval_required: false,
   federating: true,
   federation_incoming_replies_max_depth: 100,
   federation_reachability_timeout_days: 7,
@@ -225,8 +227,6 @@ config :pleroma, :instance,
   autofollowed_nicknames: [],
   max_pinned_statuses: 1,
   attachment_links: false,
-  welcome_user_nickname: nil,
-  welcome_message: nil,
   max_report_comment_size: 1000,
   safe_dm_mentions: false,
   healthcheck: false,
@@ -239,6 +239,7 @@ config :pleroma, :instance,
   max_remote_account_fields: 20,
   account_field_name_length: 512,
   account_field_value_length: 2048,
+  registration_reason_length: 500,
   external_user_synchronization: true,
   extended_nickname_format: true,
   cleanup_attachments: false,
@@ -252,6 +253,26 @@ config :pleroma, :instance,
       number: 5,
       length: 16
     ]
+  ],
+  show_reactions: true
+
+config :pleroma, :welcome,
+  direct_message: [
+    enabled: false,
+    sender_nickname: nil,
+    message: nil
+  ],
+  chat_message: [
+    enabled: false,
+    sender_nickname: nil,
+    message: nil
+  ],
+  email: [
+    enabled: false,
+    sender: nil,
+    subject: "Welcome to <%= instance_name %>",
+    html: "Welcome to <%= instance_name %>",
+    text: "Welcome to <%= instance_name %>"
   ]
 
 config :pleroma, :feed,
@@ -359,6 +380,7 @@ config :pleroma, :mrf_simple,
   federated_timeline_removal: [],
   report_removal: [],
   reject: [],
+  followers_only: [],
   accept: [],
   avatar_removal: [],
   banner_removal: [],
@@ -377,8 +399,9 @@ config :pleroma, :mrf_vocabulary,
   accept: [],
   reject: []
 
+# threshold of 7 days
 config :pleroma, :mrf_object_age,
-  threshold: 172_800,
+  threshold: 604_800,
   actions: [:delist, :strip_followers]
 
 config :pleroma, :rich_media,
@@ -493,8 +516,15 @@ config :pleroma, Pleroma.User,
     "user-search",
     "user_exists",
     "users",
-    "web"
-  ]
+    "web",
+    "verify_credentials",
+    "update_credentials",
+    "relationships",
+    "search",
+    "confirmation_resend",
+    "mfa"
+  ],
+  email_blacklist: []
 
 config :pleroma, Oban,
   repo: Pleroma.Repo,
@@ -527,16 +557,14 @@ config :pleroma, :workers,
     federator_outgoing: 5
   ]
 
-config :auto_linker,
-  opts: [
-    extra: true,
-    # TODO: Set to :no_scheme when it works properly
-    validate_tld: true,
-    class: false,
-    strip_prefix: false,
-    new_window: false,
-    rel: "ugc"
-  ]
+config :pleroma, Pleroma.Formatter,
+  class: false,
+  rel: "ugc",
+  new_window: false,
+  truncate: false,
+  strip_prefix: false,
+  extra: true,
+  validate_tld: :no_scheme
 
 config :pleroma, :ldap,
   enabled: System.get_env("LDAP_ENABLED") == "true",
@@ -635,6 +663,16 @@ config :pleroma, Pleroma.Plugs.RemoteIp, enabled: true
 
 config :pleroma, :static_fe, enabled: false
 
+# Example of frontend configuration
+# This example will make us serve the primary frontend from the
+# frontends directory within your `:pleroma, :instance, static_dir`.
+# e.g., instance/static/frontends/pleroma/develop/
+#
+# With no frontend configuration, the bundled files from the `static` directory will
+# be used.
+#
+# config :pleroma, :frontends, primary: %{"name" => "pleroma", "ref" => "develop"}
+
 config :pleroma, :web_cache_ttl,
   activity_pub: nil,
   activity_pub_question: 30_000
@@ -688,15 +726,17 @@ config :pleroma, :hackney_pools,
     timeout: 300_000
   ]
 
+private_instance? = :if_instance_is_private
+
 config :pleroma, :restrict_unauthenticated,
-  timelines: %{local: false, federated: false},
-  profiles: %{local: false, remote: false},
-  activities: %{local: false, remote: false}
+  timelines: %{local: private_instance?, federated: private_instance?},
+  profiles: %{local: private_instance?, remote: private_instance?},
+  activities: %{local: private_instance?, remote: private_instance?}
 
 config :pleroma, Pleroma.Web.ApiSpec.CastAndValidate, strict: false
 
 config :pleroma, :mrf,
-  policies: Pleroma.Web.ActivityPub.MRF.NoOpPolicy,
+  policies: Pleroma.Web.ActivityPub.MRF.ObjectAgePolicy,
   transparency: true,
   transparency_exclusions: []
 
@@ -705,6 +745,10 @@ config :tzdata, :http_client, Pleroma.HTTP.Tzdata
 config :ex_aws, http_client: Pleroma.HTTP.ExAws
 
 config :pleroma, :instances_favicons, enabled: false
+
+config :floki, :html_parser, Floki.HTMLParser.FastHtml
+
+config :pleroma, Pleroma.Web.Auth.Authenticator, Pleroma.Web.Auth.PleromaAuthenticator
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

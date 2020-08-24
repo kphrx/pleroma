@@ -21,7 +21,10 @@ config :logger, :console,
 
 config :pleroma, :auth, oauth_consumer_strategies: []
 
-config :pleroma, Pleroma.Upload, filters: [], link_name: false
+config :pleroma, Pleroma.Upload,
+  filters: [],
+  link_name: false,
+  default_description: :filename
 
 config :pleroma, Pleroma.Uploaders.Local, uploads: "test/uploads"
 
@@ -117,6 +120,10 @@ config :pleroma, Pleroma.Uploaders.S3,
   bucket: nil,
   streaming_enabled: true,
   public_endpoint: nil
+
+config :tzdata, :autoupdate, :disabled
+
+config :pleroma, :mrf, policies: []
 
 if File.exists?("./config/test.secret.exs") do
   import_config "test.secret.exs"

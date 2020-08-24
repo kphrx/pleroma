@@ -294,13 +294,17 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
 
     emoji_reactions =
       with %{data: %{"reactions" => emoji_reactions}} <- object do
-        Enum.map(emoji_reactions, fn [emoji, users] ->
-          %{
-            name: emoji,
-            count: length(users),
-            me: !!(opts[:for] && opts[:for].ap_id in users)
-          }
+        Enum.map(emoji_reactions, fn
+          [emoji, users] when is_list(users) ->
+            build_emoji_map(emoji, users, opts[:for])
+
+          {emoji, users} when is_list(users) ->
+            build_emoji_map(emoji, users, opts[:for])
+
+          _ ->
+            nil
         end)
+        |> Enum.reject(&is_nil/1)
       else
         _ -> []
       end
@@ -463,23 +467,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     end
   end
 
-  def render_content(%{data: %{"type" => object_type}} = object)
-      when object_type in ["Video", "Event", "Audio"] do
-    with name when not is_nil(name) and name != "" <- object.data["name"] do
-      "<p><a href=\"#{object.data["id"]}\">#{name}</a></p>#{object.data["content"]}"
-    else
-      _ -> object.data["content"] || ""
-    end
-  end
+  def render_content(%{data: %{"name" => name}} = object) when not is_nil(name) and name != "" do
+    url = object.data["url"] || object.data["id"]
 
-  def render_content(%{data: %{"type" => object_type}} = object)
-      when object_type in ["Article", "Page"] do
-    with summary when not is_nil(summary) and summary != "" <- object.data["name"],
-         url when is_bitstring(url) <- object.data["url"] do
-      "<p><a href=\"#{url}\">#{summary}</a></p>#{object.data["content"]}"
-    else
-      _ -> object.data["content"] || ""
-    end
+    "<p><a href=\"#{url}\">#{name}</a></p>#{object.data["content"]}"
   end
 
   def render_content(object), do: object.data["content"] || ""
@@ -539,4 +530,12 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
 
   defp pinned?(%Activity{id: id}, %User{pinned_activities: pinned_activities}),
     do: id in pinned_activities
+
+  defp build_emoji_map(emoji, users, current_user) do
+    %{
+      name: emoji,
+      count: length(users),
+      me: !!(current_user && current_user.ap_id in users)
+    }
+  end
 end
