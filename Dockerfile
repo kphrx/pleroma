@@ -10,12 +10,12 @@ COPY . .
 ENV MIX_ENV=prod
 ENV VIX_COMPILATION_MODE=PLATFORM_PROVIDED_LIBVIPS
 
-RUN apk add git gcc g++ musl-dev make cmake file-dev vips-dev &&\
-	echo "import Config" > config/prod.secret.exs &&\
-	mix local.hex --force &&\
+RUN apk add git gcc g++ musl-dev make cmake file-dev vips-dev
+RUN echo "import Config" > config/prod.secret.exs &&\
+	mkdir release
+RUN mix local.hex --force &&\
 	mix local.rebar --force &&\
 	mix deps.get --only prod &&\
-	mkdir release &&\
 	mix release --path release
 
 FROM alpine:${ALPINE_VER}
