@@ -38,8 +38,8 @@ ARG HOME=/opt/pleroma
 ARG DATA=/var/lib/pleroma
 
 RUN apk update &&\
-	apk add exiftool ffmpeg vips libmagic ncurses postgresql-client &&\
-	adduser --system --shell /bin/false --home ${HOME} pleroma &&\
+	apk add exiftool ffmpeg vips libmagic ncurses postgresql-client
+RUN adduser --system --shell /bin/false --home ${HOME} pleroma &&\
 	mkdir -p ${DATA}/uploads &&\
 	mkdir -p ${DATA}/static &&\
 	chown -R pleroma ${DATA} &&\
