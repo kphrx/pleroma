@@ -30,19 +30,17 @@ jobs:
           elif [[ $GITHUB_REF == refs/pull/* ]]; then
             VERSION=pr-${{ github.event.number }}
           fi
-          CACHE_TAG="${DOCKER_IMAGE}:${VERSION,,}"
-          TAGS="$CACHE_TAG"
+          TAGS="${DOCKER_IMAGE}:${VERSION,,}"
           if [[ $GITHUB_REF = refs/tags/* ]] && [[ $VERSION =~ ^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
             MINOR=${VERSION%.*}
             MAJOR=${MINOR%.*}
-            TAGS="$TAGS,${DOCKER_IMAGE}:${MINOR},${DOCKER_IMAGE}:${MAJOR},${DOCKER_IMAGE}:latest"
+            TAGS="$TAGS,${DOCKER_IMAGE}:${MINOR},${DOCKER_IMAGE}:${MAJOR},${DOCKER_IMAGE}:stable-latest"
           fi
           SHORT_SHA=$(git rev-parse --short HEAD)
           if [[ $GITHUB_REF != refs/tags/* ]] && [[ "${{ github.event_name }}" = "push" ]]; then
             TAGS="$TAGS,${DOCKER_IMAGE}:${SHORT_SHA}"
           fi
           BUILD_ARGS="VCS_REF=${SHORT_SHA},BUILD_DATE=$(date --utc -Iseconds)"
-          echo ::set-output name=cache-tag::${CACHE_TAG}
           echo ::set-output name=build-args::${BUILD_ARGS}
           echo ::set-output name=tags::${TAGS}
 
@@ -59,13 +57,28 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build base image
+        id: docker_build_base
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          load: false
+          target: build
+          cache-from: type=gha,scope=build
+          cache-to: type=gha,scope=build,mode=max
+
       - name: Build and push image
         uses: docker/build-push-action@v2
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          cache-from: type=registry,ref=${{ steps.prepare.outputs.cache-tag }}
+          cache-from: |
+            type=gha,scope=prod
+            type=gha,scope=build
+          cache-to: type=gha,scope=prod,mode=max
           build-args: ${{ steps.prepare.outputs.build-args }}
           tags: ${{ steps.prepare.outputs.tags }}
 
