@@ -709,7 +709,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     test "doesn't return activities with filtered words" do
       user = insert(:user)
       user_two = insert(:user)
-      insert(:filter, user: user, phrase: "test", hide: true)
+      insert(:filter, user: user, phrase: "test", context: ["home"], hide: true)
 
       {:ok, %{id: id1, data: %{"context" => context}}} = CommonAPI.post(user, %{status: "1"})
 
@@ -725,7 +725,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
 
       activities =
         context
-        |> ActivityPub.fetch_activities_for_context(%{user: user})
+        |> ActivityPub.fetch_activities_for_context(%{user: user, phrase_filtering_user: user})
         |> Enum.map(& &1.id)
 
       assert length(activities) == 4
@@ -1031,13 +1031,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       user = insert(:user)
       user_two = insert(:user)
 
-      insert(:filter, user: user_two, phrase: "cofe", hide: true)
-      insert(:filter, user: user_two, phrase: "ok boomer", hide: true)
-      insert(:filter, user: user_two, phrase: "test", hide: false)
+      insert(:filter, user: user_two, phrase: "cofe", context: ["home"], hide: true)
+      insert(:filter, user: user_two, phrase: "ok boomer", context: ["home"], hide: true)
+      insert(:filter, user: user_two, phrase: "test", context: ["home"], hide: false)
 
       params = %{
         type: ["Create", "Announce"],
-        user: user_two
+        user: user_two,
+        phrase_filtering_user: user_two
       }
 
       {:ok, %{user: user, user_two: user_two, params: params}}
@@ -1088,7 +1089,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       activities =
         ActivityPub.fetch_activities([], %{
           type: ["Create", "Announce"],
-          user: another_user
+          user: another_user,
+          phrase_filtering_user: another_user
         })
 
       assert Enum.count(activities) == 2
