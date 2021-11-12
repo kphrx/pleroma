@@ -86,7 +86,7 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
   def handle_info({:render_with_user, view, template, item, topic}, state) do
     user = %User{} = User.get_cached_by_ap_id(state.user.ap_id)
 
-    if Streamer.filtered_by_user?(user, item) do
+    if Streamer.filtered_by_user?(topic, user, item) do
       {:ok, state}
     else
       message = view.render(template, item, user, topic)
