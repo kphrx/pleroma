@@ -48,6 +48,14 @@ defmodule Pleroma.Filter do
     from(f in query, where: f.hide)
   end
 
+  @spec get_context(Ecto.Query.t(), String.t()) :: Ecto.Query.t()
+  def get_context(query, context) do
+    from(
+      f in query,
+      where: ^context in f.context
+    )
+  end
+
   @spec get_filters(Ecto.Query.t() | module(), User.t()) :: [t()]
   def get_filters(query \\ __MODULE__, %User{id: user_id}) do
     query =
@@ -193,18 +201,22 @@ defmodule Pleroma.Filter do
     end
   end
 
-  @spec compose_regex(User.t() | [t()], format()) :: String.t() | Regex.t() | nil
-  def compose_regex(user_or_filters, format \\ :postgres)
+  @spec compose_regex(User.t(), String.t(), format()) :: String.t() | Regex.t() | nil
+  def compose_regex(user, context, format \\ :postgres)
 
-  def compose_regex(%User{} = user, format) do
+  def compose_regex(%User{} = user, context, format)
+      when context in ["home", "notifications"] do
     __MODULE__
     |> get_active()
     |> get_irreversible()
+    |> get_context(context)
     |> get_filters(user)
-    |> compose_regex(format)
+    |> to_regex(format)
   end
 
-  def compose_regex([_ | _] = filters, format) do
+  def compose_regex(_, _, _), do: nil
+
+  defp to_regex([_ | _] = filters, format) do
     phrases =
       filters
       |> Enum.map(& &1.phrase)
@@ -222,5 +234,5 @@ defmodule Pleroma.Filter do
     end
   end
 
-  def compose_regex(_, _), do: nil
+  defp to_regex(_, _), do: nil
 end
