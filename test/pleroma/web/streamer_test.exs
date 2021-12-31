@@ -773,6 +773,7 @@ defmodule Pleroma.Web.StreamerTest do
       refute_receive _
     end
 
+    @tag :erratic
     test "it sends conversation update to the 'direct' stream when a message is deleted", %{
       user: user,
       token: oauth_token
