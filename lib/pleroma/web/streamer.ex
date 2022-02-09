@@ -141,9 +141,15 @@ defmodule Pleroma.Web.Streamer do
     end
   end
 
-  def filtered_by_user?(user, item, streamed_type \\ :activity)
+  @spec filtered_by_user?(
+          topic :: String.t(),
+          User.t(),
+          Activity.t() | Notification.t(),
+          :activity | :notification
+        ) :: boolean()
+  def filtered_by_user?(topic, user, item, streamed_type \\ :activity)
 
-  def filtered_by_user?(%User{} = user, %Activity{} = item, streamed_type) do
+  def filtered_by_user?(topic, %User{} = user, %Activity{} = item, streamed_type) do
     %{block: blocked_ap_ids, mute: muted_ap_ids, reblog_mute: reblog_muted_ap_ids} =
       User.outgoing_relationships_ap_ids(user, [:block, :mute, :reblog_mute])
 
@@ -159,6 +165,9 @@ defmodule Pleroma.Web.Streamer do
                parent.data["actor"] == user.ap_id),
          true <- Enum.all?([blocked_ap_ids, muted_ap_ids], &(parent.data["actor"] not in &1)),
          true <- MapSet.disjoint?(recipients, recipient_blocks),
+         false <-
+           streamed_type == :activity && topic == "user:" <> to_string(user.id) &&
+             match_irreversible_filter(user, parent),
          %{host: item_host} <- URI.parse(item.actor),
          %{host: parent_host} <- URI.parse(parent.data["actor"]),
          false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
@@ -171,8 +180,8 @@ defmodule Pleroma.Web.Streamer do
     end
   end
 
-  def filtered_by_user?(%User{} = user, %Notification{activity: activity}, _) do
-    filtered_by_user?(user, activity, :notification)
+  def filtered_by_user?(topic, %User{} = user, %Notification{activity: activity}, _) do
+    filtered_by_user?(topic, user, activity, :notification)
   end
 
   defp do_stream("direct", item) do
@@ -319,6 +328,18 @@ defmodule Pleroma.Web.Streamer do
       ActivityPub.contain_activity(activity, user)
     end
   end
+
+  defp match_irreversible_filter(user, %Object{data: %{"content" => content}}) do
+    case Pleroma.Filter.compose_regex(user, "home", :re) do
+      nil ->
+        false
+
+      regex ->
+        Regex.match?(regex, content)
+    end
+  end
+
+  defp match_irreversible_filter(_, _), do: false
 
   # In test environement, only return true if the registry is started.
   # In benchmark environment, returns false.
