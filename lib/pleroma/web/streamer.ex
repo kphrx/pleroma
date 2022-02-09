@@ -329,13 +329,13 @@ defmodule Pleroma.Web.Streamer do
     end
   end
 
-  defp match_irreversible_filter(user, %Object{data: %{"context" => context}}) do
+  defp match_irreversible_filter(user, %Object{data: %{"content" => content}}) do
     case Pleroma.Filter.compose_regex(user, "home", :re) do
       nil ->
         false
 
       regex ->
-        Regex.match?(regex, context)
+        Regex.match?(regex, content)
     end
   end
 
