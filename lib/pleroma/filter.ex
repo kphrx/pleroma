@@ -217,17 +217,23 @@ defmodule Pleroma.Filter do
   def compose_regex(_, _, _), do: nil
 
   defp to_regex([_ | _] = filters, format) do
-    phrases =
+    whole_word_only =
       filters
+      |> Enum.filter(& &1.whole_word)
+      |> Enum.map(& &1.phrase)
+      |> Enum.join("|")
+    not_whole_word =
+      filters
+      |> Enum.filter(& !&1.whole_word)
       |> Enum.map(& &1.phrase)
       |> Enum.join("|")
 
     case format do
       :postgres ->
-        "\\y(#{phrases})\\y"
+        "((#{not_whole_word})|(\\y(#{whole_word_only})\\y))"
 
       :re ->
-        ~r/\b#{phrases}\b/i
+        ~r/((#{not_whole_word})|(\b#{whole_word_only})\b))/i
 
       _ ->
         nil
