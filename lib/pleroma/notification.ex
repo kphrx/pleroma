@@ -171,7 +171,7 @@ defmodule Pleroma.Notification do
   end
 
   defp exclude_filtered(query, user) do
-    case Pleroma.Filter.compose_regex(user, "notifications") do
+    case Pleroma.Filter.compose_regex(user) do
       nil ->
         query
 
@@ -687,7 +687,7 @@ defmodule Pleroma.Notification do
       object.data["actor"] == user.ap_id ->
         false
 
-      not is_nil(regex = Pleroma.Filter.compose_regex(user, "notifications", :re)) ->
+      not is_nil(regex = Pleroma.Filter.compose_regex(user, :re)) ->
         Regex.match?(regex, object.data["content"])
 
       true ->

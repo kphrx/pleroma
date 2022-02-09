@@ -347,7 +347,7 @@ defmodule Pleroma.NotificationTest do
       subscriber = insert(:user)
 
       User.subscribe(subscriber, user)
-      insert(:filter, user: subscriber, phrase: "cofe", context: ["notifications"], hide: true)
+      insert(:filter, user: subscriber, phrase: "cofe", hide: true)
 
       {:ok, status} = CommonAPI.post(user, %{status: "got cofe?"})
 
@@ -1147,7 +1147,7 @@ defmodule Pleroma.NotificationTest do
     end
 
     test "it doesn't return notifications about mentions with filtered word", %{user: user} do
-      insert(:filter, user: user, phrase: "cofe", context: ["notifications"], hide: true)
+      insert(:filter, user: user, phrase: "cofe", hide: true)
       another_user = insert(:user)
 
       {:ok, _activity} = CommonAPI.post(another_user, %{status: "@#{user.nickname} got cofe?"})
