@@ -722,6 +722,60 @@ defmodule Pleroma.Web.StreamerTest do
     end
   end
 
+  describe "word filters" do
+    setup do
+      %{user: user, token: token} = oauth_access(["read"])
+      user_two = insert(:user)
+      {:ok, user, user_two, _activity} = CommonAPI.follow(user, user_two)
+      insert(:filter, user: user, phrase: "cofe", context: ["home", "public"], hide: true)
+      insert(:filter, user: user, phrase: "ok boomer", context: ["home"], hide: true)
+      insert(:filter, user: user, phrase: "test", context: ["home"], hide: false)
+      {:ok, %{user: user, token: token, user_two: user_two}}
+    end
+
+    test "it filters posts from hard word filters", %{
+      user: user,
+      user_two: user_two,
+      token: oauth_token
+    } do
+      {:ok, topic} = Streamer.get_topic_and_add_socket("user", user, oauth_token)
+
+      {:ok, activity_one} = CommonAPI.post(user_two, %{status: "Give me some cofe!"})
+
+      assert_receive {:render_with_user, _, _, ^activity_one}
+      assert Streamer.filtered_by_user?(topic, user, activity_one)
+
+      {:ok, activity_two} = CommonAPI.post(user_two, %{status: "ok boomer"})
+
+      assert_receive {:render_with_user, _, _, ^activity_two}
+      assert Streamer.filtered_by_user?(topic, user, activity_two)
+    end
+
+    test "it doesn't filters posts from soft word filters", %{
+      user: user,
+      user_two: user_two,
+      token: oauth_token
+    } do
+      {:ok, topic} = Streamer.get_topic_and_add_socket("user", user, oauth_token)
+      {:ok, activity} = CommonAPI.post(user_two, %{status: "test"})
+
+      assert_receive {:render_with_user, _, _, ^activity}
+      refute Streamer.filtered_by_user?(topic, user, activity)
+    end
+
+    test "it doesn't filters posts from public word filters", %{
+      user: user,
+      user_two: user_two,
+      token: oauth_token
+    } do
+      {:ok, topic} = Streamer.get_topic_and_add_socket("public", user, oauth_token)
+      {:ok, activity} = CommonAPI.post(user_two, %{status: "Give me some cofe!"})
+
+      assert_receive {:render_with_user, _, _, ^activity}
+      refute Streamer.filtered_by_user?(topic, user, activity)
+    end
+  end
+
   describe "direct streams" do
     setup do: oauth_access(["read"])
 
