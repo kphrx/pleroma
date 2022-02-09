@@ -166,8 +166,8 @@ defmodule Pleroma.Web.Streamer do
          true <- Enum.all?([blocked_ap_ids, muted_ap_ids], &(parent.data["actor"] not in &1)),
          true <- MapSet.disjoint?(recipients, recipient_blocks),
          false <-
-           (streamed_type == :notification || topic == "user:" <> to_string(user.id)) &&
-             match_irreversible_filter(user, parent, streamed_type),
+           streamed_type == :activity && topic == "user:" <> to_string(user.id) &&
+             match_irreversible_filter(user, parent),
          %{host: item_host} <- URI.parse(item.actor),
          %{host: parent_host} <- URI.parse(parent.data["actor"]),
          false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
@@ -329,8 +329,8 @@ defmodule Pleroma.Web.Streamer do
     end
   end
 
-  defp match_irreversible_filter(user, %Object{data: %{"context" => context}}, stream_type) do
-    case irreversible_regex(user, stream_type) do
+  defp match_irreversible_filter(user, %Object{data: %{"context" => context}}) do
+    case Pleroma.Filter.compose_regex(user, "home", :re) do
       nil ->
         false
 
@@ -339,12 +339,7 @@ defmodule Pleroma.Web.Streamer do
     end
   end
 
-  defp match_irreversible_filter(_, _, _), do: false
-
-  defp irreversible_regex(user, :notification),
-    do: Pleroma.Filter.compose_regex(user, "notifications", :re)
-
-  defp irreversible_regex(user, :activity), do: Pleroma.Filter.compose_regex(user, "home", :re)
+  defp match_irreversible_filter(_, _), do: false
 
   # In test environement, only return true if the registry is started.
   # In benchmark environment, returns false.
