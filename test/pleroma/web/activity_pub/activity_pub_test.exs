@@ -1169,8 +1169,9 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       user = insert(:user)
       user_two = insert(:user)
 
-      insert(:filter, user: user_two, phrase: "cofe", context: ["home"], hide: true)
+      insert(:filter, user: user_two, phrase: "cofe", context: ["home", "public"], hide: true)
       insert(:filter, user: user_two, phrase: "ok boomer", context: ["home"], hide: true)
+      insert(:filter, user: user_two, phrase: "noise", context: ["notification"], hide: true)
       insert(:filter, user: user_two, phrase: "test", context: ["home"], hide: false)
 
       params = %{
@@ -1217,6 +1218,32 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       activities = ActivityPub.fetch_activities([], params)
 
       assert Enum.empty?(activities)
+    end
+
+    test "it does not filter if filter is hide or doesn't have home in context", %{
+      user: user,
+      params: params
+    } do
+      {:ok, _} = CommonAPI.post(user, %{status: "make some noise"})
+      {:ok, _} = CommonAPI.post(user, %{status: "test"})
+
+      activities = ActivityPub.fetch_activities([], params)
+
+      assert Enum.count(activities) == 2
+    end
+
+    test "it returns all statuses in public timeline", %{user: user, user_two: user_two} do
+      {:ok, _} = CommonAPI.post(user, %{status: "got cofe?"})
+      {:ok, _} = CommonAPI.post(user, %{status: "test!"})
+
+      activities =
+        ActivityPub.fetch_public_activities(%{
+          type: ["Create"],
+          muting_user: user_two,
+          blocking_user: user_two
+        })
+
+      assert Enum.count(activities) == 2
     end
 
     test "it returns all statuses if user does not have any filters" do
