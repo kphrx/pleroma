@@ -68,6 +68,16 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
     |> validate_required([:type, :name, :icon])
   end
 
+  def changeset(struct, data) do
+    types = ~w[Mention Hashtag Emoji]
+
+    struct
+    |> cast(data, __schema__(:fields))
+    |> validate_change(:type, {:inclusion, types}, fn _, _ ->
+      [{:type, {"is invalid", [validation: :inclusion, enum: types]}}]
+    end)
+  end
+
   def icon_changeset(struct, data) do
     struct
     |> cast(data, [:type, :url])
