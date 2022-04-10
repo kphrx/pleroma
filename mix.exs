@@ -124,7 +124,10 @@ defmodule Pleroma.Mixfile do
       {:ecto_sql, "~> 3.6.2"},
       {:postgrex, ">= 0.15.5"},
       {:oban, "~> 2.3.4"},
-      {:gettext, "~> 0.18"},
+      {:gettext,
+       git: "https://github.com/tusooa/gettext.git",
+       ref: "72fb2496b6c5280ed911bdc3756890e7f38a4808",
+       override: true},
       {:bcrypt_elixir, "~> 2.2"},
       {:trailing_format_plug, "~> 0.0.7"},
       {:fast_sanitize, "~> 0.2.0"},
@@ -243,9 +246,10 @@ defmodule Pleroma.Mixfile do
     identifier_filter = ~r/[^0-9a-z\-]+/i
 
     git_available? = match?({_output, 0}, System.cmd("sh", ["-c", "command -v git"]))
+    dotgit_present? = File.exists?(".git")
 
     git_pre_release =
-      if git_available? do
+      if git_available? and dotgit_present? do
         {tag, tag_err} =
           System.cmd("git", ["describe", "--tags", "--abbrev=0"], stderr_to_stdout: true)
 
@@ -272,6 +276,7 @@ defmodule Pleroma.Mixfile do
     # Branch name as pre-release version component, denoted with a dot
     branch_name =
       with true <- git_available?,
+           true <- dotgit_present?,
            {branch_name, 0} <- System.cmd("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
            branch_name <- String.trim(branch_name),
            branch_name <- System.get_env("PLEROMA_BUILD_BRANCH") || branch_name,
