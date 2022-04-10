@@ -15,11 +15,20 @@ jobs:
         git config --global user.name "${GITHUB_ACTOR}"
         git remote set-url origin https://${GITHUB_ACTOR}:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git
         git remote add upstream https://git.pleroma.social/pleroma/pleroma.git
+        git remote add fork https://kphrx:${{ secrets.PLEROMA_GITLAB_TOKEN }}@git.pleroma.social/kphrx/pleroma.git
     - name: fetch upstream
       run: |
         git fetch upstream stable:stable
         git fetch upstream develop:develop
-        git push origin --all
-        git fetch --tags
+        git fetch upstream --tags
+    - name: push to origin
+      run: |
+        git push origin stable:stable
+        git push origin develop:develop
         git push origin --tags
+    - name: push to fork
+      run: |
+        git push fork stable:stable
+        git push fork develop:develop
+        git push fork --tags
 
