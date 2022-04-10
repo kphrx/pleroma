@@ -82,3 +82,33 @@ jobs:
           build-args: ${{ steps.prepare.outputs.build-args }}
           tags: ${{ steps.prepare.outputs.tags }}
 
+  deployment:
+    needs: docker
+    runs-on: ubuntu-latest
+    environment: 
+      name: pl.kpherox.dev
+      url: https://pl.kpherox.dev
+    steps:
+      - name: setup
+        env:
+          DOCKER_HOST: ssh://deploy_server
+          DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          COMPOSE_YML: ${{ secrets.COMPOSE_YML }}
+        run: |
+          ssh-keyscan ${DEPLOY_SERVER} >> ~/.ssh/known_hosts
+          echo "${DEPLOY_KEY}" >> ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Host deploy_server
+            HostName ${DEPLOY_SERVER}
+            User ${DEPLOY_USER}
+            IdentityFile ~/.ssh/deploy_key
+          " >> ~/.ssh/config
+          echo "${COMPOSE_YML}" >> ./compose.yml
+          docker context ls
+      - name: deploy
+        run: |
+          docker compose -p pleroma pull
+          docker compose -p pleroma up -d
+        
