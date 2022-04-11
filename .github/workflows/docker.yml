@@ -85,13 +85,14 @@ jobs:
   deployment:
     needs: docker
     runs-on: ubuntu-latest
+    env:
+      DOCKER_HOST: ssh://deploy_server
     environment: 
       name: pl.kpherox.dev
       url: https://pl.kpherox.dev
     steps:
       - name: setup
         env:
-          DOCKER_HOST: ssh://deploy_server
           DEPLOY_SERVER: ${{ secrets.DEPLOY_SERVER }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
@@ -110,6 +111,7 @@ jobs:
           docker context ls
       - name: deploy
         run: |
+          docker context ls
           docker compose -p pleroma pull
           docker compose -p pleroma up -d
         
