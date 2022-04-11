@@ -97,6 +97,7 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           COMPOSE_YML: ${{ secrets.COMPOSE_YML }}
         run: |
+          mkdir -p ~/.ssh
           ssh-keyscan ${DEPLOY_SERVER} >> ~/.ssh/known_hosts
           echo "${DEPLOY_KEY}" >> ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
