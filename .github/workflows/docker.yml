@@ -84,7 +84,7 @@ jobs:
 
   deployment:
     needs: docker
-    if: github.ref == 'pl.kpherox.dev'
+    if: ${{ github.ref_name == 'pl.kpherox.dev' }}
     runs-on: ubuntu-latest
     env:
       DOCKER_HOST: ssh://deploy_server
