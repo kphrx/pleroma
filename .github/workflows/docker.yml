@@ -3,9 +3,7 @@ name: docker
 on:
   push:
     branches:
-      - '**'
-    tags:
-      - 'v*.*.*'
+      - 'pl.kpherox.dev'
   pull_request:
 
 jobs:
