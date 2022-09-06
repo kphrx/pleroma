@@ -63,14 +63,17 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.EmojiReactValidator do
   end
 
   defp fix_emoji_qualification(%{"content" => emoji} = data) do
-    # Emoji variation sequence
-    new_emoji = emoji <> "\uFE0F"
+    new_emoji = Pleroma.Emoji.fully_qualify_emoji(emoji)
 
-    if Pleroma.Emoji.is_unicode_emoji?(new_emoji) do
-      data
-      |> Map.put("content", new_emoji)
-    else
-      data
+    cond do
+      Pleroma.Emoji.is_unicode_emoji?(emoji) ->
+        data
+
+      Pleroma.Emoji.is_unicode_emoji?(new_emoji) ->
+        data |> Map.put("content", new_emoji)
+
+      true ->
+        data
     end
   end
 
