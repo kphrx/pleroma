@@ -38,7 +38,7 @@ jobs:
           if [[ $GITHUB_REF != refs/tags/* ]] && [[ "${{ github.event_name }}" = "push" ]]; then
             TAGS="$TAGS,${DOCKER_IMAGE}:${SHORT_SHA}"
           fi
-          BUILD_ARGS="VCS_REF=${SHORT_SHA},BUILD_DATE=$(date --utc -Iseconds)"
+          BUILD_ARGS="VCS_REF=${SHORT_SHA}\nBUILD_DATE=$(date --utc -Iseconds)"
           echo ::set-output name=build-args::${BUILD_ARGS}
           echo ::set-output name=tags::${TAGS}
 
