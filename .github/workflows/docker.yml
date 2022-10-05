@@ -22,6 +22,8 @@ jobs:
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=
+          labels: |
+            org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
