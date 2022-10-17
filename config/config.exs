@@ -508,7 +508,7 @@ config :cors_plug,
     "Idempotency-Key"
   ],
   credentials: true,
-  headers: ["Authorization", "Content-Type", "Idempotency-Key"]
+  headers: ["Authorization", "Content-Type", "Idempotency-Key", "User-Agent"]
 
 config :pleroma, Pleroma.User,
   restricted_nicknames: [
