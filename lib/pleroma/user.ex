@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.User do
@@ -156,6 +156,7 @@ defmodule Pleroma.User do
     field(:last_status_at, :naive_datetime)
     field(:birthday, :date)
     field(:show_birthday, :boolean, default: false)
+    field(:language, :string)
 
     embeds_one(
       :notification_settings,
@@ -705,11 +706,12 @@ defmodule Pleroma.User do
     ])
     |> validate_required([:name, :nickname])
     |> unique_constraint(:nickname)
-    |> validate_exclusion(:nickname, Config.get([User, :restricted_nicknames]))
+    |> validate_not_restricted_nickname(:nickname)
     |> validate_format(:nickname, local_nickname_regex())
     |> put_ap_id()
     |> unique_constraint(:ap_id)
     |> put_following_and_follower_and_featured_address()
+    |> put_private_key()
   end
 
   def register_changeset(struct, params \\ %{}, opts \\ []) do
@@ -746,23 +748,16 @@ defmodule Pleroma.User do
       :emoji,
       :accepts_chat_messages,
       :registration_reason,
-      :birthday
+      :birthday,
+      :language
     ])
     |> validate_required([:name, :nickname, :password, :password_confirmation])
     |> validate_confirmation(:password)
     |> unique_constraint(:email)
     |> validate_format(:email, @email_regex)
-    |> validate_change(:email, fn :email, email ->
-      valid? =
-        Config.get([User, :email_blacklist])
-        |> Enum.all?(fn blacklisted_domain ->
-          !String.ends_with?(email, ["@" <> blacklisted_domain, "." <> blacklisted_domain])
-        end)
-
-      if valid?, do: [], else: [email: "Invalid email"]
-    end)
+    |> validate_email_not_in_blacklisted_domain(:email)
     |> unique_constraint(:nickname)
-    |> validate_exclusion(:nickname, Config.get([User, :restricted_nicknames]))
+    |> validate_not_restricted_nickname(:nickname)
     |> validate_format(:nickname, local_nickname_regex())
     |> validate_length(:bio, max: bio_limit)
     |> validate_length(:name, min: 1, max: name_limit)
@@ -774,6 +769,36 @@ defmodule Pleroma.User do
     |> put_ap_id()
     |> unique_constraint(:ap_id)
     |> put_following_and_follower_and_featured_address()
+    |> put_private_key()
+  end
+
+  def validate_not_restricted_nickname(changeset, field) do
+    validate_change(changeset, field, fn _, value ->
+      valid? =
+        Config.get([User, :restricted_nicknames])
+        |> Enum.all?(fn restricted_nickname ->
+          String.downcase(value) != String.downcase(restricted_nickname)
+        end)
+
+      if valid?, do: [], else: [nickname: "Invalid nickname"]
+    end)
+  end
+
+  def validate_email_not_in_blacklisted_domain(changeset, field) do
+    validate_change(changeset, field, fn _, value ->
+      valid? =
+        Config.get([User, :email_blacklist])
+        |> Enum.all?(fn blacklisted_domain ->
+          blacklisted_domain_downcase = String.downcase(blacklisted_domain)
+
+          !String.ends_with?(String.downcase(value), [
+            "@" <> blacklisted_domain_downcase,
+            "." <> blacklisted_domain_downcase
+          ])
+        end)
+
+      if valid?, do: [], else: [email: "Invalid email"]
+    end)
   end
 
   def maybe_validate_required_email(changeset, true), do: changeset
@@ -821,6 +846,11 @@ defmodule Pleroma.User do
     |> put_change(:follower_address, followers)
     |> put_change(:following_address, following)
     |> put_change(:featured_address, featured)
+  end
+
+  defp put_private_key(changeset) do
+    {:ok, pem} = Keys.generate_rsa_pem()
+    put_change(changeset, :keys, pem)
   end
 
   defp autofollow_users(user) do
@@ -1127,10 +1157,24 @@ defmodule Pleroma.User do
     |> update_and_set_cache()
   end
 
-  def update_and_set_cache(changeset) do
+  def update_and_set_cache(%{data: %Pleroma.User{} = user} = changeset) do
+    was_superuser_before_update = User.superuser?(user)
+
     with {:ok, user} <- Repo.update(changeset, stale_error_field: :id) do
       set_cache(user)
     end
+    |> maybe_remove_report_notifications(was_superuser_before_update)
+  end
+
+  defp maybe_remove_report_notifications({:ok, %Pleroma.User{} = user} = result, true) do
+    if not User.superuser?(user),
+      do: user |> Notification.destroy_multiple_from_types(["pleroma:report"])
+
+    result
+  end
+
+  defp maybe_remove_report_notifications(result, _) do
+    result
   end
 
   def get_user_friends_ap_ids(user) do
@@ -1443,17 +1487,30 @@ defmodule Pleroma.User do
           {:ok, list(UserRelationship.t())} | {:error, String.t()}
   def mute(%User{} = muter, %User{} = mutee, params \\ %{}) do
     notifications? = Map.get(params, :notifications, true)
-    expires_in = Map.get(params, :expires_in, 0)
+    duration = Map.get(params, :duration, 0)
 
-    with {:ok, user_mute} <- UserRelationship.create_mute(muter, mutee),
+    expires_at =
+      if duration > 0 do
+        DateTime.utc_now()
+        |> DateTime.add(duration)
+      else
+        nil
+      end
+
+    with {:ok, user_mute} <- UserRelationship.create_mute(muter, mutee, expires_at),
          {:ok, user_notification_mute} <-
-           (notifications? && UserRelationship.create_notification_mute(muter, mutee)) ||
+           (notifications? &&
+              UserRelationship.create_notification_mute(
+                muter,
+                mutee,
+                expires_at
+              )) ||
              {:ok, nil} do
-      if expires_in > 0 do
+      if duration > 0 do
         Pleroma.Workers.MuteExpireWorker.enqueue(
           "unmute_user",
           %{"muter_id" => muter.id, "mutee_id" => mutee.id},
-          schedule_in: expires_in
+          scheduled_at: expires_at
         )
       end
 
@@ -1524,11 +1581,17 @@ defmodule Pleroma.User do
         blocker
       end
 
-    # clear any requested follows as well
+    # clear any requested follows from both sides as well
     blocked =
       case CommonAPI.reject_follow_request(blocked, blocker) do
         {:ok, %User{} = updated_blocked} -> updated_blocked
         nil -> blocked
+      end
+
+    blocker =
+      case CommonAPI.reject_follow_request(blocker, blocked) do
+        {:ok, %User{} = updated_blocker} -> updated_blocker
+        nil -> blocker
       end
 
     unsubscribe(blocked, blocker)
@@ -2030,6 +2093,7 @@ defmodule Pleroma.User do
       follower_address: uri <> "/followers"
     }
     |> change
+    |> put_private_key()
     |> unique_constraint(:nickname)
     |> Repo.insert()
     |> set_cache()
@@ -2295,17 +2359,6 @@ defmodule Pleroma.User do
     }
   end
 
-  def ensure_keys_present(%{keys: keys} = user) when not is_nil(keys), do: {:ok, user}
-
-  def ensure_keys_present(%User{} = user) do
-    with {:ok, pem} <- Keys.generate_rsa_pem() do
-      user
-      |> cast(%{keys: pem}, [:keys])
-      |> validate_required([:keys])
-      |> update_and_set_cache()
-    end
-  end
-
   def get_ap_ids_by_nicknames(nicknames) do
     from(u in User,
       where: u.nickname in ^nicknames,
@@ -2346,6 +2399,38 @@ defmodule Pleroma.User do
     |> unique_constraint(:email)
     |> validate_format(:email, @email_regex)
     |> update_and_set_cache()
+  end
+
+  def alias_users(user) do
+    user.also_known_as
+    |> Enum.map(&User.get_cached_by_ap_id/1)
+    |> Enum.filter(fn user -> user != nil end)
+  end
+
+  def add_alias(user, new_alias_user) do
+    current_aliases = user.also_known_as || []
+    new_alias_ap_id = new_alias_user.ap_id
+
+    if new_alias_ap_id in current_aliases do
+      {:ok, user}
+    else
+      user
+      |> cast(%{also_known_as: current_aliases ++ [new_alias_ap_id]}, [:also_known_as])
+      |> update_and_set_cache()
+    end
+  end
+
+  def delete_alias(user, alias_user) do
+    current_aliases = user.also_known_as || []
+    alias_ap_id = alias_user.ap_id
+
+    if alias_ap_id in current_aliases do
+      user
+      |> cast(%{also_known_as: current_aliases -- [alias_ap_id]}, [:also_known_as])
+      |> update_and_set_cache()
+    else
+      {:error, :no_such_alias}
+    end
   end
 
   # Internal function; public one is `deactivate/2`

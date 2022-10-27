@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.WebFinger do
@@ -63,8 +63,6 @@ defmodule Pleroma.Web.WebFinger do
   end
 
   def represent_user(user, "JSON") do
-    {:ok, user} = User.ensure_keys_present(user)
-
     %{
       "subject" => "acct:#{user.nickname}@#{Pleroma.Web.Endpoint.host()}",
       "aliases" => gather_aliases(user),
@@ -73,8 +71,6 @@ defmodule Pleroma.Web.WebFinger do
   end
 
   def represent_user(user, "XML") do
-    {:ok, user} = User.ensure_keys_present(user)
-
     aliases =
       user
       |> gather_aliases()

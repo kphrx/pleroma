@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ApiSpec.Schemas.Account do
@@ -33,6 +33,7 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
       header: %Schema{type: :string, format: :uri},
       id: FlakeID,
       locked: %Schema{type: :boolean},
+      mute_expires_at: %Schema{type: :string, format: "date-time", nullable: true},
       note: %Schema{type: :string, format: :html},
       statuses_count: %Schema{type: :integer},
       url: %Schema{type: :string, format: :uri},

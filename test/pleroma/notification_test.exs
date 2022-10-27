@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.NotificationTest do
@@ -126,6 +126,28 @@ defmodule Pleroma.NotificationTest do
 
       subscriber_notifications = Notification.for_user(subscriber)
       assert Enum.empty?(subscriber_notifications)
+    end
+
+    test "it sends edited notifications to those who repeated a status" do
+      user = insert(:user)
+      repeated_user = insert(:user)
+      other_user = insert(:user)
+
+      {:ok, activity_one} =
+        CommonAPI.post(user, %{
+          status: "hey @#{other_user.nickname}!"
+        })
+
+      {:ok, _activity_two} = CommonAPI.repeat(activity_one.id, repeated_user)
+
+      {:ok, _edit_activity} =
+        CommonAPI.update(user, activity_one, %{
+          status: "hey @#{other_user.nickname}! mew mew"
+        })
+
+      assert [%{type: "reblog"}] = Notification.for_user(user)
+      assert [%{type: "update"}] = Notification.for_user(repeated_user)
+      assert [%{type: "mention"}] = Notification.for_user(other_user)
     end
   end
 
@@ -520,6 +542,25 @@ defmodule Pleroma.NotificationTest do
     end
   end
 
+  describe "destroy_multiple_from_types/2" do
+    test "clears all notifications of a certain type for a given user" do
+      report_activity = insert(:report_activity)
+      user1 = insert(:user, is_moderator: true, is_admin: true)
+      user2 = insert(:user, is_moderator: true, is_admin: true)
+      {:ok, _} = Notification.create_notifications(report_activity)
+
+      {:ok, _} =
+        CommonAPI.post(user2, %{
+          status: "hey @#{user1.nickname} !"
+        })
+
+      Notification.destroy_multiple_from_types(user1, ["pleroma:report"])
+
+      assert [%Pleroma.Notification{type: "mention"}] = Notification.for_user(user1)
+      assert [%Pleroma.Notification{type: "pleroma:report"}] = Notification.for_user(user2)
+    end
+  end
+
   describe "set_read_up_to()" do
     test "it sets all notifications as read up to a specified notification ID" do
       user = insert(:user)
@@ -819,6 +860,30 @@ defmodule Pleroma.NotificationTest do
 
       assert [other_user] == enabled_receivers
       assert [] == disabled_receivers
+    end
+
+    test "it sends edited notifications to those who repeated a status" do
+      user = insert(:user)
+      repeated_user = insert(:user)
+      other_user = insert(:user)
+
+      {:ok, activity_one} =
+        CommonAPI.post(user, %{
+          status: "hey @#{other_user.nickname}!"
+        })
+
+      {:ok, _activity_two} = CommonAPI.repeat(activity_one.id, repeated_user)
+
+      {:ok, edit_activity} =
+        CommonAPI.update(user, activity_one, %{
+          status: "hey @#{other_user.nickname}! mew mew"
+        })
+
+      {enabled_receivers, _disabled_receivers} =
+        Notification.get_notified_from_activity(edit_activity)
+
+      assert repeated_user in enabled_receivers
+      assert other_user not in enabled_receivers
     end
   end
 

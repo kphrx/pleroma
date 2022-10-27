@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.Federator do
@@ -61,10 +61,8 @@ defmodule Pleroma.Web.Federator do
   def perform(:publish, activity) do
     Logger.debug(fn -> "Running publish for #{activity.data["id"]}" end)
 
-    with %User{} = actor <- User.get_cached_by_ap_id(activity.data["actor"]),
-         {:ok, actor} <- User.ensure_keys_present(actor) do
-      Publisher.publish(actor, activity)
-    end
+    %User{} = actor = User.get_cached_by_ap_id(activity.data["actor"])
+    Publisher.publish(actor, activity)
   end
 
   def perform(:incoming_ap_doc, params) do

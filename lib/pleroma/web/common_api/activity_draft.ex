@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.CommonAPI.ActivityDraft do
@@ -224,7 +224,10 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     object =
       note_data
       |> Map.put("emoji", emoji)
-      |> Map.put("source", draft.status)
+      |> Map.put("source", %{
+        "content" => draft.status,
+        "mediaType" => Utils.get_content_type(draft.params[:content_type])
+      })
       |> Map.put("generator", draft.params[:generator])
 
     %__MODULE__{draft | object: object}

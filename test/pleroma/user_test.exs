@@ -1,10 +1,11 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.UserTest do
   alias Pleroma.Activity
   alias Pleroma.Builders.UserBuilder
+  alias Pleroma.Notification
   alias Pleroma.Object
   alias Pleroma.Repo
   alias Pleroma.Tests.ObanHelpers
@@ -310,7 +311,7 @@ defmodule Pleroma.UserTest do
   describe "unfollow/2" do
     setup do: clear_config([:instance, :external_user_synchronization])
 
-    test "unfollow with syncronizes external user" do
+    test "unfollow with synchronizes external user" do
       clear_config([:instance, :external_user_synchronization], true)
 
       followed =
@@ -617,13 +618,31 @@ defmodule Pleroma.UserTest do
     end
 
     test "it restricts certain nicknames" do
+      clear_config([User, :restricted_nicknames], ["about"])
       [restricted_name | _] = Pleroma.Config.get([User, :restricted_nicknames])
 
-      assert is_bitstring(restricted_name)
+      assert is_binary(restricted_name)
 
       params =
         @full_user_data
         |> Map.put(:nickname, restricted_name)
+
+      changeset = User.register_changeset(%User{}, params)
+
+      refute changeset.valid?
+    end
+
+    test "it is case-insensitive when restricting nicknames" do
+      clear_config([User, :restricted_nicknames], ["about"])
+      [restricted_name | _] = Pleroma.Config.get([User, :restricted_nicknames])
+
+      assert is_binary(restricted_name)
+
+      restricted_upcase_name = String.upcase(restricted_name)
+
+      params =
+        @full_user_data
+        |> Map.put(:nickname, restricted_upcase_name)
 
       changeset = User.register_changeset(%User{}, params)
 
@@ -635,6 +654,11 @@ defmodule Pleroma.UserTest do
 
       # Block with match
       params = Map.put(@full_user_data, :email, "troll@trolling.world")
+      changeset = User.register_changeset(%User{}, params)
+      refute changeset.valid?
+
+      # Block with case-insensitive match
+      params = Map.put(@full_user_data, :email, "troll@TrOlLing.wOrld")
       changeset = User.register_changeset(%User{}, params)
       refute changeset.valid?
 
@@ -653,14 +677,14 @@ defmodule Pleroma.UserTest do
       assert changeset.valid?
     end
 
-    test "it sets the password_hash and ap_id" do
+    test "it sets the password_hash, ap_id, private key and followers collection address" do
       changeset = User.register_changeset(%User{}, @full_user_data)
 
       assert changeset.valid?
 
       assert is_binary(changeset.changes[:password_hash])
+      assert is_binary(changeset.changes[:keys])
       assert changeset.changes[:ap_id] == User.ap_id(%User{nickname: @full_user_data.nickname})
-
       assert changeset.changes.follower_address == "#{changeset.changes.ap_id}/followers"
     end
 
@@ -1122,7 +1146,7 @@ defmodule Pleroma.UserTest do
       user = insert(:user)
       muted_user = insert(:user)
 
-      {:ok, _user_relationships} = User.mute(user, muted_user, %{expires_in: 60})
+      {:ok, _user_relationships} = User.mute(user, muted_user, %{duration: 60})
       assert User.mutes?(user, muted_user)
 
       worker = Pleroma.Workers.MuteExpireWorker
@@ -2107,21 +2131,6 @@ defmodule Pleroma.UserTest do
     end
   end
 
-  describe "ensure_keys_present" do
-    test "it creates keys for a user and stores them in info" do
-      user = insert(:user)
-      refute is_binary(user.keys)
-      {:ok, user} = User.ensure_keys_present(user)
-      assert is_binary(user.keys)
-    end
-
-    test "it doesn't create keys if there already are some" do
-      user = insert(:user, keys: "xxx")
-      {:ok, user} = User.ensure_keys_present(user)
-      assert user.keys == "xxx"
-    end
-  end
-
   describe "get_ap_ids_by_nicknames" do
     test "it returns a list of AP ids for a given set of nicknames" do
       user = insert(:user)
@@ -2210,6 +2219,26 @@ defmodule Pleroma.UserTest do
       assert {:ok, user} = Cachex.get(:user_cache, "ap_id:#{user.ap_id}")
       assert %User{bio: "test-bio"} = User.get_cached_by_ap_id(user.ap_id)
     end
+
+    test "removes report notifs when user isn't superuser any more" do
+      report_activity = insert(:report_activity)
+      user = insert(:user, is_moderator: true, is_admin: true)
+      {:ok, _} = Notification.create_notifications(report_activity)
+
+      assert [%Pleroma.Notification{type: "pleroma:report"}] = Notification.for_user(user)
+
+      {:ok, user} = user |> User.admin_api_update(%{is_moderator: false})
+      # is still superuser because still admin
+      assert [%Pleroma.Notification{type: "pleroma:report"}] = Notification.for_user(user)
+
+      {:ok, user} = user |> User.admin_api_update(%{is_moderator: true, is_admin: false})
+      # is still superuser because still moderator
+      assert [%Pleroma.Notification{type: "pleroma:report"}] = Notification.for_user(user)
+
+      {:ok, user} = user |> User.admin_api_update(%{is_moderator: false})
+      # is not a superuser any more
+      assert [] = Notification.for_user(user)
+    end
   end
 
   describe "following/followers synchronization" do
@@ -2236,7 +2265,7 @@ defmodule Pleroma.UserTest do
       assert other_user.follower_count == 1
     end
 
-    test "syncronizes the counters with the remote instance for the followed when enabled" do
+    test "synchronizes the counters with the remote instance for the followed when enabled" do
       clear_config([:instance, :external_user_synchronization], false)
 
       user = insert(:user)
@@ -2258,7 +2287,7 @@ defmodule Pleroma.UserTest do
       assert other_user.follower_count == 437
     end
 
-    test "syncronizes the counters with the remote instance for the follower when enabled" do
+    test "synchronizes the counters with the remote instance for the follower when enabled" do
       clear_config([:instance, :external_user_synchronization], false)
 
       user = insert(:user)
@@ -2556,6 +2585,82 @@ defmodule Pleroma.UserTest do
     %{id: id} = insert(:note_activity, user: user)
     %{object: %{data: %{"id" => object_id}}} = Activity.get_by_id_with_object(id)
     object_id
+  end
+
+  describe "add_alias/2" do
+    test "should add alias for another user" do
+      user = insert(:user)
+      user2 = insert(:user)
+
+      assert {:ok, user_updated} = user |> User.add_alias(user2)
+
+      assert user_updated.also_known_as |> length() == 1
+      assert user2.ap_id in user_updated.also_known_as
+    end
+
+    test "should add multiple aliases" do
+      user = insert(:user)
+      user2 = insert(:user)
+      user3 = insert(:user)
+
+      assert {:ok, user} = user |> User.add_alias(user2)
+      assert {:ok, user_updated} = user |> User.add_alias(user3)
+
+      assert user_updated.also_known_as |> length() == 2
+      assert user2.ap_id in user_updated.also_known_as
+      assert user3.ap_id in user_updated.also_known_as
+    end
+
+    test "should not add duplicate aliases" do
+      user = insert(:user)
+      user2 = insert(:user)
+
+      assert {:ok, user} = user |> User.add_alias(user2)
+
+      assert {:ok, user_updated} = user |> User.add_alias(user2)
+
+      assert user_updated.also_known_as |> length() == 1
+      assert user2.ap_id in user_updated.also_known_as
+    end
+  end
+
+  describe "alias_users/1" do
+    test "should get aliases for a user" do
+      user = insert(:user)
+      user2 = insert(:user, also_known_as: [user.ap_id])
+
+      aliases = user2 |> User.alias_users()
+
+      assert aliases |> length() == 1
+
+      alias_user = aliases |> Enum.at(0)
+
+      assert alias_user.ap_id == user.ap_id
+    end
+  end
+
+  describe "delete_alias/2" do
+    test "should delete existing alias" do
+      user = insert(:user)
+      user2 = insert(:user, also_known_as: [user.ap_id])
+
+      assert {:ok, user_updated} = user2 |> User.delete_alias(user)
+
+      assert user_updated.also_known_as == []
+    end
+
+    test "should report error on non-existing alias" do
+      user = insert(:user)
+      user2 = insert(:user)
+      user3 = insert(:user, also_known_as: [user.ap_id])
+
+      assert {:error, :no_such_alias} = user3 |> User.delete_alias(user2)
+
+      user3_updated = User.get_cached_by_ap_id(user3.ap_id)
+
+      assert user3_updated.also_known_as |> length() == 1
+      assert user.ap_id in user3_updated.also_known_as
+    end
   end
 
   describe "account endorsements" do

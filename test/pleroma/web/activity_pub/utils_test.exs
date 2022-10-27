@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.UtilsTest do
@@ -429,7 +429,6 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
       object = Object.normalize(note_activity, fetch: false)
       res = Utils.lazy_put_activity_defaults(%{"context" => object.data["id"]})
       assert res["context"] == object.data["id"]
-      assert res["context_id"] == object.id
       assert res["id"]
       assert res["published"]
     end
@@ -437,7 +436,6 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
     test "returns map with fake id and published data" do
       assert %{
                "context" => "pleroma:fakecontext",
-               "context_id" => -1,
                "id" => "pleroma:fakeid",
                "published" => _
              } = Utils.lazy_put_activity_defaults(%{}, true)
@@ -454,13 +452,11 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
         })
 
       assert res["context"] == object.data["id"]
-      assert res["context_id"] == object.id
       assert res["id"]
       assert res["published"]
       assert res["object"]["id"]
       assert res["object"]["published"]
       assert res["object"]["context"] == object.data["id"]
-      assert res["object"]["context_id"] == object.id
     end
   end
 

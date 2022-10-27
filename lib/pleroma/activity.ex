@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Activity do
@@ -53,7 +53,7 @@ defmodule Pleroma.Activity do
     #
     # ```
     # |> join(:inner, [activity], o in Object,
-    #      on: fragment("(?->>'id') = COALESCE((?)->'object'->> 'id', (?)->>'object')",
+    #      on: fragment("(?->>'id') = associated_object_id((?))",
     #        o.data, activity.data, activity.data))
     # |> preload([activity, object], [object: object])
     # ```
@@ -69,9 +69,8 @@ defmodule Pleroma.Activity do
     join(query, join_type, [activity], o in Object,
       on:
         fragment(
-          "(?->>'id') = COALESCE(?->'object'->>'id', ?->>'object')",
+          "(?->>'id') = associated_object_id(?)",
           o.data,
-          activity.data,
           activity.data
         ),
       as: :object

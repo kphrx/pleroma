@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2021 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ApiSpec.AccountOperation do
@@ -279,10 +279,16 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
           "Mute notifications in addition to statuses? Defaults to `true`."
         ),
         Operation.parameter(
+          :duration,
+          :query,
+          %Schema{type: :integer},
+          "Expire the mute in `duration` seconds. Default 0 for infinity"
+        ),
+        Operation.parameter(
           :expires_in,
           :query,
           %Schema{type: :integer, default: 0},
-          "Expire the mute in `expires_in` seconds. Default 0 for infinity"
+          "Deprecated, use `duration` instead"
         )
       ],
       responses: %{
@@ -366,6 +372,22 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
       parameters: [%Reference{"$ref": "#/components/parameters/accountIdOrNickname"}],
       responses: %{
         200 => Operation.response("Relationship", "application/json", AccountRelationship)
+      }
+    }
+  end
+
+  def remove_from_followers_operation do
+    %Operation{
+      tags: ["Account actions"],
+      summary: "Remove from followers",
+      operationId: "AccountController.remove_from_followers",
+      security: [%{"oAuth" => ["follow", "write:follows"]}],
+      description: "Remove the given account from followers",
+      parameters: [%Reference{"$ref": "#/components/parameters/accountIdOrNickname"}],
+      responses: %{
+        200 => Operation.response("Relationship", "application/json", AccountRelationship),
+        400 => Operation.response("Error", "application/json", ApiError),
+        404 => Operation.response("Error", "application/json", ApiError)
       }
     }
   end
@@ -545,10 +567,23 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
           description: "Invite token required when the registrations aren't public"
         },
         birthday: %Schema{
-          type: :string,
           nullable: true,
           description: "User's birthday",
-          format: :date
+          anyOf: [
+            %Schema{
+              type: :string,
+              format: :date
+            },
+            %Schema{
+              type: :string,
+              maxLength: 0
+            }
+          ]
+        },
+        language: %Schema{
+          type: :string,
+          nullable: true,
+          description: "User's preferred language for emails"
         }
       },
       example: %{
@@ -728,10 +763,18 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
         },
         actor_type: ActorType,
         birthday: %Schema{
-          type: :string,
           nullable: true,
           description: "User's birthday",
-          format: :date
+          anyOf: [
+            %Schema{
+              type: :string,
+              format: :date
+            },
+            %Schema{
+              type: :string,
+              maxLength: 0
+            }
+          ]
         },
         show_birthday: %Schema{
           allOf: [BooleanLike],
@@ -856,10 +899,15 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
           description: "Mute notifications in addition to statuses? Defaults to true.",
           default: true
         },
+        duration: %Schema{
+          type: :integer,
+          nullable: true,
+          description: "Expire the mute in `expires_in` seconds. Default 0 for infinity"
+        },
         expires_in: %Schema{
           type: :integer,
           nullable: true,
-          description: "Expire the mute in `expires_in` seconds. Default 0 for infinity",
+          description: "Deprecated, use `duration` instead",
           default: 0
         }
       },

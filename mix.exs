@@ -4,8 +4,8 @@ defmodule Pleroma.Mixfile do
   def project do
     [
       app: :pleroma,
-      version: version("2.4.51"),
-      elixir: "~> 1.9",
+      version: version("2.4.53"),
+      elixir: "~> 1.10",
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:phoenix, :gettext] ++ Mix.compilers(),
       elixirc_options: [warnings_as_errors: warnings_as_errors()],
@@ -80,7 +80,8 @@ defmodule Pleroma.Mixfile do
         :quack,
         :fast_sanitize,
         :os_mon,
-        :ssl
+        :ssl,
+        :esshd
       ],
       included_applications: [:ex_syslogger]
     ]
@@ -124,7 +125,10 @@ defmodule Pleroma.Mixfile do
       {:ecto_sql, "~> 3.6.2"},
       {:postgrex, ">= 0.15.5"},
       {:oban, "~> 2.3.4"},
-      {:gettext, "~> 0.18"},
+      {:gettext,
+       git: "https://github.com/tusooa/gettext.git",
+       ref: "72fb2496b6c5280ed911bdc3756890e7f38a4808",
+       override: true},
       {:bcrypt_elixir, "~> 2.2"},
       {:trailing_format_plug, "~> 0.0.7"},
       {:fast_sanitize, "~> 0.2.0"},
@@ -142,7 +146,7 @@ defmodule Pleroma.Mixfile do
       {:mogrify, "~> 0.9.1"},
       {:ex_aws, "~> 2.1.6"},
       {:ex_aws_s3, "~> 2.0"},
-      {:sweet_xml, "~> 0.6.6"},
+      {:sweet_xml, "~> 0.7.2"},
       {:earmark, "~> 1.4.15"},
       {:bbcode_pleroma, "~> 0.2.0"},
       {:crypt,
@@ -163,8 +167,8 @@ defmodule Pleroma.Mixfile do
       {:poolboy, "~> 1.5"},
       {:prometheus, "~> 4.6"},
       {:prometheus_ex,
-       git: "https://git.pleroma.social/pleroma/elixir-libraries/prometheus.ex.git",
-       ref: "a4e9beb3c1c479d14b352fd9d6dd7b1f6d7deee5",
+       git: "https://github.com/lanodan/prometheus.ex.git",
+       branch: "fix/elixir-1.14",
        override: true},
       {:prometheus_plugs, "~> 1.1"},
       {:prometheus_phoenix, "~> 1.3"},
@@ -191,7 +195,7 @@ defmodule Pleroma.Mixfile do
        ref: "e0f16822d578866e186a0974d65ad58cddc1e2ab"},
       {:restarter, path: "./restarter"},
       {:majic, "~> 1.0"},
-      {:eblurhash, "~> 1.1.0"},
+      {:eblurhash, "~> 1.2.2"},
       {:open_api_spex, "~> 3.10"},
       {:phoenix_live_dashboard, "~> 0.6.2"},
       {:ecto_psql_extras, "~> 0.6"},
@@ -208,7 +212,7 @@ defmodule Pleroma.Mixfile do
       {:excoveralls, "0.12.3", only: :test},
       {:hackney, "~> 1.18.0", override: true},
       {:mox, "~> 1.0", only: :test},
-      {:websocket_client, git: "https://github.com/jeremyong/websocket_client.git", only: :test}
+      {:websockex, "~> 0.4.3", only: :test}
     ] ++ oauth_deps()
   end
 
@@ -243,9 +247,10 @@ defmodule Pleroma.Mixfile do
     identifier_filter = ~r/[^0-9a-z\-]+/i
 
     git_available? = match?({_output, 0}, System.cmd("sh", ["-c", "command -v git"]))
+    dotgit_present? = File.exists?(".git")
 
     git_pre_release =
-      if git_available? do
+      if git_available? and dotgit_present? do
         {tag, tag_err} =
           System.cmd("git", ["describe", "--tags", "--abbrev=0"], stderr_to_stdout: true)
 
@@ -272,6 +277,7 @@ defmodule Pleroma.Mixfile do
     # Branch name as pre-release version component, denoted with a dot
     branch_name =
       with true <- git_available?,
+           true <- dotgit_present?,
            {branch_name, 0} <- System.cmd("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
            branch_name <- String.trim(branch_name),
            branch_name <- System.get_env("PLEROMA_BUILD_BRANCH") || branch_name,

@@ -497,6 +497,27 @@ config :pleroma, :config_description, [
   },
   %{
     group: :pleroma,
+    key: :delete_context_objects,
+    type: :group,
+    description: "`delete_context_objects` background migration settings",
+    children: [
+      %{
+        key: :fault_rate_allowance,
+        type: :float,
+        description:
+          "Max accepted rate of objects that failed in the migration. Any value from 0.0 which tolerates no errors to 1.0 which will enable the feature even if context object deletion failed for all records.",
+        suggestions: [0.01]
+      },
+      %{
+        key: :sleep_interval_ms,
+        type: :integer,
+        description:
+          "Sleep interval between each chunk of processed records in order to decrease the load on the system (defaults to 0 and should be keep default on most instances)."
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
     key: :instance,
     type: :group,
     description: "Instance-related settings",
@@ -534,6 +555,15 @@ config :pleroma, :config_description, [
           "The instance's description. It can be seen in nodeinfo and `/api/v1/instance`",
         suggestions: [
           "Very cool instance"
+        ]
+      },
+      %{
+        key: :short_description,
+        type: :string,
+        description:
+          "Shorter version of instance description. It can be seen on `/api/v1/instance`",
+        suggestions: [
+          "Cool instance"
         ]
       },
       %{
@@ -975,7 +1005,8 @@ config :pleroma, :config_description, [
         key: :birthday_min_age,
         type: :integer,
         description:
-          "Minimum required age for users to create account. Only used if birthday is required."
+          "Minimum required age (in days) for users to create account. Only used if birthday is required.",
+        suggestions: [6570]
       }
     ]
   },
@@ -1719,6 +1750,11 @@ config :pleroma, :config_description, [
         key: :sign_object_fetches,
         type: :boolean,
         description: "Sign object fetches with HTTP signatures"
+      },
+      %{
+        key: :authorized_fetch_mode,
+        type: :boolean,
+        description: "Require HTTP signatures for AP fetches"
       },
       %{
         key: :note_replies_output_limit,
@@ -2726,7 +2762,7 @@ config :pleroma, :config_description, [
                 key: :versions,
                 type: {:list, :atom},
                 description: "List of TLS version to use",
-                suggestions: [:tlsv1, ":tlsv1.1", ":tlsv1.2"]
+                suggestions: [:tlsv1, ":tlsv1.1", ":tlsv1.2", ":tlsv1.3"]
               }
             ]
           }
