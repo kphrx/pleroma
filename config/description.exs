@@ -3523,5 +3523,18 @@ config :pleroma, :config_description, [
         suggestion: [100_000]
       }
     ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Translation,
+    type: :group,
+    description: "Translation providers",
+    children: [
+      %{
+        key: Pleroma.Translation,
+        type: :service,
+        suggestions: [Pleroma.Translation.DeepL, Pleroma.Translation.LibreTranslate]
+      }
+    ]
   }
 ]

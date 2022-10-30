@@ -202,7 +202,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       },
       vapid: %{
         public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
-      }
+      },
+      translation: %{enabled: Pleroma.Translation.configured?}
     })
   end
 
