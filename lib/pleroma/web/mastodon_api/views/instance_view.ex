@@ -129,7 +129,10 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
         "profile_directory"
       end,
       "pleroma:get:main/ostatus",
-      "pleroma:group_actors"
+      "pleroma:group_actors",
+      if Pleroma.Translation.configured?() do
+        "translation"
+      end
     ]
     |> Enum.filter(& &1)
   end
@@ -203,7 +206,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       vapid: %{
         public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
       },
-      translation: %{enabled: Pleroma.Translation.configured?}
+      translation: %{enabled: Pleroma.Translation.configured?()}
     })
   end
 
