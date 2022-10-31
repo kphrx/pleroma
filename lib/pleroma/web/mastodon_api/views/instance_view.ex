@@ -130,7 +130,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       end,
       "pleroma:get:main/ostatus",
       "pleroma:group_actors",
-      if Pleroma.Translation.configured?() do
+      if Pleroma.Language.Translation.configured?() do
         "translation"
       end
     ]
@@ -206,7 +206,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       vapid: %{
         public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
       },
-      translation: %{enabled: Pleroma.Translation.configured?()}
+      translation: %{enabled: Pleroma.Language.Translation.configured?()}
     })
   end
 
