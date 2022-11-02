@@ -5,6 +5,7 @@
 defmodule Pleroma.Web.CommonAPI.ActivityDraft do
   alias Pleroma.Activity
   alias Pleroma.Conversation.Participation
+  alias Pleroma.Language.LanguageDetector
   alias Pleroma.Object
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.ActivityPub.Visibility
@@ -241,13 +242,15 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
   end
 
   defp language(draft) do
-    language = draft.params[:language]
+    language =
+      with language <- draft.params[:language],
+           true <- good_locale_code?(language) do
+        language
+      else
+        _ -> LanguageDetector.detect(draft.full_payload)
+      end
 
-    if good_locale_code?(language) do
-      %__MODULE__{draft | language: language}
-    else
-      draft
-    end
+    %__MODULE__{draft | language: language}
   end
 
   defp object(draft) do
