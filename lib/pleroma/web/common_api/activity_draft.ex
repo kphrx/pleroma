@@ -247,7 +247,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
            true <- good_locale_code?(language) do
         language
       else
-        _ -> LanguageDetector.detect(draft.full_payload)
+        _ -> LanguageDetector.detect(draft.content_html <> " " <> draft.summary)
       end
 
     %__MODULE__{draft | language: language}
