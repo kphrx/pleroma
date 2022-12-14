@@ -875,15 +875,29 @@ defmodule Pleroma.Web.ActivityPub.Utils do
     {:ok, %{activity | data: new_data}}
   end
 
-  def maybe_anonymize_reporter(activity) do
+  def get_anonymized_reporter do
     with true <- Pleroma.Config.get([:activitypub, :anonymize_reporter]),
          nickname when is_binary(nickname) <-
            Pleroma.Config.get([:activitypub, :anonymize_reporter_local_nickname]),
          %User{ap_id: ap_id, local: true} <- User.get_cached_by_nickname(nickname) do
+      ap_id
+    else
+      _ -> nil
+    end
+  end
+
+  def maybe_anonymize_reporter(%Activity{data: data} = activity) do
+    %Activity{activity | data: maybe_anonymize_reporter(data)}
+  end
+
+  def maybe_anonymize_reporter(activity) do
+    ap_id = get_anonymized_reporter()
+
+    if is_binary(ap_id) do
       activity
       |> Map.put("actor", ap_id)
     else
-      _ -> activity
+      activity
     end
   end
 

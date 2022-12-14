@@ -415,6 +415,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     with flag_data <- make_flag_data(params, additional),
          {:ok, activity} <- insert(flag_data, local),
          {:ok, stripped_activity} <- strip_report_status_data(activity),
+         stripped_activity <- maybe_anonymize_reporter(stripped_activity),
          _ <- notify_and_stream(activity),
          :ok <-
            maybe_federate(stripped_activity) do
