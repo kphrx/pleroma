@@ -875,6 +875,18 @@ defmodule Pleroma.Web.ActivityPub.Utils do
     {:ok, %{activity | data: new_data}}
   end
 
+  def maybe_anonymize_reporter(activity) do
+    with true <- Pleroma.Config.get([:activitypub, :anonymize_reporter]),
+         nickname when is_binary(nickname) <-
+           Pleroma.Config.get([:activitypub, :anonymize_reporter_local_nickname]),
+         %User{ap_id: ap_id, local: true} <- User.get_cached_by_nickname(nickname) do
+      activity
+      |> Map.put("actor", ap_id)
+    else
+      _ -> activity
+    end
+  end
+
   def update_activity_visibility(activity, visibility) when visibility in @valid_visibilities do
     [to, cc, recipients] =
       activity
