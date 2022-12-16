@@ -1738,7 +1738,9 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
           |> put_in(["object"], [target_account.ap_id, object_ap_id])
           |> Map.put("actor", placeholder.ap_id)
 
-        assert_called(Utils.maybe_federate(%{activity | data: new_data}))
+        assert_called(
+          Utils.maybe_federate(%{activity | actor: placeholder.ap_id, data: new_data})
+        )
       end
     end
 

@@ -887,7 +887,8 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   end
 
   def maybe_anonymize_reporter(%Activity{data: data} = activity) do
-    %Activity{activity | data: maybe_anonymize_reporter(data)}
+    new_data = maybe_anonymize_reporter(data)
+    %Activity{activity | actor: new_data["actor"], data: new_data}
   end
 
   def maybe_anonymize_reporter(activity) do

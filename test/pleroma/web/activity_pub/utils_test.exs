@@ -693,6 +693,20 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
       assert %{"actor" => placeholder.ap_id} == Utils.maybe_anonymize_reporter(report)
     end
 
+    test "anonymize Activity", %{
+      placeholder: placeholder,
+      reporter: reporter,
+      report: report
+    } do
+      clear_config([:activitypub, :anonymize_reporter], true)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+      report_activity = %Activity{actor: reporter, data: report}
+      anon_id = placeholder.ap_id
+
+      assert %Activity{actor: ^anon_id, data: %{"actor" => ^anon_id}} =
+               Utils.maybe_anonymize_reporter(report_activity)
+    end
+
     test "do not anonymize when disabled", %{
       placeholder: placeholder,
       reporter: reporter,
