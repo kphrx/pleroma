@@ -13,6 +13,11 @@ concurrency:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    env:
+      ERL_FLAGS: '+JPperf true'
+      ELIXIR_VER: '1.14.2'
+      ERLANG_VER: '25.2'
+      ALPINE_VER: '3.17.0'
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -53,6 +58,11 @@ jobs:
           target: build
           cache-from: type=gha,scope=build
           cache-to: type=gha,scope=build,mode=max
+          build-args: |
+            ERL_FLAGS=${{ env.ERL_FLAGS }}
+            ELIXIR_VER=${{ env.ELIXIR_VER }}
+            ERLANG_VER=${{ env.ERLANG_VER }}
+            ALPINE_VER=${{ env.ALPINE_VER }}
 
       - name: Build and push image
         uses: docker/build-push-action@v2
@@ -65,4 +75,9 @@ jobs:
             type=gha,scope=build
           cache-to: type=gha,scope=prod,mode=max
           tags: ${{ steps.metadata.outputs.tags }}
+          build-args: |
+            ERL_FLAGS=${{ env.ERL_FLAGS }}
+            ELIXIR_VER=${{ env.ELIXIR_VER }}
+            ERLANG_VER=${{ env.ERLANG_VER }}
+            ALPINE_VER=${{ env.ALPINE_VER }}
           labels: ${{ steps.metadata.outputs.labels }}
