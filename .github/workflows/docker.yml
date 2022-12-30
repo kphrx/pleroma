@@ -13,6 +13,8 @@ concurrency:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    env:
+      ERL_FLAGS: '+JPperf true'
     steps:
       - name: Check out code
         uses: actions/checkout@v2
@@ -53,6 +55,7 @@ jobs:
           target: build
           cache-from: type=gha,scope=build
           cache-to: type=gha,scope=build,mode=max
+          build-args: ERL_FLAGS=${{ env.ERL_FLAGS }}
 
       - name: Build and push image
         uses: docker/build-push-action@v2
@@ -65,4 +68,5 @@ jobs:
             type=gha,scope=build
           cache-to: type=gha,scope=prod,mode=max
           tags: ${{ steps.metadata.outputs.tags }}
+          build-args: ERL_FLAGS=${{ env.ERL_FLAGS }}
           labels: ${{ steps.metadata.outputs.labels }}
