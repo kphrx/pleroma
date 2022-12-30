@@ -2,6 +2,8 @@ FROM hexpm/elixir:1.13.4-erlang-23.2.7.5-alpine-3.16.0 as build
 
 COPY . .
 
+ARG ERL_FLAGS
+ENV ERL_FLAGS="${ERL_FLAGS}"
 ENV MIX_ENV=prod
 
 RUN apk add git gcc g++ musl-dev make cmake file-dev &&\
