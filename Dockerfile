@@ -2,6 +2,8 @@ FROM elixir:1.11.4-alpine as build
 
 COPY . .
 
+ARG ERL_FLAGS
+ENV ERL_FLAGS="${ERL_FLAGS}"
 ENV MIX_ENV=prod
 
 RUN apk add git gcc g++ musl-dev make cmake file-dev &&\
