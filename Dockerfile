@@ -6,6 +6,8 @@ FROM hexpm/elixir:${ELIXIR_VER}-erlang-${ERLANG_VER}-alpine-${ALPINE_VER} as bui
 
 COPY . .
 
+ARG ERL_FLAGS
+ENV ERL_FLAGS="${ERL_FLAGS}"
 ENV MIX_ENV=prod
 
 RUN apk add git gcc g++ musl-dev make cmake file-dev &&\
