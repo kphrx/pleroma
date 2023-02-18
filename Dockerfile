@@ -1,4 +1,4 @@
-FROM hexpm/elixir:1.14.2-erlang-25.2-alpine-3.16.3 as build
+FROM hexpm/elixir:1.13.4-erlang-23.2.7.5-alpine-3.16.0 as build
 
 COPY . .
 
@@ -14,7 +14,7 @@ RUN apk add git gcc g++ musl-dev make cmake file-dev &&\
 	mkdir release &&\
 	mix release --path release
 
-FROM alpine:3.16.3
+FROM alpine:3.16.0
 
 ARG BUILD_DATE
 ARG VCS_REF
