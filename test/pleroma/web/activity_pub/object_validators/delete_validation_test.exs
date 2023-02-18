@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.ObjectValidators.DeleteValidationTest do
-  use Pleroma.DataCase, async: false
+  use Pleroma.DataCase, async: true
 
   alias Pleroma.Object
   alias Pleroma.Web.ActivityPub.Builder
@@ -90,26 +90,17 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.DeleteValidationTest do
       assert {:actor, {"is not allowed to modify object", []}} in cng.errors
     end
 
-    test "it's only valid if the actor of the object is a privileged local user",
+    test "it's valid if the actor of the object is a local superuser",
          %{valid_post_delete: valid_post_delete} do
-      clear_config([:instance, :moderator_privileges], [:messages_delete])
-
       user =
         insert(:user, local: true, is_moderator: true, ap_id: "https://gensokyo.2hu/users/raymoo")
 
-      post_delete_with_moderator_actor =
+      valid_other_actor =
         valid_post_delete
         |> Map.put("actor", user.ap_id)
 
-      {:ok, _, meta} = ObjectValidator.validate(post_delete_with_moderator_actor, [])
-
+      {:ok, _, meta} = ObjectValidator.validate(valid_other_actor, [])
       assert meta[:do_not_federate]
-
-      clear_config([:instance, :moderator_privileges], [])
-
-      {:error, cng} = ObjectValidator.validate(post_delete_with_moderator_actor, [])
-
-      assert {:actor, {"is not allowed to modify object", []}} in cng.errors
     end
   end
 end

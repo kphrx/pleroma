@@ -326,7 +326,7 @@ defmodule Pleroma.User do
   end
 
   def visible_for(%User{} = user, for_user) do
-    if privileged?(for_user, :users_manage_activation_state) do
+    if superuser?(for_user) do
       :visible
     else
       visible_account_status(user)
@@ -353,45 +353,10 @@ defmodule Pleroma.User do
     end
   end
 
-  @spec privileged?(User.t(), atom()) :: boolean()
-  def privileged?(%User{is_admin: false, is_moderator: false}, _), do: false
-
-  def privileged?(
-        %User{local: true, is_admin: is_admin, is_moderator: is_moderator},
-        privilege_tag
-      ),
-      do:
-        privileged_for?(privilege_tag, is_admin, :admin_privileges) or
-          privileged_for?(privilege_tag, is_moderator, :moderator_privileges)
-
-  def privileged?(_, _), do: false
-
-  defp privileged_for?(privilege_tag, true, config_role_key),
-    do: privilege_tag in Config.get([:instance, config_role_key])
-
-  defp privileged_for?(_, _, _), do: false
-
-  @spec privileges(User.t()) :: [atom()]
-  def privileges(%User{local: false}) do
-    []
-  end
-
-  def privileges(%User{is_moderator: false, is_admin: false}) do
-    []
-  end
-
-  def privileges(%User{local: true, is_moderator: true, is_admin: true}) do
-    (Config.get([:instance, :moderator_privileges]) ++ Config.get([:instance, :admin_privileges]))
-    |> Enum.uniq()
-  end
-
-  def privileges(%User{local: true, is_moderator: true, is_admin: false}) do
-    Config.get([:instance, :moderator_privileges])
-  end
-
-  def privileges(%User{local: true, is_moderator: false, is_admin: true}) do
-    Config.get([:instance, :admin_privileges])
-  end
+  @spec superuser?(User.t()) :: boolean()
+  def superuser?(%User{local: true, is_admin: true}), do: true
+  def superuser?(%User{local: true, is_moderator: true}), do: true
+  def superuser?(_), do: false
 
   @spec invisible?(User.t()) :: boolean()
   def invisible?(%User{invisible: true}), do: true
@@ -646,13 +611,7 @@ defmodule Pleroma.User do
          {:ok, new_value} <- value_function.(value) do
       put_change(changeset, map_field, new_value)
     else
-      {:error, :file_too_large} ->
-        Ecto.Changeset.validate_change(changeset, map_field, fn map_field, _value ->
-          [{map_field, "file is too large"}]
-        end)
-
-      _ ->
-        changeset
+      _ -> changeset
     end
   end
 
@@ -946,16 +905,12 @@ defmodule Pleroma.User do
     end
   end
 
-  defp send_user_approval_email(%User{email: email} = user) when is_binary(email) do
+  defp send_user_approval_email(user) do
     user
     |> Pleroma.Emails.UserEmail.approval_pending_email()
     |> Pleroma.Emails.Mailer.deliver_async()
 
     {:ok, :enqueued}
-  end
-
-  defp send_user_approval_email(_user) do
-    {:ok, :skipped}
   end
 
   defp send_admin_approval_emails(user) do
@@ -1202,10 +1157,24 @@ defmodule Pleroma.User do
     |> update_and_set_cache()
   end
 
-  def update_and_set_cache(changeset) do
+  def update_and_set_cache(%{data: %Pleroma.User{} = user} = changeset) do
+    was_superuser_before_update = User.superuser?(user)
+
     with {:ok, user} <- Repo.update(changeset, stale_error_field: :id) do
       set_cache(user)
     end
+    |> maybe_remove_report_notifications(was_superuser_before_update)
+  end
+
+  defp maybe_remove_report_notifications({:ok, %Pleroma.User{} = user} = result, true) do
+    if not User.superuser?(user),
+      do: user |> Notification.destroy_multiple_from_types(["pleroma:report"])
+
+    result
+  end
+
+  defp maybe_remove_report_notifications(result, _) do
+    result
   end
 
   def get_user_friends_ap_ids(user) do
@@ -2284,11 +2253,6 @@ defmodule Pleroma.User do
   def all_superusers do
     User.Query.build(%{super_users: true, local: true, is_active: true})
     |> Repo.all()
-  end
-
-  @spec all_users_with_privilege(atom()) :: [User.t()]
-  def all_users_with_privilege(privilege) do
-    User.Query.build(%{is_privileged: privilege}) |> Repo.all()
   end
 
   def muting_reblogs?(%User{} = user, %User{} = target) do

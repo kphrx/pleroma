@@ -695,24 +695,20 @@ defmodule Pleroma.Web.ActivityPub.Utils do
     Enum.map(statuses || [], &build_flag_object/1)
   end
 
-  defp build_flag_object(%Activity{} = activity) do
-    object = Object.normalize(activity, fetch: false)
+  defp build_flag_object(%Activity{data: %{"id" => id}, object: %{data: data}}) do
+    activity_actor = User.get_by_ap_id(data["actor"])
 
-    # Do not allow people to report Creates. Instead, report the Object that is Created.
-    if activity.data["type"] != "Create" do
-      build_flag_object_with_actor_and_id(
-        object,
-        User.get_by_ap_id(activity.data["actor"]),
-        activity.data["id"]
-      )
-    else
-      build_flag_object(object)
-    end
-  end
-
-  defp build_flag_object(%Object{} = object) do
-    actor = User.get_by_ap_id(object.data["actor"])
-    build_flag_object_with_actor_and_id(object, actor, object.data["id"])
+    %{
+      "type" => "Note",
+      "id" => id,
+      "content" => data["content"],
+      "published" => data["published"],
+      "actor" =>
+        AccountView.render(
+          "show.json",
+          %{user: activity_actor, skip_visibility_check: true}
+        )
+    }
   end
 
   defp build_flag_object(act) when is_map(act) or is_binary(act) do
@@ -724,12 +720,12 @@ defmodule Pleroma.Web.ActivityPub.Utils do
       end
 
     case Activity.get_by_ap_id_with_object(id) do
-      %Activity{object: object} = _ ->
-        build_flag_object(object)
+      %Activity{} = activity ->
+        build_flag_object(activity)
 
       nil ->
-        if %Object{} = object = Object.get_by_ap_id(id) do
-          build_flag_object(object)
+        if activity = Activity.get_by_object_ap_id_with_object(id) do
+          build_flag_object(activity)
         else
           %{"id" => id, "deleted" => true}
         end
@@ -737,20 +733,6 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   end
 
   defp build_flag_object(_), do: []
-
-  defp build_flag_object_with_actor_and_id(%Object{data: data}, actor, id) do
-    %{
-      "type" => "Note",
-      "id" => id,
-      "content" => data["content"],
-      "published" => data["published"],
-      "actor" =>
-        AccountView.render(
-          "show.json",
-          %{user: actor, skip_visibility_check: true}
-        )
-    }
-  end
 
   #### Report-related helpers
   def get_reports(params, page, page_size) do
