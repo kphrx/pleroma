@@ -4,7 +4,7 @@
 
 defmodule Pleroma.Web.CommonAPITest do
   use Oban.Testing, repo: Pleroma.Repo
-  use Pleroma.DataCase, async: false
+  use Pleroma.DataCase
 
   alias Pleroma.Activity
   alias Pleroma.Chat
@@ -331,7 +331,7 @@ defmodule Pleroma.Web.CommonAPITest do
       refute Activity.get_by_id(post.id)
     end
 
-    test "it does not allow a user to delete posts from another user" do
+    test "it does not allow a user to delete their posts" do
       user = insert(:user)
       other_user = insert(:user)
 
@@ -341,8 +341,7 @@ defmodule Pleroma.Web.CommonAPITest do
       assert Activity.get_by_id(post.id)
     end
 
-    test "it allows privileged users to delete other user's posts" do
-      clear_config([:instance, :moderator_privileges], [:messages_delete])
+    test "it allows moderators to delete other user's posts" do
       user = insert(:user)
       moderator = insert(:user, is_moderator: true)
 
@@ -354,20 +353,19 @@ defmodule Pleroma.Web.CommonAPITest do
       refute Activity.get_by_id(post.id)
     end
 
-    test "it doesn't allow unprivileged mods or admins to delete other user's posts" do
-      clear_config([:instance, :admin_privileges], [])
-      clear_config([:instance, :moderator_privileges], [])
+    test "it allows admins to delete other user's posts" do
       user = insert(:user)
-      moderator = insert(:user, is_moderator: true, is_admin: true)
+      moderator = insert(:user, is_admin: true)
 
       {:ok, post} = CommonAPI.post(user, %{status: "namu amida butsu"})
 
-      assert {:error, "Could not delete"} = CommonAPI.delete(post.id, moderator)
-      assert Activity.get_by_id(post.id)
+      assert {:ok, delete} = CommonAPI.delete(post.id, moderator)
+      assert delete.local
+
+      refute Activity.get_by_id(post.id)
     end
 
-    test "privileged users deleting non-local posts won't federate the delete" do
-      clear_config([:instance, :admin_privileges], [:messages_delete])
+    test "superusers deleting non-local posts won't federate the delete" do
       # This is the user of the ingested activity
       _user =
         insert(:user,
@@ -376,7 +374,7 @@ defmodule Pleroma.Web.CommonAPITest do
           last_refreshed_at: NaiveDateTime.utc_now()
         )
 
-      admin = insert(:user, is_admin: true)
+      moderator = insert(:user, is_admin: true)
 
       data =
         File.read!("test/fixtures/mastodon-post-activity.json")
@@ -386,7 +384,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
       with_mock Pleroma.Web.Federator,
         publish: fn _ -> nil end do
-        assert {:ok, delete} = CommonAPI.delete(post.id, admin)
+        assert {:ok, delete} = CommonAPI.delete(post.id, moderator)
         assert delete.local
         refute called(Pleroma.Web.Federator.publish(:_))
       end
@@ -1102,11 +1100,10 @@ defmodule Pleroma.Web.CommonAPITest do
       target_user = insert(:user)
 
       {:ok, activity} = CommonAPI.post(target_user, %{status: "foobar"})
-      activity = Activity.normalize(activity)
 
       reporter_ap_id = reporter.ap_id
       target_ap_id = target_user.ap_id
-      reported_object_ap_id = activity.object.data["id"]
+      activity_ap_id = activity.data["id"]
       comment = "foobar"
 
       report_data = %{
@@ -1117,7 +1114,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
       note_obj = %{
         "type" => "Note",
-        "id" => reported_object_ap_id,
+        "id" => activity_ap_id,
         "content" => "foobar",
         "published" => activity.object.data["published"],
         "actor" => AccountView.render("show.json", %{user: target_user})
@@ -1139,7 +1136,6 @@ defmodule Pleroma.Web.CommonAPITest do
     test "updates report state" do
       [reporter, target_user] = insert_pair(:user)
       activity = insert(:note_activity, user: target_user)
-      object = Object.normalize(activity)
 
       {:ok, %Activity{id: report_id}} =
         CommonAPI.report(reporter, %{
@@ -1152,10 +1148,10 @@ defmodule Pleroma.Web.CommonAPITest do
 
       assert report.data["state"] == "resolved"
 
-      [reported_user, object_id] = report.data["object"]
+      [reported_user, activity_id] = report.data["object"]
 
       assert reported_user == target_user.ap_id
-      assert object_id == object.data["id"]
+      assert activity_id == activity.data["id"]
     end
 
     test "updates report state, don't strip when report_strip_status is false" do
