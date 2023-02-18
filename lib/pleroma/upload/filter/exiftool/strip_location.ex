@@ -14,7 +14,6 @@ defmodule Pleroma.Upload.Filter.Exiftool.StripLocation do
   # Formats not compatible with exiftool at this time
   def filter(%Pleroma.Upload{content_type: "image/heic"}), do: {:ok, :noop}
   def filter(%Pleroma.Upload{content_type: "image/webp"}), do: {:ok, :noop}
-  def filter(%Pleroma.Upload{content_type: "image/svg" <> _}), do: {:ok, :noop}
 
   def filter(%Pleroma.Upload{tempfile: file, content_type: "image" <> _}) do
     try do
