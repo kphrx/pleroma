@@ -64,7 +64,8 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
       requestBody: request_body("Parameters", update_credentials_request(), required: true),
       responses: %{
         200 => Operation.response("Account", "application/json", Account),
-        403 => Operation.response("Error", "application/json", ApiError)
+        403 => Operation.response("Error", "application/json", ApiError),
+        413 => Operation.response("Error", "application/json", ApiError)
       }
     }
   end
@@ -460,7 +461,7 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
 
   def lookup_operation do
     %Operation{
-      tags: ["Account lookup"],
+      tags: ["Retrieve account information"],
       summary: "Find a user by nickname",
       operationId: "AccountController.lookup",
       parameters: [

@@ -998,10 +998,48 @@ config :pleroma, :config_description, [
         description: "Enable profile directory."
       },
       %{
-        key: :privileged_staff,
-        type: :boolean,
+        key: :admin_privileges,
+        type: {:list, :atom},
+        suggestions: [
+          :users_read,
+          :users_manage_invites,
+          :users_manage_activation_state,
+          :users_manage_tags,
+          :users_manage_credentials,
+          :users_delete,
+          :messages_read,
+          :messages_delete,
+          :instances_delete,
+          :reports_manage_reports,
+          :moderation_log_read,
+          :announcements_manage_announcements,
+          :emoji_manage_emoji,
+          :statistics_read
+        ],
         description:
-          "Let moderators access sensitive data (e.g. updating user credentials, get password reset token, delete users, index and read private statuses and chats)"
+          "What extra privileges to allow admins (e.g. updating user credentials, get password reset token, delete users, index and read private statuses and chats)"
+      },
+      %{
+        key: :moderator_privileges,
+        type: {:list, :atom},
+        suggestions: [
+          :users_read,
+          :users_manage_invites,
+          :users_manage_activation_state,
+          :users_manage_tags,
+          :users_manage_credentials,
+          :users_delete,
+          :messages_read,
+          :messages_delete,
+          :instances_delete,
+          :reports_manage_reports,
+          :moderation_log_read,
+          :announcements_manage_announcements,
+          :emoji_manage_emoji,
+          :statistics_read
+        ],
+        description:
+          "What extra privileges to allow moderators (e.g. updating user credentials, get password reset token, delete users, index and read private statuses and chats)"
       },
       %{
         key: :birthday_required,
@@ -1014,6 +1052,15 @@ config :pleroma, :config_description, [
         description:
           "Minimum required age (in days) for users to create account. Only used if birthday is required.",
         suggestions: [6570]
+      },
+      %{
+        key: :languages,
+        type: {:list, :string},
+        description:
+          "Languages to be exposed in /api/v1/instance. Should be in the format of BCP47 language codes.",
+        suggestions: [
+          "en"
+        ]
       }
     ]
   },
