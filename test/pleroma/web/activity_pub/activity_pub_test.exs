@@ -1681,69 +1681,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
              } = activity
     end
 
-    test_with_mock "strips status data from Flag, before federating it",
-                   %{
-                     reporter: reporter,
-                     context: context,
-                     target_account: target_account,
-                     reported_activity: reported_activity,
-                     object_ap_id: object_ap_id,
-                     content: content
-                   },
-                   Utils,
-                   [:passthrough],
-                   [] do
-      {:ok, activity} =
-        ActivityPub.flag(%{
-          actor: reporter,
-          context: context,
-          account: target_account,
-          statuses: [reported_activity],
-          content: content
-        })
-
-      new_data = put_in(activity.data, ["object"], [target_account.ap_id, object_ap_id])
-
-      assert_called(Utils.maybe_federate(%{activity | data: new_data}))
-    end
-
-    test "anonymize reporter from Flag, before federating it, if configured so",
-         %{
-           reporter: reporter,
-           context: context,
-           target_account: target_account,
-           reported_activity: reported_activity,
-           object_ap_id: object_ap_id,
-           content: content
-         } do
-      placeholder = insert(:user)
-      clear_config([:activitypub, :anonymize_reporter], true)
-      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
-      # Workaround "could not checkout connection" problem
-      # https://elixirforum.com/t/ecto-timeout-errors-when-wrapping-into-cachex-calls-in-tests/19078/11
-      %User{} = User.get_cached_by_nickname(placeholder.nickname)
-
-      with_mock Utils, [:passthrough], [] do
-        {:ok, activity} =
-          ActivityPub.flag(%{
-            actor: reporter,
-            context: context,
-            account: target_account,
-            statuses: [reported_activity],
-            content: content
-          })
-
-        new_data =
-          activity.data
-          |> put_in(["object"], [target_account.ap_id, object_ap_id])
-          |> Map.put("actor", placeholder.ap_id)
-
-        assert_called(
-          Utils.maybe_federate(%{activity | actor: placeholder.ap_id, data: new_data})
-        )
-      end
-    end
-
     test_with_mock "reverts on error",
                    %{
                      reporter: reporter,

@@ -891,6 +891,14 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
+  def prepare_outgoing(%{"type" => "Flag"} = data) do
+    with {:ok, stripped_activity} <- Utils.strip_report_status_data(data),
+         stripped_activity <- Utils.maybe_anonymize_reporter(stripped_activity),
+         stripped_activity <- Map.merge(stripped_activity, Utils.make_json_ld_header()) do
+      {:ok, stripped_activity}
+    end
+  end
+
   def prepare_outgoing(%{"type" => _type} = data) do
     data =
       data

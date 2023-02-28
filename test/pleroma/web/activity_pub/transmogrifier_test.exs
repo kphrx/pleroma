@@ -642,6 +642,69 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
 
       assert [_, _, %{"@language" => "pl"}] = modified["@context"]
     end
+
+    test "it strips report data" do
+      reporter = insert(:user)
+      target_account = insert(:user)
+      content = "foobar"
+      {:ok, reported_activity} = CommonAPI.post(target_account, %{status: content})
+      context = Utils.generate_context_id()
+
+      object_ap_id = reported_activity.object.data["id"]
+
+      assert {:ok, activity} =
+               Pleroma.Web.ActivityPub.ActivityPub.flag(%{
+                 actor: reporter,
+                 context: context,
+                 account: target_account,
+                 statuses: [reported_activity],
+                 content: content
+               })
+
+      {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+
+      expected_data =
+        activity.data
+        |> put_in(["object"], [target_account.ap_id, object_ap_id])
+        |> Map.put("actor", reporter.ap_id)
+        |> Map.merge(Utils.make_json_ld_header())
+
+      assert data == expected_data
+    end
+
+    test "it strips report data and anonymize" do
+      placeholder = insert(:user)
+
+      reporter = insert(:user)
+      target_account = insert(:user)
+      content = "foobar"
+      {:ok, reported_activity} = CommonAPI.post(target_account, %{status: content})
+      context = Utils.generate_context_id()
+
+      object_ap_id = reported_activity.object.data["id"]
+
+      assert {:ok, activity} =
+               Pleroma.Web.ActivityPub.ActivityPub.flag(%{
+                 actor: reporter,
+                 context: context,
+                 account: target_account,
+                 statuses: [reported_activity],
+                 content: content
+               })
+
+      clear_config([:activitypub, :anonymize_reporter], true)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+
+      {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+
+      expected_data =
+        activity.data
+        |> put_in(["object"], [target_account.ap_id, object_ap_id])
+        |> Map.put("actor", placeholder.ap_id)
+        |> Map.merge(Utils.make_json_ld_header())
+
+      assert data == expected_data
+    end
   end
 
   describe "actor rewriting" do

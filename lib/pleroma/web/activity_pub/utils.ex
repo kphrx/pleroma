@@ -859,8 +859,14 @@ defmodule Pleroma.Web.ActivityPub.Utils do
 
   def update_report_state(_, _), do: {:error, "Unsupported state"}
 
-  def strip_report_status_data(activity) do
-    [actor | reported_activities] = activity.data["object"]
+  def strip_report_status_data(%Activity{} = activity) do
+    with {:ok, new_data} <- strip_report_status_data(activity.data) do
+      {:ok, %{activity | data: new_data}}
+    end
+  end
+
+  def strip_report_status_data(data) do
+    [actor | reported_activities] = data["object"]
 
     stripped_activities =
       Enum.reduce(reported_activities, [], fn act, acc ->
@@ -870,9 +876,9 @@ defmodule Pleroma.Web.ActivityPub.Utils do
         end
       end)
 
-    new_data = put_in(activity.data, ["object"], [actor | stripped_activities])
+    new_data = put_in(data, ["object"], [actor | stripped_activities])
 
-    {:ok, %{activity | data: new_data}}
+    {:ok, new_data}
   end
 
   def get_anonymized_reporter do
