@@ -379,6 +379,50 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
              )
     end
 
+    test_with_mock "Publishes with the new actor if prepare_outgoing changes the actor.",
+                   Pleroma.Web.Federator.Publisher,
+                   [:passthrough],
+                   [] do
+      other_user =
+        insert(:user, %{
+          local: false,
+          inbox: "https://domain.com/users/nick1/inbox",
+          ap_enabled: true
+        })
+
+      actor = insert(:user)
+      replaced_actor = insert(:user)
+
+      note_activity =
+        insert(:note_activity,
+          user: actor,
+          data_attrs: %{"to" => [other_user.ap_id]}
+        )
+
+      with_mock Pleroma.Web.ActivityPub.Transmogrifier,
+        prepare_outgoing: fn data -> {:ok, Map.put(data, "actor", replaced_actor.ap_id)} end do
+        res = Publisher.publish(actor, note_activity)
+
+        assert res == :ok
+
+        refute called(
+                 Pleroma.Web.Federator.Publisher.enqueue_one(Publisher, %{
+                   inbox: "https://domain.com/users/nick1/inbox",
+                   actor_id: actor.id,
+                   id: note_activity.data["id"]
+                 })
+               )
+
+        assert called(
+                 Pleroma.Web.Federator.Publisher.enqueue_one(Publisher, %{
+                   inbox: "https://domain.com/users/nick1/inbox",
+                   actor_id: replaced_actor.id,
+                   id: note_activity.data["id"]
+                 })
+               )
+      end
+    end
+
     test_with_mock "publishes an activity with BCC to all relevant peers.",
                    Pleroma.Web.ActivityPub.Publisher,
                    [:passthrough],
