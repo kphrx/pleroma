@@ -1,0 +1,62 @@
+defmodule Pleroma.Web.ApiSpec.PleromaFrontendSettingsOperation do
+  alias OpenApiSpex.Operation
+  alias OpenApiSpex.Schema
+  import Pleroma.Web.ApiSpec.Helpers
+
+  @spec open_api_operation(atom) :: Operation.t()
+  def open_api_operation(action) do
+    operation = String.to_existing_atom("#{action}_operation")
+    apply(__MODULE__, operation, [])
+  end
+
+  def available_frontends_operation() do
+    %Operation{
+      tags: ["Frontends"],
+      summary: "Frontend Settings Profiles",
+      description: "List frontend setting profiles",
+      operationId: "PleromaAPI.FrontendSettingsController.available_frontends",
+      responses: %{
+        200 =>
+          Operation.response("Frontends", "application/json", %Schema{
+            type: :array,
+            items: %Schema{
+              type: :string
+            }
+          })
+      }
+    }
+  end
+
+  def update_preferred_frontend_operation() do
+    %Operation{
+      tags: ["Frontends"],
+      summary: "Frontend Settings Profiles",
+      description: "List frontend setting profiles",
+      operationId: "PleromaAPI.FrontendSettingsController.available_frontends",
+      requestBody:
+        request_body(
+          "Frontend",
+          %Schema{
+            type: :object,
+            required: [:frontend_name],
+            properties: %{
+              frontend_name: %Schema{
+                type: :string,
+                description: "Frontend name"
+              }
+            }
+          },
+          required: true
+        ),
+      responses: %{
+        200 =>
+          Operation.response("Frontends", "application/json", %Schema{
+            type: :array,
+            items: %Schema{
+              type: :string
+            }
+          })
+      }
+    }
+  end
+end
