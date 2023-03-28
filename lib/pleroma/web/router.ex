@@ -637,11 +637,6 @@ defmodule Pleroma.Web.Router do
   end
 
   scope "/api/v1/pleroma", Pleroma.Web.MastodonAPI do
-    pipe_through(:api)
-    get("/accounts/:id/endorsements", AccountController, :endorsements)
-  end
-
-  scope "/api/v2/pleroma", Pleroma.Web.PleromaAPI do
     scope [] do
       pipe_through(:authenticated_api)
       get("/chats", ChatController, :index2)
@@ -901,7 +896,11 @@ defmodule Pleroma.Web.Router do
 
   scope "/", Pleroma.Web do
     pipe_through(:browser)
+
     get("/mailer/unsubscribe/:token", Mailer.SubscriptionController, :unsubscribe)
+
+    get("/frontend_switcher", FrontendSwitcher.FrontendSwitcherController, :switch)
+    post("/frontend_switcher", FrontendSwitcher.FrontendSwitcherController, :do_switch)
   end
 
   pipeline :ap_service_actor do

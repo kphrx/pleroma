@@ -49,6 +49,7 @@ defmodule Pleroma.Web.Plugs.FrontendStatic do
   end
 
   def call(conn, opts) do
+    IO.inspect("OPTS: #{inspect(opts)}")
     with false <- api_route?(conn.path_info),
          false <- invalid_path?(conn.path_info),
          fallback_frontend_type <- Map.get(opts, :frontend_type, :primary),
@@ -69,16 +70,26 @@ defmodule Pleroma.Web.Plugs.FrontendStatic do
     Map.get(cookies, @frontend_cookie_name)
   end
 
-  def preferred_or_fallback(conn, fallback) do
+  # Only override primary frontend
+  def preferred_or_fallback(conn, :primary) do
     case preferred_frontend(conn) do
       nil ->
-        fallback
+        :primary
 
       frontend ->
         frontend
     end
   end
 
+<<<<<<< HEAD
+=======
+  def preferred_or_fallback(conn, fallback), do: fallback
+
+  defp enabled?(if_opt) when is_function(if_opt), do: if_opt.()
+  defp enabled?(true), do: true
+  defp enabled?(_), do: false
+
+>>>>>>> de64c6c54a (add selection UI)
   defp invalid_path?(list) do
     invalid_path?(list, :binary.compile_pattern(["/", "\\", ":", "\0"]))
   end
