@@ -15,9 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ERL_FLAGS: '+JPperf true'
-      ELIXIR_VER: '1.14.2'
-      ERLANG_VER: '25.2'
-      ALPINE_VER: '3.17.0'
+      ELIXIR_VER: '1.14.4'
+      ERLANG_VER: '25.3'
+      ALPINE_VER: '3.17.2'
     steps:
       - name: Check out code
         uses: actions/checkout@v2
