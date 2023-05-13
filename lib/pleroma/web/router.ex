@@ -760,6 +760,7 @@ defmodule Pleroma.Web.Router do
 
     get("/instance", InstanceController, :show)
     get("/instance/peers", InstanceController, :peers)
+    get("/instance/translation_languages", InstanceController, :translation_languages)
 
     get("/statuses", StatusController, :index)
     get("/statuses/:id", StatusController, :show)
