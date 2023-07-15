@@ -6,78 +6,122 @@ on:
       - 'pl.kpherox.dev'
   pull_request:
 
+env:
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
+  ELIXIR_VER: '1.15.2'
+  ERLANG_VER: '26.0.2'
+  ALPINE_VER: '3.18.2'
+
 concurrency: 
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  docker:
+  build:
     runs-on: ubuntu-latest
-    env:
-      ERL_FLAGS: '+JPperf true'
-      ELIXIR_VER: '1.14.4'
-      ERLANG_VER: '25.3'
-      ALPINE_VER: '3.17.2'
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+
     steps:
-      - name: Check out code
-        uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v3
 
       - name: Docker metadata
         id: metadata
         uses: docker/metadata-action@v4
         with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=pr
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=
+          images: ${{ env.REGISTRY_IMAGE }}
           labels: |
             org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        if: matrix.platform == 'linux/arm64'
+        uses: docker/setup-qemu-action@v2
+
+      - name: Setup erl flags for QEMU
+        if: matrix.platform == 'linux/arm64'
+        run: |
+          echo "ERL_FLAGS=+JMsingle true" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build base image
-        id: docker_build_base
-        uses: docker/build-push-action@v2
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v4
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
-          push: false
-          load: false
-          target: build
-          cache-from: type=gha,scope=build
-          cache-to: type=gha,scope=build,mode=max
-          build-args: |
-            ERL_FLAGS=${{ env.ERL_FLAGS }}
-            ELIXIR_VER=${{ env.ELIXIR_VER }}
-            ERLANG_VER=${{ env.ERLANG_VER }}
-            ALPINE_VER=${{ env.ALPINE_VER }}
-
-      - name: Build and push image
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          cache-from: |
-            type=gha,scope=prod
-            type=gha,scope=build
-          cache-to: type=gha,scope=prod,mode=max
-          tags: ${{ steps.metadata.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           build-args: |
             ERL_FLAGS=${{ env.ERL_FLAGS }}
             ELIXIR_VER=${{ env.ELIXIR_VER }}
             ERLANG_VER=${{ env.ERLANG_VER }}
             ALPINE_VER=${{ env.ALPINE_VER }}
           labels: ${{ steps.metadata.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v3
+        with:
+          name: digests
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+  
+  merge:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v3
+        with:
+          name: digests
+          path: /tmp/digests
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Docker metadata
+        id: metadata
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.metadata.outputs.version }}
