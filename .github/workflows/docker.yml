@@ -14,10 +14,10 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     env:
-      ERL_FLAGS: '+JPperf true'
-      ELIXIR_VER: '1.14.4'
-      ERLANG_VER: '25.3'
-      ALPINE_VER: '3.17.2'
+      ERL_FLAGS: '+JMsingle true'
+      ELIXIR_VER: '1.15.2'
+      ERLANG_VER: '26.0.2'
+      ALPINE_VER: '3.18.2'
     steps:
       - name: Check out code
         uses: actions/checkout@v2
