@@ -8,9 +8,9 @@ on:
 
 env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
-  ELIXIR_VER: '1.14.4'
-  ERLANG_VER: '25.3'
-  ALPINE_VER: '3.17.2'
+  ELIXIR_VER: '1.14.5'
+  ERLANG_VER: '25.3.2.5'
+  ALPINE_VER: '3.18.2'
 
 concurrency: 
   group: ${{ github.workflow }}-${{ github.ref }}
