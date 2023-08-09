@@ -9,7 +9,7 @@ on:
 env:
   REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
   ELIXIR_VER: '1.14.5'
-  ERLANG_VER: '25.3.2.5'
+  ERLANG_VER: '26.0.2'
   ALPINE_VER: '3.18.2'
 
 concurrency: 
