@@ -69,6 +69,31 @@ header a:hover, .h-card a:hover {
     text-decoration: underline;
 }
 
+header dl {
+    background-color: #1b2735;
+    border-radius: 4px;
+    padding: .5rem;
+}
+
+header dl a {
+    text-decoration: underline;
+}
+
+header dt {
+    color: darkgray;
+}
+
+header :where(dt, dd) {
+    margin: 0;
+    padding: 0 .5rem;
+}
+
+header dd + dt {
+    border-top: 1px solid;
+    margin-top: .5rem;
+    padding-top: .5rem;
+}
+
 .display-name {
     padding-top: 4px;
     display: block;
