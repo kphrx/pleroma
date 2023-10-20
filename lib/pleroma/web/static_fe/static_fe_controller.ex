@@ -141,7 +141,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEController do
   defp represent(%Activity{} = activity), do: represent(activity, false)
 
   defp represent(%Activity{object: %Object{data: data}} = activity, selected) do
-    {:ok, user} = User.get_or_fetch(activity.object.data["actor"])
+    {:ok, user} = User.get_or_fetch(data["actor"])
 
     link =
       case user.local do
@@ -158,6 +158,15 @@ defmodule Pleroma.Web.StaticFE.StaticFEController do
         nil
       end
 
+    quote_activity =
+      if data["quoteUrl"] && data["quoteUrl"] != "" do
+        data["quoteUrl"]
+        |> Activity.get_create_by_object_ap_id_with_object()
+        |> represent()
+      else
+        nil
+      end
+
     %{
       user: User.sanitize_html(user),
       title: get_title(activity.object),
@@ -166,6 +175,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEController do
       link: link,
       published: data["published"],
       sensitive: data["sensitive"],
+      quote: quote_activity,
       selected: selected,
       counts: get_counts(activity),
       id: activity.id
