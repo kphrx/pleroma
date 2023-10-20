@@ -11,6 +11,12 @@
     <%= link "@#{@user.nickname}@#{Endpoint.host()}", to: (@user.uri || @user.ap_id) %>
   </h3>
   <p><%= raw @user.bio %></p>
+  <dl>
+    <%= for %{"name" => name, "value" => value} <- @user.fields do %>
+      <dt><%= raw name %></dt>
+      <dd><%= raw value %></dd>
+    <% end %>
+  </dl>
 </header>
 
 <main>
