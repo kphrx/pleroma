@@ -37,10 +37,17 @@ header {
     margin-right: 4px;
 }
 
-.activity-content img, video, audio {
+.activity-content > img, video, audio {
     padding: 1em;
     max-width: 800px;
     max-height: 800px;
+}
+
+.activity-content > .activity {
+    border: 1px solid;
+    padding: 1em;
+    margin-top: 1em;
+    margin-bottom: 0;
 }
 
 #selected {

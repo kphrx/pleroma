@@ -30,6 +30,9 @@
                                          mediaType: fetch_media_type(url)}) %>
       <% end %>
     <% end %>
+    <%= if @quote do %>
+      <%= render("_notice.html", @quote) %>
+    <% end %>
   </div>
   <%= if @selected do %>
     <dl class="counts">
