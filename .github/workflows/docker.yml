@@ -53,6 +53,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+        with:
+          version: latest
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -108,12 +110,16 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+        with:
+          version: latest
 
       - name: Docker metadata
         id: metadata
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
+          labels: |
+            org.opencontainers.image.licenses=AGPL-3.0-only
           tags: |
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
@@ -127,10 +133,29 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create manifest list and push
-        working-directory: /tmp/digests
-        run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ env.REGISTRY_IMAGE }}@sha256:%s ' *)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { readdirSync } = require('fs');
+            const { DOCKER_METADATA_OUTPUT_JSON, REGISTRY_IMAGE } = process.env;
+            const args = ['buildx', 'imagetools', 'create'];
+
+            const metadata = JSON.parse(`${DOCKER_METADATA_OUTPUT_JSON}`);
+            for (const [labelName, labelValue] of Object.entries(metadata.labels)) {
+              args.push('--annotation', `index:${labelName}=${labelValue}`);
+            }
+            for (const tag of metadata.tags) {
+              args.push('--tag', tag);
+            }
+
+            process.chdir('/tmp/digests');
+            for (const filename of readdirSync('./')) {
+              if (/(^|\/)\.[^/.]/g.test(filename)) {
+                continue;
+              }
+              args.push(`${REGISTRY_IMAGE}@sha256:${filename}`);
+            }
+            exec.exec('docker', args);
 
       - name: Inspect image
         run: |
