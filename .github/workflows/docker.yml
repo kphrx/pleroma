@@ -44,7 +44,7 @@ jobs:
 
       - name: Set up QEMU
         if: matrix.platform == 'linux/arm64'
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Setup erl flags for QEMU
         if: matrix.platform == 'linux/arm64'
