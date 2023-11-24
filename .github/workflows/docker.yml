@@ -42,6 +42,35 @@ jobs:
           labels: |
             org.opencontainers.image.licenses=AGPL-3.0-only
 
+      - run: npm install csv-parse
+      - name: Anotations list
+        id: annotations
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const { parse } = require('csv-parse/sync');
+            const { DOCKER_METADATA_OUTPUT_LABELS } = process.env;
+
+            const records = parse(DOCKER_METADATA_OUTPUT_LABELS, {
+              columns: false,
+              relaxQuotes: true,
+              comment: false,
+              relaxColumnCount: true,
+              skipEmptyLines: true,
+              quote: false
+            }).map(record => {
+              if (record.length > 1) {
+                return `manifest:${record.join(',')}`;
+              } else {
+                return `manifest:${record[0]}`;
+              }
+            });
+
+            return records.join('\n');
+
+      - run: rm -rf package.json package-lock.json node_modules
+
       - name: Set up QEMU
         if: matrix.platform == 'linux/arm64'
         uses: docker/setup-qemu-action@v3
@@ -74,6 +103,7 @@ jobs:
             ELIXIR_VER=${{ env.ELIXIR_VER }}
             ERLANG_VER=${{ env.ERLANG_VER }}
             ALPINE_VER=${{ env.ALPINE_VER }}
+          annotations: ${{ steps.annotations.outputs.result }}
           labels: ${{ steps.metadata.outputs.labels }}
           provenance: false
           outputs: type=image,oci-mediatypes=true,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
