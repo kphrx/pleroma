@@ -81,19 +81,12 @@ jobs:
           provenance: false
           outputs: type=image,oci-mediatypes=true,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
-      - name: Export digest
-        run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        uses: actions/upload-artifact@v3
+      - uses: cloudposse/github-action-matrix-outputs-write@0.4.2
         with:
-          name: digests
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
+          matrix-step-name: ${{ github.job }}
+          matrix-key: ${{ matrix.platform }}
+          outputs: |-
+            digest: ${{ steps.build.outputs.digest }}
 
   merge:
     runs-on: ubuntu-latest
@@ -105,11 +98,10 @@ jobs:
       - build
 
     steps:
-      - name: Download digests
-        uses: actions/download-artifact@v3
+      - uses: cloudposse/github-action-matrix-outputs-read@0.1.1
+        id: read
         with:
-          name: digests
-          path: /tmp/digests
+          matrix-step-name: build
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -138,30 +130,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create manifest list and push
-        uses: actions/github-script@v7
+        uses: kphrx/docker-buildx-imagetools-action@v0.1.0
         with:
-          script: |
-            const { readdirSync } = require('fs');
-            const { DOCKER_METADATA_OUTPUT_JSON, REGISTRY_IMAGE } = process.env;
-            const args = ['buildx', 'imagetools', 'create'];
-
-            const metadata = JSON.parse(`${DOCKER_METADATA_OUTPUT_JSON}`);
-            for (const annotation of metadata.annotations) {
-              args.push('--annotation', annotation);
-            }
-            for (const tag of metadata.tags) {
-              args.push('--tag', tag);
-            }
-
-            process.chdir('/tmp/digests');
-            for (const filename of readdirSync('./')) {
-              if (/(^|\/)\.[^/.]/g.test(filename)) {
-                continue;
-              }
-              args.push(`${REGISTRY_IMAGE}@sha256:${filename}`);
-            }
-            exec.exec('docker', args);
-
-      - name: Inspect image
-        run: |
-          docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE }}:${{ steps.metadata.outputs.version }}
+          annotations: ${{ steps.metadata.outputs.annotations }}
+          sources: ${{ join(fromJson(steps.read.outputs.result).digest.*, ',') }}
+          tags: ${{ steps.metadata.outputs.tags }}
