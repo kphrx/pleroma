@@ -39,8 +39,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          labels: |
-            org.opencontainers.image.licenses=AGPL-3.0-only
+          annotations: "org.opencontainers.image.licenses=AGPL-3.0-only"
+          labels: "org.opencontainers.image.licenses=AGPL-3.0-only"
 
       - run: rm -rf package.json package-lock.json node_modules
 
@@ -121,8 +121,7 @@ jobs:
           DOCKER_METADATA_ANNOTATIONS_LEVELS: index
         with:
           images: ${{ env.REGISTRY_IMAGE }}
-          labels: |
-            org.opencontainers.image.licenses=AGPL-3.0-only
+          annotations: "org.opencontainers.image.licenses=AGPL-3.0-only"
           tags: |
             type=ref,event=pr
             type=raw,value=latest,enable={{is_default_branch}}
