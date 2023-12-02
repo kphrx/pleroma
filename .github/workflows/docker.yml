@@ -98,10 +98,16 @@ jobs:
       - build
 
     steps:
-      - uses: cloudposse/github-action-matrix-outputs-read@0.1.1
-        id: read
-        with:
-          matrix-step-name: build
+      - uses: actions/download-artifact@v3
+
+      - name: Get digests
+        id: digests
+        run: |
+          {
+            echo 'result<<EOF'
+            find . -name 'build' -maxdepth 2 -exec cat {} \; | jq -rc  '.[].digest'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -130,8 +136,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create manifest list and push
-        uses: kphrx/docker-buildx-imagetools-action@v0.1.0
+        uses: kphrx/docker-buildx-imagetools-action@v0.1.1
         with:
           annotations: ${{ steps.metadata.outputs.annotations }}
-          sources: ${{ join(fromJson(steps.read.outputs.result).digest.*, ',') }}
+          sources: ${{ steps.digests.outputs.result }}
           tags: ${{ steps.metadata.outputs.tags }}
