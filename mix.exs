@@ -4,7 +4,7 @@ defmodule Pleroma.Mixfile do
   def project do
     [
       app: :pleroma,
-      version: version("2.6.50"),
+      version: version("2.6.51"),
       elixir: "~> 1.11",
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: Mix.compilers(),
@@ -183,7 +183,7 @@ defmodule Pleroma.Mixfile do
       {:majic, "~> 1.0"},
       {:open_api_spex, "~> 3.16"},
       {:ecto_psql_extras, "~> 0.6"},
-      {:vix, "~> 0.25.0"},
+      {:vix, "~> 0.26.0"},
       {:elixir_make, "~> 0.7.7", override: true},
       {:blurhash, "~> 0.1.0", hex: :rinpatch_blurhash},
 
