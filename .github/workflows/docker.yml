@@ -27,8 +27,8 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - linux/amd64
-          - linux/arm64
+          - amd64
+          - arm64
 
     steps:
       - name: Checkout
@@ -45,11 +45,11 @@ jobs:
       - run: rm -rf package.json package-lock.json node_modules
 
       - name: Set up QEMU
-        if: matrix.platform == 'linux/arm64'
+        if: matrix.platform == 'arm64'
         uses: docker/setup-qemu-action@v3
 
       - name: Setup erl flags for QEMU
-        if: matrix.platform == 'linux/arm64'
+        if: matrix.platform == 'arm64'
         run: |
           echo "ERL_FLAGS=+JPperf true" >> "$GITHUB_ENV"
 
@@ -70,7 +70,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: ${{ matrix.platform }}
+          platforms: linux/${{ matrix.platform }}
           build-args: |
             ERL_FLAGS=${{ env.ERL_FLAGS }}
             ELIXIR_VER=${{ env.ELIXIR_VER }}
@@ -81,16 +81,16 @@ jobs:
           provenance: false
           outputs: type=image,oci-mediatypes=true,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
-      - uses: cloudposse/github-action-matrix-outputs-write@0.4.2
+      - run: echo "${{ steps.build.outputs.digest }}" > digest-${{ matrix.platform }}.txt
+      - uses: actions/upload-artifact@v4
         with:
-          matrix-step-name: ${{ github.job }}
-          matrix-key: ${{ matrix.platform }}
-          outputs: |-
-            digest: ${{ steps.build.outputs.digest }}
+          name: digest-${{ matrix.platform }}
+          path: digest-${{ matrix.platform }}.txt
 
   merge:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
       packages: write
       id-token: write
@@ -98,14 +98,18 @@ jobs:
       - build
 
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
+        with:
+          path: digests
+          pattern: digest-*
+          merge-multiple: true
 
       - name: Get digests
         id: digests
         run: |
           {
             echo 'result<<EOF'
-            find . -name 'build' -maxdepth 2 -exec cat {} \; | jq -rc  '.[].digest'
+            find digests -name 'digest-*.txt' -exec cat {} \;
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
