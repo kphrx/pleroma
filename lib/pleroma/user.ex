@@ -39,6 +39,7 @@ defmodule Pleroma.User do
   alias Pleroma.Workers.BackgroundWorker
 
   require Logger
+  require Pleroma.Constants
 
   @type t :: %__MODULE__{}
   @type account_status ::
@@ -579,7 +580,7 @@ defmodule Pleroma.User do
     |> validate_format(:nickname, local_nickname_regex())
     |> validate_length(:bio, max: bio_limit)
     |> validate_length(:name, min: 1, max: name_limit)
-    |> validate_inclusion(:actor_type, ["Person", "Service"])
+    |> validate_inclusion(:actor_type, Pleroma.Constants.allowed_user_actor_types())
     |> put_fields()
     |> put_emoji()
     |> put_change_if_present(:bio, &{:ok, parse_bio(&1, struct)})
@@ -1560,7 +1561,7 @@ defmodule Pleroma.User do
       unmute(muter, mutee)
     else
       {who, result} = error ->
-        Logger.warn(
+        Logger.warning(
           "User.unmute/2 failed. #{who}: #{result}, muter_id: #{muter_id}, mutee_id: #{mutee_id}"
         )
 
@@ -2252,7 +2253,7 @@ defmodule Pleroma.User do
     if String.contains?(user.nickname, "@") do
       user.nickname
     else
-      %{host: host} = URI.parse(user.ap_id)
+      host = Pleroma.Web.WebFinger.host()
       user.nickname <> "@" <> host
     end
   end
@@ -2680,6 +2681,8 @@ defmodule Pleroma.User do
     |> cast(%{last_active_at: NaiveDateTime.utc_now()}, [:last_active_at])
     |> update_and_set_cache()
   end
+
+  def update_last_active_at(user), do: user
 
   def active_user_count(days \\ 30) do
     active_after = Timex.shift(NaiveDateTime.utc_now(), days: -days)

@@ -16,7 +16,7 @@ config :pleroma, Pleroma.Captcha,
 
 # Print only warnings and errors during test
 config :logger, :console,
-  level: :warn,
+  level: :warning,
   format: "\n[$level] $message\n"
 
 config :pleroma, :auth, oauth_consumer_strategies: []
@@ -152,6 +152,15 @@ config :pleroma, Pleroma.Uploaders.S3, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Upload, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.ScheduledActivity, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Web.RichMedia.Helpers, config_impl: Pleroma.StaticStubbedConfigMock
+
+peer_module =
+  if String.to_integer(System.otp_release()) >= 25 do
+    :peer
+  else
+    :slave
+  end
+
+config :pleroma, Pleroma.Cluster, peer_module: peer_module
 
 if File.exists?("./config/test.secret.exs") do
   import_config "test.secret.exs"
