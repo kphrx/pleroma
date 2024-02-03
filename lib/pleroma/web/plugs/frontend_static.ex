@@ -81,15 +81,8 @@ defmodule Pleroma.Web.Plugs.FrontendStatic do
     end
   end
 
-<<<<<<< HEAD
-=======
   def preferred_or_fallback(conn, fallback), do: fallback
 
-  defp enabled?(if_opt) when is_function(if_opt), do: if_opt.()
-  defp enabled?(true), do: true
-  defp enabled?(_), do: false
-
->>>>>>> de64c6c54a (add selection UI)
   defp invalid_path?(list) do
     invalid_path?(list, :binary.compile_pattern(["/", "\\", ":", "\0"]))
   end
