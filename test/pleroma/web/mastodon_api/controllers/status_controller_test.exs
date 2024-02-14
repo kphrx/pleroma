@@ -1687,7 +1687,14 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
             "description" =>
               "Directed by Michael Bay. With Sean Connery, Nicolas Cage, Ed Harris, John Spencer."
           }
-        }
+        },
+        "author_name" => "",
+        "author_url" => "",
+        "blurhash" => nil,
+        "embed_url" => "",
+        "height" => 0,
+        "html" => "",
+        "width" => 0
       }
 
       response =
@@ -1707,6 +1714,41 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
         |> json_response_and_validate_schema(200)
 
       assert response_two["card"] == card_data
+    end
+
+    test "replaces missing description with an empty string", %{conn: conn, user: user} do
+      Tesla.Mock.mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "https://example.com/ogp-missing-data"})
+
+      response =
+        conn
+        |> get("/api/v1/statuses/#{activity.id}")
+        |> json_response_and_validate_schema(:ok)
+
+      assert response["card"] == %{
+               "type" => "link",
+               "title" => "Pleroma",
+               "description" => "",
+               "image" => nil,
+               "provider_name" => "example.com",
+               "provider_url" => "https://example.com",
+               "url" => "https://example.com/ogp-missing-data",
+               "pleroma" => %{
+                 "opengraph" => %{
+                   "title" => "Pleroma",
+                   "type" => "website",
+                   "url" => "https://example.com/ogp-missing-data"
+                 }
+               },
+               "author_name" => "",
+               "author_url" => "",
+               "blurhash" => nil,
+               "embed_url" => "",
+               "height" => 0,
+               "html" => "",
+               "width" => 0
+             }
     end
   end
 

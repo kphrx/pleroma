@@ -34,16 +34,40 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Status do
         type: :object,
         nullable: true,
         description: "Preview card for links included within status content",
-        required: [:url, :title, :description, :type],
+        # Yeah, it's effectivelly all required in MastoAPI so far
+        required: [
+          :url,
+          :title,
+          :description,
+          :type,
+          :author_name,
+          :author_url,
+          :provider_name,
+          :provider_url,
+          :html,
+          :width,
+          :height,
+          :image,
+          :embed_url,
+          :blurhash
+        ],
         properties: %{
+          url: %Schema{type: :string, format: :uri, description: "Location of linked resource"},
+          title: %Schema{type: :string, description: "Title of linked resource"},
+          description: %Schema{type: :string, description: "Description of preview"},
           type: %Schema{
             type: :string,
             enum: ["link", "photo", "video", "rich"],
             description: "The type of the preview card"
           },
+          author_name: %Schema{type: :string, description: "author of the original resource"},
+          author_url: %Schema{
+            type: :string,
+            format: :uri,
+            description: "link to the author of the original resource"
+          },
           provider_name: %Schema{
             type: :string,
-            nullable: true,
             description: "The provider of the original resource"
           },
           provider_url: %Schema{
@@ -51,7 +75,13 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Status do
             format: :uri,
             description: "A link to the provider of the original resource"
           },
-          url: %Schema{type: :string, format: :uri, description: "Location of linked resource"},
+          html: %Schema{
+            type: :string,
+            format: :html,
+            description: "HTML to be used for generating the preview card"
+          },
+          width: %Schema{type: :integer, description: "Width of preview, in pixels"},
+          height: %Schema{type: :integer, description: "Height of preview, in pixels"},
           image: %Schema{
             type: :string,
             nullable: true,
@@ -62,8 +92,17 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Status do
             type: :string,
             description: "Alternate text that describes what is in the thumbnail"
           },
-          title: %Schema{type: :string, description: "Title of linked resource"},
-          description: %Schema{type: :string, description: "Description of preview"}
+          embed_url: %Schema{
+            type: :string,
+            format: :uri,
+            description: "Used for photo embeds, instead of custom `html`"
+          },
+          blurhash: %Schema{
+            type: :string,
+            nullable: true,
+            description:
+              "A hash computed by the (BlurHash algorithm)[https://github.com/woltapp/blurhash], for generating colorful preview thumbnails when media has not been downloaded yet."
+          }
         }
       },
       content: %Schema{type: :string, format: :html, description: "HTML-encoded status content"},
