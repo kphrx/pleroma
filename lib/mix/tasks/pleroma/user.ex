@@ -454,6 +454,52 @@ defmodule Mix.Tasks.Pleroma.User do
     end
   end
 
+  def run(["fix_preferred_nickname", nickname]) do
+    start_pleroma()
+
+    with {_, %User{} = user1} <- {:current, User.get_by_nickname(nickname)},
+         {_, {:ok, %{"ap_id" => ap_id, "subject" => "acct:" <> acct}}} when not is_nil(ap_id) <-
+           {:webfinger, Pleroma.Web.WebFinger.finger(nickname)},
+         {_, %User{} = user2, _} <- {:ap_id, User.get_cached_by_ap_id(ap_id), ap_id},
+         {_, false, false, _, _} <-
+           {:nickname_comparison, nickname == user2.nickname, acct == user2.nickname, ap_id, acct},
+         {_, false, _} <- {:ap_id_comparison, user1.ap_id == user2.ap_id, user2.ap_id} do
+      shell_info(
+        "Found an old user for #{nickname}, the old ap id is #{user1.ap_id}, new one is #{user2.ap_id}, renaming."
+      )
+
+      user1
+      |> User.remote_user_changeset(%{nickname: "#{user1.id}.#{user1.nickname}"})
+      |> User.update_and_set_cache()
+
+      user2
+      |> User.remote_user_changeset(%{nickname: "#{acct}"})
+      |> User.update_and_set_cache()
+    else
+      {:current, _} ->
+        shell_error("Not found users for #{nickname}")
+
+      {:webfinger, _} ->
+        shell_error("Not found remote users for #{nickname}")
+
+      {:nickname_comparison, true, _, ap_id, _} ->
+        shell_info(
+          "Found a user for #{nickname}, but the ap id #{ap_id} is the same as the new user. Race condition? Not changing anything."
+        )
+
+      {:nickname_comparison, false, true, ap_id, acct} ->
+        shell_info(
+          "Found a user for #{nickname}, but the ap id #{ap_id} is new nickname #{acct}. Not changing anything."
+        )
+
+      {:ap_id, _} ->
+        shell_error("Not found remote users for #{nickname}")
+
+      {:ap_id_comparison, true, ap_id} ->
+        shell_info("Found a user for #{nickname}. Correct ap id #{ap_id}.")
+    end
+  end
+
   defp set_moderator(user, value) do
     {:ok, user} =
       user
