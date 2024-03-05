@@ -454,6 +454,71 @@ defmodule Mix.Tasks.Pleroma.User do
     end
   end
 
+  def run(["fix_preferred_nickname", nickname]) do
+    start_pleroma()
+
+    with {_, %User{} = before_user} <- {:before, User.get_cached_by_nickname(nickname)},
+         {_, {:ok, %{"ap_id" => ap_id, "subject" => "acct:" <> acct}}} when not is_nil(ap_id) <-
+           {:webfinger, Pleroma.Web.WebFinger.finger(nickname)},
+         {_, %User{} = current_user} <- {:current, User.get_cached_by_ap_id(ap_id)},
+         {_, false, false, _, _} <-
+           {:nickname_comparison, nickname == current_user.nickname,
+            acct == current_user.nickname, ap_id, acct},
+         {_, false, _} <-
+           {:ap_id_comparison, before_user.ap_id == current_user.ap_id, current_user.ap_id} do
+      shell_info(
+        "Found an before user for #{nickname}, the before ap id is #{before_user.ap_id}, current one is #{current_user.ap_id}, renaming."
+      )
+
+      before_user
+      |> User.remote_user_changeset(%{nickname: "#{before_user.id}.#{before_user.nickname}"})
+      |> User.update_and_set_cache()
+
+      current_user
+      |> User.remote_user_changeset(%{nickname: "#{acct}"})
+      |> User.update_and_set_cache()
+    else
+      {:before, _} ->
+        shell_error("Not found users for #{nickname}")
+
+      {x, _} when x in [:current, :webfinger] ->
+        shell_error("Not found remote users for #{nickname}")
+
+      {:nickname_comparison, true, _, ap_id, _} ->
+        shell_info(
+          "Found a user for #{nickname}, but the ap id #{ap_id} is the same as the current user. Race condition? Not changing anything."
+        )
+
+      {:nickname_comparison, false, true, ap_id, acct} ->
+        shell_info(
+          "Found a user for #{nickname}, but the ap id #{ap_id} is current nickname #{acct}. Not changing anything."
+        )
+
+      {:ap_id_comparison, true, ap_id} ->
+        shell_info("Found a user for #{nickname}. Correct ap id #{ap_id}.")
+    end
+  end
+
+  def run(["fix_preferred_nickname_all_from_instance", instance]) do
+    start_pleroma()
+
+    Pleroma.User.Query.build(%{nickname: "@#{instance}"})
+    |> Pleroma.Repo.chunk_stream(500, :batches)
+    |> Stream.each(fn users ->
+      users
+      |> Enum.map(fn user ->
+        case Regex.run(~r/^#{user.id}\.(.*)$/, user.nickname) do
+          [_, nickname] ->
+            run(["fix_preferred_nickname", nickname])
+
+          _ ->
+            nil
+        end
+      end)
+    end)
+    |> Stream.run()
+  end
+
   defp set_moderator(user, value) do
     {:ok, user} =
       user
