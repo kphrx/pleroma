@@ -499,6 +499,26 @@ defmodule Mix.Tasks.Pleroma.User do
     end
   end
 
+  def run(["fix_preferred_nickname_all_from_instance", instance]) do
+    start_pleroma()
+
+    Pleroma.User.Query.build(%{nickname: "@#{instance}"})
+    |> Pleroma.Repo.chunk_stream(500, :batches)
+    |> Stream.each(fn users ->
+      users
+      |> Enum.map(fn user ->
+        case Regex.run(~r/^#{user.id}\.(.*)$/, user.nickname) do
+          [_, nickname] ->
+            run(["fix_preferred_nickname", nickname])
+
+          _ ->
+            nil
+        end
+      end)
+    end)
+    |> Stream.run()
+  end
+
   defp set_moderator(user, value) do
     {:ok, user} =
       user
