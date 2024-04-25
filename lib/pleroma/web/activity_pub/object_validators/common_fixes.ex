@@ -4,6 +4,7 @@
 
 defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
+  alias Pleroma.Language.LanguageDetector
   alias Pleroma.Maps
   alias Pleroma.Object
   alias Pleroma.Object.Containment
@@ -145,7 +146,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
     language =
       [
         get_language_from_context(object),
-        get_language_from_content_map(object)
+        get_language_from_content_map(object),
+        get_language_from_content(object)
       ]
       |> Enum.find(&good_locale_code?(&1))
 
@@ -179,6 +181,12 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   end
 
   defp get_language_from_content_map(_), do: nil
+
+  defp get_language_from_content(%{"summary" => summary, "content" => content}) do
+    LanguageDetector.detect("#{summary} #{content}")
+  end
+
+  defp get_language_from_content(_), do: nil
 
   def maybe_add_content_map(%{"language" => language, "content" => content} = object)
       when not_empty_string(language) do
