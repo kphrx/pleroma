@@ -75,15 +75,6 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     })
   end
 
-  defp common_information(instance) do
-    %{
-      title: Keyword.get(instance, :name),
-      version: "#{@mastodon_api_level} (compatible; #{Pleroma.Application.named_version()})",
-      languages: Keyword.get(instance, :languages, ["en"]),
-      rules: []
-    }
-  end
-
   def render("translation_languages.json", _) do
     with true <- Pleroma.Language.Translation.configured?(),
          {:ok, languages} <- Pleroma.Language.Translation.languages_matrix() do
@@ -91,6 +82,15 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     else
       _ -> %{}
     end
+  end
+
+  defp common_information(instance) do
+    %{
+      title: Keyword.get(instance, :name),
+      version: "#{@mastodon_api_level} (compatible; #{Pleroma.Application.named_version()})",
+      languages: Keyword.get(instance, :languages, ["en"]),
+      rules: []
+    }
   end
 
   def features do

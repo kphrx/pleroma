@@ -558,7 +558,13 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
   end
 
   @doc "POST /api/v1/statuses/:id/translate"
-  def translate(%{body_params: params, assigns: %{user: user}} = conn, %{id: status_id}) do
+  def translate(
+        %{
+          assigns: %{user: user},
+          private: %{open_api_spex: %{body_params: params, params: %{id: status_id}}}
+        } = conn,
+        _
+      ) do
     with %Activity{object: object} <- Activity.get_by_id_with_object(status_id),
          {:visibility, visibility} when visibility in ["public", "unlisted"] <-
            {:visibility, Visibility.get_visibility(object)},
