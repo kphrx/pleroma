@@ -26,6 +26,11 @@ defmodule Pleroma.Web.MastodonAPI.InstanceController do
     json(conn, Pleroma.Stats.get_peers())
   end
 
+  @doc "GET /api/v1/instance/rules"
+  def rules(conn, _params) do
+    render(conn, "rules.json")
+  end
+
   @doc "GET /api/v1/instance/translation_languages"
   def translation_languages(conn, _params) do
     render(conn, "translation_languages.json")

@@ -76,6 +76,20 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     })
   end
 
+  def render("rules.json", _) do
+    Pleroma.Rule.query()
+    |> Pleroma.Repo.all()
+    |> render_many(__MODULE__, "rule.json", as: :rule)
+  end
+
+  def render("rule.json", %{rule: rule}) do
+    %{
+      id: to_string(rule.id),
+      text: rule.text,
+      hint: rule.hint || ""
+    }
+  end
+
   def render("translation_languages.json", _) do
     with true <- Pleroma.Language.Translation.configured?(),
          {:ok, languages} <- Pleroma.Language.Translation.languages_matrix() do
@@ -87,10 +101,10 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
 
   defp common_information(instance) do
     %{
-      title: Keyword.get(instance, :name),
-      version: "#{@mastodon_api_level} (compatible; #{Pleroma.Application.named_version()})",
       languages: Keyword.get(instance, :languages, ["en"]),
-      rules: []
+      rules: render(__MODULE__, "rules.json"),
+      title: Keyword.get(instance, :name),
+      version: "#{@mastodon_api_level} (compatible; #{Pleroma.Application.named_version()})"
     }
   end
 
@@ -225,6 +239,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
 
   defp configuration2 do
     configuration()
+    |> put_in([:accounts, :max_pinned_statuses], Config.get([:instance, :max_pinned_statuses], 0))
+    |> put_in([:statuses, :characters_reserved_per_url], 0)
     |> Map.merge(%{
       urls: %{
         streaming: Pleroma.Web.Endpoint.websocket_url(),
