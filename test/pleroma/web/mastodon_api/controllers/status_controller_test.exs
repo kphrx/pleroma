@@ -1692,10 +1692,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       response =
         conn
-        |> get("/api/v1/statuses/#{activity.id}/card")
+        |> get("/api/v1/statuses/#{activity.id}")
         |> json_response_and_validate_schema(200)
 
-      assert response == card_data
+      assert response["card"] == card_data
 
       # works with private posts
       {:ok, activity} =
@@ -1703,10 +1703,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       response_two =
         conn
-        |> get("/api/v1/statuses/#{activity.id}/card")
+        |> get("/api/v1/statuses/#{activity.id}")
         |> json_response_and_validate_schema(200)
 
-      assert response_two == card_data
+      assert response_two["card"] == card_data
     end
   end
 
