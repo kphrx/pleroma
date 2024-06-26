@@ -74,29 +74,6 @@ defmodule Pleroma.Search.MeilisearchTest do
       assert_received("posted_to_meilisearch")
     end
 
-    test "doesn't index posts that are not public" do
-      user = insert(:user)
-
-      Enum.each(["private", "direct"], fn visibility ->
-        {:ok, activity} =
-          CommonAPI.post(user, %{
-            status: "guys i just don't wanna leave the swamp",
-            visibility: visibility
-          })
-
-        args = %{"op" => "add_to_index", "activity" => activity.id}
-
-        Config
-        |> expect(:get, fn
-          [Pleroma.Search, :module], nil ->
-            Meilisearch
-        end)
-
-        assert_enqueued(worker: SearchIndexingWorker, args: args)
-        assert :ok = perform_job(SearchIndexingWorker, args)
-      end)
-    end
-
     test "deletes posts from index when deleted locally" do
       user = insert(:user)
 

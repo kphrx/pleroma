@@ -1,16 +1,19 @@
 defmodule Pleroma.Search do
   alias Pleroma.Activity
   alias Pleroma.Object
+  alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Workers.SearchIndexingWorker
 
   @spec add_to_index(Activity.t()) :: :ok | :error
-  def add_to_index(%Pleroma.Activity{id: activity_id} = activity) do
-    with true <- indexable?(activity),
+  def add_to_index(%Pleroma.Activity{id: activity_id, object: %Object{} = object} = activity) do
+    with {_, true} <- {:indexable, indexable?(activity)},
+         {_, "public"} <- {:visibility, Visibility.get_visibility(object)},
          {:ok, %Oban.Job{}} <-
            SearchIndexingWorker.enqueue("add_to_index", %{"activity" => activity_id}) do
       :ok
     else
-      false -> :ok
+      {:indexable, false} -> :ok
+      {:visibility, _} -> :ok
       _ -> :error
     end
   end
