@@ -5,7 +5,7 @@ defmodule Pleroma.Search do
   alias Pleroma.Workers.SearchIndexingWorker
 
   @spec add_to_index(Activity.t()) :: :ok | :error
-  def add_to_index(%Pleroma.Activity{id: activity_id, object: %Object{} = object} = activity) do
+  def add_to_index(%Activity{id: activity_id, object: %Object{} = object} = activity) do
     with {_, true} <- {:indexable, indexable?(activity)},
          {_, "public"} <- {:visibility, Visibility.get_visibility(object)},
          {:ok, %Oban.Job{}} <-
@@ -15,6 +15,13 @@ defmodule Pleroma.Search do
       {:indexable, false} -> :ok
       {:visibility, _} -> :ok
       _ -> :error
+    end
+  end
+
+  def add_to_index(%Activity{id: activity_id}) do
+    case Activity.get_by_id_with_object(activity_id) do
+      %Activity{} = preloaded -> add_to_index(preloaded)
+      _ -> :ok
     end
   end
 
@@ -36,6 +43,6 @@ defmodule Pleroma.Search do
     search_module.healthcheck_endpoints
   end
 
-  defp indexable?(%Activity{object: %Object{}, data: %{"type" => "Create"}}), do: true
+  defp indexable?(%Activity{data: %{"type" => "Create"}}), do: true
   defp indexable?(_), do: false
 end
