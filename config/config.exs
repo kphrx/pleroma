@@ -83,8 +83,8 @@ config :ex_aws, :s3,
   scheme: "https://"
 
 config :pleroma, Pleroma.Uploaders.IPFS,
-  post_gateway_url: nil,
-  get_gateway_url: nil
+  post_gateway_url: "http://localhost:5001",
+  get_gateway_url: "http://localhost:8080"
 
 config :pleroma, :emoji,
   shortcode_globs: ["/emoji/custom/**/*.png"],
@@ -132,6 +132,8 @@ config :pleroma, Pleroma.Web.Endpoint,
   ]
 
 # Configures Elixir's Logger
+config :logger, backends: [:console]
+
 config :logger, :console,
   level: :debug,
   format: "\n$time $metadata[$level] $message\n",
@@ -585,12 +587,11 @@ config :pleroma, Oban,
     activity_expiration: 10,
     federator_incoming: 5,
     federator_outgoing: 5,
-    ingestion_queue: 50,
     web_push: 50,
     transmogrifier: 20,
-    background: 5,
+    background: 20,
     search_indexing: [limit: 10, paused: true],
-    slow: 1
+    slow: 5
   ],
   plugins: [Oban.Plugins.Pruner],
   crontab: [
