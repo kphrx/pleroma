@@ -563,7 +563,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
          {:visibility, visibility} when visibility in ["public", "unlisted"] <-
            {:visibility, Visibility.get_visibility(object)},
          {:language, language} when is_binary(language) <-
-           {:language, Map.get(params, :target_language) || user.language},
+           {:language, Map.get(params, :lang) || user.language},
          {:ok, result} <-
            Translation.translate(
              object.data["content"],
