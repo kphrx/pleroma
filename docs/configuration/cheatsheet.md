@@ -436,7 +436,7 @@ config :pleroma, Pleroma.Web.MediaProxy.Invalidation.Http,
 * `ignore_hosts`: list of hosts which will be ignored by the metadata parser. For example `["accounts.google.com", "xss.website"]`, defaults to `[]`.
 * `ignore_tld`: list TLDs (top-level domains) which will ignore for parse metadata. default is ["local", "localdomain", "lan"].
 * `parsers`: list of Rich Media parsers.
-* `failure_backoff`: Amount of milliseconds after request failure, during which the request will not be retried.
+* `timeout`: Amount of milliseconds after which the HTTP request is forcibly terminated.
 
 ## HTTP server
 
@@ -853,7 +853,7 @@ config :logger,
   backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
-  level: :warn
+  level: :warning
 ```
 
 Another example, keeping console output and adding the pid to syslog output:
@@ -862,7 +862,7 @@ config :logger,
   backends: [:console, {ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
-  level: :warn,
+  level: :warning,
   option: [:pid, :ndelay]
 ```
 
@@ -1171,6 +1171,7 @@ Control favicons for instances.
     3. the directory named by the TMP environment variable
     4. C:\TMP on Windows or /tmp on Unix-like operating systems
     5. as a last resort, the current working directory
+* `:timeout` an integer representing seconds
 
 ## Frontend management
 

@@ -1229,79 +1229,6 @@ config :pleroma, :config_description, [
     ]
   },
   %{
-    group: :logger,
-    type: :group,
-    description: "Logger-related settings",
-    children: [
-      %{
-        key: :backends,
-        type: [:atom, :tuple, :module],
-        description:
-          "Where logs will be sent, :console - send logs to stdout, { ExSyslogger, :ex_syslogger } - to syslog, Quack.Logger - to Slack.",
-        suggestions: [:console, {ExSyslogger, :ex_syslogger}]
-      }
-    ]
-  },
-  %{
-    group: :logger,
-    type: :group,
-    key: :ex_syslogger,
-    label: "ExSyslogger",
-    description: "ExSyslogger-related settings",
-    children: [
-      %{
-        key: :level,
-        type: {:dropdown, :atom},
-        description: "Log level",
-        suggestions: [:debug, :info, :warning, :error]
-      },
-      %{
-        key: :ident,
-        type: :string,
-        description:
-          "A string that's prepended to every message, and is typically set to the app name",
-        suggestions: ["pleroma"]
-      },
-      %{
-        key: :format,
-        type: :string,
-        description: "Default: \"$date $time [$level] $levelpad$node $metadata $message\"",
-        suggestions: ["$metadata[$level] $message"]
-      },
-      %{
-        key: :metadata,
-        type: {:list, :atom},
-        suggestions: [:request_id]
-      }
-    ]
-  },
-  %{
-    group: :logger,
-    type: :group,
-    key: :console,
-    label: "Console Logger",
-    description: "Console logger settings",
-    children: [
-      %{
-        key: :level,
-        type: {:dropdown, :atom},
-        description: "Log level",
-        suggestions: [:debug, :info, :warning, :error]
-      },
-      %{
-        key: :format,
-        type: :string,
-        description: "Default: \"$date $time [$level] $levelpad$node $metadata $message\"",
-        suggestions: ["$metadata[$level] $message"]
-      },
-      %{
-        key: :metadata,
-        type: {:list, :atom},
-        suggestions: [:request_id]
-      }
-    ]
-  },
-  %{
     group: :pleroma,
     key: :frontend_configurations,
     type: :group,
@@ -2174,11 +2101,11 @@ config :pleroma, :config_description, [
         ]
       },
       %{
-        key: :failure_backoff,
+        key: :timeout,
         type: :integer,
         description:
-          "Amount of milliseconds after request failure, during which the request will not be retried.",
-        suggestions: [60_000]
+          "Amount of milliseconds after which the HTTP request is forcibly terminated.",
+        suggestions: [5_000]
       }
     ]
   },
@@ -3429,19 +3356,18 @@ config :pleroma, :config_description, [
         suggestions: [7]
       },
       %{
-        key: :process_wait_time,
-        type: :integer,
-        label: "Process Wait Time",
-        description:
-          "The amount of time to wait for backup to report progress, in milliseconds. If no progress is received from the backup job for that much time, terminate it and deem it failed.",
-        suggestions: [30_000]
-      },
-      %{
         key: :process_chunk_size,
         type: :integer,
         label: "Process Chunk Size",
         description: "The number of activities to fetch in the backup job for each chunk.",
         suggestions: [100]
+      },
+      %{
+        key: :timeout,
+        type: :integer,
+        label: "Timeout",
+        description: "The amount of time to wait for backup to complete in seconds.",
+        suggestions: [1_800]
       }
     ]
   },

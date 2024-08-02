@@ -62,14 +62,12 @@ defmodule Pleroma.Web.Push.ImplTest do
     |> Enum.each(fn push -> assert match?(:ok, Impl.deliver(push)) end)
   end
 
-  @tag capture_log: true
   test "returns error if notification activity type does not match" do
     assert capture_log(fn ->
              assert Impl.build(%{}) == []
            end) =~ "WebPush: unknown activity type"
   end
 
-  @tag capture_log: true
   test "fail message sending" do
     user = insert(:user)
 
@@ -80,7 +78,7 @@ defmodule Pleroma.Web.Push.ImplTest do
     )
 
     other_user = insert(:user)
-    {:ok, _, _, activity} = CommonAPI.follow(user, other_user)
+    {:ok, _, _, activity} = CommonAPI.follow(other_user, user)
 
     notif =
       insert(:notification,
@@ -105,7 +103,7 @@ defmodule Pleroma.Web.Push.ImplTest do
       )
 
     other_user = insert(:user)
-    {:ok, _, _, activity} = CommonAPI.follow(user, other_user)
+    {:ok, _, _, activity} = CommonAPI.follow(other_user, user)
 
     notif =
       insert(:notification,
@@ -156,7 +154,7 @@ defmodule Pleroma.Web.Push.ImplTest do
   test "renders title and body for follow activity" do
     user = insert(:user, nickname: "Bob")
     other_user = insert(:user)
-    {:ok, _, _, activity} = CommonAPI.follow(user, other_user)
+    {:ok, _, _, activity} = CommonAPI.follow(other_user, user)
     object = Object.normalize(activity, fetch: false)
 
     assert Impl.format_body(%{activity: activity, type: "follow"}, user, object) ==
@@ -194,7 +192,7 @@ defmodule Pleroma.Web.Push.ImplTest do
           "<span>Lorem ipsum dolor sit amet</span>, consectetur :firefox: adipiscing elit. Fusce sagittis finibus turpis."
       })
 
-    {:ok, activity} = CommonAPI.favorite(user, activity.id)
+    {:ok, activity} = CommonAPI.favorite(activity.id, user)
     object = Object.normalize(activity, fetch: false)
 
     assert Impl.format_body(%{activity: activity, type: "favourite"}, user, object) ==
@@ -227,7 +225,7 @@ defmodule Pleroma.Web.Push.ImplTest do
 
     {:ok, activity} = CommonAPI.post(user, %{status: "lorem ipsum"})
 
-    {:ok, activity} = CommonAPI.update(user, activity, %{status: "edited status"})
+    {:ok, activity} = CommonAPI.update(activity, user, %{status: "edited status"})
     object = Object.normalize(activity, fetch: false)
 
     assert Impl.format_body(%{activity: activity, type: "update"}, user, object) ==
@@ -353,7 +351,7 @@ defmodule Pleroma.Web.Push.ImplTest do
                body: "New Mention"
              }
 
-      {:ok, activity} = CommonAPI.favorite(user, activity.id)
+      {:ok, activity} = CommonAPI.favorite(activity.id, user)
 
       notif = insert(:notification, user: user2, activity: activity, type: "favourite")
 
@@ -369,7 +367,10 @@ defmodule Pleroma.Web.Push.ImplTest do
       user = insert(:user, nickname: "Bob")
 
       user2 =
-        insert(:user, nickname: "Rob", notification_settings: %{hide_notification_contents: false})
+        insert(:user,
+          nickname: "Rob",
+          notification_settings: %{hide_notification_contents: false}
+        )
 
       {:ok, activity} =
         CommonAPI.post(user, %{
@@ -407,7 +408,7 @@ defmodule Pleroma.Web.Push.ImplTest do
                title: "New Mention"
              }
 
-      {:ok, activity} = CommonAPI.favorite(user, activity.id)
+      {:ok, activity} = CommonAPI.favorite(activity.id, user)
 
       notif = insert(:notification, user: user2, activity: activity, type: "favourite")
 
