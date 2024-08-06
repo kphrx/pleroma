@@ -80,13 +80,26 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   parameters set:
 
   * `inbox`: the inbox to publish to
-  * `json`: the JSON message body representing the ActivityPub message
-  * `actor`: the actor which is signing the message
-  * `id`: the ActivityStreams URI of the message
+  * `activity_id`: the internal activity id
+  * `cc`: the cc recipients relevant to this inbox (optional)
   """
-  def publish_one(%{inbox: inbox, json: json, actor: %User{} = actor, id: id} = params) do
-    Logger.debug("Federating #{id} to #{inbox}")
+  def publish_one(%{inbox: inbox, activity_id: activity_id} = params) do
+    activity = Activity.get_by_id_with_user_actor(activity_id)
+    actor = activity.user_actor
+
+    ap_id = activity.data["id"]
+    Logger.debug("Federating #{ap_id} to #{inbox}")
     uri = %{path: path} = URI.parse(inbox)
+
+    {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+
+    cc = Map.get(params, :cc)
+
+    json =
+      data
+      |> Map.put("cc", cc)
+      |> Jason.encode!()
+
     digest = "SHA-256=" <> (:crypto.hash(:sha256, json) |> Base.encode64())
 
     date = Pleroma.Signature.signed_date()
@@ -119,36 +132,34 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     else
       {_post_result, %{status: code} = response} = e ->
         unless params[:unreachable_since], do: Instances.set_unreachable(inbox)
-        Logger.metadata(activity: id, inbox: inbox, status: code)
+        Logger.metadata(activity: activity_id, inbox: inbox, status: code)
         Logger.error("Publisher failed to inbox #{inbox} with status #{code}")
 
         case response do
+          %{status: 400} -> {:cancel, :bad_request}
           %{status: 403} -> {:cancel, :forbidden}
           %{status: 404} -> {:cancel, :not_found}
           %{status: 410} -> {:cancel, :not_found}
           _ -> {:error, e}
         end
 
+      {:error, {:already_started, _}} ->
+        Logger.debug("Publisher snoozing worker job due worker :already_started race condition")
+        connection_pool_snooze()
+
       {:error, :pool_full} ->
         Logger.debug("Publisher snoozing worker job due to full connection pool")
-        {:snooze, 30}
+        connection_pool_snooze()
 
       e ->
         unless params[:unreachable_since], do: Instances.set_unreachable(inbox)
-        Logger.metadata(activity: id, inbox: inbox)
+        Logger.metadata(activity: activity_id, inbox: inbox)
         Logger.error("Publisher failed to inbox #{inbox} #{inspect(e)}")
         {:error, e}
     end
   end
 
-  def publish_one(%{actor_id: actor_id} = params) do
-    actor = User.get_cached_by_id(actor_id)
-
-    params
-    |> Map.delete(:actor_id)
-    |> Map.put(:actor, actor)
-    |> publish_one()
-  end
+  defp connection_pool_snooze, do: {:snooze, 3}
 
   defp signature_host(%URI{port: port, scheme: scheme, host: host}) do
     if port == URI.default_port(scheme) do
@@ -250,7 +261,6 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   def publish(%User{} = actor, %{data: %{"bcc" => bcc}} = activity)
       when is_list(bcc) and bcc != [] do
     public = public?(activity)
-    {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
 
     [priority_recipients, recipients] = recipients(actor, activity)
 
@@ -275,16 +285,10 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
           # instance would only accept a first message for the first recipient and ignore the rest.
           cc = get_cc_ap_ids(ap_id, recipients)
 
-          json =
-            data
-            |> Map.put("cc", cc)
-            |> Jason.encode!()
-
           __MODULE__.enqueue_one(%{
             inbox: inbox,
-            json: json,
-            actor_id: actor.id,
-            id: activity.data["id"],
+            cc: cc,
+            activity_id: activity.id,
             unreachable_since: unreachable_since
           })
         end)
@@ -300,9 +304,6 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
       Logger.debug(fn -> "Relaying #{activity.data["id"]} out" end)
       Relay.publish(activity)
     end
-
-    {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
-    json = Jason.encode!(data)
 
     [priority_inboxes, inboxes] =
       recipients(actor, activity)
@@ -325,9 +326,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
         __MODULE__.enqueue_one(
           %{
             inbox: inbox,
-            json: json,
-            actor_id: actor.id,
-            id: activity.data["id"],
+            activity_id: activity.id,
             unreachable_since: unreachable_since
           },
           priority: priority

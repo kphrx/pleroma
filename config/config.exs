@@ -448,7 +448,7 @@ config :pleroma, :rich_media,
     Pleroma.Web.RichMedia.Parsers.TwitterCard,
     Pleroma.Web.RichMedia.Parsers.OEmbed
   ],
-  failure_backoff: 60_000,
+  timeout: 5_000,
   ttl_setters: [
     Pleroma.Web.RichMedia.Parser.TTL.AwsSignedUrl,
     Pleroma.Web.RichMedia.Parser.TTL.Opengraph
@@ -580,20 +580,21 @@ config :pleroma, Pleroma.User,
   ],
   email_blacklist: []
 
+# The Pruner :max_age must be longer than Worker :unique
+# value or it cannot enforce uniqueness.
 config :pleroma, Oban,
   repo: Pleroma.Repo,
   log: false,
   queues: [
     activity_expiration: 10,
     federator_incoming: 5,
-    federator_outgoing: 5,
+    federator_outgoing: 25,
     web_push: 50,
-    transmogrifier: 20,
     background: 20,
     search_indexing: [limit: 10, paused: true],
     slow: 5
   ],
-  plugins: [Oban.Plugins.Pruner],
+  plugins: [{Oban.Plugins.Pruner, max_age: 900}],
   crontab: [
     {"0 0 * * 0", Pleroma.Workers.Cron.DigestEmailsWorker},
     {"0 0 * * *", Pleroma.Workers.Cron.NewUsersDigestWorker}
@@ -857,19 +858,19 @@ config :pleroma, :pools,
 config :pleroma, :hackney_pools,
   federation: [
     max_connections: 50,
-    timeout: 150_000
+    timeout: 10_000
   ],
   media: [
     max_connections: 50,
-    timeout: 150_000
+    timeout: 15_000
   ],
   rich_media: [
     max_connections: 50,
-    timeout: 150_000
+    timeout: 15_000
   ],
   upload: [
     max_connections: 25,
-    timeout: 300_000
+    timeout: 15_000
   ]
 
 config :pleroma, :majic_pool, size: 2
@@ -908,8 +909,8 @@ config :pleroma, Pleroma.User.Backup,
   purge_after_days: 30,
   limit_days: 7,
   dir: nil,
-  process_wait_time: 30_000,
-  process_chunk_size: 100
+  process_chunk_size: 100,
+  timeout: :timer.minutes(30)
 
 config :pleroma, ConcurrentLimiter, [
   {Pleroma.Search, [max_running: 30, max_waiting: 50]}
