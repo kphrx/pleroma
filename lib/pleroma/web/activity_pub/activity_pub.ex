@@ -1212,8 +1212,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_instance(query, _), do: query
 
-  defp restrict_filtered(query, %{phrase_filtering_user: %User{} = user}) do
-    case Filter.compose_regex(user, "home") do
+  defp restrict_filtered(query, %{user: %User{} = user}) do
+    case Filter.compose_regex(user) do
       nil ->
         query
 
@@ -1224,6 +1224,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
               activity.actor == ^user.ap_id
         )
     end
+  end
+
+  defp restrict_filtered(query, %{blocking_user: %User{} = user}) do
+    restrict_filtered(query, %{user: user})
   end
 
   defp restrict_filtered(query, _), do: query
