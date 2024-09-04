@@ -1076,7 +1076,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     following_ap_ids = User.get_friends_ap_ids(user)
 
     query =
-      if has_named_binding?(query, :object), do: query, else: Activity.with_joined_object(query)
+      if has_named_binding?(query, :object), do: query, else: Activity.with_joined_object(query, :left)
 
     from(
       [activity, object: o] in query,
