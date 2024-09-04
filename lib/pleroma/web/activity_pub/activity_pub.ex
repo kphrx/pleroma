@@ -1125,11 +1125,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       # Same as above, but checks the Object
       where:
         fragment(
-          "(not (split_part(?->>'actor', '/', 3) = ANY(?))) or (?->>'actor') = ANY(?)",
+          "(not (split_part(?->>'actor', '/', 3) = ANY(?))) or (?->>'actor') = ANY(?) or ? is null",
           o.data,
           ^domain_blocks,
           o.data,
-          ^following_ap_ids
+          ^following_ap_ids,
+          o
         )
     )
   end
