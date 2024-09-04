@@ -1319,7 +1319,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp maybe_preload_objects(query, _) do
     query
-    |> Activity.with_preloaded_object()
+    |> Activity.with_preloaded_object(:left)
   end
 
   defp maybe_preload_bookmarks(query, %{skip_preload: true}), do: query
