@@ -690,7 +690,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> Map.put(:pinned_object_ids, Map.keys(user.pinned_objects))
 
     params =
-      if is_nil(reading_user) || User.blocks?(reading_user, user) do
+      if User.blocks?(reading_user, user) do
         params
       else
         params
