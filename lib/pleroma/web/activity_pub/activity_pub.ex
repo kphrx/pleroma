@@ -1076,7 +1076,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     following_ap_ids = User.get_friends_ap_ids(user)
 
     query =
-      if has_named_binding?(query, :object), do: query, else: Activity.with_joined_object(query)
+      if has_named_binding?(query, :object), do: query, else: Activity.with_joined_object(query, :left)
 
     from(
       [activity, object: o] in query,
@@ -1125,11 +1125,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       # Same as above, but checks the Object
       where:
         fragment(
-          "(not (split_part(?->>'actor', '/', 3) = ANY(?))) or (?->>'actor') = ANY(?)",
+          "(not (split_part(?->>'actor', '/', 3) = ANY(?))) or (?->>'actor') = ANY(?) or ? is null",
           o.data,
           ^domain_blocks,
           o.data,
-          ^following_ap_ids
+          ^following_ap_ids,
+          o
         )
     )
   end
@@ -1315,7 +1316,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp maybe_preload_objects(query, _) do
     query
-    |> Activity.with_preloaded_object()
+    |> Activity.with_preloaded_object(:left)
   end
 
   defp maybe_preload_bookmarks(query, %{skip_preload: true}), do: query
