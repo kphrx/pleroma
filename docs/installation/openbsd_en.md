@@ -1,6 +1,6 @@
 # Installing on OpenBSD
 
-This guide describes the installation and configuration of pleroma (and the required software to run it) on a single OpenBSD 6.6 server.
+This guide describes the installation and configuration of pleroma (and the required software to run it) on a single OpenBSD 7.5 server.
 
 For any additional information regarding commands and configuration files mentioned here, check the man pages [online](https://man.openbsd.org/) or directly on your server with the man command.
 
@@ -12,7 +12,7 @@ For any additional information regarding commands and configuration files mentio
 To install them, run the following command (with doas or as root):
 
 ```
-pkg_add elixir gmake git postgresql-server postgresql-contrib cmake ffmpeg ImageMagick libvips
+pkg_add elixir gmake git postgresql-server postgresql-contrib cmake libmagic libvips
 ```
 
 Pleroma requires a reverse proxy, OpenBSD has relayd in base (and is used in this guide) and packages/ports are available for nginx (www/nginx) and apache (www/apache-httpd). Independently of the reverse proxy, [acme-client(1)](https://man.openbsd.org/acme-client) can be used to get a certificate from Let's Encrypt.
