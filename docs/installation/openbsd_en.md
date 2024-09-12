@@ -1,25 +1,28 @@
 # Installing on OpenBSD
 
-This guide describes the installation and configuration of pleroma (and the required software to run it) on a single OpenBSD 7.5 server.
+{! backend/installation/otp_vs_from_source_source.include !}
+
+This guide describes the installation and configuration of Pleroma (and the required software to run it) on a single OpenBSD 7.5 server.
 
 For any additional information regarding commands and configuration files mentioned here, check the man pages [online](https://man.openbsd.org/) or directly on your server with the man command.
 
 {! backend/installation/generic_dependencies.include !}
 
+## Installation
+
 ### Preparing the system
 #### Required software
 
-To install them, run the following command (with doas or as root):
+To install required packages, run the following command:
 
 ```
-pkg_add elixir gmake git postgresql-server postgresql-contrib cmake libmagic libvips
+# pkg_add elixir gmake git postgresql-server postgresql-contrib cmake libmagic libvips
 ```
 
 Pleroma requires a reverse proxy, OpenBSD has relayd in base (and is used in this guide) and packages/ports are available for nginx (www/nginx) and apache (www/apache-httpd). Independently of the reverse proxy, [acme-client(1)](https://man.openbsd.org/acme-client) can be used to get a certificate from Let's Encrypt.
 
 #### Optional software
 
-Per [`docs/installation/optional/media_graphics_packages.md`](../installation/optional/media_graphics_packages.md):
   * ImageMagick
   * ffmpeg
   * exiftool
@@ -27,41 +30,97 @@ Per [`docs/installation/optional/media_graphics_packages.md`](../installation/op
 To install the above:
 
 ```
-pkg_add ImageMagick ffmpeg p5-Image-ExifTool
+# pkg_add ImageMagick ffmpeg p5-Image-ExifTool
 ```
 
-#### Creating the pleroma user
-Pleroma will be run by a dedicated user, \_pleroma. Before creating it, insert the following lines in login.conf:
+For more information read [`docs/installation/optional/media_graphics_packages.md`](../installation/optional/media_graphics_packages.md):
+
+### PostgreSQL
+
+Switch to the \_postgresql user and initialize PostgreSQL:
+
+```
+# su _postgresql
+$ initdb -D /var/postgresql/data -U postgres
+```
+
+Running PostgreSQL in a different directory than `/var/postgresql/data` requires changing the `daemon_flags` variable in the `/etc/rc.d/postgresql` script.
+
+Enable and start the postgresql service:
+
+```
+# rcctl enable postgresql
+# rcctl start postgresql
+```
+
+To check that PostgreSQL started properly and didn't fail right after starting, you can run `ps aux | grep postgres`, there should be multiple lines of output. Or alternatively run `# rcctl check postgresql` which should return `postgresql(ok)`.
+
+### Configuring Pleroma
+
+Pleroma will be run by a dedicated \_pleroma user. Before creating it, insert the following lines in /etc/login.conf:
+
 ```
 pleroma:\
 	:datasize-max=1536M:\
 	:datasize-cur=1536M:\
-	:openfiles-max=4096
+	:openfiles-max=4096:\
+    :setenv=LC_ALL=en_US.UTF-8
 ```
-This creates a "pleroma" login class and sets higher values than default for datasize and openfiles (see [login.conf(5)](https://man.openbsd.org/login.conf)), this is required to avoid having pleroma crash some time after starting.
 
-Create the \_pleroma user, assign it the pleroma login class and create its home directory (/home/\_pleroma/): `useradd -m -L pleroma _pleroma`
+This creates a "pleroma" login class and sets higher values than default for datasize and openfiles (see [login.conf(5)](https://man.openbsd.org/login.conf)), this is required to avoid having Pleroma crash some time after starting.
 
-#### Clone pleroma's directory
-Enter a shell as the \_pleroma user. As root, run `su _pleroma -;cd`. Then clone the repository with `git clone -b stable https://git.pleroma.social/pleroma/pleroma.git`. Pleroma is now installed in /home/\_pleroma/pleroma/, it will be configured and started at the end of this guide.
-
-#### PostgreSQL
-Start a shell as the \_postgresql user (as root run `su _postgresql -` then run the `initdb` command to initialize postgresql:
-You will need to specify pgdata directory to the default (/var/postgresql/data) with the `-D <path>` and set the user to postgres with the `-U <username>` flag. This can be done as follows:
+Create the \_pleroma user, assign it the pleroma login class and create its home directory (/home/\_pleroma/):
 
 ```
-initdb -D /var/postgresql/data -U postgres
+# useradd -m -L pleroma _pleroma
+# echo 'export VIX_COMPILATION_MODE=PLATFORM_PROVIDED_LIBVIPS' >> /home/_pleroma/.profile
 ```
-If you are not using the default directory, you will have to update the `datadir` variable in the /etc/rc.d/postgresql script.
 
-When this is done, enable postgresql so that it starts on boot and start it. As root, run:
+Switch to the _pleroma user:
+
 ```
-rcctl enable postgresql
-rcctl start postgresql
+# su _pleroma
 ```
-To check that it started properly and didn't fail right after starting, you can run `ps aux | grep postgres`, there should be multiple lines of output.
+
+Change to the home directory (/home/\_pleroma) and clone the Pleroma repository:
+
+```
+$ cd
+$ git clone -b stable https://git.pleroma.social/pleroma/pleroma.git
+$ cd pleroma
+```
+
+Pleroma is now installed in /home/\_pleroma/pleroma/. To configure it run:
+
+```
+$ mix deps.get
+$ MIX_ENV=prod mix pleroma.instance gen # You will be asked a few questions here.
+$ cp config/generated_config.exs config/prod.secret.exs
+```
+
+Note: Answer yes when asked to install Hex and rebar3. This step might take some time as Pleroma gets compiled first.
+
+Create the Pleroma database:
+
+```
+# psql -U postgres -f /home/_pleroma/pleroma/config/setup_db.psql
+```
+
+Switch back to the \_pleroma user and apply database migrations:
+
+```
+# su _pleroma
+$ cd /home/_pleroma/pleroma
+$ MIX_ENV=prod mix ecto.migrate
+```
+
+Note: You will need to run this step again when updating your instance to a newer version with `git pull` or `git checkout tags/NEW_VERSION`.
+
+As \_pleroma in /home/\_pleroma/pleroma, you can now run `MIX_ENV=prod mix phx.server` to start your instance.
+In another SSH session or a tmux window, check that it is working properly by running `ftp -MVo - http://127.0.0.1:4000/api/v1/instance`, you should get json output. Double-check that the *uri* value near the bottom is your instance's domain name and the instance *title* is correct.
 
 #### httpd
+
 httpd will have three functions:
 
   * redirect requests trying to reach the instance over http to the https URL
@@ -69,6 +128,7 @@ httpd will have three functions:
   * get Let's Encrypt certificates, with acme-client
 
 Insert the following config in httpd.conf:
+
 ```
 # $OpenBSD: httpd.conf,v 1.17 2017/04/16 08:50:49 ajacoutot Exp $
 
@@ -95,18 +155,22 @@ server "default" {
 types {
 }
 ```
+
 Do not forget to change *<IPv4/6 address\>* to your server's address(es). If httpd should only listen on one protocol family, comment one of the two first *listen* options.
 
 Create the /var/www/htdocs/local/ folder and write the content of your robots.txt in /var/www/htdocs/local/robots.txt.
 Check the configuration with `httpd -n`, if it is OK enable and start httpd (as root):
+
 ```
-rcctl enable httpd
-rcctl start httpd
+# rcctl enable httpd
+# rcctl start httpd
 ```
 
 #### acme-client
+
 acme-client is used to get SSL/TLS certificates from Let's Encrypt.
 Insert the following configuration in /etc/acme-client.conf:
+
 ```
 #
 # $OpenBSD: acme-client.conf,v 1.4 2017/03/22 11:14:14 benno Exp $
@@ -126,19 +190,24 @@ domain <domain name> {
 	challengedir "/var/www/acme/"
 }
 ```
+
 Replace *<domain name\>* by the domain name you'll use for your instance. As root, run `acme-client -n` to check the config, then `acme-client -ADv <domain name>` to create account and domain keys, and request a certificate for the first time.
 Make acme-client run everyday by adding it in /etc/daily.local. As root, run the following command: `echo "acme-client <domain name>" >> /etc/daily.local`.
 
 Relayd will look for certificates and keys based on the address it listens on (see next part), the easiest way to make them available to relayd is to create a link, as root run:
+
 ```
 ln -s /etc/ssl/<domain name>.fullchain.pem /etc/ssl/<IP address>.crt
 ln -s /etc/ssl/private/<domain name>.key /etc/ssl/private/<IP address>.key
 ```
+
 This will have to be done for each IPv4 and IPv6 address relayd listens on.
 
 #### relayd
+
 relayd will be used as the reverse proxy sitting in front of pleroma.
 Insert the following configuration in /etc/relayd.conf:
+
 ```
 # $OpenBSD: relayd.conf,v 1.4 2018/03/23 09:55:06 claudio Exp $
 
@@ -188,8 +257,10 @@ relay wwwtls {
 	forward to <httpd_server> port 80 check http "/robots.txt" code 200
 }
 ```
+
 Again, change *<IPv4/6 address\>* to your server's address(es) and comment one of the two *listen* options if needed. Also change *wss://CHANGEME.tld* to *wss://<your instance's domain name\>*.
 Check the configuration with `relayd -n`, if it is OK enable and start relayd (as root):
+
 ```
 rcctl enable relayd
 rcctl start relayd
@@ -225,36 +296,36 @@ pass in quick on $if inet6 proto icmp6 to ($if) icmp6-type { echoreq unreach par
 pass in quick on $if proto tcp to ($if) port { http https } # relayd/httpd
 pass in quick on $if proto tcp from $authorized_ssh_clients to ($if) port ssh
 ```
+
 Replace *<network interface\>* by your server's network interface name (which you can get with ifconfig). Consider replacing the content of the authorized\_ssh\_clients macro by, for example, your home IP address, to avoid SSH connection attempts from bots.
 
 Check pf's configuration by running `pfctl -nf /etc/pf.conf`, load it with `pfctl -f /etc/pf.conf` and enable pf at boot with `rcctl enable pf`.
 
-#### Configure and start pleroma
-Enter a shell as \_pleroma (as root `su _pleroma -`) and enter pleroma's installation directory (`cd ~/pleroma/`).
+### Starting pleroma at boot
 
-Then follow the main installation guide:
+Copy the startup script and make sure it's executable:
 
-  * run `mix deps.get`
-  * run `MIX_ENV=prod mix pleroma.instance gen` and enter your instance's information when asked
-  * copy config/generated\_config.exs to config/prod.secret.exs. The default values should be sufficient but you should edit it and check that everything seems OK.
-  * exit your current shell back to a root one and run `psql -U postgres -f /home/_pleroma/pleroma/config/setup_db.psql` to setup the database.
-  * return to a \_pleroma shell into pleroma's installation directory (`su _pleroma -;cd ~/pleroma`) and run `MIX_ENV=prod mix ecto.migrate`
-
-As \_pleroma in /home/\_pleroma/pleroma, you can now run `LC_ALL=en_US.UTF-8 MIX_ENV=prod mix phx.server` to start your instance.
-In another SSH session/tmux window, check that it is working properly by running `ftp -MVo - http://127.0.0.1:4000/api/v1/instance`, you should get json output. Double-check that *uri*'s value is your instance's domain name.
-
-##### Starting pleroma at boot
-An rc script to automatically start pleroma at boot hasn't been written yet, it can be run in a tmux session (tmux is in base).
-
-
-#### Create administrative user
-
-If your instance is up and running, you can create your first user with administrative rights with the following command as the \_pleroma user.
 ```
-LC_ALL=en_US.UTF-8 MIX_ENV=prod mix pleroma.user new <username> <your@emailaddress> --admin
+# cp /home/_pleroma/pleroma/installation/openbsd/rc.d/pleroma /etc/rc.d/pleroma
+# chmod +x /etc/rc.d/pleroma
 ```
 
-#### Further reading
+Enable and start the pleroma service:
+
+```
+# rcctl enable pleroma
+# rcctl start pleroma
+```
+
+### Create administrative user
+
+If your instance is up and running, you can create your first user with administrative rights with the following command as the \_pleroma user:
+
+```
+MIX_ENV=prod mix pleroma.user new <username> <your@emailaddress> --admin
+```
+
+### Further reading
 
 {! backend/installation/further_reading.include !}
 
