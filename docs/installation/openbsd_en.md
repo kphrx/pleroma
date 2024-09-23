@@ -117,7 +117,133 @@ $ MIX_ENV=prod mix ecto.migrate
 Note: You will need to run this step again when updating your instance to a newer version with `git pull` or `git checkout tags/NEW_VERSION`.
 
 As \_pleroma in /home/\_pleroma/pleroma, you can now run `MIX_ENV=prod mix phx.server` to start your instance.
-In another SSH session or a tmux window, check that it is working properly by running `ftp -MVo - http://127.0.0.1:4000/api/v1/instance`, you should get json output. Double-check that the *uri* value near the bottom is your instance's domain name and the instance *title* is correct.
+In another SSH session or a tmux window, check that it is working properly by running `ftp -MVo - http://127.0.0.1:4000/api/v1/instance`, you should get json output. Double-check that the *uri* value near the bottom is your instance's domain name and the instance *title* are correct.
+
+### Configuring acme-client
+
+acme-client is used to get SSL/TLS certificates from Let's Encrypt.
+Insert the following configuration in /etc/acme-client.conf and replace `example.tld` with your domain:
+
+```
+#
+# $OpenBSD: acme-client.conf,v 1.5 2023/05/10 07:34:57 tb Exp $
+#
+
+authority letsencrypt {
+        api url "https://acme-v02.api.letsencrypt.org/directory"
+        account key "/etc/acme/letsencrypt-privkey.pem"
+}
+
+domain example.tld {
+        # Adds alternative names to the certificate. Useful when serving media on another domain. Comma or space separated list.
+        # alternative names {  }
+
+        domain key "/etc/ssl/private/example.tld.key"
+        domain certificate "/etc/ssl/example.tld_cert-only.crt"
+        domain full chain certificate "/etc/ssl/example.tld.crt"
+        sign with letsencrypt
+}
+```
+
+Check the configuration:
+
+```
+# acme-client -n
+```
+
+Add auto-renewal by adding acme-client to `/etc/weekly.local`, replace `example.tld` with your domain:
+
+```
+echo "acme-client example.tld >> /etc/weekly.local
+```
+
+### Configuring the Web server
+
+Pleroma supports two Web servers:
+
+  * nginx (recommended for most users)
+  * OpenBSD's httpd and relayd (ONLY for advanced users, media proxy cache is NOT supported and will NOT work properly)
+
+#### nginx
+
+Since nginx is not installed by default, install it by running:
+
+```
+# pkg_add nginx
+```
+
+Add the following to `/etc/nginx/nginx.conf`, within the `server {}` block listening on port 80 and change `server_name`, as follows:
+
+```
+http {
+    ...
+
+    server {
+        ...
+        server_name example.tld; # Replace with your domain
+
+        location ~ /.well-known/acme-challenge {
+            root /var/www/acme;
+        }
+    }
+}
+```
+
+Start the nginx service and acquire certificates:
+
+```
+# rcctl start nginx
+# acme-client example.tld
+```
+
+OpenBSD's default nginx configuration does not contain an include directive, which is typically used for multiple sites.
+Therefore, you will need to first create the required directory as follows:
+
+```
+# mkdir /etc/nginx/sites-available
+# mkdir /etc/nginx/sites-enabled
+```
+
+Next add the `include` directive to `/etc/nginx/nginx.conf`, within the `http {}` block, as follows:
+
+```
+http {
+    ...
+
+    server {
+        ...
+    }
+
+    include /etc/nginx/sites-enabled/*;
+}
+```
+
+As root, copy `/home/_pleroma/pleroma/installation/pleroma.nginx` to `/etc/nginx/sites-available/pleroma.nginx`.
+
+Edit default `/etc/nginx/sites-available/pleroma.nginx` settings and replace `example.tld` with your domain:
+
+  * Change `ssl_trusted_certificate` to `/etc/ssl/example.tld_cert-only.crt`
+  * Change `ssl_certificate` to `/etc/ssl/example.tld.crt`
+  * Change `ssl_certificate_key` to `/etc/ssl/private/example.tld.key`
+
+Symlink the Pleroma configuration to the enabled sites:
+
+```
+# ln -s /etc/nginx/sites-available/pleroma.nginx /etc/nginx/sites-enabled
+```
+
+Check nginx configuration syntax by running:
+
+```
+# nginx -t
+```
+
+If the configuration is correct, you can now enable and reload the nginx service:
+
+```
+# rcctl enable nginx
+# rcctl reload nginx
+```
 
 #### httpd
 
@@ -165,43 +291,6 @@ Check the configuration with `httpd -n`, if it is OK enable and start httpd (as 
 # rcctl enable httpd
 # rcctl start httpd
 ```
-
-#### acme-client
-
-acme-client is used to get SSL/TLS certificates from Let's Encrypt.
-Insert the following configuration in /etc/acme-client.conf:
-
-```
-#
-# $OpenBSD: acme-client.conf,v 1.4 2017/03/22 11:14:14 benno Exp $
-#
-
-authority letsencrypt-<domain name> {
-	#agreement url "https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf"
-	api url "https://acme-v02.api.letsencrypt.org/directory"
-	account key "/etc/acme/letsencrypt-privkey-<domain name>.pem"
-}
-
-domain <domain name> {
-	domain key "/etc/ssl/private/<domain name>.key"
-	domain certificate "/etc/ssl/<domain name>.crt"
-	domain full chain certificate "/etc/ssl/<domain name>.fullchain.pem"
-	sign with letsencrypt-<domain name>
-	challengedir "/var/www/acme/"
-}
-```
-
-Replace *<domain name\>* by the domain name you'll use for your instance. As root, run `acme-client -n` to check the config, then `acme-client -ADv <domain name>` to create account and domain keys, and request a certificate for the first time.
-Make acme-client run everyday by adding it in /etc/daily.local. As root, run the following command: `echo "acme-client <domain name>" >> /etc/daily.local`.
-
-Relayd will look for certificates and keys based on the address it listens on (see next part), the easiest way to make them available to relayd is to create a link, as root run:
-
-```
-ln -s /etc/ssl/<domain name>.fullchain.pem /etc/ssl/<IP address>.crt
-ln -s /etc/ssl/private/<domain name>.key /etc/ssl/private/<IP address>.key
-```
-
-This will have to be done for each IPv4 and IPv6 address relayd listens on.
 
 #### relayd
 
@@ -322,7 +411,7 @@ Enable and start the pleroma service:
 If your instance is up and running, you can create your first user with administrative rights with the following command as the \_pleroma user:
 
 ```
-MIX_ENV=prod mix pleroma.user new <username> <your@emailaddress> --admin
+$ MIX_ENV=prod mix pleroma.user new <username> <your@emailaddress> --admin
 ```
 
 ### Further reading
