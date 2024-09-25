@@ -114,8 +114,8 @@ server {
     # }
 
     # Remove this location if you choose to use a dedicated subdomain
-    # for media and mediaproxy
-    location ~ ^/(media|proxy) {
+    # for mediaproxy
+    location /proxy {
         proxy_cache        pleroma_media_cache;
         slice              1m;
         proxy_cache_key    $host$uri$is_args$args$slice_range;
@@ -190,7 +190,7 @@ server {
 #         allow all;
 #     }
 #
-#     location ~ ^/(media|proxy) {
+#     location /proxy {
 #         proxy_cache        pleroma_media_cache;
 #         slice              1m;
 #         proxy_cache_key    $host$uri$is_args$args$slice_range;
