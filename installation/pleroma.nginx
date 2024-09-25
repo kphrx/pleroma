@@ -139,6 +139,8 @@ server {
 #   config :pleroma, Pleroma.Upload,
 #    base_url: "https://media.example.tld/uploads/",
 #
+#   config :pleroma, Pleroma.Uploaders.Local, uploads: "/var/lib/pleroma/uploads"
+#
 # And then uncomment and configure the following server.
 # Make sure your certificate was issued to support both domains or use a dedicated certificate:
 #
@@ -182,6 +184,11 @@ server {
 #     proxy_set_header Connection "upgrade";
 #     proxy_set_header Host $http_host;
 #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#
+#     location ~ /uploads {
+#         root /var/lib/pleroma;
+#         allow all;
+#     }
 #
 #     location ~ ^/(media|proxy) {
 #         proxy_cache        pleroma_media_cache;
