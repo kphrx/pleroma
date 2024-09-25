@@ -127,6 +127,18 @@ server {
         chunked_transfer_encoding on;
         proxy_pass         http://phoenix;
     }
+
+    # Nginx can serve the local file uploads directly reducing work for
+    # the backend. Make sure to change this to a "deny all" if you use
+    # a dedicated subdomain. It will break access to uploads that have already
+    # federated if you are converting an existing installation, so weigh the risks
+    # carefully.
+    #
+    # location /uploads {
+    #     root /var/lib/pleroma;  <-- make sure this is correct for your deployment
+    #     allow all;
+    # }
+
 }
 
 # It is strongly recommended that you host your media and the mediaproxy on a dedicated subdomain for security reasons.
@@ -185,7 +197,7 @@ server {
 #     proxy_set_header Host $http_host;
 #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 #
-#     location ~ /uploads {
+#     location /uploads {
 #         root /var/lib/pleroma;
 #         allow all;
 #     }
