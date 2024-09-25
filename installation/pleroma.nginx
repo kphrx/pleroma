@@ -107,6 +107,8 @@ server {
     #     proxy_pass http://phoenix/notice/$1;
     # }
 
+    # Remove this location if you choose to use a dedicated subdomain
+    # for media and mediaproxy
     location ~ ^/(media|proxy) {
         proxy_cache        pleroma_media_cache;
         slice              1m;
@@ -120,3 +122,71 @@ server {
         proxy_pass         http://phoenix;
     }
 }
+
+# It is strongly recommended that you host your media and the mediaproxy on a dedicated subdomain for security reasons.
+# The following Pleroma settings will be required to enable this capability:
+#
+#   config :pleroma, :media_proxy,
+#    base_url: "https://media.example.tld/"
+#
+#   # Assuming default media upload deployment (e.g., not S3 which will require a different domain anyway) --
+#   config :pleroma, Pleroma.Upload,
+#    base_url: "https://media.example.tld/uploads/",
+#
+# And then uncomment and configure the following server.
+# Make sure your certificate was issued to support both domains or use a dedicated certificate:
+#
+# server {
+#     server_name media.example.tld;
+#
+#     listen 443 ssl;
+#     listen [::]:443 ssl;
+#     http2 on;
+#
+#     # Optional HTTP/3 support
+#     # Note: requires you open UDP port 443
+#     #
+#     # listen 443 quic reuseport;
+#     # listen [::]:443 quic reuseport;
+#     # http3 on;
+#     # quic_retry on;
+#     # ssl_early_data on;
+#     # quic_gso on;
+#     # add_header Alt-Svc 'h3=":443"; ma=86400';
+#
+#     ssl_session_timeout 1d;
+#     ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
+#     ssl_session_tickets off;
+#
+#     ssl_trusted_certificate   /etc/letsencrypt/live/example.tld/chain.pem;
+#     ssl_certificate           /etc/letsencrypt/live/example.tld/fullchain.pem;
+#     ssl_certificate_key       /etc/letsencrypt/live/example.tld/privkey.pem;
+#
+#     ssl_protocols TLSv1.2 TLSv1.3;
+#     ssl_ciphers "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA384:!aNULL:!eNULL:!EXPORT:!DES:!MD5:!PSK:!RC4";
+#     ssl_prefer_server_ciphers off;
+#     # In case of an old server with an OpenSSL version of 1.0.2 or below,
+#     # leave only prime256v1 or comment out the following line.
+#     ssl_ecdh_curve X25519:prime256v1:secp384r1:secp521r1;
+#     ssl_stapling on;
+#     ssl_stapling_verify on;
+#
+#     proxy_http_version 1.1;
+#     proxy_set_header Upgrade $http_upgrade;
+#     proxy_set_header Connection "upgrade";
+#     proxy_set_header Host $http_host;
+#     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#
+#     location ~ ^/(media|proxy) {
+#         proxy_cache        pleroma_media_cache;
+#         slice              1m;
+#         proxy_cache_key    $host$uri$is_args$args$slice_range;
+#         proxy_set_header   Range $slice_range;
+#         proxy_cache_valid  200 206 301 304 1h;
+#         proxy_cache_lock   on;
+#         proxy_ignore_client_abort on;
+#         proxy_buffering    on;
+#         chunked_transfer_encoding on;
+#         proxy_pass         http://phoenix;
+#     }
+# }
