@@ -45,6 +45,17 @@ server {
     listen [::]:443 ssl;
     http2 on;
 
+    # Optional HTTP/3 support
+    # Note: requires you open UDP port 443
+    #
+    # listen 443 quic reuseport;
+    # listen [::]:443 quic reuseport;
+    # http3 on;
+    # quic_retry on;
+    # ssl_early_data on;
+    # quic_gso on;
+    # add_header Alt-Svc 'h3=":443"; ma=86400';
+
     ssl_session_timeout 1d;
     ssl_session_cache shared:MozSSL:10m;  # about 40000 sessions
     ssl_session_tickets off;
