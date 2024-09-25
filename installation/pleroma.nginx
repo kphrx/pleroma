@@ -6,7 +6,7 @@
 # 3. Copy this file to /etc/nginx/sites-available/ and then add a symlink to it
 #    in /etc/nginx/sites-enabled/ and run 'nginx -s reload' or restart nginx.
 
-proxy_cache_path /tmp/pleroma-media-cache levels=1:2 keys_zone=pleroma_media_cache:10m max_size=10g
+proxy_cache_path /var/tmp/pleroma-media-cache levels=1:2 keys_zone=pleroma_media_cache:10m max_size=10g
                  inactive=720m use_temp_path=off;
 
 # this is explicitly IPv4 since Pleroma.Web.Endpoint binds on IPv4 only
