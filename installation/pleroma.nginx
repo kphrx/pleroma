@@ -134,8 +134,8 @@ server {
     # federated if you are converting an existing installation, so weigh the risks
     # carefully.
     #
-    # location /uploads {
-    #     root /var/lib/pleroma;  <-- make sure this is correct for your deployment
+    # location /media/ {
+    #     alias /var/lib/pleroma/uploads/;  # <-- make sure this is correct for your deployment
     #     allow all;
     # }
 
@@ -197,8 +197,8 @@ server {
 #     proxy_set_header Host $http_host;
 #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 #
-#     location /uploads {
-#         root /var/lib/pleroma;
+#     location /media/ {  # <-- make sure this path matches your Pleroma.Upload :base_url
+#         alias /var/lib/pleroma/uploads/;  # <-- make sure this is correct for your deployment
 #         allow all;
 #     }
 #
