@@ -304,39 +304,6 @@ If the configuration is correct, enable and start the `relayd` service:
 
 Refer to the [Hardening your instance](../configuration/hardening.md) document on how to serve media on another domain. We STRONGLY RECOMMEND you to do this to minimize attack vectors.
 
-
-#### pf
-Enabling and configuring pf is highly recommended.
-In /etc/pf.conf, insert the following configuration:
-
-```
-# Macros
-if="<network interface>"
-authorized_ssh_clients="any"
-
-# Skip traffic on loopback interface
-set skip on lo
-
-# Default behavior
-set block-policy drop
-block in log all
-pass out quick
-
-# Security features
-match in all scrub (no-df random-id)
-block in log from urpf-failed
-
-# Rules
-pass in quick on $if inet proto icmp to ($if) icmp-type { echoreq unreach paramprob trace } # ICMP
-pass in quick on $if inet6 proto icmp6 to ($if) icmp6-type { echoreq unreach paramprob timex toobig } # ICMPv6
-pass in quick on $if proto tcp to ($if) port { http https } # relayd/httpd
-pass in quick on $if proto tcp from $authorized_ssh_clients to ($if) port ssh
-```
-
-Replace *<network interface\>* by your server's network interface name (which you can get with ifconfig). Consider replacing the content of the authorized\_ssh\_clients macro by, for example, your home IP address, to avoid SSH connection attempts from bots.
-
-Check pf's configuration by running `pfctl -nf /etc/pf.conf`, load it with `pfctl -f /etc/pf.conf` and enable pf at boot with `rcctl enable pf`.
-
 ### Starting pleroma at boot
 
 Copy the startup script and make sure it's executable:
