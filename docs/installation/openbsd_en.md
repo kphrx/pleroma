@@ -247,45 +247,27 @@ If the configuration is correct, you can now enable and reload the nginx service
 
 #### httpd
 
-httpd will have three functions:
+httpd will have two functions:
 
   * redirect requests trying to reach the instance over http to the https URL
-  * serve a robots.txt file
   * get Let's Encrypt certificates, with acme-client
 
-Insert the following config in httpd.conf:
+As root, copy `/home/_pleroma/pleroma/installation/openbsd/httpd.conf` to `/etc/httpd.conf`, or modify the existing one.
 
+Edit `/etc/httpd.conf` settings and change:
+
+  * `<ipaddr>` with your instance's IPv4 address
+  * All occurances of `example.tld` with your instance's domain name
+  * When using IPv6 also change:
+    - Uncomment the `ext_inet6="<ip6addr>"` line near the beginning of the file and change `<ip6addr` to your instance's IPv6 address
+    - Uncomment the line starting with `listen on $ext_inet6` in the `server` block
+
+Check the configuration by running:
 ```
-# $OpenBSD: httpd.conf,v 1.17 2017/04/16 08:50:49 ajacoutot Exp $
-
-ext_inet="<IPv4 address>"
-ext_inet6="<IPv6 address>"
-
-server "default" {
-	listen on $ext_inet port 80 # Comment to disable listening on IPv4
-	listen on $ext_inet6 port 80 # Comment to disable listening on IPv6
-	listen on 127.0.0.1 port 80 # Do NOT comment this line
-
-	log syslog
-	directory no index
-
-	location "/.well-known/acme-challenge/*" {
-		root "/acme"
-		request strip 2
-	}
-
-	location "/robots.txt" { root "/htdocs/local/" }
-	location "/*" { block return 302 "https://$HTTP_HOST$REQUEST_URI" }
-}
-
-types {
-}
+# httpd -n
 ```
 
-Do not forget to change *<IPv4/6 address\>* to your server's address(es). If httpd should only listen on one protocol family, comment one of the two first *listen* options.
-
-Create the /var/www/htdocs/local/ folder and write the content of your robots.txt in /var/www/htdocs/local/robots.txt.
-Check the configuration with `httpd -n`, if it is OK enable and start httpd (as root):
+If the configuration is correct, enable and start the `httpd` service:
 
 ```
 # rcctl enable httpd
@@ -295,73 +277,38 @@ Check the configuration with `httpd -n`, if it is OK enable and start httpd (as 
 #### relayd
 
 relayd will be used as the reverse proxy sitting in front of pleroma.
-Insert the following configuration in /etc/relayd.conf:
 
+As root, copy `/home/_pleroma/pleroma/installation/openbsd/relayd.conf` to `/etc/relayd.conf`, or modify the existing one.
+
+Edit `/etc/relayd.conf` settings and change:
+
+  * `<ipaddr>` with your instance's IPv4 address
+  * All occurances of `example.tld` with your instance's domain name
+  * When using IPv6 also change:
+    - Uncomment the `ext_inet6="<ip6addr>"` line near the beginning of the file and change `<ip6addr>` to your instance's IPv6 address
+    - Uncomment the line starting with `listen on $ext_inet6` in the `relay wwwtls` block
+
+Check the configuration by running:
 ```
-# $OpenBSD: relayd.conf,v 1.4 2018/03/23 09:55:06 claudio Exp $
-
-ext_inet="<IPv4 address>"
-ext_inet6="<IPv6 address>"
-
-table <pleroma_server> { 127.0.0.1 }
-table <httpd_server> { 127.0.0.1 }
-
-http protocol plerup { # Protocol for upstream pleroma server
-	#tcp { nodelay, sack, socket buffer 65536, backlog 128 } # Uncomment and adjust as you see fit
-	tls ciphers "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305"
-	tls ecdhe secp384r1
-
-	# Forward some paths to the local server (as pleroma won't respond to them as you might want)
-	pass request quick path "/robots.txt" forward to <httpd_server>
-
-	# Append a bunch of headers
-	match request header append "X-Forwarded-For" value "$REMOTE_ADDR" # This two header and the next one are not strictly required by pleroma but adding them won't hurt
-	match request header append "X-Forwarded-By" value "$SERVER_ADDR:$SERVER_PORT"
-
-	match response header append "X-XSS-Protection" value "1; mode=block"
-	match response header append "X-Permitted-Cross-Domain-Policies" value "none"
-	match response header append "X-Frame-Options" value "DENY"
-	match response header append "X-Content-Type-Options" value "nosniff"
-	match response header append "Referrer-Policy" value "same-origin"
-	match response header append "X-Download-Options" value "noopen"
-	match response header append "Content-Security-Policy" value "default-src 'none'; base-uri 'self'; form-action 'self'; img-src 'self' data: https:; media-src 'self' https:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self' wss://CHANGEME.tld; upgrade-insecure-requests;" # Modify "CHANGEME.tld" and set your instance's domain here
-	match request header append "Connection" value "upgrade"
-	#match response header append "Strict-Transport-Security" value "max-age=31536000; includeSubDomains" # Uncomment this only after you get HTTPS working.
-
-	# If you do not want remote frontends to be able to access your Pleroma backend server, comment these lines
-	match response header append "Access-Control-Allow-Origin" value "*"
-	match response header append "Access-Control-Allow-Methods" value "POST, PUT, DELETE, GET, PATCH, OPTIONS"
-	match response header append "Access-Control-Allow-Headers" value "Authorization, Content-Type, Idempotency-Key"
-	match response header append "Access-Control-Expose-Headers" value "Link, X-RateLimit-Reset, X-RateLimit-Limit, X-RateLimit-Remaining, X-Request-Id"
-	# Stop commenting lines here
-}
-
-relay wwwtls {
-	listen on $ext_inet port https tls # Comment to disable listening on IPv4
-	listen on $ext_inet6 port https tls # Comment to disable listening on IPv6
-
-	protocol plerup
-
-	forward to <pleroma_server> port 4000 check http "/" code 200
-	forward to <httpd_server> port 80 check http "/robots.txt" code 200
-}
+# relayd -n
 ```
 
-Again, change *<IPv4/6 address\>* to your server's address(es) and comment one of the two *listen* options if needed. Also change *wss://CHANGEME.tld* to *wss://<your instance's domain name\>*.
-Check the configuration with `relayd -n`, if it is OK enable and start relayd (as root):
+If the configuration is correct, enable and start the `relayd` service:
 
 ```
-rcctl enable relayd
-rcctl start relayd
+# rcctl enable relayd
+# rcctl start relayd
 ```
 
-##### (Strongly recommended) serve media on another domain
+#### (Strongly recommended) serve media on another domain
 
 Refer to the [Hardening your instance](../configuration/hardening.md) document on how to serve media on another domain. We STRONGLY RECOMMEND you to do this to minimize attack vectors.
+
 
 #### pf
 Enabling and configuring pf is highly recommended.
 In /etc/pf.conf, insert the following configuration:
+
 ```
 # Macros
 if="<network interface>"
