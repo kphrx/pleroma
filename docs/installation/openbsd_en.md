@@ -320,7 +320,7 @@ Copy the startup script and make sure it's executable:
 
 ```
 # cp /home/_pleroma/pleroma/installation/openbsd/rc.d/pleroma /etc/rc.d/pleroma
-# chmod +x /etc/rc.d/pleroma
+# chmod 555 /etc/rc.d/pleroma
 ```
 
 Enable and start the pleroma service:
