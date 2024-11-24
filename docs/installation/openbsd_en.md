@@ -121,7 +121,7 @@ In another SSH session or a tmux window, check that it is working properly by ru
 ### Configuring acme-client
 
 acme-client is used to get SSL/TLS certificates from Let's Encrypt.
-Insert the following configuration in /etc/acme-client.conf and replace `example.tld` with your domain:
+Insert the following configuration in `/etc/acme-client.conf` and replace `example.tld` with your domain:
 
 ```
 #
@@ -150,12 +150,6 @@ Check the configuration:
 # acme-client -n
 ```
 
-Add auto-renewal by adding acme-client to `/etc/weekly.local`, replace `example.tld` with your domain:
-
-```
-echo "acme-client example.tld >> /etc/weekly.local
-```
-
 ### Configuring the Web server
 
 Pleroma supports two Web servers:
@@ -181,7 +175,8 @@ http {
         ...
         server_name example.tld; # Replace with your domain
 
-        location ~ /.well-known/acme-challenge {
+        location /.well-known/acme-challenge {
+            rewrite ^/.well-known/acme-challenge/(.*) /$1 break;
             root /var/www/acme;
         }
     }
@@ -193,6 +188,12 @@ Start the nginx service and acquire certificates:
 ```
 # rcctl start nginx
 # acme-client example.tld
+```
+
+Add certificate auto-renewal by adding acme-client to `/etc/weekly.local`, replace `example.tld` with your domain:
+
+```
+# echo "acme-client example.tld && rcctl reload nginx" >> /etc/weekly.local
 ```
 
 OpenBSD's default nginx configuration does not contain an include directive, which is typically used for multiple sites.
@@ -246,6 +247,8 @@ If the configuration is correct, you can now enable and reload the nginx service
 
 #### httpd
 
+***Skip this section when using nginx***
+
 httpd will have two functions:
 
   * redirect requests trying to reach the instance over http to the https URL
@@ -275,6 +278,8 @@ If the configuration is correct, enable and start the `httpd` service:
 
 #### relayd
 
+***Skip this section when using nginx***
+
 relayd will be used as the reverse proxy sitting in front of pleroma.
 
 As root, copy `/home/_pleroma/pleroma/installation/openbsd/relayd.conf` to `/etc/relayd.conf`, or modify the existing one.
@@ -297,6 +302,12 @@ If the configuration is correct, enable and start the `relayd` service:
 ```
 # rcctl enable relayd
 # rcctl start relayd
+```
+
+Add certificate auto-renewal by adding acme-client to `/etc/weekly.local`, replace `example.tld` with your domain:
+
+```
+# echo "acme-client example.tld && rcctl reload relayd" >> /etc/weekly.local
 ```
 
 #### (Strongly recommended) serve media on another domain
