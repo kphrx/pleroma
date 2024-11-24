@@ -46,6 +46,11 @@ $ initdb -D /var/postgresql/data -U postgres
 
 Running PostgreSQL in a different directory than `/var/postgresql/data` requires changing the `daemon_flags` variable in the `/etc/rc.d/postgresql` script.
 
+For security reasons it is recommended to change the authentication method for `local` and `host` connections with the localhost address to `scram-sha-256`.<br>
+Do not forget to set a password for the `postgres` user before doing so, otherwise you won't be able to log back in unless you change the authentication method back to `trust`.<br>
+Changing the password hashing algorithm is not needed.<br>
+For more information [read](https://www.postgresql.org/docs/16/auth-pg-hba-conf.html) the PostgreSQL documentation.
+
 Enable and start the postgresql service:
 
 ```
@@ -53,7 +58,7 @@ Enable and start the postgresql service:
 # rcctl start postgresql
 ```
 
-To check that PostgreSQL started properly and didn't fail right after starting, you can run `ps aux | grep postgres`, there should be multiple lines of output. Or alternatively run `# rcctl check postgresql` which should return `postgresql(ok)`.
+To check that PostgreSQL started properly and didn't fail right after starting, run `# rcctl check postgresql` which should return `postgresql(ok)`.
 
 ### Configuring Pleroma
 
