@@ -57,14 +57,15 @@ To check that PostgreSQL started properly and didn't fail right after starting, 
 
 ### Configuring Pleroma
 
-Pleroma will be run by a dedicated \_pleroma user. Before creating it, insert the following lines in /etc/login.conf:
+Pleroma will be run by a dedicated \_pleroma user. Before creating it, insert the following lines in `/etc/login.conf`:
 
 ```
 pleroma:\
-	:datasize-max=1536M:\
-	:datasize-cur=1536M:\
+	:datasize=1536M:\
 	:openfiles-max=4096:\
-    :setenv=LC_ALL=en_US.UTF-8
+	:openfiles-cur=1024:\
+	:setenv=LC_ALL=en_US.UTF-8,VIX_COMPILATION_MODE=PLATFORM_PROVIDED_LIBVIPS:\
+	:tc=daemon:
 ```
 
 This creates a "pleroma" login class and sets higher values than default for datasize and openfiles (see [login.conf(5)](https://man.openbsd.org/login.conf)), this is required to avoid having Pleroma crash some time after starting.
@@ -73,19 +74,17 @@ Create the \_pleroma user, assign it the pleroma login class and create its home
 
 ```
 # useradd -m -L pleroma _pleroma
-# echo 'export VIX_COMPILATION_MODE=PLATFORM_PROVIDED_LIBVIPS' >> /home/_pleroma/.profile
 ```
 
 Switch to the _pleroma user:
 
 ```
-# su _pleroma
+# su -l _pleroma
 ```
 
-Change to the home directory (/home/\_pleroma) and clone the Pleroma repository:
+Clone the Pleroma repository:
 
 ```
-$ cd
 $ git clone -b stable https://git.pleroma.social/pleroma/pleroma.git
 $ cd pleroma
 ```
@@ -109,8 +108,8 @@ Create the Pleroma database:
 Switch back to the \_pleroma user and apply database migrations:
 
 ```
-# su _pleroma
-$ cd /home/_pleroma/pleroma
+# su -l _pleroma
+$ cd pleroma
 $ MIX_ENV=prod mix ecto.migrate
 ```
 
