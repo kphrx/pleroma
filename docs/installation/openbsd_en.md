@@ -41,7 +41,7 @@ Switch to the \_postgresql user and initialize PostgreSQL:
 
 ```
 # su _postgresql
-$ initdb -D /var/postgresql/data -U postgres
+$ initdb -D /var/postgresql/data -U postgres --encoding=utf-8 --lc-collate=C
 ```
 
 Running PostgreSQL in a different directory than `/var/postgresql/data` requires changing the `daemon_flags` variable in the `/etc/rc.d/postgresql` script.
