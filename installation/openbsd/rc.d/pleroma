@@ -13,8 +13,7 @@
 daemon="/usr/local/bin/elixir"
 daemon_flags="--erl \"-detached\" -S /usr/local/bin/mix phx.server"
 daemon_user="_pleroma"
-
-env="MIX_ENV=prod"
+daemon_execdir="/home/_pleroma/pleroma"
 
 . /etc/rc.d/rc.subr
 
@@ -23,10 +22,6 @@ pexp="phx.server"
 
 rc_check() {
 	pgrep -q -U _pleroma -f "phx.server"
-}
-
-rc_start() {
-	rc_exec "cd pleroma; export ${env}; ${daemon} ${daemon_flags}"
 }
 
 rc_stop() {
