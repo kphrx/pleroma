@@ -264,7 +264,7 @@ As root, copy `/home/_pleroma/pleroma/installation/openbsd/httpd.conf` to `/etc/
 Edit `/etc/httpd.conf` settings and change:
 
   * `<ipaddr>` with your instance's IPv4 address
-  * All occurances of `example.tld` with your instance's domain name
+  * All occurrences of `example.tld` with your instance's domain name
   * When using IPv6 also change:
     - Uncomment the `ext_inet6="<ip6addr>"` line near the beginning of the file and change `<ip6addr` to your instance's IPv6 address
     - Uncomment the line starting with `listen on $ext_inet6` in the `server` block
@@ -298,7 +298,7 @@ As root, copy `/home/_pleroma/pleroma/installation/openbsd/relayd.conf` to `/etc
 Edit `/etc/relayd.conf` settings and change:
 
   * `<ipaddr>` with your instance's IPv4 address
-  * All occurances of `example.tld` with your instance's domain name
+  * All occurrences of `example.tld` with your instance's domain name
   * When using IPv6 also change:
     - Uncomment the `ext_inet6="<ip6addr>"` line near the beginning of the file and change `<ip6addr>` to your instance's IPv6 address
     - Uncomment the line starting with `listen on $ext_inet6` in the `relay wwwtls` block
