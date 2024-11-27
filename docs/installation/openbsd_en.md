@@ -281,6 +281,12 @@ If the configuration is correct, enable and start the `httpd` service:
 # rcctl start httpd
 ```
 
+Acquire certificate:
+
+```
+# acme-client example.tld
+```
+
 #### relayd
 
 ***Skip this section when using nginx***
