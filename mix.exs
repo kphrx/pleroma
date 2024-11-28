@@ -193,7 +193,7 @@ defmodule Pleroma.Mixfile do
        ref: "b647d0deecaa3acb140854fe4bda5b7e1dc6d1c8"},
       {:captcha,
        git: "https://git.pleroma.social/pleroma/elixir-libraries/elixir-captcha.git",
-       ref: "6630c42aaaab124e697b4e513190c89d8b64e410"},
+       ref: "e7b7cc34cc16b383461b966484c297e4ec9aeef6"},
       {:restarter, path: "./restarter"},
       {:majic, "~> 1.0"},
       {:open_api_spex, "~> 3.16"},
