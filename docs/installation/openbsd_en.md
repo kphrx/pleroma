@@ -107,14 +107,12 @@ Note: Answer yes when asked to install Hex and rebar3. This step might take some
 Create the Pleroma database:
 
 ```
-# psql -U postgres -f /home/_pleroma/pleroma/config/setup_db.psql
+$ psql -U postgres -f config/setup_db.psql
 ```
 
-Switch back to the \_pleroma user and apply database migrations:
+Apply database migrations:
 
 ```
-# su -l _pleroma
-$ cd pleroma
 $ MIX_ENV=prod mix ecto.migrate
 ```
 
@@ -343,9 +341,10 @@ Enable and start the pleroma service:
 
 ### Create administrative user
 
-If your instance is up and running, you can create your first user with administrative rights with the following command as the \_pleroma user:
+If your instance is up and running, you can create your first user with administrative rights with the following commands as the \_pleroma user:
 
 ```
+$ cd pleroma
 $ MIX_ENV=prod mix pleroma.user new <username> <your@emailaddress> --admin
 ```
 
