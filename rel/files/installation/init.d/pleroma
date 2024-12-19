@@ -16,6 +16,10 @@ retry="SIGTERM/30/SIGKILL/5"
 
 pidfile="/var/run/pleroma.pid"
 
+# Needs OpenRC >= 0.42
+respawn_max=200
+respawn_period=86400 # 1*day
+
 depend() {
 	want nginx
 	need postgresql
