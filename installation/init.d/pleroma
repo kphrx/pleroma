@@ -37,6 +37,12 @@ depend() {
 	need nginx postgresql
 }
 
+start_pre() {
+	ebegin "running migrations if any"
+	su -s /bin/sh -c '/usr/bin/mix ecto.migrate' -l "${command_user}"
+	eend "$?"
+}
+
 healthcheck() {
 	# put pleroma_health=YES in /etc/conf.d/pleroma if you want healthchecking
 	# and make sure you have curl installed

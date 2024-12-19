@@ -24,3 +24,9 @@ depend() {
 	want nginx
 	need postgresql
 }
+
+start_pre() {
+	ebegin "running migrations if any"
+	su -s /bin/sh -c '/opt/pleroma/bin/pleroma_ctl migrate' -l "${command_user}"
+	eend "$?"
+}
