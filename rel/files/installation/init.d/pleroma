@@ -17,6 +17,6 @@ retry="SIGTERM/30/SIGKILL/5"
 pidfile="/var/run/pleroma.pid"
 
 depend() {
-    want nginx
-    need postgresql
+	want nginx
+	need postgresql
 }
