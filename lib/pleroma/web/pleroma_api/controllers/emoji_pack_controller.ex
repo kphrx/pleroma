@@ -16,6 +16,7 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackController do
            :import_from_filesystem,
            :remote,
            :download,
+           :download_zip,
            :create,
            :update,
            :delete
@@ -110,6 +111,35 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackController do
         conn
         |> put_status(:not_found)
         |> json(%{error: "Pack #{name} does not exist"})
+    end
+  end
+
+  def download_zip(
+        %{private: %{open_api_spex: %{body_params: %{url: url, name: name}}}} = conn,
+        _
+      ) do
+    with :ok <- Pack.download_zip(name, %{url: url}) do
+      json(conn, "ok")
+    else
+      {:error, error} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: error})
+    end
+  end
+
+  def download_zip(
+        %{private: %{open_api_spex: %{body_params: %{file: %Plug.Upload{} = file, name: name}}}} =
+          conn,
+        _
+      ) do
+    with :ok <- Pack.download_zip(name, %{file: file}) do
+      json(conn, "ok")
+    else
+      {:error, error} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: error})
     end
   end
 

@@ -225,6 +225,67 @@ defmodule Pleroma.Emoji.Pack do
     end
   end
 
+  def download_zip(name, opts \\ %{}) do
+    pack_path =
+      Path.join([
+        Pleroma.Config.get!([:instance, :static_dir]),
+        "emoji",
+        name
+      ])
+
+    with {_, false} <-
+           {"Pack already exists, refusing to import #{name}", File.exists?(pack_path)},
+         {_, :ok} <- {"Could not create the pack directory", File.mkdir_p(pack_path)},
+         {_, {:ok, %{body: binary_archive}}} <-
+           (case opts do
+              %{url: url} ->
+                {"Could not download pack", Pleroma.HTTP.get(url)}
+
+              %{file: file} ->
+                case File.read(file.path) do
+                  {:ok, data} -> {nil, {:ok, %{body: data}}}
+                  {:error, _e} -> {"Could not read the uploaded pack file", :error}
+                end
+
+              _ ->
+                {"Neither file nor URL was present in the request", :error}
+            end),
+         {_, {:ok, _}} <-
+           {"Could not unzip pack",
+            :zip.unzip(binary_archive, cwd: String.to_charlist(pack_path))} do
+      # Get the pack SHA
+      archive_sha = :crypto.hash(:sha256, binary_archive) |> Base.encode16()
+
+      pack_json_path = Path.join([pack_path, "pack.json"])
+      # Make a json if it does not exist
+      if not File.exists?(pack_json_path) do
+        # Make a list of the emojis
+        emoji_map =
+          Pleroma.Emoji.Loader.make_shortcode_to_file_map(
+            pack_path,
+            Map.get(opts, :exts, [".png", ".gif", ".jpg"])
+          )
+
+        pack_json = %{
+          pack: %{
+            license: Map.get(opts, :license, ""),
+            homepage: Map.get(opts, :homepage, ""),
+            description: Map.get(opts, :description, ""),
+            src: Map.get(opts, :url),
+            src_sha256: archive_sha
+          },
+          files: emoji_map
+        }
+
+        File.write!(pack_json_path, Jason.encode!(pack_json, pretty: true))
+      end
+
+      :ok
+    else
+      {err, _} -> {:error, err}
+    end
+  end
+
   @spec download(String.t(), String.t(), String.t()) :: {:ok, t()} | {:error, atom()}
   def download(name, url, as) do
     uri = url |> String.trim() |> URI.parse()
