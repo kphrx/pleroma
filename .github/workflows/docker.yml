@@ -41,15 +41,15 @@ jobs:
           case "${{ runner.arch }}" in
             "X64")
               echo "docker=linux/amd64" >> "$GITHUB_OUTPUT"
-              echo "digest-name=digest-amd64" >> "$GITHUB_OUTPUT"
-              echo "digest-file=digest-amd64.txt" >> "$GITHUB_OUTPUT"
+              digest_name="digest-amd64"
             ;;
             "ARM64")
               echo "docker=linux/arm64" >> "$GITHUB_OUTPUT"
-              echo "digest-name=digest-arm64" >> "$GITHUB_OUTPUT"
-              echo "digest-file=digest-arm64.txt" >> "$GITHUB_OUTPUT"
+              digest_name="digest-arm64"
             ;;
           esac
+          echo "digest-name=${digest_name}" >> "$GITHUB_OUTPUT"
+          echo "digest-file=${digest_name}.txt" >> "$GITHUB_OUTPUT"
 
       - name: Docker metadata
         id: metadata
