@@ -78,7 +78,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ step.platform.outputs.docker }}
+          platforms: ${{ steps.platform.outputs.docker }}
           build-args: |
             ERL_FLAGS=${{ env.ERL_FLAGS }}
             ELIXIR_VER=${{ env.ELIXIR_VER }}
@@ -89,11 +89,11 @@ jobs:
           provenance: false
           outputs: type=image,oci-mediatypes=true,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
 
-      - run: echo "${{ steps.build.outputs.digest }}" > ${{ step.platform.outputs.digest-file }}
+      - run: echo "${{ steps.build.outputs.digest }}" > ${{ steps.platform.outputs.digest-file }}
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ step.platform.outputs.digest-name }}
-          path: ${{ step.platform.outputs.digest-file }}
+          name: ${{ steps.platform.outputs.digest-name }}
+          path: ${{ steps.platform.outputs.digest-file }}
 
   merge:
     runs-on: ubuntu-latest
