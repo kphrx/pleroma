@@ -26,9 +26,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             platform: amd64
-          - os: ubuntu-aarch64
+          - os: ubuntu-24.04-arm
             platform: arm64
 
     runs-on: ${{ matrix.os }}
@@ -46,15 +46,6 @@ jobs:
           labels: "org.opencontainers.image.licenses=AGPL-3.0-only"
 
       - run: rm -rf package.json package-lock.json node_modules
-
-      #- name: Set up QEMU
-      #  if: matrix.platform == 'arm64'
-      #  uses: docker/setup-qemu-action@v3
-
-      #- name: Setup erl flags for QEMU
-      #  if: matrix.platform == 'arm64'
-      #  run: |
-      #    echo "ERL_FLAGS=+JPperf true" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
