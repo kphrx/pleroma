@@ -168,16 +168,20 @@ defmodule Pleroma.Web.OAuth.App do
 
   @spec remove_orphans(pos_integer()) :: :ok
   def remove_orphans(limit \\ 100) do
-    fifteen_mins_ago = DateTime.add(DateTime.utc_now(), -900, :second)
+    fifteen_mins_ago = NaiveDateTime.add(NaiveDateTime.utc_now(), -900)
 
-    Repo.transaction(fn ->
+    # First get the IDs of apps to delete
+    app_ids =
       from(a in __MODULE__,
         where: is_nil(a.user_id) and a.inserted_at < ^fifteen_mins_ago,
-        limit: ^limit
+        limit: ^limit,
+        select: a.id
       )
       |> Repo.all()
-      |> Enum.each(&Repo.delete(&1))
-    end)
+
+    # Then delete those specific apps
+    from(a in __MODULE__, where: a.id in ^app_ids)
+    |> Repo.delete_all()
 
     :ok
   end

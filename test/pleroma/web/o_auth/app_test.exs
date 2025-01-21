@@ -55,19 +55,49 @@ defmodule Pleroma.Web.OAuth.AppTest do
   end
 
   test "removes orphaned apps" do
+    # Create an orphaned app (no user_id)
     attrs = %{client_name: "Mastodon-Local", redirect_uris: "."}
     {:ok, %App{} = old_app} = App.get_or_make(attrs, ["write"])
 
-    attrs = %{client_name: "PleromaFE", redirect_uris: "."}
-    {:ok, %App{} = app} = App.get_or_make(attrs, ["write"])
+    # Create a non-orphaned app with a user
+    user = insert(:user)
+    attrs = %{client_name: "PleromaFE", redirect_uris: ".", user_id: user.id}
+    {:ok, %App{} = kept_app} = App.get_or_make(attrs, ["write"])
 
-    # backdate the old app so it's within the threshold for being cleaned up
+    # Create an old but non-orphaned app
+    attrs = %{client_name: "OldButValid", redirect_uris: ".", user_id: user.id}
+    {:ok, %App{} = old_kept_app} = App.get_or_make(attrs, ["write"])
+
+    # backdate both old apps so they're within the threshold for being cleaned up
+    # 1 hour ago
+    past_time = NaiveDateTime.add(NaiveDateTime.utc_now(), -3600)
+
     {:ok, _} =
-      "UPDATE apps SET inserted_at = now() - interval '1 hour' WHERE id = #{old_app.id}"
-      |> Pleroma.Repo.query()
+      Repo.query(
+        "UPDATE apps SET inserted_at = $1 WHERE id IN ($2, $3)",
+        [past_time, old_app.id, old_kept_app.id]
+      )
+
+    # Ensure the updates were applied
+    updated_app = Repo.get(App, old_app.id)
+    updated_kept_app = Repo.get(App, old_kept_app.id)
+
+    assert NaiveDateTime.compare(
+             updated_app.inserted_at,
+             NaiveDateTime.add(NaiveDateTime.utc_now(), -900)
+           ) == :lt
+
+    assert NaiveDateTime.compare(
+             updated_kept_app.inserted_at,
+             NaiveDateTime.add(NaiveDateTime.utc_now(), -900)
+           ) == :lt
 
     App.remove_orphans()
 
-    assert [app] == Pleroma.Repo.all(App)
+    # Verify the orphaned app was removed
+    assert is_nil(Repo.get(App, old_app.id))
+    # Verify both non-orphaned apps still exist, regardless of age
+    assert Repo.get(App, kept_app.id)
+    assert Repo.get(App, old_kept_app.id)
   end
 end

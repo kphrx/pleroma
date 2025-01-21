@@ -1,0 +1,1 @@
+- Optimize orphaned OAuth apps cleanup by using a single delete query instead of deleting records one by one.
