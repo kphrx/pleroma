@@ -600,6 +600,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   def render("card.json", _), do: nil
 
   def render("attachment.json", %{attachment: attachment}) do
+    object_type = attachment["type"] |> String.downcase()
     [attachment_url | _] = attachment["url"]
     media_type = attachment_url["mediaType"] || attachment_url["mimeType"] || "image"
     href = attachment_url["href"] |> MediaProxy.url()
@@ -611,7 +612,11 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
         String.contains?(media_type, "image") -> "image"
         String.contains?(media_type, "video") -> "video"
         String.contains?(media_type, "audio") -> "audio"
-        true -> "unknown"
+        true -> object_type
+      end
+      |> case do
+        x when x in ["image", "video", "audio"] -> x
+        _ -> "unknown"
       end
 
     attachment_id =
