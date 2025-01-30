@@ -13,7 +13,7 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
   @dir "test/tmp/instance_static"
 
   setup do
-    File.mkdir_p!(@dir)
+    Pleroma.Backports.mkdir_p!(@dir)
     on_exit(fn -> File.rm_rf(@dir) end)
   end
 
@@ -38,7 +38,7 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
     clear_config([:frontends, :primary], %{"name" => name, "ref" => ref})
     path = "#{@dir}/frontends/#{name}/#{ref}"
 
-    File.mkdir_p!(path)
+    Pleroma.Backports.mkdir_p!(path)
     File.write!("#{path}/index.html", "from frontend plug")
 
     index = get(conn, "/")
@@ -52,7 +52,7 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
     clear_config([:frontends, :admin], %{"name" => name, "ref" => ref})
     path = "#{@dir}/frontends/#{name}/#{ref}"
 
-    File.mkdir_p!(path)
+    Pleroma.Backports.mkdir_p!(path)
     File.write!("#{path}/index.html", "from frontend plug")
 
     index = get(conn, "/pleroma/admin/")
@@ -67,7 +67,7 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
     clear_config([:frontends, :primary], %{"name" => name, "ref" => ref})
     path = "#{@dir}/frontends/#{name}/#{ref}"
 
-    File.mkdir_p!("#{path}/proxy/rr/ss")
+    Pleroma.Backports.mkdir_p!("#{path}/proxy/rr/ss")
     File.write!("#{path}/proxy/rr/ss/Ek7w8WPVcAApOvN.jpg:large", "FB image")
 
     ConfigMock

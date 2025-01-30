@@ -58,7 +58,7 @@ defmodule Pleroma.Emoji.PackTest do
     test "skips existing emojis when adding from zip file", %{pack: pack} do
       # First, let's create a test pack with a "bear" emoji
       test_pack_path = Path.join(@emoji_path, "test_bear_pack")
-      File.mkdir_p(test_pack_path)
+      Pleroma.Backports.mkdir_p(test_pack_path)
 
       # Create a pack.json file
       File.write!(Path.join(test_pack_path, "pack.json"), """

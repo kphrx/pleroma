@@ -488,7 +488,7 @@ defmodule Pleroma.Emoji.Pack do
     with true <- String.contains?(file_path, "/"),
          path <- Path.dirname(file_path),
          false <- File.exists?(path) do
-      File.mkdir_p!(path)
+      Pleroma.Backports.mkdir_p!(path)
     end
   end
 
@@ -536,7 +536,7 @@ defmodule Pleroma.Emoji.Pack do
     emoji_path = emoji_path()
     # Create the directory first if it does not exist. This is probably the first request made
     # with the API so it should be sufficient
-    with {:create_dir, :ok} <- {:create_dir, File.mkdir_p(emoji_path)},
+    with {:create_dir, :ok} <- {:create_dir, Pleroma.Backports.mkdir_p(emoji_path)},
          {:ls, {:ok, results}} <- {:ls, File.ls(emoji_path)} do
       {:ok, Enum.sort(results)}
     else
@@ -561,7 +561,7 @@ defmodule Pleroma.Emoji.Pack do
   end
 
   defp unzip(archive, pack_info, remote_pack, local_pack) do
-    with :ok <- File.mkdir_p!(local_pack.path) do
+    with :ok <- Pleroma.Backports.mkdir_p!(local_pack.path) do
       files = Enum.map(remote_pack["files"], fn {_, path} -> path end)
       # Fallback cannot contain a pack.json file
       files = if pack_info[:fallback], do: files, else: ["pack.json" | files]
