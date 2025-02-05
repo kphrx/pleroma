@@ -19,7 +19,8 @@ To install required packages, run the following command:
 # pkg_add erlang%26 elixir gmake git postgresql-server postgresql-contrib cmake libmagic libvips
 ```
 
-Pleroma requires a reverse proxy, OpenBSD has relayd in base (and is used in this guide) and packages/ports are available for nginx (www/nginx) and apache (www/apache-httpd). Independently of the reverse proxy, [acme-client(1)](https://man.openbsd.org/acme-client) can be used to get a certificate from Let's Encrypt.
+Pleroma requires a reverse proxy, OpenBSD has relayd in base (and is used in this guide) and packages/ports are available for nginx (www/nginx) and apache (www/apache-httpd).
+Independently of the reverse proxy, [acme-client(1)](https://man.openbsd.org/acme-client) can be used to get a certificate from Let's Encrypt.
 
 #### Optional software
 
@@ -119,7 +120,8 @@ $ MIX_ENV=prod mix ecto.migrate
 Note: You will need to run this step again when updating your instance to a newer version with `git pull` or `git checkout tags/NEW_VERSION`.
 
 As \_pleroma in /home/\_pleroma/pleroma, you can now run `MIX_ENV=prod mix phx.server` to start your instance.
-In another SSH session or a tmux window, check that it is working properly by running `ftp -MVo - http://127.0.0.1:4000/api/v1/instance`, you should get json output. Double-check that the *uri* value near the bottom is your instance's domain name and the instance *title* are correct.
+In another SSH session or a tmux window, check that it is working properly by running `ftp -MVo - http://127.0.0.1:4000/api/v1/instance`, you should get json output.
+Double-check that the *uri* value near the bottom is your instance's domain name and the instance *title* are correct.
 
 ### Configuring acme-client
 
@@ -176,10 +178,10 @@ http {
 
     server {
         ...
-        server_name example.tld; # Replace with your domain
+        server_name localhost; # Replace with your domain
 
         location /.well-known/acme-challenge {
-            rewrite ^/.well-known/acme-challenge/(.*) /$1 break;
+            rewrite ^/\.well-known/acme-challenge/(.*) /$1 break;
             root /var/www/acme;
         }
     }
@@ -225,9 +227,31 @@ As root, copy `/home/_pleroma/pleroma/installation/pleroma.nginx` to `/etc/nginx
 
 Edit default `/etc/nginx/sites-available/pleroma.nginx` settings and replace `example.tld` with your domain:
 
+  * Uncomment the location block for `~ /\.well-known/acme-challenge` in the server block listening on port 80
+    - add `rewrite ^/\.well-known/acme-challenge/(.*) /$1 break;` above the `root` location
+    - change the `root` location to `/var/www/acme;`
   * Change `ssl_trusted_certificate` to `/etc/ssl/example.tld_cert-only.crt`
   * Change `ssl_certificate` to `/etc/ssl/example.tld.crt`
   * Change `ssl_certificate_key` to `/etc/ssl/private/example.tld.key`
+
+Remove the following `location {}` block from `/etc/nginx/nginx.conf`, that was previously added for acquiring certificates and change `server_name` back to `localhost`:
+
+```
+http {
+    ...
+
+    server {
+        ...
+        server_name example.tld; # Change back to localhost
+
+        # Delete this block
+        location /.well-known/acme-challenge {
+            rewrite ^/\.well-known/acme-challenge/(.*) /$1 break;
+            root /var/www/acme;
+        }
+    }
+}
+```
 
 Symlink the Pleroma configuration to the enabled sites:
 
@@ -240,6 +264,9 @@ Check nginx configuration syntax by running:
 ```
 # nginx -t
 ```
+
+Note: If the above command complains about a `conflicting server name`, check again that the `location {}` block for acquiring certificates has been removed from `/etc/nginx/nginx.conf` and that the `server_name` has been reverted back to `localhost`.
+After doing so run `# nginx -t` again.
 
 If the configuration is correct, you can now enable and reload the nginx service:
 
