@@ -257,6 +257,7 @@ config :pleroma, :config_description, [
           Swoosh.Adapters.Mailgun,
           Swoosh.Adapters.Mailjet,
           Swoosh.Adapters.Mandrill,
+          Swoosh.Adapters.Mua,
           Swoosh.Adapters.Postmark,
           Swoosh.Adapters.SMTP,
           Swoosh.Adapters.Sendgrid,
@@ -450,6 +451,40 @@ config :pleroma, :config_description, [
         label: "GMail API Access Token",
         type: :string,
         suggestions: ["GMAIL_API_ACCESS_TOKEN"]
+      },
+      %{
+        group: {:subgroup, Swoosh.Adapters.Mua},
+        key: :relay,
+        type: :string,
+        description: "Hostname or IP address",
+        suggestions: ["smtp.example.com"]
+      },
+      %{
+        group: {:subgroup, Swoosh.Adapters.Mua},
+        key: :port,
+        type: :integer,
+        description: "SMTP port",
+        suggestions: ["587"]
+      },
+      %{
+        group: {:subgroup, Swoosh.Adapters.Mua},
+        key: :auth,
+        type: :keyword,
+        description: "SMTP AUTH",
+        children: [
+          %{
+            key: :username,
+            type: :string,
+            description: "SMTP AUTH username",
+            suggestions: ["user@example.com"]
+          },
+          %{
+            key: :password,
+            type: :string,
+            description: "SMTP AUTH password",
+            suggestions: ["password"]
+          }
+        ]
       }
     ]
   },
