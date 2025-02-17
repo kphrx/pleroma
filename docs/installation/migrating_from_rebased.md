@@ -16,11 +16,12 @@ MIX_ENV=prod mix deps.get
 MIX_ENV=prod mix compile
 ```
 
-As Rebased recommends using [`asdf` version manager](https://asdf-vm.com/), you might want to either keep using it or switch to system Elixir installation. If you choose the latter, follow Pleroma installation instructions for your distribution and replace systemd service with one provided by Pleroma upstream.
+As Rebased recommends using [`asdf` version manager](https://asdf-vm.com/), you might want to either keep using it or switch to system Elixir installation. If you choose the latter, follow Pleroma installation instructions for your distribution and replace the Pleroma systemd service with one provided by Pleroma upstream.
 
 ```bash
 sudo cp /opt/pleroma/installation/pleroma.service /etc/systemd/system/pleroma.service
-sudo systemctl daemon-reload```
+sudo systemctl daemon-reload
+```
 
 Because Rebased doesn't come with a bundled frontend, you most likely have one installed in thhe `instance/static` directory. You can remove it, as Pleroma comes with a bundled frontend. Be sure not to remove other files you might have there, like custom emojis.
 
