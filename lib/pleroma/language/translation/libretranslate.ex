@@ -7,6 +7,8 @@ defmodule Pleroma.Language.Translation.Libretranslate do
 
   alias Pleroma.Language.Translation.Provider
 
+  use Provider
+
   @behaviour Provider
 
   @name "LibreTranslate"
@@ -44,7 +46,7 @@ defmodule Pleroma.Language.Translation.Libretranslate do
          %{
            content: content,
            detected_source_language: source_language,
-           provider: "LibreTranslate"
+           provider: @name
          }}
 
       _ ->

@@ -2,7 +2,6 @@ defmodule Pleroma.Language.TranslationTest do
   use Pleroma.Web.ConnCase
 
   alias Pleroma.Language.Translation
-  # use Oban.Testing, repo: Pleroma.Repo
 
   setup do: clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
 
