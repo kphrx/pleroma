@@ -95,6 +95,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
 
     response = %{
       id: to_string(notification.id),
+      group_key: "ungrouped-" <> to_string(notification.id),
       type: notification.type,
       created_at: CommonAPI.Utils.to_masto_date(notification.inserted_at),
       account: account,
@@ -106,6 +107,9 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
 
     case notification.type do
       "mention" ->
+        put_status(response, activity, reading_user, status_render_opts)
+
+      "status" ->
         put_status(response, activity, reading_user, status_render_opts)
 
       "favourite" ->

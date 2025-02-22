@@ -14,6 +14,7 @@ defmodule Pleroma.Web.Endpoint do
     websocket: [
       path: "/",
       compress: false,
+      connect_info: [:sec_websocket_protocol],
       error_handler: {Pleroma.Web.MastodonAPI.WebsocketHandler, :handle_error, []},
       fullsweep_after: 20
     ]
@@ -37,6 +38,8 @@ defmodule Pleroma.Web.Endpoint do
   socket("/live", Phoenix.LiveView.Socket)
 
   plug(Plug.Telemetry, event_prefix: [:phoenix, :endpoint])
+
+  plug(Pleroma.Web.Plugs.LoggerMetadataPath)
 
   plug(Pleroma.Web.Plugs.SetLocalePlug)
   plug(CORSPlug)

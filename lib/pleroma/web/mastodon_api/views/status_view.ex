@@ -30,7 +30,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   # pagination is restricted to 40 activities at a time
   defp fetch_rich_media_for_activities(activities) do
     Enum.each(activities, fn activity ->
-      spawn(fn -> Card.get_by_activity(activity) end)
+      Card.get_by_activity(activity)
     end)
   end
 
@@ -293,7 +293,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       cond do
         is_nil(opts[:for]) -> false
         is_boolean(activity.thread_muted?) -> activity.thread_muted?
-        true -> CommonAPI.thread_muted?(opts[:for], activity)
+        true -> CommonAPI.thread_muted?(activity, opts[:for])
       end
 
     attachment_data = object.data["attachment"] || []
@@ -465,7 +465,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
         parent_visible: visible_for_user?(reply_to, opts[:for]),
         pinned_at: pinned_at,
         quotes_count: object.data["quotesCount"] || 0,
-        bookmark_folder: bookmark_folder
+        bookmark_folder: bookmark_folder,
+        list_id: get_list_id(object, client_posted_this_activity)
       }
     }
   end
@@ -624,6 +625,19 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
           to_string(attachment["id"] || hash_id)
       end
 
+    description =
+      if attachment["summary"] do
+        HTML.strip_tags(attachment["summary"])
+      else
+        attachment["name"]
+      end
+
+    name = if attachment["summary"], do: attachment["name"]
+
+    pleroma =
+      %{mime_type: media_type}
+      |> Maps.put_if_present(:name, name)
+
     %{
       id: attachment_id,
       url: href,
@@ -631,8 +645,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       preview_url: href_preview,
       text_url: href,
       type: type,
-      description: attachment["name"],
-      pleroma: %{mime_type: media_type},
+      description: description,
+      pleroma: pleroma,
       blurhash: attachment["blurhash"]
     }
     |> Maps.put_if_present(:meta, meta)
@@ -790,19 +804,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
 
   defp build_application(_), do: nil
 
-  # Workaround for Elixir issue #10771
-  # Avoid applying URI.merge unless necessary
-  # TODO: revert to always attempting URI.merge(image_url_data, page_url_data)
-  # when Elixir 1.12 is the minimum supported version
-  @spec build_image_url(struct() | nil, struct()) :: String.t() | nil
-  defp build_image_url(
-         %URI{scheme: image_scheme, host: image_host} = image_url_data,
-         %URI{} = _page_url_data
-       )
-       when not is_nil(image_scheme) and not is_nil(image_host) do
-    image_url_data |> to_string
-  end
-
+  @spec build_image_url(URI.t(), URI.t()) :: String.t()
   defp build_image_url(%URI{} = image_url_data, %URI{} = page_url_data) do
     URI.merge(page_url_data, image_url_data) |> to_string
   end
@@ -836,6 +838,16 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       build_image_url(URI.parse(url), page_url_data) |> MediaProxy.url()
     else
       nil
+    end
+  end
+
+  defp get_list_id(object, client_posted_this_activity) do
+    with true <- client_posted_this_activity,
+         %{data: %{"listMessage" => list_ap_id}} when is_binary(list_ap_id) <- object,
+         %{id: list_id} <- Pleroma.List.get_by_ap_id(list_ap_id) do
+      list_id
+    else
+      _ -> nil
     end
   end
 end

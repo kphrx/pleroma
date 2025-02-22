@@ -43,10 +43,6 @@ defmodule Pleroma.Frontend do
       {:download_or_unzip, _} ->
         Logger.info("Could not download or unzip the frontend")
         {:error, "Could not download or unzip the frontend"}
-
-      _e ->
-        Logger.info("Could not install the frontend")
-        {:error, "Could not install the frontend"}
     end
   end
 
@@ -78,11 +74,14 @@ defmodule Pleroma.Frontend do
 
         new_file_path = Path.join(dest, path)
 
-        new_file_path
+        path
         |> Path.dirname()
+        |> then(&Path.join(dest, &1))
         |> File.mkdir_p!()
 
-        File.write!(new_file_path, data)
+        if not File.dir?(new_file_path) do
+          File.write!(new_file_path, data)
+        end
       end)
     end
   end

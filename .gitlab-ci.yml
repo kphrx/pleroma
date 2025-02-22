@@ -1,14 +1,15 @@
-image: git.pleroma.social:5050/pleroma/pleroma/ci-base
+image: git.pleroma.social:5050/pleroma/pleroma/ci-base:elixir-1.14.5-otp-25
 
 variables: &global_variables
   # Only used for the release
-  ELIXIR_VER: 1.12.3
+  ELIXIR_VER: 1.17.3
   POSTGRES_DB: pleroma_test
   POSTGRES_USER: postgres
   POSTGRES_PASSWORD: postgres
   DB_HOST: postgres
   DB_PORT: "5432"
   MIX_ENV: test
+  GIT_STRATEGY: fetch
 
 workflow:
   rules:
@@ -18,9 +19,7 @@ workflow:
     - if: $CI_COMMIT_BRANCH
 
 cache: &global_cache_policy
-  key:
-    files:
-      - mix.lock
+  key: $CI_JOB_IMAGE-$CI_COMMIT_SHORT_SHA
   paths:
     - deps
     - _build
@@ -72,7 +71,7 @@ check-changelog:
   tags:
     - amd64
 
-build-1.12.3:
+build-1.14.5-otp-25:
   extends:
   - .build_changes_policy
   - .using-ci-base
@@ -80,13 +79,12 @@ build-1.12.3:
   script:
   - mix compile --force
 
-build-1.15.7-otp-25:
+build-1.17.1-otp-26:
   extends:
   - .build_changes_policy
   - .using-ci-base
   stage: build
-  image: git.pleroma.social:5050/pleroma/pleroma/ci-base:elixir-1.15
-  allow_failure: true
+  image: git.pleroma.social:5050/pleroma/pleroma/ci-base:elixir-1.17.1-otp-26
   script:
   - mix compile --force
 
@@ -121,7 +119,7 @@ benchmark:
     - mix ecto.migrate
     - mix pleroma.load_testing
 
-unit-testing-1.12.3:
+unit-testing-1.14.5-otp-25:
   extends:
   - .build_changes_policy
   - .using-ci-base
@@ -136,7 +134,7 @@ unit-testing-1.12.3:
   script: &testing_script
     - mix ecto.create
     - mix ecto.migrate
-    - mix test --cover --preload-modules
+    - mix pleroma.test_runner --cover --preload-modules
   coverage: '/^Line total: ([^ ]*%)$/'
   artifacts:
     reports:
@@ -144,34 +142,19 @@ unit-testing-1.12.3:
         coverage_format: cobertura
         path: coverage.xml
 
-unit-testing-1.15.7-otp-25:
+unit-testing-1.17.1-otp-26:
   extends:
   - .build_changes_policy
   - .using-ci-base
   stage: test
-  image: git.pleroma.social:5050/pleroma/pleroma/ci-base:elixir-1.15-otp25
-  allow_failure: true
+  image: git.pleroma.social:5050/pleroma/pleroma/ci-base:elixir-1.17.1-otp-26
   cache: *testing_cache_policy
   services: *testing_services
   script: *testing_script
 
-unit-testing-1.12-erratic:
-  extends:
-  - .build_changes_policy
-  - .using-ci-base
-  stage: test
-  retry: 2
-  allow_failure: true
-  cache: *testing_cache_policy
-  services: *testing_services
-  script:
-    - mix ecto.create
-    - mix ecto.migrate
-    - mix test --only=erratic
-
-formatting-1.13:
+formatting-1.15:
   extends: .build_changes_policy
-  image: &formatting_elixir elixir:1.13-alpine
+  image: &formatting_elixir elixir:1.15-alpine
   stage: lint
   cache: *testing_cache_policy
   before_script: &current_bfr_script
@@ -183,7 +166,7 @@ formatting-1.13:
   script:
     - mix format --check-formatted
 
-cycles-1.13:
+cycles-1.15:
   extends: .build_changes_policy
   image: *formatting_elixir
   stage: lint
@@ -289,7 +272,8 @@ stop_review_app:
 
 amd64:
   stage: release
-  image: elixir:$ELIXIR_VER
+  image: 
+    name: hexpm/elixir-amd64:1.17.3-erlang-26.2.5.6-ubuntu-focal-20241011
   only: &release-only
   - stable@pleroma/pleroma
   - develop@pleroma/pleroma
@@ -314,8 +298,9 @@ amd64:
   variables: &release-variables
     MIX_ENV: prod
     VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
+    DEBIAN_FRONTEND: noninteractive
   before_script: &before-release
-  - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev
+  - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev git
   - echo "import Config" > config/prod.secret.exs
   - mix local.hex --force
   - mix local.rebar --force
@@ -330,7 +315,8 @@ amd64-musl:
   stage: release
   artifacts: *release-artifacts
   only: *release-only
-  image: elixir:$ELIXIR_VER-alpine
+  image: 
+    name: hexpm/elixir-amd64:1.17.3-erlang-26.2.5.6-alpine-3.17.9
   tags:
     - amd64
   cache: *release-cache
@@ -344,6 +330,7 @@ amd64-musl:
 
 arm:
   stage: release
+  allow_failure: true
   artifacts: *release-artifacts
   only: *release-only
   tags:
@@ -372,7 +359,8 @@ arm64:
   only: *release-only
   tags:
     - arm
-  image: arm64v8/elixir:$ELIXIR_VER
+  image: 
+    name: hexpm/elixir-arm64:1.17.3-erlang-26.2.5.6-ubuntu-focal-20241011
   cache: *release-cache
   variables: *release-variables
   before_script: *before-release
@@ -384,7 +372,8 @@ arm64-musl:
   only: *release-only
   tags:
     - arm
-  image: arm64v8/elixir:$ELIXIR_VER-alpine
+  image: 
+    name: hexpm/elixir-arm64:1.17.3-erlang-26.2.5.6-alpine-3.17.9
   cache: *release-cache
   variables: *release-variables
   before_script: *before-release-musl

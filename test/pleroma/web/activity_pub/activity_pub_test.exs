@@ -232,12 +232,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
 
       assert user.avatar == %{
                "type" => "Image",
-               "url" => [%{"href" => "https://jk.nipponalba.scot/images/profile.jpg"}]
+               "url" => [%{"href" => "https://jk.nipponalba.scot/images/profile.jpg"}],
+               "name" => "profile picture"
              }
 
       assert user.banner == %{
                "type" => "Image",
-               "url" => [%{"href" => "https://jk.nipponalba.scot/images/profile.jpg"}]
+               "url" => [%{"href" => "https://jk.nipponalba.scot/images/profile.jpg"}],
+               "name" => "profile picture"
              }
     end
 
@@ -291,9 +293,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
             body: featured_data,
             headers: [{"content-type", "application/activity+json"}]
           }
-      end)
 
-      Tesla.Mock.mock_global(fn
         %{
           method: :get,
           url: ^object_url
@@ -306,7 +306,18 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       end)
 
       {:ok, user} = ActivityPub.make_user_from_ap_id(ap_id)
-      Process.sleep(50)
+
+      assert_enqueued(
+        worker: Pleroma.Workers.RemoteFetcherWorker,
+        args: %{
+          "op" => "fetch_remote",
+          "id" => object_url,
+          "depth" => 1
+        }
+      )
+
+      # wait for oban
+      Pleroma.Tests.ObanHelpers.perform_all()
 
       assert user.featured_address == featured_url
       assert Map.has_key?(user.pinned_objects, object_url)
@@ -368,9 +379,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
             body: featured_data,
             headers: [{"content-type", "application/activity+json"}]
           }
-      end)
 
-      Tesla.Mock.mock_global(fn
         %{
           method: :get,
           url: ^object_url
@@ -383,7 +392,18 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       end)
 
       {:ok, user} = ActivityPub.make_user_from_ap_id(ap_id)
-      Process.sleep(50)
+
+      assert_enqueued(
+        worker: Pleroma.Workers.RemoteFetcherWorker,
+        args: %{
+          "op" => "fetch_remote",
+          "id" => object_url,
+          "depth" => 1
+        }
+      )
+
+      # wait for oban
+      Pleroma.Tests.ObanHelpers.perform_all()
 
       assert user.featured_address == featured_url
       assert Map.has_key?(user.pinned_objects, object_url)
@@ -413,6 +433,35 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       {:ok, user} = ActivityPub.make_user_from_ap_id(user_id)
 
       assert user.birthday == ~D[2001-02-12]
+    end
+
+    test "fetches avatar description" do
+      user_id = "https://example.com/users/marcin"
+
+      user_data =
+        "test/fixtures/users_mock/user.json"
+        |> File.read!()
+        |> String.replace("{{nickname}}", "marcin")
+        |> Jason.decode!()
+        |> Map.delete("featured")
+        |> Map.update("icon", %{}, fn image -> Map.put(image, "name", "image description") end)
+        |> Jason.encode!()
+
+      Tesla.Mock.mock(fn
+        %{
+          method: :get,
+          url: ^user_id
+        } ->
+          %Tesla.Env{
+            status: 200,
+            body: user_data,
+            headers: [{"content-type", "application/activity+json"}]
+          }
+      end)
+
+      {:ok, user} = ActivityPub.make_user_from_ap_id(user_id)
+
+      assert user.avatar["name"] == "image description"
     end
   end
 
@@ -818,6 +867,33 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     end
   end
 
+  describe "fetch activities for followed hashtags" do
+    test "it should return public activities that reference a given hashtag" do
+      hashtag = insert(:hashtag, name: "tenshi")
+      user = insert(:user)
+      other_user = insert(:user)
+
+      {:ok, normally_visible} =
+        CommonAPI.post(other_user, %{status: "hello :)", visibility: "public"})
+
+      {:ok, public} = CommonAPI.post(user, %{status: "maji #tenshi", visibility: "public"})
+      {:ok, _unrelated} = CommonAPI.post(user, %{status: "dai #tensh", visibility: "public"})
+      {:ok, unlisted} = CommonAPI.post(user, %{status: "maji #tenshi", visibility: "unlisted"})
+      {:ok, _private} = CommonAPI.post(user, %{status: "maji #tenshi", visibility: "private"})
+
+      activities =
+        ActivityPub.fetch_activities([other_user.follower_address], %{
+          followed_hashtags: [hashtag.id]
+        })
+
+      assert length(activities) == 3
+      normal_id = normally_visible.id
+      public_id = public.id
+      unlisted_id = unlisted.id
+      assert [%{id: ^normal_id}, %{id: ^public_id}, %{id: ^unlisted_id}] = activities
+    end
+  end
+
   describe "fetch activities in context" do
     test "retrieves activities that have a given context" do
       {:ok, activity} = ActivityBuilder.insert(%{"type" => "Create", "context" => "2hu"})
@@ -1020,7 +1096,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     refute activity in activities
 
     followed_user = insert(:user)
-    CommonAPI.follow(user, followed_user)
+    CommonAPI.follow(followed_user, user)
     {:ok, repeat_activity} = CommonAPI.repeat(activity.id, followed_user)
 
     activities = ActivityPub.fetch_activities([], %{blocking_user: user, skip_preload: true})
@@ -1153,7 +1229,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     note_two = insert(:note, data: %{"context" => "suya.."})
     activity_two = insert(:note_activity, note: note_two)
 
-    {:ok, _activity_two} = CommonAPI.add_mute(user, activity_two)
+    {:ok, _activity_two} = CommonAPI.add_mute(activity_two, user)
 
     assert [_activity_one] = ActivityPub.fetch_activities([], %{muting_user: user})
   end
@@ -1164,7 +1240,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     note_two = insert(:note, data: %{"context" => "suya.."})
     activity_two = insert(:note_activity, note: note_two)
 
-    {:ok, _activity_two} = CommonAPI.add_mute(user, activity_two)
+    {:ok, _activity_two} = CommonAPI.add_mute(activity_two, user)
 
     assert [_activity_two, _activity_one] =
              ActivityPub.fetch_activities([], %{muting_user: user, with_muted: true})
@@ -1340,7 +1416,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       activity = insert(:note_activity)
       user = insert(:user)
       booster = insert(:user)
-      {:ok, _reblog_mute} = CommonAPI.hide_reblogs(user, booster)
+      {:ok, _reblog_mute} = CommonAPI.hide_reblogs(booster, user)
 
       {:ok, activity} = CommonAPI.repeat(activity.id, booster)
 
@@ -1353,8 +1429,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       activity = insert(:note_activity)
       user = insert(:user)
       booster = insert(:user)
-      {:ok, _reblog_mute} = CommonAPI.hide_reblogs(user, booster)
-      {:ok, _reblog_mute} = CommonAPI.show_reblogs(user, booster)
+      {:ok, _reblog_mute} = CommonAPI.hide_reblogs(booster, user)
+      {:ok, _reblog_mute} = CommonAPI.show_reblogs(booster, user)
 
       {:ok, activity} = CommonAPI.repeat(activity.id, booster)
 
@@ -1434,7 +1510,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       follower = insert(:user)
       followed = insert(:user)
 
-      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, followed)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(followed, follower)
 
       with_mock(Utils, [:passthrough], maybe_federate: fn _ -> {:error, :reverted} end) do
         assert {:error, :reverted} = ActivityPub.unfollow(follower, followed)
@@ -1451,7 +1527,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       follower = insert(:user)
       followed = insert(:user)
 
-      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, followed)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(followed, follower)
       {:ok, activity} = ActivityPub.unfollow(follower, followed)
 
       assert activity.data["type"] == "Undo"
@@ -1468,7 +1544,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       follower = insert(:user)
       followed = insert(:user, %{is_locked: true})
 
-      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, followed)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(followed, follower)
       {:ok, activity} = ActivityPub.unfollow(follower, followed)
 
       assert activity.data["type"] == "Undo"
@@ -1836,14 +1912,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       {:ok, a4} = CommonAPI.post(user2, %{status: "Agent Smith "})
       {:ok, a5} = CommonAPI.post(user1, %{status: "Red or Blue "})
 
-      {:ok, _} = CommonAPI.favorite(user, a4.id)
-      {:ok, _} = CommonAPI.favorite(other_user, a3.id)
-      {:ok, _} = CommonAPI.favorite(user, a3.id)
-      {:ok, _} = CommonAPI.favorite(other_user, a5.id)
-      {:ok, _} = CommonAPI.favorite(user, a5.id)
-      {:ok, _} = CommonAPI.favorite(other_user, a4.id)
-      {:ok, _} = CommonAPI.favorite(user, a1.id)
-      {:ok, _} = CommonAPI.favorite(other_user, a1.id)
+      {:ok, _} = CommonAPI.favorite(a4.id, user)
+      {:ok, _} = CommonAPI.favorite(a3.id, other_user)
+      {:ok, _} = CommonAPI.favorite(a3.id, user)
+      {:ok, _} = CommonAPI.favorite(a5.id, other_user)
+      {:ok, _} = CommonAPI.favorite(a5.id, user)
+      {:ok, _} = CommonAPI.favorite(a4.id, other_user)
+      {:ok, _} = CommonAPI.favorite(a1.id, user)
+      {:ok, _} = CommonAPI.favorite(a1.id, other_user)
       result = ActivityPub.fetch_favourites(user)
 
       assert Enum.map(result, & &1.id) == [a1.id, a5.id, a3.id, a4.id]
@@ -2687,7 +2763,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     assert user.name == " "
   end
 
-  @tag capture_log: true
   test "pin_data_from_featured_collection will ignore unsupported values" do
     assert %{} ==
              ActivityPub.pin_data_from_featured_collection(%{

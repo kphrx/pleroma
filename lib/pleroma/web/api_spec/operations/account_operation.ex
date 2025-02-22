@@ -11,6 +11,7 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
   alias Pleroma.Web.ApiSpec.Schemas.ActorType
   alias Pleroma.Web.ApiSpec.Schemas.ApiError
   alias Pleroma.Web.ApiSpec.Schemas.BooleanLike
+  alias Pleroma.Web.ApiSpec.Schemas.FlakeID
   alias Pleroma.Web.ApiSpec.Schemas.List
   alias Pleroma.Web.ApiSpec.Schemas.Status
   alias Pleroma.Web.ApiSpec.Schemas.VisibilityScope
@@ -497,18 +498,44 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
     }
   end
 
-  def identity_proofs_operation do
+  def familiar_followers_operation do
     %Operation{
       tags: ["Retrieve account information"],
-      summary: "Identity proofs",
-      operationId: "AccountController.identity_proofs",
-      # Validators complains about unused path params otherwise
+      summary: "Followers that you follow",
+      operationId: "AccountController.familiar_followers",
+      description:
+        "Obtain a list of all accounts that follow a given account, filtered for accounts you follow.",
+      security: [%{"oAuth" => ["read:follows"]}],
       parameters: [
-        %Reference{"$ref": "#/components/parameters/accountIdOrNickname"}
+        Operation.parameter(
+          :id,
+          :query,
+          %Schema{
+            oneOf: [%Schema{type: :array, items: %Schema{type: :string}}, %Schema{type: :string}]
+          },
+          "Account IDs",
+          example: "123"
+        )
       ],
-      description: "Not implemented",
       responses: %{
-        200 => empty_array_response()
+        200 =>
+          Operation.response("Accounts", "application/json", %Schema{
+            title: "ArrayOfAccounts",
+            type: :array,
+            items: %Schema{
+              title: "Account",
+              type: :object,
+              properties: %{
+                id: FlakeID,
+                accounts: %Schema{
+                  title: "ArrayOfAccounts",
+                  type: :array,
+                  items: Account,
+                  example: [Account.schema().example]
+                }
+              }
+            }
+          })
       }
     }
   end
@@ -786,6 +813,16 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
           allOf: [BooleanLike],
           nullable: true,
           description: "User's birthday will be visible"
+        },
+        avatar_description: %Schema{
+          type: :string,
+          nullable: true,
+          description: "Avatar image description."
+        },
+        header_description: %Schema{
+          type: :string,
+          nullable: true,
+          description: "Header image description."
         }
       },
       example: %{

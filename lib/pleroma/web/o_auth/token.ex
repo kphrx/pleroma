@@ -96,15 +96,14 @@ defmodule Pleroma.Web.OAuth.Token do
     |> validate_required([:valid_until])
   end
 
-  @spec create(App.t(), User.t(), map()) :: {:ok, Token} | {:error, Ecto.Changeset.t()}
+  @spec create(App.t(), User.t(), map()) :: {:ok, Token.t()} | {:error, Ecto.Changeset.t()}
   def create(%App{} = app, %User{} = user, attrs \\ %{}) do
     with {:ok, token} <- do_create(app, user, attrs) do
       if Pleroma.Config.get([:oauth2, :clean_expired_tokens]) do
-        Pleroma.Workers.PurgeExpiredToken.enqueue(%{
-          token_id: token.id,
-          valid_until: DateTime.from_naive!(token.valid_until, "Etc/UTC"),
-          mod: __MODULE__
-        })
+        Pleroma.Workers.PurgeExpiredToken.new(%{token_id: token.id, mod: __MODULE__},
+          scheduled_at: DateTime.from_naive!(token.valid_until, "Etc/UTC")
+        )
+        |> Oban.insert()
       end
 
       {:ok, token}
