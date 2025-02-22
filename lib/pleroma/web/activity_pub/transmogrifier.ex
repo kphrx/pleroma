@@ -16,6 +16,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.ActivityPub.ObjectValidator
+  alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
   alias Pleroma.Web.ActivityPub.Pipeline
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.ActivityPub.Visibility
@@ -167,7 +168,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   def fix_quote_url_and_maybe_fetch(object, options \\ []) do
     quote_url =
-      case Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes.fix_quote_url(object) do
+      case CommonFixes.fix_quote_url(object) do
         %{"quoteUrl" => quote_url} -> quote_url
         _ -> nil
       end
@@ -720,6 +721,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> set_reply_to_uri
     |> set_quote_url
     |> set_replies
+    |> CommonFixes.maybe_add_content_map()
     |> strip_internal_fields
     |> strip_internal_tags
     |> set_type

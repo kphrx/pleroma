@@ -37,6 +37,7 @@ defmodule Pleroma.Constants do
       "updated",
       "emoji",
       "content",
+      "contentMap",
       "summary",
       "sensitive",
       "attachment",
@@ -102,7 +103,8 @@ defmodule Pleroma.Constants do
       "Announce",
       "Undo",
       "Flag",
-      "EmojiReact"
+      "EmojiReact",
+      "Listen"
     ]
   )
 
