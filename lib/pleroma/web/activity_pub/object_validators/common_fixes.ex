@@ -152,11 +152,19 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   def maybe_add_language(object) do
     language =
       [
-        get_language_from_context(object),
-        get_language_from_content_map(object),
-        get_language_from_content(object)
+        &get_language_from_context/1,
+        &get_language_from_content_map/1,
+        &get_language_from_content/1
       ]
-      |> Enum.find(&good_locale_code?(&1))
+      |> Enum.find_value(fn get_language ->
+        language = get_language.(object)
+
+        if good_locale_code?(language) do
+          language
+        else
+          nil
+        end
+      end)
 
     if language do
       Map.put(object, "language", language)
@@ -189,8 +197,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
 
   defp get_language_from_content_map(_), do: nil
 
-  defp get_language_from_content(%{"summary" => summary, "content" => content}) do
-    LanguageDetector.detect("#{summary} #{content}")
+  defp get_language_from_content(%{"content" => content} = object) do
+    LanguageDetector.detect("#{object["summary"] || ""} #{content}")
   end
 
   defp get_language_from_content(_), do: nil

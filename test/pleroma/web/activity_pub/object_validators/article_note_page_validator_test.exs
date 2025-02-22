@@ -9,6 +9,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
   alias Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator
   alias Pleroma.Web.ActivityPub.Utils
 
+  import Mock
   import Pleroma.Factory
 
   describe "Notes" do
@@ -232,6 +233,28 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
       {:ok, object} = ArticleNotePageValidator.cast_and_apply(note)
 
       assert object.language == "pl"
+    end
+
+    test_with_mock "it doesn't call LanguageDetector when language is specified",
+                   Pleroma.Language.LanguageDetector,
+                   detect: fn _ -> nil end do
+      user = insert(:user)
+
+      note = %{
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "id" => Utils.generate_object_id(),
+        "type" => "Note",
+        "content" => "a post in English",
+        "contentMap" => %{
+          "en" => "a post in English"
+        },
+        "attributedTo" => user.ap_id
+      }
+
+      ArticleNotePageValidator.cast_and_apply(note)
+
+      refute called(Pleroma.Language.LanguageDetector.detect(:_))
     end
 
     test "it adds contentMap if language is specified" do
