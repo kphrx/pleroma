@@ -3,7 +3,16 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Language.LanguageDetector do
+  import Pleroma.EctoType.ActivityPub.ObjectValidators.LanguageCode,
+    only: [good_locale_code?: 1]
+
   @words_threshold 4
+
+  def configured? do
+    provider = get_provider()
+
+    !!provider and provider.configured?
+  end
 
   def missing_dependencies do
     provider = get_provider()
@@ -34,7 +43,12 @@ defmodule Pleroma.Language.LanguageDetector do
     if word_count < @words_threshold or !provider or !provider.configured? do
       nil
     else
-      provider.detect(text)
+      with language <- provider.detect(text),
+           true <- good_locale_code?(language) do
+        language
+      else
+        _ -> nil
+      end
     end
   end
 

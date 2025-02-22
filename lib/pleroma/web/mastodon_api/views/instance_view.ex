@@ -146,7 +146,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       "pleroma:get:main/ostatus",
       "pleroma:group_actors",
       "pleroma:bookmark_folders",
-      if Config.get([Pleroma.Language.LanguageDetector, :provider]) do
+      if Pleroma.Language.LanguageDetector.configured?() do
         "pleroma:language_detection"
       end
     ]
