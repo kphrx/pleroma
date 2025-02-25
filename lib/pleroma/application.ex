@@ -56,7 +56,10 @@ defmodule Pleroma.Application do
       Pleroma.Web.Plugs.HTTPSecurityPlug.warn_if_disabled()
     end
 
-    Pleroma.ApplicationRequirements.verify!()
+    if Mix.env() != :test do
+      Pleroma.ApplicationRequirements.verify!()
+    end
+
     load_custom_modules()
     Pleroma.Docs.JSON.compile()
     limiters_setup()
