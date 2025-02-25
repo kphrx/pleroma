@@ -5,11 +5,11 @@
 defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest do
   use Pleroma.DataCase, async: true
 
+  alias Pleroma.Language.LanguageDetectorMock
+  alias Pleroma.StaticStubbedConfigMock
   alias Pleroma.Web.ActivityPub.ObjectValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator
   alias Pleroma.Web.ActivityPub.Utils
-  alias Pleroma.Language.LanguageDetectorMock
-  alias Pleroma.StaticStubbedConfigMock
 
   import Mox
   import Pleroma.Factory
