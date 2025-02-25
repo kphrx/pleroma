@@ -3,26 +3,51 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Language.LanguageDetectorTest do
-  use Pleroma.Web.ConnCase
+  use Pleroma.DataCase, async: true
 
   alias Pleroma.Language.LanguageDetector
+  alias Pleroma.Language.LanguageDetectorMock
+  alias Pleroma.UnstubbedConfigMock
 
-  setup do: clear_config([Pleroma.Language.LanguageDetector, :provider], LanguageDetectorMock)
+  import Mox
+
+  setup do
+    # Stub the UnstubbedConfigMock to return our mock for the provider
+    UnstubbedConfigMock
+    |> stub(:get, fn
+      [Pleroma.Language.LanguageDetector, :provider] -> LanguageDetectorMock
+      _other -> nil
+    end)
+
+    # Stub the LanguageDetectorMock with default implementations
+    LanguageDetectorMock
+    |> stub(:missing_dependencies, fn -> [] end)
+    |> stub(:configured?, fn -> true end)
+
+    :ok
+  end
 
   test "it detects text language" do
+    LanguageDetectorMock
+    |> expect(:detect, fn _text -> "fr" end)
+
     detected_language = LanguageDetector.detect("Je viens d'atterrir en Tchéquie.")
 
     assert detected_language == "fr"
   end
 
   test "it returns nil if text is not long enough" do
+    # No need to set expectations as the word count check happens before the provider is called
+
     detected_language = LanguageDetector.detect("it returns nil")
 
     assert detected_language == nil
   end
 
   test "it returns nil if no provider specified" do
-    clear_config([Pleroma.Language.LanguageDetector, :provider], nil)
+    # Override the stub to return nil for the provider
+    UnstubbedConfigMock
+    |> expect(:get, fn [Pleroma.Language.LanguageDetector, :provider] -> nil end)
 
     detected_language = LanguageDetector.detect("this should also return nil")
 

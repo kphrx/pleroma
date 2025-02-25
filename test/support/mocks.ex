@@ -33,3 +33,7 @@ Mox.defmock(Pleroma.StubbedHTTPSignaturesMock, for: Pleroma.HTTPSignaturesAPI)
 Mox.defmock(Pleroma.LoggerMock, for: Pleroma.Logging)
 
 Mox.defmock(Pleroma.Uploaders.S3.ExAwsMock, for: Pleroma.Uploaders.S3.ExAwsAPI)
+
+Mox.defmock(Pleroma.Language.LanguageDetectorMock,
+  for: Pleroma.Language.LanguageDetector.Provider
+)

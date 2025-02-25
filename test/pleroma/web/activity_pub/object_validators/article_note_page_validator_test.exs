@@ -8,9 +8,29 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
   alias Pleroma.Web.ActivityPub.ObjectValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator
   alias Pleroma.Web.ActivityPub.Utils
+  alias Pleroma.Language.LanguageDetectorMock
+  alias Pleroma.UnstubbedConfigMock
 
-  import Mock
+  import Mox
   import Pleroma.Factory
+
+  # Setup for all tests
+  setup do
+    # Stub the UnstubbedConfigMock to return our mock for the provider
+    UnstubbedConfigMock
+    |> stub(:get, fn
+      [Pleroma.Language.LanguageDetector, :provider] -> LanguageDetectorMock
+      _other -> nil
+    end)
+
+    # Stub the LanguageDetectorMock with default implementations
+    LanguageDetectorMock
+    |> stub(:missing_dependencies, fn -> [] end)
+    |> stub(:configured?, fn -> true end)
+    |> stub(:detect, fn _text -> nil end)
+
+    :ok
+  end
 
   describe "Notes" do
     setup do
@@ -235,9 +255,20 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
       assert object.language == "pl"
     end
 
-    test_with_mock "it doesn't call LanguageDetector when language is specified",
-                   Pleroma.Language.LanguageDetector,
-                   detect: fn _ -> nil end do
+    test "it doesn't call LanguageDetector when language is specified" do
+      # Set up expectation that detect should not be called
+      LanguageDetectorMock
+      |> expect(:detect, 0, fn _ -> flunk("LanguageDetector.detect should not be called") end)
+      |> stub(:missing_dependencies, fn -> [] end)
+      |> stub(:configured?, fn -> true end)
+
+      # Stub the UnstubbedConfigMock to return our mock for the provider
+      UnstubbedConfigMock
+      |> stub(:get, fn
+        [Pleroma.Language.LanguageDetector, :provider] -> LanguageDetectorMock
+        _other -> nil
+      end)
+
       user = insert(:user)
 
       note = %{
@@ -253,8 +284,6 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
       }
 
       ArticleNotePageValidator.cast_and_apply(note)
-
-      refute called(Pleroma.Language.LanguageDetector.detect(:_))
     end
 
     test "it adds contentMap if language is specified" do

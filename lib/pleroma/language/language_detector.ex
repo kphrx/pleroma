@@ -7,6 +7,7 @@ defmodule Pleroma.Language.LanguageDetector do
     only: [good_locale_code?: 1]
 
   @words_threshold 4
+  @config_impl Application.compile_env(:pleroma, [__MODULE__, :config_impl], Pleroma.Config)
 
   def configured? do
     provider = get_provider()
@@ -53,6 +54,6 @@ defmodule Pleroma.Language.LanguageDetector do
   end
 
   defp get_provider do
-    Pleroma.Config.get([__MODULE__, :provider])
+    @config_impl.get([__MODULE__, :provider])
   end
 end
