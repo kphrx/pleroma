@@ -95,6 +95,85 @@ end
 
 This means that by default, these mocks will behave like their real implementations unless you explicitly override them with expectations in your tests.
 
+### Understanding Config Mock Types
+
+Pleroma has three different Config mock implementations, each with a specific purpose and different characteristics regarding async test safety:
+
+#### 1. ConfigMock
+
+- Defined in `test/support/mocks.ex` as `Mox.defmock(Pleroma.ConfigMock, for: Pleroma.Config.Getting)`
+- It's stubbed with the real `Pleroma.Config` by default in `DataCase`: `Mox.stub_with(Pleroma.ConfigMock, Pleroma.Config)`
+- This means it falls back to the normal configuration behavior unless explicitly overridden
+- Used for general mocking of configuration in tests where you want most config to behave normally
+- ⚠️ **NOT ASYNC-SAFE**: Since it's stubbed with the real `Pleroma.Config`, it modifies global application state
+- Can not be used in tests with `async: true`
+
+#### 2. StaticStubbedConfigMock
+
+- Defined in `test/support/mocks.ex` as `Mox.defmock(Pleroma.StaticStubbedConfigMock, for: Pleroma.Config.Getting)`
+- It's stubbed with `Pleroma.Test.StaticConfig` (defined in `test/test_helper.exs`)
+- `Pleroma.Test.StaticConfig` creates a completely static configuration snapshot at the start of the test run:
+  ```elixir
+  defmodule Pleroma.Test.StaticConfig do
+    @moduledoc """
+    This module provides a Config that is completely static, built at startup time from the environment. 
+    It's safe to use in testing as it will not modify any state.
+    """
+
+    @behaviour Pleroma.Config.Getting
+    @config Application.get_all_env(:pleroma)
+
+    def get(path, default \\ nil) do
+      get_in(@config, path) || default
+    end
+  end
+  ```
+- Configuration is frozen at startup time and doesn't change during the test run
+- ✅ **ASYNC-SAFE**: Never modifies global state since it uses a frozen snapshot of the configuration
+
+#### 3. UnstubbedConfigMock
+
+- Defined in `test/support/mocks.ex` as `Mox.defmock(Pleroma.UnstubbedConfigMock, for: Pleroma.Config.Getting)`
+- Unlike the other two mocks, it's not automatically stubbed with any implementation in `DataCase`
+- Starts completely "unstubbed" and requires tests to explicitly set expectations or stub it
+- The most commonly used configuration mock in the test suite
+- Often aliased as `ConfigMock` in individual test files: `alias Pleroma.UnstubbedConfigMock, as: ConfigMock`
+- Set as the default config implementation in `config/test.exs`: `config :pleroma, :config_impl, Pleroma.UnstubbedConfigMock`
+- Offers maximum flexibility for tests that need precise control over configuration values
+- ✅ **ASYNC-SAFE**: Safe if used with `expect()` to set up test-specific expectations (since expectations are process-scoped)
+
+#### Configuring Components to Use Specific Mocks
+
+In `config/test.exs`, different components can be configured to use different configuration mocks:
+
+```elixir
+# Components using UnstubbedConfigMock
+config :pleroma, Pleroma.Upload, config_impl: Pleroma.UnstubbedConfigMock
+config :pleroma, Pleroma.User.Backup, config_impl: Pleroma.UnstubbedConfigMock
+config :pleroma, Pleroma.Uploaders.S3, config_impl: Pleroma.UnstubbedConfigMock
+
+# Components using StaticStubbedConfigMock (async-safe)
+config :pleroma, Pleroma.Language.LanguageDetector, config_impl: Pleroma.StaticStubbedConfigMock
+config :pleroma, Pleroma.Web.RichMedia.Helpers, config_impl: Pleroma.StaticStubbedConfigMock
+config :pleroma, Pleroma.Web.Plugs.HTTPSecurityPlug, config_impl: Pleroma.StaticStubbedConfigMock
+```
+
+This allows different parts of the application to use the most appropriate configuration mocking strategy based on their specific needs.
+
+#### When to Use Each Config Mock Type
+
+- **ConfigMock**: ⚠️ For non-async tests only, when you want most configuration to behave normally with occasional overrides
+- **StaticStubbedConfigMock**: ✅ For async tests where modifying global state would be problematic and a static configuration is sufficient
+- **UnstubbedConfigMock**: ⚠️ Use carefully in async tests; set specific expectations rather than stubbing with implementations that modify global state
+
+#### Summary of Async Safety
+
+| Mock Type | Async-Safe? | Best Use Case |
+|-----------|-------------|--------------|
+| ConfigMock | ❌ No | Non-async tests that need minimal configuration overrides |
+| StaticStubbedConfigMock | ✅ Yes | Async tests that need configuration values without modification |
+| UnstubbedConfigMock | ⚠️ Depends | Any test with careful usage; set expectations rather than stubbing |
+
 ## Configuration in Async Tests
 
 ### Understanding `clear_config` Limitations
