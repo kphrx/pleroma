@@ -152,7 +152,7 @@ config :pleroma, Pleroma.User.Backup, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Uploaders.S3, ex_aws_impl: Pleroma.Uploaders.S3.ExAwsMock
 config :pleroma, Pleroma.Uploaders.S3, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Upload, config_impl: Pleroma.UnstubbedConfigMock
-config :pleroma, Pleroma.Language.LanguageDetector, config_impl: Pleroma.UnstubbedConfigMock
+config :pleroma, Pleroma.Language.LanguageDetector, config_impl: Pleroma.StaticStubbedConfigMock
 config :pleroma, Pleroma.ScheduledActivity, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Web.RichMedia.Helpers, config_impl: Pleroma.StaticStubbedConfigMock
 config :pleroma, Pleroma.Uploaders.IPFS, config_impl: Pleroma.UnstubbedConfigMock

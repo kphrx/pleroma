@@ -7,13 +7,13 @@ defmodule Pleroma.Language.LanguageDetectorTest do
 
   alias Pleroma.Language.LanguageDetector
   alias Pleroma.Language.LanguageDetectorMock
-  alias Pleroma.UnstubbedConfigMock
+  alias Pleroma.StaticStubbedConfigMock
 
   import Mox
 
   setup do
-    # Stub the UnstubbedConfigMock to return our mock for the provider
-    UnstubbedConfigMock
+    # Stub the StaticStubbedConfigMock to return our mock for the provider
+    StaticStubbedConfigMock
     |> stub(:get, fn
       [Pleroma.Language.LanguageDetector, :provider] -> LanguageDetectorMock
       _other -> nil
@@ -46,7 +46,7 @@ defmodule Pleroma.Language.LanguageDetectorTest do
 
   test "it returns nil if no provider specified" do
     # Override the stub to return nil for the provider
-    UnstubbedConfigMock
+    StaticStubbedConfigMock
     |> expect(:get, fn [Pleroma.Language.LanguageDetector, :provider] -> nil end)
 
     detected_language = LanguageDetector.detect("this should also return nil")

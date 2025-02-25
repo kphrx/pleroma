@@ -9,15 +9,15 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
   alias Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Language.LanguageDetectorMock
-  alias Pleroma.UnstubbedConfigMock
+  alias Pleroma.StaticStubbedConfigMock
 
   import Mox
   import Pleroma.Factory
 
   # Setup for all tests
   setup do
-    # Stub the UnstubbedConfigMock to return our mock for the provider
-    UnstubbedConfigMock
+    # Stub the StaticStubbedConfigMock to return our mock for the provider
+    StaticStubbedConfigMock
     |> stub(:get, fn
       [Pleroma.Language.LanguageDetector, :provider] -> LanguageDetectorMock
       _other -> nil
@@ -262,8 +262,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
       |> stub(:missing_dependencies, fn -> [] end)
       |> stub(:configured?, fn -> true end)
 
-      # Stub the UnstubbedConfigMock to return our mock for the provider
-      UnstubbedConfigMock
+      # Stub the StaticStubbedConfigMock to return our mock for the provider
+      StaticStubbedConfigMock
       |> stub(:get, fn
         [Pleroma.Language.LanguageDetector, :provider] -> LanguageDetectorMock
         _other -> nil
