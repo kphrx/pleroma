@@ -160,7 +160,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
         %{activity: %{data: %{"type" => "Announce", "object" => _object}} = activity} = opts
       ) do
     user = CommonAPI.get_user(activity.data["actor"])
-    created_at = Utils.to_masto_date(activity.data["published"])
+    created_at = Utils.to_masto_date(activity.data["published"] || activity.inserted_at)
     object = Object.normalize(activity, fetch: false)
 
     reblogged_parent_activity =
@@ -299,7 +299,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     attachment_data = object.data["attachment"] || []
     attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
 
-    created_at = Utils.to_masto_date(object.data["published"])
+    created_at = Utils.to_masto_date(object.data["published"] || object.inserted_at)
 
     edited_at =
       with %{"updated" => updated} <- object.data,
@@ -526,7 +526,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     attachment_data = object.data["attachment"] || []
     attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
 
-    created_at = Utils.to_masto_date(object.data["updated"] || object.data["published"])
+    created_at = Utils.to_masto_date(object.data["updated"] || object.data["published"] || object.inserted_at)
 
     content =
       object
