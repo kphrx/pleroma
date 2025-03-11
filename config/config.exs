@@ -65,7 +65,8 @@ config :pleroma, Pleroma.Upload,
   proxy_remote: false,
   filename_display_max_length: 30,
   default_description: nil,
-  base_url: nil
+  base_url: nil,
+  allowed_mime_types: ["image", "audio", "video"]
 
 config :pleroma, Pleroma.Uploaders.Local, uploads: "uploads"
 
@@ -150,7 +151,10 @@ config :mime, :types, %{
   "application/xrd+xml" => ["xrd+xml"],
   "application/jrd+json" => ["jrd+json"],
   "application/activity+json" => ["activity+json"],
-  "application/ld+json" => ["activity+json"]
+  "application/ld+json" => ["activity+json"],
+  # Can be removed when bumping MIME past 2.0.5
+  # see https://akkoma.dev/AkkomaGang/akkoma/issues/657
+  "image/apng" => ["apng"]
 }
 
 config :tesla, adapter: Tesla.Adapter.Hackney
@@ -359,7 +363,8 @@ config :pleroma, :activitypub,
   follow_handshake_timeout: 500,
   note_replies_output_limit: 5,
   sign_object_fetches: true,
-  authorized_fetch_mode: false
+  authorized_fetch_mode: false,
+  client_api_enabled: false
 
 config :pleroma, :streamer,
   workers: 3,
@@ -412,11 +417,6 @@ config :pleroma, :mrf_activity_expiration, days: 365
 config :pleroma, :mrf_vocabulary,
   accept: [],
   reject: []
-
-config :pleroma, :mrf_dnsrbl,
-  nameserver: "127.0.0.1",
-  port: 53,
-  zone: "bl.pleroma.com"
 
 # threshold of 7 days
 config :pleroma, :mrf_object_age,
@@ -807,6 +807,13 @@ config :pleroma, :frontends,
         "https://lily-is.land/infra/glitch-lily/-/jobs/artifacts/${ref}/download?job=build",
       "ref" => "servant",
       "build_dir" => "public"
+    },
+    "pl-fe" => %{
+      "name" => "pl-fe",
+      "git" => "https://github.com/mkljczk/pl-fe",
+      "build_url" => "https://pl.mkljczk.pl/pl-fe.zip",
+      "ref" => "develop",
+      "build_dir" => "."
     }
   }
 
