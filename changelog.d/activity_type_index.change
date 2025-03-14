@@ -1,0 +1,1 @@
+Add new activity actor/type index. Greatly speeds up retrieval of rare types (like "Listen")
