@@ -48,7 +48,7 @@ config :pleroma, ecto_repos: [Pleroma.Repo]
 
 config :pleroma, Pleroma.Repo,
   telemetry_event: [Pleroma.Repo.Instrumenter],
-  migration_lock: nil
+  migration_lock: :pg_advisory_lock
 
 config :pleroma, Pleroma.Captcha,
   enabled: true,
