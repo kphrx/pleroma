@@ -42,6 +42,96 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountControllerTest do
     end
   end
 
+  # Adapted from
+  # https://github.com/mastodon/mastodon/blob/main/spec/requests/api/v2/admin/accounts_spec.rb
+  describe "GET /api/v2/admin/accounts" do
+    setup do
+      remote_account = insert(:user, nickname: "remote@example.org", local: false)
+      other_remote_account = insert(:user, nickname: "other@foo.bar", local: false)
+      # suspended_account = insert(:user)
+      # suspended_remote = insert(:user)
+      disabled_account = insert(:user, is_active: false)
+      pending_account = insert(:user, is_approved: false)
+      admin_account = insert(:user, is_admin: true)
+
+      {:ok,
+       %{
+         remote_account: remote_account,
+         other_remote_account: other_remote_account,
+         disabled_account: disabled_account,
+         pending_account: pending_account,
+         admin_account: admin_account
+       }}
+    end
+
+    # test "returns the correct accounts when called with status active
+    # and origin local and permissions staff", %{
+    #   conn: conn,
+    #   admin_account: %{id: admin_account_id}
+    # } do
+    #   assert [%{"id" => ^admin_account_id}] =
+    #            conn
+    #            |> get("/api/v2/admin/accounts?status=active&origin=local&permissions=staff")
+    #            |> json_response_and_validate_schema(200)
+    # end
+
+    test "returns the correct accounts when called with by_domain value and origin remote", %{
+      conn: conn,
+      remote_account: %{id: remote_account_id}
+    } do
+      assert [%{"id" => ^remote_account_id}] =
+               conn
+               |> get("/api/v2/admin/accounts?by_domain=example.org&origin=remote")
+               |> json_response_and_validate_schema(200)
+    end
+
+    # test "returns the correct accounts when called with status suspended", %{
+    #   conn: conn,
+    #   suspended_account: %{id: suspended_account_id}
+    # } do
+    #   assert [%{"id" => ^suspended_account_id}] =
+    #            conn
+    #            |> get("/api/v2/admin/accounts?status=suspended")
+    #            |> json_response_and_validate_schema(200)
+    # end
+
+    test "returns the correct accounts when called with status disabled", %{
+      conn: conn,
+      disabled_account: %{id: disabled_account_id}
+    } do
+      assert [%{"id" => ^disabled_account_id}] =
+               conn
+               |> get("/api/v2/admin/accounts?status=disabled")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "returns the correct accounts when called with status pending", %{
+      conn: conn,
+      pending_account: %{id: pending_account_id}
+    } do
+      assert [%{"id" => ^pending_account_id}] =
+               conn
+               |> get("/api/v2/admin/accounts?status=pending")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "sets the correct pagination headers with limit param", %{
+      conn: conn,
+      admin_account: %{id: admin_account_id}
+    } do
+      response =
+        conn
+        |> get("/api/v2/admin/accounts?limit=1")
+
+      next_url =
+        ~r{<.+?(?<link>/api[^>]+)>; rel=\"next\"}
+        |> Regex.named_captures(get_resp_header(response, "link") |> Enum.at(0))
+        |> Map.get("link")
+
+      next_url =~ "&limit=1&max_id=#{admin_account_id}"
+    end
+  end
+
   describe "GET /api/v1/admin/accounts/:id" do
     test "show admin-level information", %{conn: conn} do
       %{id: id} =
