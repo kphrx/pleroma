@@ -6,6 +6,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.LikeHandlingTest do
   use Pleroma.DataCase, async: true
 
   alias Pleroma.Activity
+  alias Pleroma.Object
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.CommonAPI
 
@@ -74,5 +75,55 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.LikeHandlingTest do
     assert activity_data["id"] == data["id"]
     assert activity_data["object"] == activity.data["object"]
     assert activity_data["content"] == "⭐"
+  end
+
+  test "it works for misskey likes with custom emoji" do
+    user = insert(:user)
+
+    {:ok, activity} = CommonAPI.post(user, %{status: "hello"})
+
+    data =
+      File.read!("test/fixtures/misskey-custom-emoji-like.json")
+      |> Jason.decode!()
+      |> Map.put("object", activity.data["object"])
+
+    _actor = insert(:user, ap_id: data["actor"], local: false)
+
+    {:ok, %Activity{data: activity_data, local: false}} = Transmogrifier.handle_incoming(data)
+
+    assert activity_data["actor"] == data["actor"]
+    assert activity_data["type"] == "EmojiReact"
+    assert activity_data["id"] == data["id"]
+    assert activity_data["object"] == activity.data["object"]
+    assert activity_data["content"] == ":blobwtfnotlikethis:"
+
+    assert [["blobwtfnotlikethis", _, _]] =
+             Object.get_by_ap_id(activity.data["object"])
+             |> Object.get_emoji_reactions()
+  end
+
+  test "it works for mitra likes with custom emoji" do
+    user = insert(:user)
+
+    {:ok, activity} = CommonAPI.post(user, %{status: "hello"})
+
+    data =
+      File.read!("test/fixtures/mitra-custom-emoji-like.json")
+      |> Jason.decode!()
+      |> Map.put("object", activity.data["object"])
+
+    _actor = insert(:user, ap_id: data["actor"], local: false)
+
+    {:ok, %Activity{data: activity_data, local: false}} = Transmogrifier.handle_incoming(data)
+
+    assert activity_data["actor"] == data["actor"]
+    assert activity_data["type"] == "EmojiReact"
+    assert activity_data["id"] == data["id"]
+    assert activity_data["object"] == activity.data["object"]
+    assert activity_data["content"] == ":ablobcatheartsqueeze:"
+
+    assert [["ablobcatheartsqueeze", _, _]] =
+             Object.get_by_ap_id(activity.data["object"])
+             |> Object.get_emoji_reactions()
   end
 end

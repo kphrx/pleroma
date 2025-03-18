@@ -495,12 +495,23 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   defp handle_incoming_normalized(
          %{
            "type" => "Like",
-           "_misskey_reaction" => reaction
+           "content" => _
          } = data,
          options
        ) do
     data
     |> Map.put("type", "EmojiReact")
+    |> handle_incoming_normalized(options)
+  end
+
+  defp handle_incoming_normalized(
+         %{
+           "type" => "Like",
+           "_misskey_reaction" => reaction
+         } = data,
+         options
+       ) do
+    data
     |> Map.put("content", @misskey_reactions[reaction] || reaction)
     |> handle_incoming_normalized(options)
   end
