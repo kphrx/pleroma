@@ -140,6 +140,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.LikeHandlingTest do
 
     _actor = insert(:user, ap_id: data["actor"], local: false)
 
-    assert {:error, _} = Transmogrifier.handle_incoming(data)
+    assert {:ok, activity} = Transmogrifier.handle_incoming(data)
+    assert activity.data["type"] == "Like"
   end
 end

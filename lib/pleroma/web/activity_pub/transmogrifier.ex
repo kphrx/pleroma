@@ -495,10 +495,11 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   defp handle_incoming_normalized(
          %{
            "type" => "Like",
-           "content" => _
+           "content" => content
          } = data,
          options
-       ) do
+       )
+       when is_binary(content) do
     data
     |> Map.put("type", "EmojiReact")
     |> handle_incoming_normalized(options)
