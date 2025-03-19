@@ -56,7 +56,7 @@ defmodule Pleroma.Application do
       Pleroma.Web.Plugs.HTTPSecurityPlug.warn_if_disabled()
     end
 
-    if Mix.env() != :test do
+    if Config.get(:env) != :test do
       Pleroma.ApplicationRequirements.verify!()
     end
 
