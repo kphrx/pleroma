@@ -155,6 +155,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       "pleroma:get:main/ostatus",
       "pleroma:group_actors",
       "pleroma:bookmark_folders",
+      if Pleroma.Language.LanguageDetector.configured?() do
+        "pleroma:language_detection"
+      end,
       if Pleroma.Language.Translation.configured?() do
         "translation"
       end

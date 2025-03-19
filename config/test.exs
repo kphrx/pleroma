@@ -38,7 +38,10 @@ config :pleroma, :instance,
   external_user_synchronization: false,
   static_dir: "test/instance_static/"
 
-config :pleroma, :activitypub, sign_object_fetches: false, follow_handshake_timeout: 0
+config :pleroma, :activitypub,
+  sign_object_fetches: false,
+  follow_handshake_timeout: 0,
+  client_api_enabled: true
 
 # Configure your database
 config :pleroma, Pleroma.Repo,
@@ -144,6 +147,7 @@ config :pleroma, Pleroma.Search.Meilisearch, url: "http://127.0.0.1:7700/", priv
 config :phoenix, :plug_init_mode, :runtime
 
 config :pleroma, :config_impl, Pleroma.UnstubbedConfigMock
+config :pleroma, :datetime_impl, Pleroma.DateTimeMock
 
 config :pleroma, Pleroma.PromEx, disabled: true
 
@@ -152,11 +156,18 @@ config :pleroma, Pleroma.User.Backup, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Uploaders.S3, ex_aws_impl: Pleroma.Uploaders.S3.ExAwsMock
 config :pleroma, Pleroma.Uploaders.S3, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Upload, config_impl: Pleroma.UnstubbedConfigMock
+config :pleroma, Pleroma.Language.LanguageDetector, config_impl: Pleroma.StaticStubbedConfigMock
 config :pleroma, Pleroma.ScheduledActivity, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Web.RichMedia.Helpers, config_impl: Pleroma.StaticStubbedConfigMock
 config :pleroma, Pleroma.Uploaders.IPFS, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Web.Plugs.HTTPSecurityPlug, config_impl: Pleroma.StaticStubbedConfigMock
 config :pleroma, Pleroma.Web.Plugs.HTTPSignaturePlug, config_impl: Pleroma.StaticStubbedConfigMock
+
+config :pleroma, Pleroma.Upload.Filter.AnonymizeFilename,
+  config_impl: Pleroma.StaticStubbedConfigMock
+
+config :pleroma, Pleroma.Upload.Filter.Mogrify, config_impl: Pleroma.StaticStubbedConfigMock
+config :pleroma, Pleroma.Upload.Filter.Mogrify, mogrify_impl: Pleroma.MogrifyMock
 
 config :pleroma, Pleroma.Signature, http_signatures_impl: Pleroma.StubbedHTTPSignaturesMock
 
