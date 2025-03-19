@@ -126,4 +126,20 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.LikeHandlingTest do
              Object.get_by_ap_id(activity.data["object"])
              |> Object.get_emoji_reactions()
   end
+
+  test "it works for likes with wrong content" do
+    user = insert(:user)
+
+    {:ok, activity} = CommonAPI.post(user, %{status: "hello"})
+
+    data =
+      File.read!("test/fixtures/mitra-custom-emoji-like.json")
+      |> Jason.decode!()
+      |> Map.put("object", activity.data["object"])
+      |> Map.put("content", 1)
+
+    _actor = insert(:user, ap_id: data["actor"], local: false)
+
+    assert {:error, _} = Transmogrifier.handle_incoming(data)
+  end
 end
