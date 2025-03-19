@@ -1494,6 +1494,11 @@ defmodule HttpRequestMock do
     {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/twitter_card.html")}}
   end
 
+  def get("https://instagram.com/longtext", _, _, _) do
+    {:ok,
+     %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/instagram_longtext.html")}}
+  end
+
   def get("https://example.com/non-ogp", _, _, _) do
     {:ok,
      %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/non_ogp_embed.html")}}
@@ -1720,7 +1725,8 @@ defmodule HttpRequestMock do
     "https://example.com/twitter-card",
     "https://google.com/",
     "https://pleroma.local/notice/9kCP7V",
-    "https://yahoo.com/"
+    "https://yahoo.com/",
+    "https://instagram.com/longtext"
   ]
 
   def head(url, _query, _body, _headers) when url in @rich_media_mocks do
