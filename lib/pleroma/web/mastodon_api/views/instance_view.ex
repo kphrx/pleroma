@@ -90,6 +90,15 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     }
   end
 
+  def render("translation_languages.json", _) do
+    with true <- Pleroma.Language.Translation.configured?(),
+         {:ok, languages} <- Pleroma.Language.Translation.languages_matrix() do
+      languages
+    else
+      _ -> %{}
+    end
+  end
+
   defp common_information(instance) do
     %{
       languages: Keyword.get(instance, :languages, ["en"]),
@@ -246,7 +255,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       },
       vapid: %{
         public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
-      }
+      },
+      translation: %{enabled: Pleroma.Language.Translation.configured?()}
     })
   end
 
@@ -259,7 +269,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
         fields_limits: fields_limits(),
         post_formats: Config.get([:instance, :allowed_post_formats]),
         birthday_required: Config.get([:instance, :birthday_required]),
-        birthday_min_age: Config.get([:instance, :birthday_min_age])
+        birthday_min_age: Config.get([:instance, :birthday_min_age]),
+        translation: supported_languages()
       },
       stats: %{mau: Pleroma.User.active_user_count()},
       vapid_public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
@@ -284,5 +295,30 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
           shout_limit: Config.get([:shout, :limit])
         })
     })
+  end
+
+  defp supported_languages do
+    enabled = Pleroma.Language.Translation.configured?()
+
+    source_languages =
+      with true <- enabled,
+           {:ok, languages} <- Pleroma.Language.Translation.supported_languages(:source) do
+        languages
+      else
+        _ -> nil
+      end
+
+    target_languages =
+      with true <- enabled,
+           {:ok, languages} <- Pleroma.Language.Translation.supported_languages(:target) do
+        languages
+      else
+        _ -> nil
+      end
+
+    %{
+      source_languages: source_languages,
+      target_languages: target_languages
+    }
   end
 end

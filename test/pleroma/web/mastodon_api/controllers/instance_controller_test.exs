@@ -152,4 +152,13 @@ defmodule Pleroma.Web.MastodonAPI.InstanceControllerTest do
              }
            ] = result["rules"]
   end
+
+  test "translation languages matrix", %{conn: conn} do
+    clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
+
+    assert %{"en" => ["pl"], "pl" => ["en"]} =
+             conn
+             |> get("/api/v1/instance/translation_languages")
+             |> json_response_and_validate_schema(200)
+  end
 end
