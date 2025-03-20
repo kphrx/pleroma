@@ -143,6 +143,7 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
       |> json_response(200)
 
     assert response["subject"] == "acct:#{user.nickname}@localhost"
+
     assert response["aliases"] == [
              "https://hyrule.world/users/zelda",
              "https://mushroom.kingdom/users/toad"
