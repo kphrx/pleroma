@@ -55,6 +55,26 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
            ]
   end
 
+  test "Webfinger defaults to JSON when no Accept header is provided" do
+    user =
+      insert(:user,
+        ap_id: "https://hyrule.world/users/zelda",
+        also_known_as: ["https://mushroom.kingdom/users/toad"]
+      )
+
+    response =
+      build_conn()
+      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
+      |> json_response(200)
+
+    assert response["subject"] == "acct:#{user.nickname}@localhost"
+
+    assert response["aliases"] == [
+             "https://hyrule.world/users/zelda",
+             "https://mushroom.kingdom/users/toad"
+           ]
+  end
+
   test "reach user on tld, while pleroma is running on subdomain" do
     clear_config([Pleroma.Web.Endpoint, :url, :host], "sub.example.com")
 
@@ -109,16 +129,24 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
     assert result == "Couldn't find user"
   end
 
-  test "Sends a 404 when invalid format" do
-    user = insert(:user)
+  test "Returns JSON when format is not supported" do
+    user =
+      insert(:user,
+        ap_id: "https://hyrule.world/users/zelda",
+        also_known_as: ["https://mushroom.kingdom/users/toad"]
+      )
 
-    assert capture_log(fn ->
-             assert_raise Phoenix.NotAcceptableError, fn ->
-               build_conn()
-               |> put_req_header("accept", "text/html")
-               |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
-             end
-           end) =~ "no supported media type in accept header"
+    response =
+      build_conn()
+      |> put_req_header("accept", "text/html")
+      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
+      |> json_response(200)
+
+    assert response["subject"] == "acct:#{user.nickname}@localhost"
+    assert response["aliases"] == [
+             "https://hyrule.world/users/zelda",
+             "https://mushroom.kingdom/users/toad"
+           ]
   end
 
   test "Sends a 400 when resource param is missing" do
