@@ -56,7 +56,10 @@ defmodule Pleroma.Application do
       Pleroma.Web.Plugs.HTTPSecurityPlug.warn_if_disabled()
     end
 
-    Pleroma.ApplicationRequirements.verify!()
+    if Config.get(:env) != :test do
+      Pleroma.ApplicationRequirements.verify!()
+    end
+
     load_custom_modules()
     Pleroma.Docs.JSON.compile()
     limiters_setup()
@@ -169,7 +172,8 @@ defmodule Pleroma.Application do
         limit: 500_000
       ),
       build_cachex("rel_me", limit: 2500),
-      build_cachex("host_meta", default_ttl: :timer.minutes(120), limit: 5000)
+      build_cachex("host_meta", default_ttl: :timer.minutes(120), limit: 5_000),
+      build_cachex("translations", default_ttl: :timer.hours(24), limit: 5_000)
     ]
   end
 
