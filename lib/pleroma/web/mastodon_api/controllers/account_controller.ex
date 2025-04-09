@@ -501,8 +501,14 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   end
 
   @doc "POST /api/v1/accounts/:id/block"
-  def block(%{assigns: %{user: blocker, account: blocked}} = conn, _params) do
-    with {:ok, _activity} <- CommonAPI.block(blocked, blocker) do
+  def block(
+        %{
+          assigns: %{user: blocker, account: blocked},
+          private: %{open_api_spex: %{body_params: params}}
+        } = conn,
+        _params
+      ) do
+    with {:ok, _activity} <- CommonAPI.block(blocked, blocker, params) do
       render(conn, "relationship.json", user: blocker, target: blocked)
     else
       {:error, message} -> json_response(conn, :forbidden, %{error: message})
@@ -607,7 +613,8 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
       users: users,
       for: user,
       as: :user,
-      embed_relationships: embed_relationships?(params)
+      embed_relationships: embed_relationships?(params),
+      blocks: true
     )
   end
 
