@@ -1,0 +1,65 @@
+{
+   "@context" : [
+      "https://www.w3.org/ns/activitystreams",
+      "https://poa.st/schemas/litepub-0.1.jsonld",
+      {
+         "@language" : "und"
+      }
+   ],
+   "actor" : "https://poa.st/users/TrevorGoodchild",
+   "attachment" : [],
+   "attributedTo" : "https://poa.st/users/TrevorGoodchild",
+   "cc" : [
+      "https://www.w3.org/ns/activitystreams#Public"
+   ],
+   "context" : "https://poa.st/contexts/c6d125f1-4e7f-43bd-aa31-33de4d90d049",
+   "conversation" : "https://poa.st/contexts/c6d125f1-4e7f-43bd-aa31-33de4d90d049",
+   "directMessage" : false,
+   "id" : "https://poa.st/activities/bbd3347a-4a89-4cdb-bf86-4f9eed9506e3",
+   "object" : {
+      "actor" : "https://poa.st/users/TrevorGoodchild",
+      "attachment" : [],
+      "attributedTo" : "https://poa.st/users/TrevorGoodchild",
+      "cc" : [
+         "https://www.w3.org/ns/activitystreams#Public"
+      ],
+      "content" : "<span class=\"recipients-inline\"><span class=\"h-card\"><a class=\"u-url mention\" data-user=\"AfOKoodAGeklO08nyq\" href=\"https://poa.st/users/HoroTheWhiteWolf\" rel=\"ugc\">@<span>HoroTheWhiteWolf</span></a></span> </span>&gt;please let this be his zero fucks given final statement before he joins the 52%+ tranny club",
+      "context" : "https://poa.st/contexts/c6d125f1-4e7f-43bd-aa31-33de4d90d049",
+      "conversation" : "https://poa.st/contexts/c6d125f1-4e7f-43bd-aa31-33de4d90d049",
+      "id" : "https://poa.st/objects/7eb785d5-a556-4070-9091-f4afb226466c",
+      "inReplyTo" : "https://poa.st/objects/71995b41-cfb2-48ce-abce-76d570d54edc",
+      "published" : "2025-05-03T23:54:07.489885Z",
+      "repliesCount" : 2,
+      "sensitive" : false,
+      "source" : {
+         "content" : ">please let this be his zero fucks given final statement before he joins the 52%+ tranny club",
+         "mediaType" : "text/plain"
+      },
+      "summary" : "",
+      "tag" : [
+         {
+            "href" : "https://poa.st/users/HoroTheWhiteWolf",
+            "name" : "@HoroTheWhiteWolf",
+            "type" : "Mention"
+         }
+      ],
+      "to" : [
+         "https://poa.st/users/HoroTheWhiteWolf",
+         "https://poa.st/users/TrevorGoodchild/followers"
+      ],
+      "type" : "Note"
+   },
+   "published" : "2025-05-03T23:54:07.489837Z",
+   "tag" : [
+      {
+         "href" : "https://poa.st/users/HoroTheWhiteWolf",
+         "name" : "@HoroTheWhiteWolf",
+         "type" : "Mention"
+      }
+   ],
+   "to" : [
+      "https://poa.st/users/HoroTheWhiteWolf",
+      "https://poa.st/users/TrevorGoodchild/followers"
+   ],
+   "type" : "Create"
+}

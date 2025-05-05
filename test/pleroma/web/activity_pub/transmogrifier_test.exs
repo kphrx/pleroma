@@ -757,6 +757,43 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       refute recipient.follower_address in fixed_object["cc"]
       refute recipient.follower_address in fixed_object["to"]
     end
+
+    test "preserves public URL in cc even when not explicitly mentioned", %{user: user} do
+      public_url = "https://www.w3.org/ns/activitystreams#Public"
+
+      # Case 1: Public URL in cc but no mentions
+      object = %{
+        "actor" => user.ap_id,
+        "to" => ["https://social.beepboop.ga/users/dirb"],
+        "cc" => [public_url],
+        "tag" => []
+      }
+
+      fixed_object = Transmogrifier.fix_explicit_addressing(object, user.follower_address)
+      assert public_url in fixed_object["cc"]
+
+      # Case 2: Public URL in cc, with mentions but public not in to
+      object = %{
+        "actor" => user.ap_id,
+        "to" => ["https://pleroma.gold/users/user1"],
+        "cc" => [public_url],
+        "tag" => [%{"type" => "Mention", "href" => "https://pleroma.gold/users/user1"}]
+      }
+
+      fixed_object = Transmogrifier.fix_explicit_addressing(object, user.follower_address)
+      assert public_url in fixed_object["cc"]
+
+      # Case 3: Public URL in to, it should be moved to to
+      object = %{
+        "actor" => user.ap_id,
+        "to" => [public_url],
+        "cc" => [],
+        "tag" => []
+      }
+
+      fixed_object = Transmogrifier.fix_explicit_addressing(object, user.follower_address)
+      assert public_url in fixed_object["to"]
+    end
   end
 
   describe "fix_summary/1" do
