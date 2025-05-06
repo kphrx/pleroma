@@ -38,7 +38,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   plug(
     OAuthScopesPlug,
     %{fallback: :proceed_unauthenticated, scopes: ["read:accounts"]}
-    when action in [:show, :followers, :following]
+    when action in [:show, :followers, :following, :endorsements]
   )
 
   plug(
@@ -50,7 +50,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   plug(
     OAuthScopesPlug,
     %{scopes: ["read:accounts"]}
-    when action in [:verify_credentials, :endorsements]
+    when action in [:verify_credentials, :endorsements, :own_endorsements]
   )
 
   plug(
@@ -89,7 +89,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   @relationship_actions [:follow, :unfollow, :remove_from_followers]
   @needs_account ~W(
     followers following lists follow unfollow mute unmute block unblock
-    note endorse unendorse remove_from_followers
+    note endorse unendorse endorsements remove_from_followers
   )a
 
   plug(
@@ -549,6 +549,22 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
     end
   end
 
+  @doc "GET /api/v1/accounts/:id/endorsements"
+  def endorsements(%{assigns: %{user: for_user, account: user}} = conn, params) do
+    users =
+      user
+      |> User.endorsed_users_relation(_restrict_deactivated = true)
+      |> Pleroma.Repo.all()
+
+    conn
+    |> render("index.json",
+      for: for_user,
+      users: users,
+      as: :user,
+      embed_relationships: embed_relationships?(params)
+    )
+  end
+
   @doc "POST /api/v1/accounts/:id/remove_from_followers"
   def remove_from_followers(%{assigns: %{user: %{id: id}, account: %{id: id}}}, _params) do
     {:error, "Can not unfollow yourself"}
@@ -624,7 +640,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   end
 
   @doc "GET /api/v1/endorsements"
-  def endorsements(%{assigns: %{user: user}} = conn, params) do
+  def own_endorsements(%{assigns: %{user: user}} = conn, params) do
     users =
       user
       |> User.endorsed_users_relation(_restrict_deactivated = true)

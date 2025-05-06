@@ -383,6 +383,28 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
     }
   end
 
+  def endorsements_operation do
+    %Operation{
+      tags: ["Retrieve account information"],
+      summary: "Endorsements",
+      description: "Returns endorsed accounts",
+      operationId: "AccountController.endorsements",
+      parameters: [
+        with_relationships_param(),
+        %Reference{"$ref": "#/components/parameters/accountIdOrNickname"}
+      ],
+      responses: %{
+        200 =>
+          Operation.response(
+            "Array of Accounts",
+            "application/json",
+            array_of_accounts()
+          ),
+        404 => Operation.response("Not Found", "application/json", ApiError)
+      }
+    }
+  end
+
   def remove_from_followers_operation do
     %Operation{
       tags: ["Account actions"],
@@ -485,11 +507,11 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
     }
   end
 
-  def endorsements_operation do
+  def own_endorsements_operation do
     %Operation{
       tags: ["Retrieve account information"],
       summary: "Endorsements",
-      operationId: "AccountController.endorsements",
+      operationId: "AccountController.own_endorsements",
       description: "Returns endorsed accounts",
       security: [%{"oAuth" => ["read:accounts"]}],
       responses: %{
