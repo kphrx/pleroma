@@ -308,7 +308,7 @@ defmodule Pleroma.User do
 
   def binary_id(%User{} = user), do: binary_id(user.id)
 
-  @doc "Returns status account"
+  @doc "Returns account status"
   @spec account_status(User.t()) :: account_status()
   def account_status(%User{is_active: false}), do: :deactivated
   def account_status(%User{password_reset_pending: true}), do: :password_reset_pending
