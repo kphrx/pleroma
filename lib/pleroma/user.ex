@@ -895,7 +895,7 @@ defmodule Pleroma.User do
     end)
   end
 
-  def validate_email_not_in_blacklisted_domain(changeset, field) do
+  defp validate_email_not_in_blacklisted_domain(changeset, field) do
     validate_change(changeset, field, fn _, value ->
       valid? =
         Config.get([User, :email_blacklist])
@@ -912,9 +912,9 @@ defmodule Pleroma.User do
     end)
   end
 
-  def maybe_validate_required_email(changeset, true), do: changeset
+  defp maybe_validate_required_email(changeset, true), do: changeset
 
-  def maybe_validate_required_email(changeset, _) do
+  defp maybe_validate_required_email(changeset, _) do
     if Config.get([:instance, :account_activation_required]) do
       validate_required(changeset, [:email])
     else
@@ -1109,15 +1109,15 @@ defmodule Pleroma.User do
 
   defp maybe_send_registration_email(_), do: {:ok, :noop}
 
-  def needs_update?(%User{local: true}), do: false
+  defp needs_update?(%User{local: true}), do: false
 
-  def needs_update?(%User{local: false, last_refreshed_at: nil}), do: true
+  defp needs_update?(%User{local: false, last_refreshed_at: nil}), do: true
 
-  def needs_update?(%User{local: false} = user) do
+  defp needs_update?(%User{local: false} = user) do
     NaiveDateTime.diff(NaiveDateTime.utc_now(), user.last_refreshed_at) >= 86_400
   end
 
-  def needs_update?(_), do: true
+  defp needs_update?(_), do: true
 
   @spec maybe_direct_follow(User.t(), User.t()) ::
           {:ok, User.t(), User.t()} | {:error, String.t()}
@@ -1984,7 +1984,7 @@ defmodule Pleroma.User do
   end
 
   @spec purge_user_changeset(User.t()) :: Ecto.Changeset.t()
-  def purge_user_changeset(user) do
+  defp purge_user_changeset(user) do
     # "Right to be forgotten"
     # https://gdpr.eu/right-to-be-forgotten/
     change(user, %{
@@ -2156,7 +2156,7 @@ defmodule Pleroma.User do
     Repo.all(query)
   end
 
-  def delete_notifications_from_user_activities(%User{ap_id: ap_id}) do
+  defp delete_notifications_from_user_activities(%User{ap_id: ap_id}) do
     Notification
     |> join(:inner, [n], activity in assoc(n, :activity))
     |> where([n, a], fragment("? = ?", a.actor, ^ap_id))
@@ -2634,7 +2634,7 @@ defmodule Pleroma.User do
     |> update_and_set_cache()
   end
 
-  def validate_fields(changeset, remote? \\ false) do
+  defp validate_fields(changeset, remote?) do
     limit_name = if remote?, do: :max_remote_account_fields, else: :max_account_fields
     limit = Config.get([:instance, limit_name], 0)
 
