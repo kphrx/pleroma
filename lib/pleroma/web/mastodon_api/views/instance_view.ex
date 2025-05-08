@@ -261,6 +261,21 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
   end
 
   defp pleroma_configuration(instance) do
+    base_urls = %{}
+
+    base_urls =
+      if Config.get([:media_proxy, :enabled]) do
+        Map.put(base_urls, :media_proxy, Config.get([:media_proxy, :base_url]))
+      else
+        base_urls
+      end
+
+    base_urls =
+      case Config.get([Pleroma.Upload, :base_url]) do
+        nil -> base_urls
+        url -> Map.put(base_urls, :upload, url)
+      end
+
     %{
       metadata: %{
         account_activation_required: Keyword.get(instance, :account_activation_required),
@@ -270,7 +285,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
         post_formats: Config.get([:instance, :allowed_post_formats]),
         birthday_required: Config.get([:instance, :birthday_required]),
         birthday_min_age: Config.get([:instance, :birthday_min_age]),
-        translation: supported_languages()
+        translation: supported_languages(),
+        base_urls: base_urls
       },
       stats: %{mau: Pleroma.User.active_user_count()},
       vapid_public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
