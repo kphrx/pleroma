@@ -2615,7 +2615,7 @@ defmodule Pleroma.User do
     end
   end
 
-  # Internal function; public one is `deactivate/2`
+  # Internal function; public one is `set_activation/2`
   defp set_activation_status(user, status) do
     user
     |> cast(%{is_active: status}, [:is_active])
