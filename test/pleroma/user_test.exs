@@ -2669,8 +2669,8 @@ defmodule Pleroma.UserTest do
 
     assert {:ok, user} = User.update_last_active_at(user)
 
-    assert user.last_active_at >= test_started_at
-    assert user.last_active_at <= NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    assert NaiveDateTime.compare(user.last_active_at, test_started_at) in [:gt, :eq]
+    assert NaiveDateTime.compare(user.last_active_at, NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)) in [:lt, :eq]
 
     last_active_at =
       NaiveDateTime.utc_now()
@@ -2681,11 +2681,11 @@ defmodule Pleroma.UserTest do
              user
              |> cast(%{last_active_at: last_active_at}, [:last_active_at])
              |> User.update_and_set_cache()
+    assert NaiveDateTime.compare(user.last_active_at, last_active_at) == :eq
 
-    assert user.last_active_at == last_active_at
     assert {:ok, user} = User.update_last_active_at(user)
-    assert user.last_active_at >= test_started_at
-    assert user.last_active_at <= NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    assert NaiveDateTime.compare(user.last_active_at, test_started_at) in [:gt, :eq]
+    assert NaiveDateTime.compare(user.last_active_at, NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)) in [:lt, :eq]
   end
 
   test "active_user_count/1" do
