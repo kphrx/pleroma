@@ -1708,7 +1708,9 @@ defmodule Pleroma.User do
     end
   end
 
-  def block(%User{} = blocker, %User{} = blocked) do
+  def block(blocker, blocked, params \\ %{})
+
+  def block(%User{} = blocker, %User{} = blocked, params) do
     # sever any follow relationships to prevent leaks per activitypub (Pleroma issue #213)
     blocker =
       if following?(blocker, blocked) do
@@ -1738,12 +1740,33 @@ defmodule Pleroma.User do
 
     {:ok, blocker} = update_follower_count(blocker)
     {:ok, blocker, _} = Participation.mark_all_as_read(blocker, blocked)
-    add_to_block(blocker, blocked)
+
+    duration = Map.get(params, :duration, 0)
+
+    expires_at =
+      if duration > 0 do
+        DateTime.utc_now()
+        |> DateTime.add(duration)
+      else
+        nil
+      end
+
+    user_block = add_to_block(blocker, blocked, expires_at)
+
+    if duration > 0 do
+      Pleroma.Workers.MuteExpireWorker.new(
+        %{"op" => "unblock_user", "blocker_id" => blocker.id, "blocked_id" => blocked.id},
+        scheduled_at: expires_at
+      )
+      |> Oban.insert()
+    end
+
+    user_block
   end
 
   # helper to handle the block given only an actor's AP id
-  def block(%User{} = blocker, %{ap_id: ap_id}) do
-    block(blocker, get_cached_by_ap_id(ap_id))
+  def block(%User{} = blocker, %{ap_id: ap_id}, params) do
+    block(blocker, get_cached_by_ap_id(ap_id), params)
   end
 
   def unblock(%User{} = blocker, %User{} = blocked) do
@@ -2779,10 +2802,10 @@ defmodule Pleroma.User do
     set_domain_blocks(user, List.delete(user.domain_blocks, domain_blocked))
   end
 
-  @spec add_to_block(User.t(), User.t()) ::
+  @spec add_to_block(User.t(), User.t(), integer() | nil) ::
           {:ok, UserRelationship.t()} | {:error, Ecto.Changeset.t()}
-  defp add_to_block(%User{} = user, %User{} = blocked) do
-    with {:ok, relationship} <- UserRelationship.create_block(user, blocked) do
+  defp add_to_block(%User{} = user, %User{} = blocked, expires_at) do
+    with {:ok, relationship} <- UserRelationship.create_block(user, blocked, expires_at) do
       @cachex.del(:user_cache, "blocked_users_ap_ids:#{user.ap_id}")
       {:ok, relationship}
     end
