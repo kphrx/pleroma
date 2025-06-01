@@ -93,16 +93,8 @@ defmodule Pleroma.Application do
     # Disable warnings_as_errors at runtime, it breaks Phoenix live reload
     # due to protocol consolidation warnings
     # :warnings_as_errors is deprecated via Code.compiler_options/2 since 1.18
-    if elixir_version = System.version() do
-      [major, minor] =
-        elixir_version
-        |> String.split(".")
-        |> Enum.map(&String.to_integer/1)
-        |> Enum.take(2)
-
-        if major == 1 and minor < 18 do
-          Code.compiler_options(warnings_as_errors: false)
-        end
+    if Version.compare(System.version(), "1.18.0") == :lt do
+      Code.compiler_options(warnings_as_errors: false)
     end
 
     # Define workers and child supervisors to be supervised
