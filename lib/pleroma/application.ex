@@ -68,27 +68,6 @@ defmodule Pleroma.Application do
       Finch.start_link(name: MyFinch)
     end
 
-    if adapter == Tesla.Adapter.Gun do
-      if version = Pleroma.OTPVersion.version() do
-        [major, minor] =
-          version
-          |> String.split(".")
-          |> Enum.map(&String.to_integer/1)
-          |> Enum.take(2)
-
-        if (major == 22 and minor < 2) or major < 22 do
-          raise "
-            !!!OTP VERSION WARNING!!!
-            You are using gun adapter with OTP version #{version}, which doesn't support correct handling of unordered certificates chains. Please update your Erlang/OTP to at least 22.2.
-            "
-        end
-      else
-        raise "
-          !!!OTP VERSION WARNING!!!
-          To support correct handling of unordered certificates chains - OTP version must be > 22.2.
-          "
-      end
-    end
 
     # Disable warnings_as_errors at runtime, it breaks Phoenix live reload
     # due to protocol consolidation warnings
