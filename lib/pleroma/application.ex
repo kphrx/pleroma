@@ -68,7 +68,6 @@ defmodule Pleroma.Application do
       Finch.start_link(name: MyFinch)
     end
 
-
     # Disable warnings_as_errors at runtime, it breaks Phoenix live reload
     # due to protocol consolidation warnings
     # :warnings_as_errors is deprecated via Code.compiler_options/2 since 1.18

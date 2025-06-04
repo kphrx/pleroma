@@ -22,7 +22,11 @@ defmodule Pleroma.Web.Plugs.UserTrackingPlugTest do
       |> UserTrackingPlug.call(%{})
 
     assert NaiveDateTime.compare(user.last_active_at, test_started_at) in [:gt, :eq]
-    assert NaiveDateTime.compare(user.last_active_at, NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)) in [:lt, :eq]
+
+    assert NaiveDateTime.compare(
+             user.last_active_at,
+             NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+           ) in [:lt, :eq]
   end
 
   test "doesn't update last_active_at if it was updated recently", %{conn: conn} do
