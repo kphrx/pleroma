@@ -55,7 +55,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
         "#" <> name -> name
         name -> name
       end
-
+      |> String.downcase()
 
     data = Map.put(data, "name", name)
 
