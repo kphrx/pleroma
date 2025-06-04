@@ -213,7 +213,7 @@ defmodule Pleroma.Mixfile do
       {:poison, "~> 3.0", only: :test},
       {:ex_doc, "~> 0.22", only: :dev, runtime: false},
       {:ex_machina, "~> 2.4", only: :test},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:mock, "~> 0.3.5", only: :test},
       {:covertool, "~> 2.0", only: :test},
       {:hackney, "~> 1.18.0", override: true},
