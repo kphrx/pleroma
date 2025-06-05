@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Instances.InstanceTest do
-  alias Pleroma.Instances
   alias Pleroma.Instances.Instance
   alias Pleroma.Repo
   alias Pleroma.Tests.ObanHelpers
@@ -13,8 +12,6 @@ defmodule Pleroma.Instances.InstanceTest do
 
   import ExUnit.CaptureLog
   import Pleroma.Factory
-
-  setup_all do: clear_config([:instance, :federation_reachability_timeout_days], 1)
 
   describe "set_reachable/1" do
     test "clears `unreachable_since` of existing matching Instance record having non-nil `unreachable_since`" do
@@ -145,7 +142,11 @@ defmodule Pleroma.Instances.InstanceTest do
     end
 
     test "Doesn't scrapes unreachable instances" do
-      instance = insert(:instance, unreachable_since: Instances.reachability_datetime_threshold())
+      instance =
+        insert(:instance,
+          unreachable_since: NaiveDateTime.utc_now() |> NaiveDateTime.add(-:timer.hours(24))
+        )
+
       url = "https://" <> instance.host
 
       assert capture_log(fn -> assert nil == Instance.get_or_update_favicon(URI.parse(url)) end) =~

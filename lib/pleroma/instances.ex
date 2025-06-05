@@ -15,25 +15,7 @@ defmodule Pleroma.Instances do
 
   defdelegate set_unreachable(url_or_host, unreachable_since \\ nil), to: Instance
 
-  defdelegate get_consistently_unreachable, to: Instance
-
-  def set_consistently_unreachable(url_or_host),
-    do: set_unreachable(url_or_host, reachability_datetime_threshold())
-
-  def reachability_datetime_threshold do
-    federation_reachability_timeout_days =
-      Pleroma.Config.get([:instance, :federation_reachability_timeout_days], 0)
-
-    if federation_reachability_timeout_days > 0 do
-      NaiveDateTime.add(
-        NaiveDateTime.utc_now(),
-        -federation_reachability_timeout_days * 24 * 3600,
-        :second
-      )
-    else
-      ~N[0000-01-01 00:00:00]
-    end
-  end
+  defdelegate get_unreachable, to: Instance
 
   def host(url_or_host) when is_binary(url_or_host) do
     if url_or_host =~ ~r/^http/i do

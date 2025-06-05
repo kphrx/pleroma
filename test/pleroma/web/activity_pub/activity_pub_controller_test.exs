@@ -8,7 +8,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
   alias Pleroma.Activity
   alias Pleroma.Delivery
-  alias Pleroma.Instances
   alias Pleroma.Object
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
@@ -601,23 +600,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert Activity.get_by_ap_id(data["id"])
     end
 
-    test "it clears `unreachable` federation status of the sender", %{conn: conn} do
-      data = File.read!("test/fixtures/mastodon-post-activity.json") |> Jason.decode!()
-
-      sender_url = data["actor"]
-      Instances.set_consistently_unreachable(sender_url)
-      refute Instances.reachable?(sender_url)
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/inbox", data)
-
-      assert "ok" == json_response(conn, 200)
-      assert Instances.reachable?(sender_url)
-    end
-
     test "accept follow activity", %{conn: conn} do
       clear_config([:instance, :federating], true)
       relay = Relay.get_actor()
@@ -1106,24 +1088,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         |> get("/users/#{user.nickname}/inbox?page=true")
 
       assert response(conn, 200) =~ note_object.data["content"]
-    end
-
-    test "it clears `unreachable` federation status of the sender", %{conn: conn, data: data} do
-      user = insert(:user)
-      data = Map.put(data, "bcc", [user.ap_id])
-
-      sender_host = URI.parse(data["actor"]).host
-      Instances.set_consistently_unreachable(sender_host)
-      refute Instances.reachable?(sender_host)
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/users/#{user.nickname}/inbox", data)
-
-      assert "ok" == json_response(conn, 200)
-      assert Instances.reachable?(sender_host)
     end
 
     test "it removes all follower collections but actor's", %{conn: conn} do

@@ -148,17 +148,9 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
                {"digest", p.digest}
              ]
            ) do
-      if not is_nil(p.unreachable_since) do
-        Instances.set_reachable(p.inbox)
-      end
-
       result
     else
       {_post_result, %{status: code} = response} = e ->
-        if is_nil(p.unreachable_since) do
-          Instances.set_unreachable(p.inbox)
-        end
-
         Logger.metadata(activity: p.activity_id, inbox: p.inbox, status: code)
         Logger.error("Publisher failed to inbox #{p.inbox} with status #{code}")
 
@@ -179,10 +171,6 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
         connection_pool_snooze()
 
       e ->
-        if is_nil(p.unreachable_since) do
-          Instances.set_unreachable(p.inbox)
-        end
-
         Logger.metadata(activity: p.activity_id, inbox: p.inbox)
         Logger.error("Publisher failed to inbox #{p.inbox} #{inspect(e)}")
         {:error, e}
@@ -308,7 +296,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
 
     Repo.checkout(fn ->
       Enum.each(inboxes, fn inboxes ->
-        Enum.each(inboxes, fn {inbox, unreachable_since} ->
+        Enum.each(inboxes, fn inbox ->
           %User{ap_id: ap_id} = Enum.find(recipients, fn actor -> actor.inbox == inbox end)
 
           # Get all the recipients on the same host and add them to cc. Otherwise, a remote
@@ -318,8 +306,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
           __MODULE__.enqueue_one(%{
             inbox: inbox,
             cc: cc,
-            activity_id: activity.id,
-            unreachable_since: unreachable_since
+            activity_id: activity.id
           })
         end)
       end)
@@ -352,12 +339,11 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     |> Enum.each(fn {inboxes, priority} ->
       inboxes
       |> Instances.filter_reachable()
-      |> Enum.each(fn {inbox, unreachable_since} ->
+      |> Enum.each(fn inbox ->
         __MODULE__.enqueue_one(
           %{
             inbox: inbox,
-            activity_id: activity.id,
-            unreachable_since: unreachable_since
+            activity_id: activity.id
           },
           priority: priority
         )

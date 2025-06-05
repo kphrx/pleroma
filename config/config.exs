@@ -194,7 +194,6 @@ config :pleroma, :instance,
   account_approval_required: false,
   federating: true,
   federation_incoming_replies_max_depth: 100,
-  federation_reachability_timeout_days: 7,
   allow_relay: true,
   public: true,
   quarantined_instances: [],
@@ -603,7 +602,8 @@ config :pleroma, Oban,
   crontab: [
     {"0 0 * * 0", Pleroma.Workers.Cron.DigestEmailsWorker},
     {"0 0 * * *", Pleroma.Workers.Cron.NewUsersDigestWorker},
-    {"*/10 * * * *", Pleroma.Workers.Cron.AppCleanupWorker}
+    {"*/10 * * * *", Pleroma.Workers.Cron.AppCleanupWorker},
+    {"0 0 * * *", Pleroma.Workers.Cron.ScheduleReachabilityWorker}
   ]
 
 config :pleroma, Pleroma.Formatter,
