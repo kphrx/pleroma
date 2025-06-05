@@ -328,7 +328,7 @@ defmodule Pleroma.Web.ActivityPub.Builder do
   end
 
   @spec block(User.t(), User.t(), map()) :: {:ok, map(), keyword()}
-  def block(blocker, blocked, params) do
+  def block(blocker, blocked, params \\ %{}) do
     {:ok,
      %{
        "id" => Utils.generate_activity_id(),
