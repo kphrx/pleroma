@@ -8,7 +8,7 @@ defmodule Pleroma.Language.Translation do
   def configured? do
     provider = get_provider()
 
-    !!provider and provider.configured?
+    !!provider and provider.configured?()
   end
 
   def missing_dependencies do

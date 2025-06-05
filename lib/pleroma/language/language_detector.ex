@@ -12,7 +12,7 @@ defmodule Pleroma.Language.LanguageDetector do
   def configured? do
     provider = get_provider()
 
-    !!provider and provider.configured?
+    !!provider and provider.configured?()
   end
 
   def missing_dependencies do
@@ -41,7 +41,7 @@ defmodule Pleroma.Language.LanguageDetector do
     text = prepare_text(text)
     word_count = text |> String.split(~r/\s+/) |> Enum.count()
 
-    if word_count < @words_threshold or !provider or !provider.configured? do
+    if word_count < @words_threshold or !provider or !provider.configured?() do
       nil
     else
       with language <- provider.detect(text),
