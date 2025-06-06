@@ -13,7 +13,7 @@ defmodule Pleroma.Workers.ReachabilityWorker do
 
   @impl true
   def perform(%Oban.Job{args: %{"domain" => domain}}) do
-    case HTTP.get("https://#{domain}/") do
+    case HTTP.get("https://#{domain}/.well-known/nodeinfo") do
       {:ok, %{status: status}} when status in 200..299 ->
         Instances.set_reachable("https://#{domain}")
         :ok
