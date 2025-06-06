@@ -12,13 +12,9 @@ defmodule Pleroma.Workers.RemoteFetcherWorker do
   def perform(%Job{args: %{"op" => "fetch_remote", "id" => id} = args}) do
     case Fetcher.fetch_object_from_id(id, depth: args["depth"]) do
       {:ok, _object} ->
-        # Mark the server as reachable since we successfully fetched an object
-        case URI.parse(id) do
-          %URI{host: host} when not is_nil(host) ->
-            Instances.set_reachable("https://#{host}")
-
-          _ ->
-            :ok
+        unless Instances.reachable?(id) do
+          # Mark the server as reachable since we successfully fetched an object
+          Instances.set_reachable(id)
         end
 
         :ok
