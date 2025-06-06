@@ -5,7 +5,6 @@
 defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
   use Pleroma.Web.ConnCase
 
-  import ExUnit.CaptureLog
   import Pleroma.Factory
   import Tesla.Mock
 
