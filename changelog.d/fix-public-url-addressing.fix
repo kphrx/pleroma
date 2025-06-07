@@ -1,0 +1,1 @@
+- Fixed an issue where the ActivityStreams Public collection URL was being removed from incoming activities' cc fields
