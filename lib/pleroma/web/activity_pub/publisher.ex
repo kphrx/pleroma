@@ -282,7 +282,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
 
     [priority_recipients, recipients] = recipients(actor, activity)
 
-    inboxes =
+    [priority_inboxes, other_inboxes] =
       [priority_recipients, recipients]
       |> Enum.map(fn recipients ->
         recipients
@@ -295,7 +295,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
       end)
 
     Repo.checkout(fn ->
-      Enum.each(inboxes, fn inboxes ->
+      Enum.each([priority_inboxes, other_inboxes], fn inboxes ->
         Enum.each(inboxes, fn inbox ->
           %User{ap_id: ap_id} = Enum.find(recipients, fn actor -> actor.inbox == inbox end)
 
