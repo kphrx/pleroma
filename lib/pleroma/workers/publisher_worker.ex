@@ -7,7 +7,7 @@ defmodule Pleroma.Workers.PublisherWorker do
   alias Pleroma.Instances
   alias Pleroma.Web.Federator
 
-  use Oban.Worker, queue: :federator_outgoing, max_attempts: 5
+  use Oban.Worker, queue: :federator_outgoing, max_attempts: 13
 
   @impl true
   def perform(%Job{args: %{"op" => "publish", "activity_id" => activity_id}}) do
