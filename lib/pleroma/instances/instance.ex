@@ -84,7 +84,7 @@ defmodule Pleroma.Instances.Instance do
       from(i in Instance,
         where:
           i.host == ^host(url_or_host) and
-            i.unreachable_since <= ^NaiveDateTime.utc_now(),
+            not is_nil(i.unreachable_since),
         select: true
       )
     )
