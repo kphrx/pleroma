@@ -157,7 +157,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       "pleroma:bookmark_folders",
       if Pleroma.Language.LanguageDetector.configured?() do
         "pleroma:language_detection"
-      end
+      end,
+      "pleroma:block_expiration"
     ]
     |> Enum.filter(& &1)
   end

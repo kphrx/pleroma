@@ -37,20 +37,11 @@ defmodule Pleroma.Mixfile do
         pleroma: [
           include_executables_for: [:unix],
           applications: [ex_syslogger: :load, syslog: :load, eldap: :transient],
-          steps: [:assemble, &put_otp_version/1, &copy_files/1, &copy_nginx_config/1],
+          steps: [:assemble, &copy_files/1, &copy_nginx_config/1],
           config_providers: [{Pleroma.Config.ReleaseRuntimeProvider, []}]
         ]
       ]
     ]
-  end
-
-  def put_otp_version(%{path: target_path} = release) do
-    File.write!(
-      Path.join([target_path, "OTP_VERSION"]),
-      Pleroma.OTPVersion.version()
-    )
-
-    release
   end
 
   def copy_files(%{path: target_path} = release) do
@@ -215,7 +206,7 @@ defmodule Pleroma.Mixfile do
       {:poison, "~> 3.0", only: :test},
       {:ex_doc, "~> 0.22", only: :dev, runtime: false},
       {:ex_machina, "~> 2.4", only: :test},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:mock, "~> 0.3.5", only: :test},
       {:covertool, "~> 2.0", only: :test},
       {:hackney, "~> 1.18.0", override: true},
@@ -238,7 +229,7 @@ defmodule Pleroma.Mixfile do
       "ecto.rollback": ["pleroma.ecto.rollback"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate", "test"],
+      test: ["ecto.create --quiet", "ecto.migrate", "test --warnings-as-errors"],
       docs: ["pleroma.docs", "docs"],
       analyze: ["credo --strict --only=warnings,todo,fixme,consistency,readability"],
       copyright: &add_copyright/1,
