@@ -520,4 +520,105 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
     assert decoded["cc"] == []
   end
+
+  test "unlisted activities retain public address in cc" do
+    user = insert(:user)
+
+    # simulate unlistd activity by only having
+    # public address in cc
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public],
+          "to" => [user.follower_address]
+        }
+      )
+
+    assert @as_public in activity.data["cc"]
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert @as_public in decoded["cc"]
+
+    # maybe we also have another inbox in cc
+    # during Publishing
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public],
+          "to" => [user.follower_address]
+        }
+      )
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: ["https://remote.instance/users/someone_else/inbox"]
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert decoded["cc"] == [@as_public, "https://remote.instance/users/someone_else/inbox"]
+  end
+
+  test "public address in cc parameter is preserved" do
+    user = insert(:user)
+
+    cc_with_public = [@as_public, "https://example.org/users/other"]
+
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => cc_with_public,
+          "to" => [user.follower_address]
+        }
+      )
+
+    assert @as_public in activity.data["cc"]
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: cc_with_public
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert cc_with_public == decoded["cc"]
+  end
+
+  test "cc parameter is preserved" do
+    user = insert(:user)
+
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => ["https://example.com/specific/user"],
+          "to" => [user.follower_address]
+        }
+      )
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: ["https://example.com/specific/user"]
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert decoded["cc"] == ["https://example.com/specific/user"]
+  end
 end
