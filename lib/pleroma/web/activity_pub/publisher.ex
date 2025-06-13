@@ -99,11 +99,11 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
 
     public_address = Pleroma.Constants.as_public()
 
-    # Avoid overriding explicitly set cc values for specific recipients.
-    # e.g., this ensures unlisted posts are visible to users on other servers.
+    # Ensure unlisted posts don't lose the public address in the cc
+    # if the param_cc was set
     cc =
-      if public_address in original_cc and param_cc == [] do
-        [public_address]
+      if public_address in original_cc and public_address not in param_cc do
+        [public_address | param_cc]
       else
         param_cc
       end
