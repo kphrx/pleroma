@@ -520,4 +520,73 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
     assert decoded["cc"] == []
   end
+
+  test "retains public address in cc for unlisted activities" do
+    user = insert(:user)
+
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public],
+          "to" => [user.follower_address]
+        }
+      )
+
+    assert @as_public in activity.data["cc"]
+
+    # Call prepare_one without an explicit cc parameter (default in production)
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id
+      })
+
+    # Parse the JSON to verify the cc field in the federated message
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    # The public address should be preserved in the cc field
+    # Currently this will fail because it's being removed
+    assert @as_public in decoded["cc"]
+
+    # For verification, also test with an explicit cc parameter
+    # to show the cc field is completely replaced
+    prepared_with_cc =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: ["https://example.com/specific/user"]
+      })
+
+    {:ok, decoded_with_cc} = Jason.decode(prepared_with_cc.json)
+
+    # Verify cc is completely replaced with the provided value
+    assert decoded_with_cc["cc"] == ["https://example.com/specific/user"]
+  end
+
+  test "public address in cc parameter is preserved" do
+    user = insert(:user)
+
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public, "https://example.org/users/other"],
+          "to" => [user.follower_address]
+        }
+      )
+
+    assert @as_public in activity.data["cc"]
+
+    prepared_with_public_cc =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: [@as_public]
+      })
+
+    {:ok, decoded_with_public_cc} = Jason.decode(prepared_with_public_cc.json)
+
+    assert @as_public in decoded_with_public_cc["cc"]
+  end
 end
