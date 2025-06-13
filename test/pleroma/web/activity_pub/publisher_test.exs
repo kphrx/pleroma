@@ -546,6 +546,28 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
     {:ok, decoded} = Jason.decode(prepared.json)
 
     assert @as_public in decoded["cc"]
+
+    # maybe we also have another inbox in cc
+    # during Publishing
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public],
+          "to" => [user.follower_address]
+        }
+      )
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: ["https://remote.instance/users/someone_else/inbox"]
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert decoded["cc"] == [@as_public, "https://remote.instance/users/someone_else/inbox"]
   end
 
   test "public address in cc parameter is preserved" do
