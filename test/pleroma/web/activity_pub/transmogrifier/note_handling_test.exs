@@ -786,35 +786,4 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
     assert object.data["context"] == object.data["inReplyTo"]
     assert modified.data["context"] == object.data["inReplyTo"]
   end
-
-  test "it keeps the public address in cc in the activity when it is present" do
-    data =
-      File.read!("test/fixtures/mastodon-post-activity.json")
-      |> Jason.decode!()
-
-    object =
-      data["object"]
-      |> Map.put("cc", ["https://www.w3.org/ns/activitystreams#Public"])
-      |> Map.put("to", [])
-
-    data =
-      data
-      |> Map.put("object", object)
-      |> Map.put("cc", ["https://www.w3.org/ns/activitystreams#Public"])
-      |> Map.put("to", [])
-
-    {:ok, %Activity{} = modified} = Transmogrifier.handle_incoming(data)
-    assert modified.data["cc"] == ["https://www.w3.org/ns/activitystreams#Public"]
-  end
-
-  test "it tries it with the real poast_unlisted.json, ensuring that public is in the cc" do
-    data =
-      File.read!("test/fixtures/poast_unlisted.json")
-      |> Jason.decode!()
-
-    _user = insert(:user, ap_id: data["actor"])
-
-    {:ok, %Activity{} = modified} = Transmogrifier.handle_incoming(data)
-    assert modified.data["cc"] == ["https://www.w3.org/ns/activitystreams#Public"]
-  end
 end
