@@ -2792,6 +2792,15 @@ defmodule Pleroma.UserTest do
       assert user_updated.also_known_as |> length() == 1
       assert user2.ap_id in user_updated.also_known_as
     end
+
+    test "should tolerate non-http(s) aliases" do
+      user =
+        insert(:user, %{
+          also_known_as: ["at://did:plc:xgvzy7ni6ig6ievcbls5jaxe"]
+        })
+
+      assert "at://did:plc:xgvzy7ni6ig6ievcbls5jaxe" in user.also_known_as
+    end
   end
 
   describe "alias_users/1" do
