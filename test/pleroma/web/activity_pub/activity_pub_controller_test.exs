@@ -941,23 +941,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert Activity.get_by_ap_id(data["id"])
     end
 
-    test "it rejects an invalid incoming activity", %{conn: conn, data: data} do
-      user = insert(:user, is_active: false)
-
-      data =
-        data
-        |> Map.put("bcc", [user.ap_id])
-        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/users/#{user.nickname}/inbox", data)
-
-      assert "Invalid request." == json_response(conn, 400)
-    end
-
     test "it accepts messages with to as string instead of array", %{conn: conn, data: data} do
       user = insert(:user)
 
@@ -1340,6 +1323,50 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert "ok" == json_response(conn, 200)
       ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
       assert Activity.get_by_ap_id(data["id"])
+    end
+
+    test "it returns an error when receiving an activity sent to a deactivated user", %{
+      conn: conn,
+      data: data
+    } do
+      user = insert(:user)
+      {:ok, _} = User.set_activation(user, false)
+
+      data =
+        data
+        |> Map.put("bcc", [user.ap_id])
+        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
+
+      conn =
+        conn
+        |> assign(:valid_signature, true)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/inbox", data)
+
+      assert "User deactivated" == json_response(conn, 404)
+    end
+
+    test "it returns an error when receiving an activity sent from a deactivated user", %{
+      conn: conn,
+      data: data
+    } do
+      sender = insert(:user)
+      user = insert(:user)
+      {:ok, _} = User.set_activation(sender, false)
+
+      data =
+        data
+        |> Map.put("bcc", [user.ap_id])
+        |> Map.put("actor", sender.ap_id)
+        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
+
+      conn =
+        conn
+        |> assign(:valid_signature, true)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/inbox", data)
+
+      assert "Sender deactivated" == json_response(conn, 404)
     end
   end
 
