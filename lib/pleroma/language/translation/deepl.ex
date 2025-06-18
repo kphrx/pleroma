@@ -24,17 +24,15 @@ defmodule Pleroma.Language.Translation.Deepl do
       |> URI.to_string()
 
     case Pleroma.HTTP.post(
-           endpoint <>
-             "?" <>
-             URI.encode_query(%{
-               text: content,
-               source_lang: source_language |> String.upcase(),
-               target_lang: target_language,
-               tag_handling: "html"
-             }),
-           "",
+           endpoint,
+           Jason.encode!(%{
+             text: [content],
+             source_lang: source_language |> String.upcase(),
+             target_lang: target_language,
+             tag_handling: "html"
+           }),
            [
-             {"Content-Type", "application/x-www-form-urlencoded"},
+             {"Content-Type", "application/json"},
              {"Authorization", "DeepL-Auth-Key #{api_key()}"}
            ]
          ) do
