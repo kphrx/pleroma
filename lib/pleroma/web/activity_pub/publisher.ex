@@ -92,19 +92,16 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     uri = %{path: path} = URI.parse(inbox)
 
     {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
-    {actor, activity, data} =
+
+    {actor, data} =
       with {_, false} <- {:actor_changed?, data["actor"] != activity.data["actor"]} do
-        {orig_actor, activity, data}
+        {actor, data}
       else
         {:actor_changed?, true} ->
           # If prepare_outgoing changes the actor, re-get it from the db
-          actor = User.get_cached_by_ap_id(data["actor"])
-
-          activity = %Activity{activity | actor: actor.ap_id}
-
-          {actor, activity, data}
-    end
-
+          new_actor = User.get_cached_by_ap_id(data["actor"])
+          {new_actor, data}
+      end
 
     param_cc = Map.get(params, :cc, [])
 

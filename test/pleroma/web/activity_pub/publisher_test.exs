@@ -380,14 +380,18 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
     end
 
     test_with_mock "Publishes with the new actor if prepare_outgoing changes the actor.",
-                   Pleroma.Web.Federator.Publisher,
+                   Pleroma.Web.ActivityPub.Publisher,
                    [:passthrough],
                    [] do
+      mock(fn
+        %{method: :post, url: "https://domain.com/users/nick1/inbox", body: body} ->
+          {:ok, %Tesla.Env{status: 200, body: body}}
+      end)
+
       other_user =
         insert(:user, %{
           local: false,
-          inbox: "https://domain.com/users/nick1/inbox",
-          ap_enabled: true
+          inbox: "https://domain.com/users/nick1/inbox"
         })
 
       actor = insert(:user)
@@ -401,25 +405,19 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
       with_mock Pleroma.Web.ActivityPub.Transmogrifier,
         prepare_outgoing: fn data -> {:ok, Map.put(data, "actor", replaced_actor.ap_id)} end do
-        res = Publisher.publish(actor, note_activity)
+        prepared =
+          Publisher.prepare_one(%{
+            inbox: "https://domain.com/users/nick1/inbox",
+            activity_id: note_activity.id,
+            cc: ["https://domain.com/users/nick2/inbox"]
+          })
 
-        assert res == :ok
+        {:ok, decoded} = Jason.decode(prepared.json)
+        assert decoded["actor"] == replaced_actor.ap_id
 
-        refute called(
-                 Pleroma.Web.Federator.Publisher.enqueue_one(Publisher, %{
-                   inbox: "https://domain.com/users/nick1/inbox",
-                   actor_id: actor.id,
-                   id: note_activity.data["id"]
-                 })
-               )
-
-        assert called(
-                 Pleroma.Web.Federator.Publisher.enqueue_one(Publisher, %{
-                   inbox: "https://domain.com/users/nick1/inbox",
-                   actor_id: replaced_actor.id,
-                   id: note_activity.data["id"]
-                 })
-               )
+        {:ok, published} = Publisher.publish_one(prepared)
+        sent_activity = Jason.decode!(published.body)
+        assert sent_activity["actor"] == replaced_actor.ap_id
       end
     end
 
