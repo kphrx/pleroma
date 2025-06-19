@@ -1205,9 +1205,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
           }
         ],
         "actor" => actor.ap_id,
-        "cc" => [
-          reported_user.ap_id
-        ],
+        # CC and TO might either not exist at all, or be empty. We should be able to handle either.
+        # "cc" => [],
         "content" => "test",
         "context" => "context",
         "id" => "http://#{remote_domain}/activities/02be56cf-35e3-46b4-b2c6-47ae08dfee9e",

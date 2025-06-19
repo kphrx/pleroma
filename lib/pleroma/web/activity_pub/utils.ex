@@ -82,7 +82,11 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   def unaddressed_message?(params),
     do:
       [params["to"], params["cc"], params["bto"], params["bcc"]]
-      |> Enum.all?(&is_nil(&1))
+      |> Enum.all?(fn
+        nil -> true
+        [] -> true
+        _ -> false
+      end)
 
   @spec recipient_in_message(User.t(), User.t(), map()) :: boolean()
   def recipient_in_message(%User{ap_id: ap_id} = recipient, %User{} = actor, params),

@@ -1,0 +1,1 @@
+Fix reports being rejected when the activity had an empty CC or TO field (instead of not having them at all)
