@@ -664,6 +664,24 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
+  # Rewrite dislikes into the thumbs down emoji
+  defp handle_incoming_normalized(%{"type" => "Dislike"} = data, options) do
+    data
+    |> Map.put("type", "EmojiReact")
+    |> Map.put("content", "👎")
+    |> handle_incoming_normalized(options)
+  end
+
+  defp handle_incoming_normalized(
+         %{"type" => "Undo", "object" => %{"type" => "Dislike"}} = data,
+         options
+       ) do
+    data
+    |> put_in(["object", "type"], "EmojiReact")
+    |> put_in(["object", "content"], "👎")
+    |> handle_incoming_normalized(options)
+  end
+
   defp handle_incoming_normalized(_, _), do: :error
 
   @spec get_obj_helper(String.t(), Keyword.t()) :: {:ok, Object.t()} | nil
