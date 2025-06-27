@@ -9,7 +9,6 @@ defmodule Pleroma.Instances.Instance do
   alias Pleroma.Instances.Instance
   alias Pleroma.Maps
   alias Pleroma.Repo
-  alias Pleroma.User
   alias Pleroma.Workers.DeleteWorker
 
   use Ecto.Schema
@@ -293,17 +292,5 @@ defmodule Pleroma.Instances.Instance do
   def delete_users_and_activities(host) when is_binary(host) do
     DeleteWorker.new(%{"op" => "delete_instance", "host" => host})
     |> Oban.insert()
-  end
-
-  def perform(:delete_instance, host) when is_binary(host) do
-    User.Query.build(%{nickname: "@#{host}"})
-    |> Repo.chunk_stream(100, :batches)
-    |> Stream.each(fn users ->
-      users
-      |> Enum.each(fn user ->
-        User.perform(:delete, user)
-      end)
-    end)
-    |> Stream.run()
   end
 end

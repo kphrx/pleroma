@@ -100,6 +100,7 @@ defmodule Pleroma.Constants do
       "Add",
       "Remove",
       "Like",
+      "Dislike",
       "Announce",
       "Undo",
       "Flag",
@@ -115,6 +116,7 @@ defmodule Pleroma.Constants do
       "Flag",
       "Follow",
       "Like",
+      "Dislike",
       "EmojiReact",
       "Announce"
     ]

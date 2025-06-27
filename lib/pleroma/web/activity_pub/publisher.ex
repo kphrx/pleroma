@@ -93,7 +93,20 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
 
     {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
 
-    cc = Map.get(params, :cc, [])
+    param_cc = Map.get(params, :cc, [])
+
+    original_cc = Map.get(data, "cc", [])
+
+    public_address = Pleroma.Constants.as_public()
+
+    # Ensure unlisted posts don't lose the public address in the cc
+    # if the param_cc was set
+    cc =
+      if public_address in original_cc and public_address not in param_cc do
+        [public_address | param_cc]
+      else
+        param_cc
+      end
 
     json =
       data

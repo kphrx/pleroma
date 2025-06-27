@@ -1261,6 +1261,7 @@ config :pleroma, :config_description, [
             background: "/static/aurora_borealis.jpg",
             collapseMessageWithSubject: false,
             greentext: false,
+            embeddedToS: true,
             hideFilteredStatuses: false,
             hideMutedPosts: false,
             hidePostStats: false,
@@ -1311,6 +1312,12 @@ config :pleroma, :config_description, [
             label: "Greentext",
             type: :boolean,
             description: "Enables green text on lines prefixed with the > character"
+          },
+          %{
+            key: :embeddedToS,
+            label: "Embedded ToS panel",
+            type: :boolean,
+            description: "Hide Terms of Service panel decorations on About and Registration pages"
           },
           %{
             key: :hideFilteredStatuses,

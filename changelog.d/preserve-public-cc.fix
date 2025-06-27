@@ -1,0 +1,1 @@
+Fix federation issue where Public visibility information in cc field was lost when sent to remote servers, causing posts to appear with inconsistent visibility across instances
