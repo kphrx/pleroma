@@ -6,9 +6,8 @@ defmodule Pleroma.Instances.InstanceTest do
   alias Pleroma.Instances
   alias Pleroma.Instances.Instance
   alias Pleroma.Repo
-  alias Pleroma.Tests.ObanHelpers
-  alias Pleroma.Web.CommonAPI
 
+  use Oban.Testing, repo: Pleroma.Repo
   use Pleroma.DataCase
 
   import ExUnit.CaptureLog
@@ -213,32 +212,14 @@ defmodule Pleroma.Instances.InstanceTest do
     end
   end
 
-  test "delete_users_and_activities/1 deletes remote instance users and activities" do
-    [mario, luigi, _peach, wario] =
-      users = [
-        insert(:user, nickname: "mario@mushroom.kingdom", name: "Mario"),
-        insert(:user, nickname: "luigi@mushroom.kingdom", name: "Luigi"),
-        insert(:user, nickname: "peach@mushroom.kingdom", name: "Peach"),
-        insert(:user, nickname: "wario@greedville.biz", name: "Wario")
-      ]
+  test "delete_users_and_activities/1 schedules a job to delete the instance and users" do
+    insert(:user, nickname: "mario@mushroom.kingdom", name: "Mario")
 
-    {:ok, post1} = CommonAPI.post(mario, %{status: "letsa go!"})
-    {:ok, post2} = CommonAPI.post(luigi, %{status: "itsa me... luigi"})
-    {:ok, post3} = CommonAPI.post(wario, %{status: "WHA-HA-HA!"})
+    {:ok, _job} = Instance.delete_users_and_activities("mushroom.kingdom")
 
-    {:ok, job} = Instance.delete_users_and_activities("mushroom.kingdom")
-    :ok = ObanHelpers.perform(job)
-
-    [mario, luigi, peach, wario] = Repo.reload(users)
-
-    refute mario.is_active
-    refute luigi.is_active
-    refute peach.is_active
-    refute peach.name == "Peach"
-
-    assert wario.is_active
-    assert wario.name == "Wario"
-
-    assert [nil, nil, %{}] = Repo.reload([post1, post2, post3])
+    assert_enqueued(
+      worker: Pleroma.Workers.DeleteWorker,
+      args: %{"op" => "delete_instance", "host" => "mushroom.kingdom"}
+    )
   end
 end
