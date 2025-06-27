@@ -603,8 +603,7 @@ config :pleroma, Oban,
   crontab: [
     {"0 0 * * 0", Pleroma.Workers.Cron.DigestEmailsWorker},
     {"0 0 * * *", Pleroma.Workers.Cron.NewUsersDigestWorker},
-    {"*/10 * * * *", Pleroma.Workers.Cron.AppCleanupWorker},
-    {"0 0 * * *", Pleroma.Workers.Cron.ScheduleReachabilityWorker}
+    {"*/10 * * * *", Pleroma.Workers.Cron.AppCleanupWorker}
   ]
 
 config :pleroma, Pleroma.Formatter,
