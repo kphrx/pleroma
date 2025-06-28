@@ -191,6 +191,30 @@ defmodule Pleroma.Workers.ReachabilityWorkerTest do
       assert existing_job.args["domain"] == domain
       assert existing_job.args["phase"] == "phase_1min"
     end
+
+    test "handles new jobs with only domain argument and transitions them to the first phase" do
+      domain = "legacy.example.com"
+
+      with_mocks([
+        {Pleroma.Instances, [], [set_reachable: fn _ -> :ok end]}
+      ]) do
+        # Create a job with only domain (legacy format)
+        job = %Oban.Job{
+          args: %{"domain" => domain}
+        }
+
+        # Should reschedule with phase_1min and attempt 1
+        assert :ok = ReachabilityWorker.perform(job)
+
+        # Check that a new job was scheduled with the correct format
+        scheduled_jobs = all_enqueued(worker: ReachabilityWorker)
+        assert length(scheduled_jobs) == 1
+        [scheduled_job] = scheduled_jobs
+        assert scheduled_job.args["domain"] == domain
+        assert scheduled_job.args["phase"] == "phase_1min"
+        assert scheduled_job.args["attempt"] == 1
+      end
+    end
   end
 
   defp get_phase_config("phase_1min"), do: {1, 4, "phase_15min"}

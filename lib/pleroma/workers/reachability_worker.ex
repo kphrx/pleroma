@@ -24,6 +24,22 @@ defmodule Pleroma.Workers.ReachabilityWorker do
     end
   end
 
+  # New jobs enter here and are immediately re-scheduled for the first phase
+  @impl true
+  def perform(%Oban.Job{args: %{"domain" => domain}}) do
+    scheduled_at = DateTime.add(DateTime.utc_now(), 60, :second)
+
+    %{
+      "domain" => domain,
+      "phase" => "phase_1min",
+      "attempt" => 1
+    }
+    |> new(scheduled_at: scheduled_at, replace: true)
+    |> Oban.insert()
+
+    :ok
+  end
+
   @impl true
   def timeout(_job), do: :timer.seconds(5)
 
