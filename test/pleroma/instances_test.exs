@@ -109,4 +109,30 @@ defmodule Pleroma.InstancesTest do
       assert job.args["domain"] == unreachable_domain
     end
   end
+
+  test "delete_all_unreachable/0 schedules DeleteWorker jobs for all unreachable instances" do
+    domain1 = "unreachable1.example.com"
+    domain2 = "unreachable2.example.com"
+    domain3 = "unreachable3.example.com"
+
+    Instances.set_unreachable(domain1)
+    Instances.set_unreachable(domain2)
+    Instances.set_unreachable(domain3)
+
+    Instances.delete_all_unreachable()
+
+    # Verify that DeleteWorker jobs were scheduled for all unreachable domains
+    jobs = all_enqueued(worker: Pleroma.Workers.DeleteWorker)
+    assert length(jobs) == 3
+
+    domains = Enum.map(jobs, & &1.args["host"])
+    assert domain1 in domains
+    assert domain2 in domains
+    assert domain3 in domains
+
+    # Verify all jobs are delete_instance operations
+    Enum.each(jobs, fn job ->
+      assert job.args["op"] == "delete_instance"
+    end)
+  end
 end

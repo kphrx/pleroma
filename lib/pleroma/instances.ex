@@ -33,4 +33,12 @@ defmodule Pleroma.Instances do
       |> Oban.insert()
     end)
   end
+
+  @doc "Deletes all users and activities for unreachable instances"
+  def delete_all_unreachable do
+    get_unreachable()
+    |> Enum.each(fn {domain, _} ->
+      Instance.delete_users_and_activities(domain)
+    end)
+  end
 end
