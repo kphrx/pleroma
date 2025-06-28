@@ -99,11 +99,7 @@ defmodule Pleroma.Instances.Instance do
       |> changeset(%{unreachable_since: nil})
       |> Repo.insert(on_conflict: {:replace, [:unreachable_since]}, conflict_target: :host)
 
-    # Delete any existing reachability testing jobs for this instance
-    Oban.Job
-    |> Ecto.Query.where(worker: "Pleroma.Workers.ReachabilityWorker")
-    |> Ecto.Query.where([j], j.args["domain"] == ^host)
-    |> Oban.delete_all_jobs()
+    Pleroma.Workers.ReachabilityWorker.delete_jobs_for_host(host)
 
     result
   end

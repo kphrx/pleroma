@@ -11,6 +11,8 @@ defmodule Pleroma.Workers.ReachabilityWorker do
   alias Pleroma.HTTP
   alias Pleroma.Instances
 
+  import Ecto.Query
+
   @impl true
   def perform(%Oban.Job{args: %{"domain" => domain, "phase" => phase, "attempt" => attempt}}) do
     case check_reachability(domain) do
@@ -42,6 +44,14 @@ defmodule Pleroma.Workers.ReachabilityWorker do
 
   @impl true
   def timeout(_job), do: :timer.seconds(5)
+
+  @doc "Deletes scheduled jobs to check reachability for specified instance"
+  def delete_jobs_for_host(host) do
+    Oban.Job
+    |> where(worker: "Pleroma.Workers.ReachabilityWorker")
+    |> where([j], j.args["domain"] == ^host)
+    |> Oban.delete_all_jobs()
+  end
 
   defp check_reachability(domain) do
     case HTTP.get("https://#{domain}/") do
