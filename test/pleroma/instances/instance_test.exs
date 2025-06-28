@@ -27,6 +27,32 @@ defmodule Pleroma.Instances.InstanceTest do
       assert {:ok, instance} = Instance.set_reachable(instance.host)
       refute instance.unreachable_since
     end
+
+    test "cancels all ReachabilityWorker jobs for the domain" do
+      domain = "cancelme.example.org"
+      insert(:instance, host: domain, unreachable_since: NaiveDateTime.utc_now())
+
+      # Insert a ReachabilityWorker job for this domain, scheduled 5 minutes in the future
+      scheduled_at = DateTime.add(DateTime.utc_now(), 300, :second)
+
+      {:ok, job} =
+        Pleroma.Workers.ReachabilityWorker.new(
+          %{"domain" => domain, "phase" => "phase_1min", "attempt" => 1},
+          scheduled_at: scheduled_at
+        )
+        |> Oban.insert()
+
+      # Ensure the job is present
+      job = Pleroma.Repo.get(Oban.Job, job.id)
+      assert job
+
+      # Call set_reachable, which should delete the job
+      assert {:ok, _} = Instance.set_reachable(domain)
+
+      # Reload the job and assert it is deleted
+      job = Pleroma.Repo.get(Oban.Job, job.id)
+      refute job
+    end
   end
 
   describe "set_unreachable/1" do

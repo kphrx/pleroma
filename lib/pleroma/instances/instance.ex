@@ -92,9 +92,20 @@ defmodule Pleroma.Instances.Instance do
   def reachable?(url_or_host) when is_binary(url_or_host), do: true
 
   def set_reachable(url_or_host) when is_binary(url_or_host) do
-    %Instance{host: host(url_or_host)}
-    |> changeset(%{unreachable_since: nil})
-    |> Repo.insert(on_conflict: {:replace, [:unreachable_since]}, conflict_target: :host)
+    host = host(url_or_host)
+
+    result =
+      %Instance{host: host}
+      |> changeset(%{unreachable_since: nil})
+      |> Repo.insert(on_conflict: {:replace, [:unreachable_since]}, conflict_target: :host)
+
+    # Delete any existing reachability testing jobs for this instance
+    Oban.Job
+    |> Ecto.Query.where(worker: "Pleroma.Workers.ReachabilityWorker")
+    |> Ecto.Query.where([j], j.args["domain"] == ^host)
+    |> Oban.delete_all_jobs()
+
+    result
   end
 
   def set_reachable(_), do: {:error, nil}
