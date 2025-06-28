@@ -296,7 +296,7 @@ defmodule Pleroma.Instances.Instance do
   Deletes all users from an instance in a background task, thus also deleting
   all of those users' activities and notifications.
   """
-  def delete_users_and_activities(host) when is_binary(host) do
+  def delete(host) when is_binary(host) do
     DeleteWorker.new(%{"op" => "delete_instance", "host" => host})
     |> Oban.insert()
   end

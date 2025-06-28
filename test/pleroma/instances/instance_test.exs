@@ -239,10 +239,10 @@ defmodule Pleroma.Instances.InstanceTest do
     end
   end
 
-  test "delete_users_and_activities/1 schedules a job to delete the instance and users" do
+  test "delete/1 schedules a job to delete the instance and users" do
     insert(:user, nickname: "mario@mushroom.kingdom", name: "Mario")
 
-    {:ok, _job} = Instance.delete_users_and_activities("mushroom.kingdom")
+    {:ok, _job} = Instance.delete("mushroom.kingdom")
 
     assert_enqueued(
       worker: Pleroma.Workers.DeleteWorker,
