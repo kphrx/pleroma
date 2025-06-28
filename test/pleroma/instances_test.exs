@@ -6,6 +6,7 @@ defmodule Pleroma.InstancesTest do
   alias Pleroma.Instances
 
   use Pleroma.DataCase
+  use Oban.Testing, repo: Pleroma.Repo
 
   describe "reachable?/1" do
     test "returns `true` for host / url with unknown reachability status" do
@@ -67,6 +68,45 @@ defmodule Pleroma.InstancesTest do
     test "returns error status on non-binary input" do
       assert {:error, _} = Instances.set_unreachable(nil)
       assert {:error, _} = Instances.set_unreachable(1)
+    end
+  end
+
+  describe "check_all_unreachable/0" do
+    test "schedules ReachabilityWorker jobs for all unreachable instances" do
+      domain1 = "unreachable1.example.com"
+      domain2 = "unreachable2.example.com"
+      domain3 = "unreachable3.example.com"
+
+      Instances.set_unreachable(domain1)
+      Instances.set_unreachable(domain2)
+      Instances.set_unreachable(domain3)
+
+      Instances.check_all_unreachable()
+
+      # Verify that ReachabilityWorker jobs were scheduled for all unreachable domains
+      jobs = all_enqueued(worker: Pleroma.Workers.ReachabilityWorker)
+      assert length(jobs) == 3
+
+      domains = Enum.map(jobs, & &1.args["domain"])
+      assert domain1 in domains
+      assert domain2 in domains
+      assert domain3 in domains
+    end
+
+    test "does not schedule jobs for reachable instances" do
+      unreachable_domain = "unreachable.example.com"
+      reachable_domain = "reachable.example.com"
+
+      Instances.set_unreachable(unreachable_domain)
+      Instances.set_reachable(reachable_domain)
+
+      Instances.check_all_unreachable()
+
+      # Verify that only one job was scheduled (for the unreachable domain)
+      jobs = all_enqueued(worker: Pleroma.Workers.ReachabilityWorker)
+      assert length(jobs) == 1
+      [job] = jobs
+      assert job.args["domain"] == unreachable_domain
     end
   end
 end

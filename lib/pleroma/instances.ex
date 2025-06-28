@@ -24,4 +24,13 @@ defmodule Pleroma.Instances do
       url_or_host
     end
   end
+
+  @doc "Schedules reachability checks for all unreachable instances"
+  def check_all_unreachable do
+    get_unreachable()
+    |> Enum.each(fn {domain, _} ->
+      Pleroma.Workers.ReachabilityWorker.new(%{"domain" => domain})
+      |> Oban.insert()
+    end)
+  end
 end

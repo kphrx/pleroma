@@ -304,4 +304,10 @@ defmodule Pleroma.Instances.Instance do
     DeleteWorker.new(%{"op" => "delete_instance", "host" => host})
     |> Oban.insert()
   end
+
+  @doc "Schedules reachability check for instance"
+  def check_unreachable(domain) when is_binary(domain) do
+    Pleroma.Workers.ReachabilityWorker.new(%{"domain" => domain})
+    |> Oban.insert()
+  end
 end

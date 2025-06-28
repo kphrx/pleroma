@@ -249,4 +249,34 @@ defmodule Pleroma.Instances.InstanceTest do
       args: %{"op" => "delete_instance", "host" => "mushroom.kingdom"}
     )
   end
+
+  describe "check_unreachable/1" do
+    test "schedules a ReachabilityWorker job for the given domain" do
+      domain = "test.example.com"
+
+      # Call check_unreachable
+      assert {:ok, _job} = Instance.check_unreachable(domain)
+
+      # Verify that a ReachabilityWorker job was scheduled
+      jobs = all_enqueued(worker: Pleroma.Workers.ReachabilityWorker)
+      assert length(jobs) == 1
+      [job] = jobs
+      assert job.args["domain"] == domain
+    end
+
+    test "handles multiple calls for the same domain (uniqueness enforced)" do
+      domain = "duplicate.example.com"
+
+      assert {:ok, _job1} = Instance.check_unreachable(domain)
+
+      # Second call for the same domain
+      assert {:ok, %Oban.Job{conflict?: true}} = Instance.check_unreachable(domain)
+
+      # Should only have one job due to uniqueness
+      jobs = all_enqueued(worker: Pleroma.Workers.ReachabilityWorker)
+      assert length(jobs) == 1
+      [job] = jobs
+      assert job.args["domain"] == domain
+    end
+  end
 end
