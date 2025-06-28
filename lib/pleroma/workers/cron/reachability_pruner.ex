@@ -5,7 +5,7 @@ defmodule Pleroma.Workers.Cron.ReachabilityPruner do
   require Logger
 
   @reachability_worker "Elixir.Pleroma.Workers.ReachabilityWorker"
-  @prune_days 6
+  @prune_days 2
 
   @impl true
   def perform(_job) do
