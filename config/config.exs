@@ -599,12 +599,11 @@ config :pleroma, Oban,
     search_indexing: [limit: 10, paused: true],
     slow: 5
   ],
-  plugins: [{Oban.Plugins.Pruner, max_age: 900, exclude: [Pleroma.Workers.ReachabilityWorker]}],
+  plugins: [{Oban.Plugins.Pruner, max_age: 900}],
   crontab: [
     {"0 0 * * 0", Pleroma.Workers.Cron.DigestEmailsWorker},
     {"0 0 * * *", Pleroma.Workers.Cron.NewUsersDigestWorker},
-    {"*/10 * * * *", Pleroma.Workers.Cron.AppCleanupWorker},
-    {"0 2 * * *", Pleroma.Workers.Cron.ReachabilityPruner}
+    {"*/10 * * * *", Pleroma.Workers.Cron.AppCleanupWorker}
   ]
 
 config :pleroma, Pleroma.Formatter,
