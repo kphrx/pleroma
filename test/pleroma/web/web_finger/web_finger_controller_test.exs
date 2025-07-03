@@ -34,6 +34,9 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
   end
 
   test "Webfinger JRD" do
+    clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
+    clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+
     user =
       insert(:user,
         ap_id: "https://hyrule.world/users/zelda",
@@ -43,10 +46,10 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
     response =
       build_conn()
       |> put_req_header("accept", "application/jrd+json")
-      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
+      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@hyrule.world")
       |> json_response(200)
 
-    assert response["subject"] == "acct:#{user.nickname}@localhost"
+    assert response["subject"] == "acct:#{user.nickname}@hyrule.world"
 
     assert response["aliases"] == [
              "https://hyrule.world/users/zelda",
@@ -55,6 +58,9 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
   end
 
   test "Webfinger defaults to JSON when no Accept header is provided" do
+    clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
+    clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+
     user =
       insert(:user,
         ap_id: "https://hyrule.world/users/zelda",
@@ -63,10 +69,10 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
 
     response =
       build_conn()
-      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
+      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@hyrule.world")
       |> json_response(200)
 
-    assert response["subject"] == "acct:#{user.nickname}@localhost"
+    assert response["subject"] == "acct:#{user.nickname}@hyrule.world"
 
     assert response["aliases"] == [
              "https://hyrule.world/users/zelda",
@@ -102,6 +108,9 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
   end
 
   test "Webfinger XML" do
+    clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
+    clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+
     user =
       insert(:user,
         ap_id: "https://hyrule.world/users/zelda",
@@ -129,6 +138,9 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
   end
 
   test "Returns JSON when format is not supported" do
+    clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
+    clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+
     user =
       insert(:user,
         ap_id: "https://hyrule.world/users/zelda",
@@ -138,10 +150,10 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
     response =
       build_conn()
       |> put_req_header("accept", "text/html")
-      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
+      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@hyrule.world")
       |> json_response(200)
 
-    assert response["subject"] == "acct:#{user.nickname}@localhost"
+    assert response["subject"] == "acct:#{user.nickname}@hyrule.world"
 
     assert response["aliases"] == [
              "https://hyrule.world/users/zelda",
