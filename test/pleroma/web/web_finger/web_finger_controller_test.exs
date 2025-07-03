@@ -33,28 +33,46 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
     assert match?(^response_xml, expected_xml)
   end
 
-  test "Webfinger JRD" do
-    clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
-    clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+  describe "Webfinger" do
+    test "JRD" do
+      clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
+      clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
 
-    user =
-      insert(:user,
-        ap_id: "https://hyrule.world/users/zelda",
-        also_known_as: ["https://mushroom.kingdom/users/toad"]
-      )
+      user =
+        insert(:user,
+          ap_id: "https://hyrule.world/users/zelda"
+        )
 
-    response =
-      build_conn()
-      |> put_req_header("accept", "application/jrd+json")
-      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@hyrule.world")
-      |> json_response(200)
+      response =
+        build_conn()
+        |> put_req_header("accept", "application/jrd+json")
+        |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@hyrule.world")
+        |> json_response(200)
 
-    assert response["subject"] == "acct:#{user.nickname}@hyrule.world"
+      assert response["subject"] == "acct:#{user.nickname}@hyrule.world"
 
-    assert response["aliases"] == [
-             "https://hyrule.world/users/zelda",
-             "https://mushroom.kingdom/users/toad"
-           ]
+      assert response["aliases"] == [
+               "https://hyrule.world/users/zelda"
+             ]
+    end
+
+    test "XML" do
+      clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
+      clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+
+      user =
+        insert(:user,
+          ap_id: "https://hyrule.world/users/zelda"
+        )
+
+      response =
+        build_conn()
+        |> put_req_header("accept", "application/xrd+xml")
+        |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
+        |> response(200)
+
+      assert response =~ "<Alias>https://hyrule.world/users/zelda</Alias>"
+    end
   end
 
   test "Webfinger defaults to JSON when no Accept header is provided" do
@@ -63,8 +81,7 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
 
     user =
       insert(:user,
-        ap_id: "https://hyrule.world/users/zelda",
-        also_known_as: ["https://mushroom.kingdom/users/toad"]
+        ap_id: "https://hyrule.world/users/zelda"
       )
 
     response =
@@ -75,9 +92,61 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
     assert response["subject"] == "acct:#{user.nickname}@hyrule.world"
 
     assert response["aliases"] == [
-             "https://hyrule.world/users/zelda",
-             "https://mushroom.kingdom/users/toad"
+             "https://hyrule.world/users/zelda"
            ]
+  end
+
+  describe "Webfinger returns also_known_as / aliases in the response" do
+    test "JSON" do
+      clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
+      clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+
+      user =
+        insert(:user,
+          ap_id: "https://hyrule.world/users/zelda",
+          also_known_as: [
+            "https://mushroom.kingdom/users/toad",
+            "https://luigi.mansion/users/kingboo"
+          ]
+        )
+
+      response =
+        build_conn()
+        |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@hyrule.world")
+        |> json_response(200)
+
+      assert response["subject"] == "acct:#{user.nickname}@hyrule.world"
+
+      assert response["aliases"] == [
+               "https://hyrule.world/users/zelda",
+               "https://mushroom.kingdom/users/toad",
+               "https://luigi.mansion/users/kingboo"
+             ]
+    end
+
+    test "XML" do
+      clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
+      clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+
+      user =
+        insert(:user,
+          ap_id: "https://hyrule.world/users/zelda",
+          also_known_as: [
+            "https://mushroom.kingdom/users/toad",
+            "https://luigi.mansion/users/kingboo"
+          ]
+        )
+
+      response =
+        build_conn()
+        |> put_req_header("accept", "application/xrd+xml")
+        |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
+        |> response(200)
+
+      assert response =~ "<Alias>https://hyrule.world/users/zelda</Alias>"
+      assert response =~ "<Alias>https://mushroom.kingdom/users/toad</Alias>"
+      assert response =~ "<Alias>https://luigi.mansion/users/kingboo</Alias>"
+    end
   end
 
   test "reach user on tld, while pleroma is running on subdomain" do
@@ -97,44 +166,26 @@ defmodule Pleroma.Web.WebFinger.WebFingerControllerTest do
     assert response["aliases"] == ["https://sub.example.com/users/#{user.nickname}"]
   end
 
-  test "it returns 404 when user isn't found (JSON)" do
-    result =
-      build_conn()
-      |> put_req_header("accept", "application/jrd+json")
-      |> get("/.well-known/webfinger?resource=acct:jimm@localhost")
-      |> json_response(404)
+  describe "it returns 404 when user isn't found" do
+    test "JSON" do
+      result =
+        build_conn()
+        |> put_req_header("accept", "application/jrd+json")
+        |> get("/.well-known/webfinger?resource=acct:jimm@localhost")
+        |> json_response(404)
 
-    assert result == "Couldn't find user"
-  end
+      assert result == "Couldn't find user"
+    end
 
-  test "Webfinger XML" do
-    clear_config([Pleroma.Web.Endpoint, :url, :host], "hyrule.world")
-    clear_config([Pleroma.Web.WebFinger, :domain], "hyrule.world")
+    test "XML" do
+      result =
+        build_conn()
+        |> put_req_header("accept", "application/xrd+xml")
+        |> get("/.well-known/webfinger?resource=acct:jimm@localhost")
+        |> response(404)
 
-    user =
-      insert(:user,
-        ap_id: "https://hyrule.world/users/zelda",
-        also_known_as: ["https://mushroom.kingdom/users/toad"]
-      )
-
-    response =
-      build_conn()
-      |> put_req_header("accept", "application/xrd+xml")
-      |> get("/.well-known/webfinger?resource=acct:#{user.nickname}@localhost")
-      |> response(200)
-
-    assert response =~ "<Alias>https://hyrule.world/users/zelda</Alias>"
-    assert response =~ "<Alias>https://mushroom.kingdom/users/toad</Alias>"
-  end
-
-  test "it returns 404 when user isn't found (XML)" do
-    result =
-      build_conn()
-      |> put_req_header("accept", "application/xrd+xml")
-      |> get("/.well-known/webfinger?resource=acct:jimm@localhost")
-      |> response(404)
-
-    assert result == "Couldn't find user"
+      assert result == "Couldn't find user"
+    end
   end
 
   test "Returns JSON when format is not supported" do
