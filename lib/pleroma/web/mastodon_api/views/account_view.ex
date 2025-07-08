@@ -168,9 +168,9 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
         UserRelationship.exists?(
           user_relationships,
           :endorsement,
-          target,
           reading_user,
-          &User.endorses?(&2, &1)
+          target,
+          &User.endorses?(&1, &2)
         )
     }
   end
