@@ -190,7 +190,7 @@ defmodule Pleroma.Web.MastodonAPI.SearchController do
       f.()
     rescue
       error ->
-        Logger.error("#{__MODULE__} search error: #{inspect(error)}")
+        Logger.error(Exception.format(:error, error, __STACKTRACE__))
         fallback
     end
   end

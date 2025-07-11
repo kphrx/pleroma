@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Workers.DeleteWorker do
-  alias Pleroma.Instances.Instance
   alias Pleroma.User
 
   use Oban.Worker, queue: :slow
@@ -15,7 +14,15 @@ defmodule Pleroma.Workers.DeleteWorker do
   end
 
   def perform(%Job{args: %{"op" => "delete_instance", "host" => host}}) do
-    Instance.perform(:delete_instance, host)
+    Pleroma.Repo.transaction(fn ->
+      User.Query.build(%{nickname: "@#{host}"})
+      |> Pleroma.Repo.all()
+      |> Enum.each(fn user ->
+        %{"op" => "delete_user", "user_id" => user.id}
+        |> __MODULE__.new()
+        |> Oban.insert()
+      end)
+    end)
   end
 
   @impl true

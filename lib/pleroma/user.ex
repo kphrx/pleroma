@@ -150,7 +150,7 @@ defmodule Pleroma.User do
     field(:allow_following_move, :boolean, default: true)
     field(:skip_thread_containment, :boolean, default: false)
     field(:actor_type, :string, default: "Person")
-    field(:also_known_as, {:array, ObjectValidators.ObjectID}, default: [])
+    field(:also_known_as, {:array, ObjectValidators.BareUri}, default: [])
     field(:inbox, :string)
     field(:shared_inbox, :string)
     field(:accepts_chat_messages, :boolean, default: nil)
