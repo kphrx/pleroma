@@ -2,22 +2,31 @@
 
 ## Backup
 
-1. Stop the Pleroma service.
-2. Go to the working directory of Pleroma (default is `/opt/pleroma`)
+1. Stop the Pleroma service:
+```
+# sudo systemctl stop pleroma
+```
+2. Go to the working directory of Pleroma (default is `/opt/pleroma`).
 3. Run (make sure the postgres user has write access to the destination file):
 ```
 # sudo -Hu postgres pg_dump -d <pleroma_db> -v --format=custom --compress=9 -f </path/to/backup_location/pleroma.pgdump>
 ```
 4. Copy `pleroma.pgdump`, `config/prod.secret.exs`, `config/setup_db.psql` (if still available) and the `uploads` folder to your backup destination. If you have other modifications, copy those changes too.
-5. Restart the Pleroma service.
+5. Restart the Pleroma service:
+```
+# sudo systemctl start pleroma
+```
 
 ## Restore/Move
 
 1. Optionally reinstall Pleroma (either on the same server or on another server if you want to move servers).
-2. Stop the Pleroma service.
-3. Go to the working directory of Pleroma (default is `/opt/pleroma`)
+2. Stop the Pleroma service:
+```
+# sudo systemctl stop pleroma
+```
+3. Go to the working directory of Pleroma (default is `/opt/pleroma`).
 4. Copy the above mentioned files back to their original position.
-5. Drop the existing database and user if restoring in-place.
+5. Drop the existing database and user if restoring in-place:
 ```
 # sudo -Hu postgres dropdb <pleroma_db>
 # sudo -Hu postgres dropuser <pleroma_user>
@@ -38,11 +47,14 @@
 # sudo -Hu postgres pg_restore -d <pleroma_db> -v -a -1 --disable-triggers </path/to/backup_location/pleroma.pgdump>
 ```
 9. If you installed a newer Pleroma version, you should run `mix ecto.migrate`[^1]. This task performs database migrations, if there were any.
-10. Generate the statistics so that PostgreSQL can properly plan queries.
+10. Generate the statistics so that PostgreSQL can properly plan queries:
 ```
 # sudo -Hu postgres vacuumdb -v --all --analyze-in-stages
 ```
-11. Restart the Pleroma service.
+11. Restart the Pleroma service:
+```
+# sudo systemctl start pleroma
+```
 12. If setting up on a new server, configure Nginx by using your original configuration or by using the `installation/pleroma.nginx` config sample or reference the Pleroma installation guide for your OS which contains the Nginx configuration instructions.
 
 [^1]: Prefix with `MIX_ENV=prod` to run it using the production config file.
@@ -74,4 +86,4 @@
 ```
 # userdel -r pleroma
 ```
-8. Remove the dependencies that you don't need anymore (see installation guide). Make sure you don't remove packages that are still needed for other software that you have running!
+8. Remove the dependencies that you don't need anymore (see installation guide). **Make sure you don't remove packages that are still needed for other software that you have running!**
