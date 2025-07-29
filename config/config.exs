@@ -590,6 +590,7 @@ config :pleroma, Pleroma.User,
 # value or it cannot enforce uniqueness.
 config :pleroma, Oban,
   repo: Pleroma.Repo,
+  notifier: Oban.Notifiers.PG,
   log: false,
   queues: [
     activity_expiration: 10,
