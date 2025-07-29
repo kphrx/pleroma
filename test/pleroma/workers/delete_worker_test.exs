@@ -17,7 +17,7 @@ defmodule Pleroma.Workers.DeleteWorkerTest do
       user1 = insert(:user, nickname: "alice@example.com", name: "Alice")
       user2 = insert(:user, nickname: "bob@example.com", name: "Bob")
 
-      {:ok, job} = Instance.delete_users_and_activities("example.com")
+      {:ok, job} = Instance.delete("example.com")
 
       assert_enqueued(
         worker: DeleteWorker,

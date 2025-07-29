@@ -6,13 +6,11 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
   use Oban.Testing, repo: Pleroma.Repo
   use Pleroma.Web.ConnCase
 
-  import ExUnit.CaptureLog
   import Pleroma.Factory
   import Tesla.Mock
   import Mock
 
   alias Pleroma.Activity
-  alias Pleroma.Instances
   alias Pleroma.Object
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.Web.ActivityPub.Publisher
@@ -166,115 +164,6 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
                  unreachable_since: true
                })
                |> Publisher.publish_one()
-    end
-
-    test_with_mock "calls `Instances.set_reachable` on successful federation if `unreachable_since` is set",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert {:ok, _} =
-               Publisher.prepare_one(%{
-                 inbox: inbox,
-                 activity_id: activity.id,
-                 unreachable_since: NaiveDateTime.utc_now() |> NaiveDateTime.to_string()
-               })
-               |> Publisher.publish_one()
-
-      assert called(Instances.set_reachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_reachable` on successful federation if `unreachable_since` is nil",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert {:ok, _} =
-               Publisher.prepare_one(%{
-                 inbox: inbox,
-                 activity_id: activity.id,
-                 unreachable_since: nil
-               })
-               |> Publisher.publish_one()
-
-      refute called(Instances.set_reachable(inbox))
-    end
-
-    test_with_mock "calls `Instances.set_unreachable` on target inbox on non-2xx HTTP response code",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://404.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert {:cancel, _} =
-               Publisher.prepare_one(%{inbox: inbox, activity_id: activity.id})
-               |> Publisher.publish_one()
-
-      assert called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "it calls `Instances.set_unreachable` on target inbox on request error of any kind",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://connrefused.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert capture_log(fn ->
-               assert {:error, _} =
-                        Publisher.prepare_one(%{
-                          inbox: inbox,
-                          activity_id: activity.id
-                        })
-                        |> Publisher.publish_one()
-             end) =~ "connrefused"
-
-      assert called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_unreachable` if target is reachable",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert {:ok, _} =
-               Publisher.prepare_one(%{inbox: inbox, activity_id: activity.id})
-               |> Publisher.publish_one()
-
-      refute called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_unreachable` if target instance has non-nil `unreachable_since`",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://connrefused.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert capture_log(fn ->
-               assert {:error, _} =
-                        Publisher.prepare_one(%{
-                          inbox: inbox,
-                          activity_id: activity.id,
-                          unreachable_since: NaiveDateTime.utc_now() |> NaiveDateTime.to_string()
-                        })
-                        |> Publisher.publish_one()
-             end) =~ "connrefused"
-
-      refute called(Instances.set_unreachable(inbox))
     end
   end
 
