@@ -110,10 +110,6 @@ defmodule Pleroma.HTTP do
       extra_middleware
   end
 
-  defp adapter_middlewares({Tesla.Adapter.Finch, _}, extra_middleware) do
-    default_middleware() ++ extra_middleware
-  end
-
   defp adapter_middlewares(_, extra_middleware) do
     # A lot of tests are written expecting unencoded URLs
     # and the burden of fixing that is high. Also it makes
@@ -127,8 +123,9 @@ defmodule Pleroma.HTTP do
         # Emulate redirects in test env, which are handled by adapters in other environments
         [Tesla.Middleware.FollowRedirects]
 
+      # Hackney and Finch
       true ->
-        extra_middleware
+        default_middleware() ++ extra_middleware
     end
   end
 
