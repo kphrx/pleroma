@@ -26,7 +26,7 @@ defmodule Pleroma.HTTPTest do
       %{method: :post, url: "http://example.com/world"} ->
         %Tesla.Env{status: 200, body: "world"}
 
-      %{method: :get, url: "https://tsundere.love/emoji/Pack%201/koronebless.png"} ->
+      %{method: :get, url: "https://tsundere.love/emoji/Pack%201/koronebless.png?foo=bar+baz"} ->
         %Tesla.Env{status: 200, body: "emoji data"}
     end)
 
@@ -74,13 +74,13 @@ defmodule Pleroma.HTTPTest do
   test "URL encoding properly encodes URLs with spaces" do
     clear_config(:test_url_encoding, true)
 
-    url_with_space = "https://tsundere.love/emoji/Pack 1/koronebless.png"
+    url_with_space = "https://tsundere.love/emoji/Pack 1/koronebless.png?foo=bar baz"
 
     result = HTTP.get(url_with_space)
 
     assert result == {:ok, %Tesla.Env{status: 200, body: "emoji data"}}
 
-    properly_encoded_url = "https://tsundere.love/emoji/Pack%201/koronebless.png"
+    properly_encoded_url = "https://tsundere.love/emoji/Pack%201/koronebless.png?foo=bar+baz"
 
     result = HTTP.get(properly_encoded_url)
 
