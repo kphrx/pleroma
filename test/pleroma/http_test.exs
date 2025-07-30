@@ -72,6 +72,8 @@ defmodule Pleroma.HTTPTest do
   end
 
   test "URL encoding properly encodes URLs with spaces" do
+    clear_config(:test_url_encoding, true)
+
     url_with_space = "https://tsundere.love/emoji/Pack 1/koronebless.png"
 
     result = HTTP.get(url_with_space)

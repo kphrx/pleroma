@@ -17,15 +17,7 @@ defmodule Pleroma.Tesla.Middleware.EncodeUrl do
 
   @impl Tesla.Middleware
   def call(%Tesla.Env{url: url} = env, next, _) do
-    url =
-      URI.parse(url)
-      |> then(fn parsed ->
-        path = encode_path(parsed.path)
-        query = encode_query(parsed.query)
-
-        %{parsed | path: path, query: query}
-      end)
-      |> URI.to_string()
+    url = encode_url(url)
 
     env = %{env | url: url}
 
@@ -33,6 +25,17 @@ defmodule Pleroma.Tesla.Middleware.EncodeUrl do
       {:ok, env} -> {:ok, env}
       err -> err
     end
+  end
+
+  defp encode_url(url) when is_binary(url) do
+    URI.parse(url)
+    |> then(fn parsed ->
+      path = encode_path(parsed.path)
+      query = encode_query(parsed.query)
+
+      %{parsed | path: path, query: query}
+    end)
+    |> URI.to_string()
   end
 
   defp encode_path(nil), do: nil
