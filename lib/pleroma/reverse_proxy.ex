@@ -158,6 +158,8 @@ defmodule Pleroma.ReverseProxy do
     Logger.debug("#{__MODULE__} #{method} #{url} #{inspect(headers)}")
     method = method |> String.downcase() |> String.to_existing_atom()
 
+    url = maybe_encode_url(url)
+
     case client().request(method, url, headers, "", opts) do
       {:ok, code, headers, client} when code in @valid_resp_codes ->
         {:ok, code, downcase_headers(headers), client}
@@ -447,6 +449,20 @@ defmodule Pleroma.ReverseProxy do
       conn
     else
       _ -> delete_resp_header(conn, "content-length")
+    end
+  end
+
+  # Only when Tesla adapter is Hackney or Finch does the URL
+  # need encoding before Reverse Proxying as both end up
+  # using the raw Hackney client and cannot leverage our
+  # EncodeUrl Tesla middleware
+  # Also do it for test environment
+  defp maybe_encode_url(url) do
+    case Application.get_env(:tesla, :adapter) do
+      Tesla.Adapter.Hackney -> Pleroma.HTTP.encode_url(url)
+      {Tesla.Adapter.Finch, _} -> Pleroma.HTTP.encode_url(url)
+      Tesla.Mock -> Pleroma.HTTP.encode_url(url)
+      _ -> url
     end
   end
 end
