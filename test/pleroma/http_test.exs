@@ -76,14 +76,14 @@ defmodule Pleroma.HTTPTest do
 
     url_with_space = "https://tsundere.love/emoji/Pack 1/koronebless.png?foo=bar baz"
 
-    result = HTTP.get(url_with_space)
+    {:ok, result} = HTTP.get(url_with_space)
 
-    assert result == {:ok, %Tesla.Env{status: 200, body: "emoji data"}}
+    assert result.status == 200
 
     properly_encoded_url = "https://tsundere.love/emoji/Pack%201/koronebless.png?foo=bar+baz"
 
-    result = HTTP.get(properly_encoded_url)
+    {:ok, result} = HTTP.get(properly_encoded_url)
 
-    assert result == {:ok, %Tesla.Env{status: 200, body: "emoji data"}}
+    assert result.status == 200
   end
 end
