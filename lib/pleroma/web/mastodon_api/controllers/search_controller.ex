@@ -5,9 +5,9 @@
 defmodule Pleroma.Web.MastodonAPI.SearchController do
   use Pleroma.Web, :controller
 
+  alias Pleroma.Hashtag
   alias Pleroma.Repo
   alias Pleroma.User
-  alias Pleroma.Hashtag
   alias Pleroma.Web.ControllerHelper
   alias Pleroma.Web.Endpoint
   alias Pleroma.Web.MastodonAPI.AccountView
