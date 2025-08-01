@@ -130,4 +130,23 @@ defmodule Pleroma.Hashtag do
   end
 
   def get_recipients_for_activity(_activity), do: []
+
+  def search(query, options \\ []) do
+    limit = Keyword.get(options, :limit, 20)
+    offset = Keyword.get(options, :offset, 0)
+
+    query
+    |> String.downcase()
+    |> String.trim()
+    |> then(fn search_term ->
+      from(ht in Hashtag,
+        where: fragment("LOWER(?) LIKE ?", ht.name, ^"%#{search_term}%"),
+        order_by: [asc: ht.name],
+        limit: ^limit,
+        offset: ^offset
+      )
+      |> Repo.all()
+      |> Enum.map(& &1.name)
+    end)
+  end
 end

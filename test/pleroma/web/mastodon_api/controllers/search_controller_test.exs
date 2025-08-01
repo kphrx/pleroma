@@ -130,84 +130,66 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
       assert [] = results["statuses"]
     end
 
-    test "constructs hashtags from search query", %{conn: conn} do
+    test "returns empty results when no hashtags match", %{conn: conn} do
       results =
         conn
-        |> get("/api/v2/search?#{URI.encode_query(%{q: "some text with #explicit #hashtags"})}")
+        |> get("/api/v2/search?#{URI.encode_query(%{q: "nonexistent"})}")
         |> json_response_and_validate_schema(200)
 
-      assert results["hashtags"] == [
-               %{"name" => "explicit", "url" => "#{Endpoint.url()}/tag/explicit"},
-               %{"name" => "hashtags", "url" => "#{Endpoint.url()}/tag/hashtags"}
-             ]
-
-      results =
-        conn
-        |> get("/api/v2/search?#{URI.encode_query(%{q: "john doe JOHN DOE"})}")
-        |> json_response_and_validate_schema(200)
-
-      assert results["hashtags"] == [
-               %{"name" => "john", "url" => "#{Endpoint.url()}/tag/john"},
-               %{"name" => "doe", "url" => "#{Endpoint.url()}/tag/doe"},
-               %{"name" => "JohnDoe", "url" => "#{Endpoint.url()}/tag/JohnDoe"}
-             ]
-
-      results =
-        conn
-        |> get("/api/v2/search?#{URI.encode_query(%{q: "accident-prone"})}")
-        |> json_response_and_validate_schema(200)
-
-      assert results["hashtags"] == [
-               %{"name" => "accident", "url" => "#{Endpoint.url()}/tag/accident"},
-               %{"name" => "prone", "url" => "#{Endpoint.url()}/tag/prone"},
-               %{"name" => "AccidentProne", "url" => "#{Endpoint.url()}/tag/AccidentProne"}
-             ]
-
-      results =
-        conn
-        |> get("/api/v2/search?#{URI.encode_query(%{q: "https://shpposter.club/users/shpuld"})}")
-        |> json_response_and_validate_schema(200)
-
-      assert results["hashtags"] == [
-               %{"name" => "shpuld", "url" => "#{Endpoint.url()}/tag/shpuld"}
-             ]
-
-      results =
-        conn
-        |> get(
-          "/api/v2/search?#{URI.encode_query(%{q: "https://www.washingtonpost.com/sports/2020/06/10/" <> "nascar-ban-display-confederate-flag-all-events-properties/"})}"
-        )
-        |> json_response_and_validate_schema(200)
-
-      assert results["hashtags"] == [
-               %{"name" => "nascar", "url" => "#{Endpoint.url()}/tag/nascar"},
-               %{"name" => "ban", "url" => "#{Endpoint.url()}/tag/ban"},
-               %{"name" => "display", "url" => "#{Endpoint.url()}/tag/display"},
-               %{"name" => "confederate", "url" => "#{Endpoint.url()}/tag/confederate"},
-               %{"name" => "flag", "url" => "#{Endpoint.url()}/tag/flag"},
-               %{"name" => "all", "url" => "#{Endpoint.url()}/tag/all"},
-               %{"name" => "events", "url" => "#{Endpoint.url()}/tag/events"},
-               %{"name" => "properties", "url" => "#{Endpoint.url()}/tag/properties"},
-               %{
-                 "name" => "NascarBanDisplayConfederateFlagAllEventsProperties",
-                 "url" =>
-                   "#{Endpoint.url()}/tag/NascarBanDisplayConfederateFlagAllEventsProperties"
-               }
-             ]
+      assert results["hashtags"] == []
     end
 
     test "supports pagination of hashtags search results", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, _activity1} = CommonAPI.post(user, %{status: "First #alpha hashtag"})
+      {:ok, _activity2} = CommonAPI.post(user, %{status: "Second #beta hashtag"})
+      {:ok, _activity3} = CommonAPI.post(user, %{status: "Third #gamma hashtag"})
+      {:ok, _activity4} = CommonAPI.post(user, %{status: "Fourth #delta hashtag"})
+
       results =
         conn
-        |> get(
-          "/api/v2/search?#{URI.encode_query(%{q: "#some #text #with #hashtags", limit: 2, offset: 1})}"
-        )
+        |> get("/api/v2/search?#{URI.encode_query(%{q: "a", limit: 2, offset: 1})}")
         |> json_response_and_validate_schema(200)
 
-      assert results["hashtags"] == [
-               %{"name" => "text", "url" => "#{Endpoint.url()}/tag/text"},
-               %{"name" => "with", "url" => "#{Endpoint.url()}/tag/with"}
-             ]
+      hashtag_names = Enum.map(results["hashtags"], & &1["name"])
+
+      # Should return 2 hashtags (alpha, beta, gamma, delta all contain 'a')
+      # With offset 1, we skip the first one, so we get 2 of the remaining 3
+      assert length(hashtag_names) == 2
+      assert Enum.all?(hashtag_names, &String.contains?(&1, "a"))
+    end
+
+    test "searches real hashtags from database", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, _activity1} = CommonAPI.post(user, %{status: "Check out this #car"})
+      {:ok, _activity2} = CommonAPI.post(user, %{status: "Fast #racecar on the track"})
+      {:ok, _activity3} = CommonAPI.post(user, %{status: "NASCAR #nascar racing"})
+
+      results =
+        conn
+        |> get("/api/v2/search?#{URI.encode_query(%{q: "car"})}")
+        |> json_response_and_validate_schema(200)
+
+      hashtag_names = Enum.map(results["hashtags"], & &1["name"])
+
+      # Should return car, racecar, and nascar since they all contain "car"
+      assert "car" in hashtag_names
+      assert "racecar" in hashtag_names
+      assert "nascar" in hashtag_names
+
+      # Search for "race" - should return racecar
+      results =
+        conn
+        |> get("/api/v2/search?#{URI.encode_query(%{q: "race"})}")
+        |> json_response_and_validate_schema(200)
+
+      hashtag_names = Enum.map(results["hashtags"], & &1["name"])
+
+      assert "racecar" in hashtag_names
+      refute "car" in hashtag_names
+      refute "nascar" in hashtag_names
     end
 
     test "excludes a blocked users from search results", %{conn: conn} do
@@ -314,7 +296,7 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
       [account | _] = results["accounts"]
       assert account["id"] == to_string(user_three.id)
 
-      assert results["hashtags"] == ["2hu"]
+      assert results["hashtags"] == []
 
       [status] = results["statuses"]
       assert status["id"] == to_string(activity.id)
