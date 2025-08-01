@@ -158,7 +158,8 @@ defmodule Pleroma.Hashtag do
           where: fragment("LOWER(?) LIKE ANY(?)", ht.name, ^search_patterns),
           select: %{
             name: ht.name,
-            # Ranking: exact matches get highest priority (0), then prefix matches (1), then contains (2)
+            # Ranking: exact matches get highest priority (0)
+            # then prefix matches (1), then contains (2)
             match_rank:
               fragment(
                 """
