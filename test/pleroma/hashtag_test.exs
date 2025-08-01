@@ -38,6 +38,35 @@ defmodule Pleroma.HashtagTest do
       assert results == []
     end
 
+    test "searches hashtags by multiple words in query" do
+      # Create some hashtags
+      {:ok, _} = Hashtag.get_or_create_by_name("computer")
+      {:ok, _} = Hashtag.get_or_create_by_name("laptop")
+      {:ok, _} = Hashtag.get_or_create_by_name("desktop")
+      {:ok, _} = Hashtag.get_or_create_by_name("phone")
+
+      # Search for "new computer" - should return "computer"
+      results = Hashtag.search("new computer")
+      assert "computer" in results
+      refute "laptop" in results
+      refute "desktop" in results
+      refute "phone" in results
+
+      # Search for "computer laptop" - should return both
+      results = Hashtag.search("computer laptop")
+      assert "computer" in results
+      assert "laptop" in results
+      refute "desktop" in results
+      refute "phone" in results
+
+      # Search for "new phone" - should return "phone"
+      results = Hashtag.search("new phone")
+      assert "phone" in results
+      refute "computer" in results
+      refute "laptop" in results
+      refute "desktop" in results
+    end
+
     test "supports pagination" do
       {:ok, _} = Hashtag.get_or_create_by_name("alpha")
       {:ok, _} = Hashtag.get_or_create_by_name("beta")
@@ -49,6 +78,21 @@ defmodule Pleroma.HashtagTest do
 
       results = Hashtag.search("a", limit: 2, offset: 1)
       assert length(results) == 2
+    end
+
+    test "handles many search terms efficiently" do
+      # Create hashtags
+      {:ok, _} = Hashtag.get_or_create_by_name("computer")
+      {:ok, _} = Hashtag.get_or_create_by_name("laptop")
+      {:ok, _} = Hashtag.get_or_create_by_name("phone")
+      {:ok, _} = Hashtag.get_or_create_by_name("tablet")
+
+      # Search with many terms - should be efficient with PostgreSQL ANY operator
+      results = Hashtag.search("new fast computer laptop phone tablet device")
+      assert "computer" in results
+      assert "laptop" in results
+      assert "phone" in results
+      assert "tablet" in results
     end
   end
 end

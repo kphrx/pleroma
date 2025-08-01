@@ -139,6 +139,37 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
       assert results["hashtags"] == []
     end
 
+    test "searches hashtags by multiple words in query", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, _activity1} = CommonAPI.post(user, %{status: "This is my new #computer"})
+      {:ok, _activity2} = CommonAPI.post(user, %{status: "Check out this #laptop"})
+      {:ok, _activity3} = CommonAPI.post(user, %{status: "My #desktop setup"})
+      {:ok, _activity4} = CommonAPI.post(user, %{status: "New #phone arrived"})
+
+      results =
+        conn
+        |> get("/api/v2/search?#{URI.encode_query(%{q: "new computer"})}")
+        |> json_response_and_validate_schema(200)
+
+      hashtag_names = Enum.map(results["hashtags"], & &1["name"])
+      assert "computer" in hashtag_names
+      refute "laptop" in hashtag_names
+      refute "desktop" in hashtag_names
+      refute "phone" in hashtag_names
+
+      results =
+        conn
+        |> get("/api/v2/search?#{URI.encode_query(%{q: "computer laptop"})}")
+        |> json_response_and_validate_schema(200)
+
+      hashtag_names = Enum.map(results["hashtags"], & &1["name"])
+      assert "computer" in hashtag_names
+      assert "laptop" in hashtag_names
+      refute "desktop" in hashtag_names
+      refute "phone" in hashtag_names
+    end
+
     test "supports pagination of hashtags search results", %{conn: conn} do
       user = insert(:user)
 

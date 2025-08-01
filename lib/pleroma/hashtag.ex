@@ -135,18 +135,28 @@ defmodule Pleroma.Hashtag do
     limit = Keyword.get(options, :limit, 20)
     offset = Keyword.get(options, :offset, 0)
 
-    query
-    |> String.downcase()
-    |> String.trim()
-    |> then(fn search_term ->
+    search_terms =
+      query
+      |> String.downcase()
+      |> String.trim()
+      |> String.split(~r/\s+/)
+      |> Enum.filter(&(&1 != ""))
+
+    if Enum.empty?(search_terms) do
+      []
+    else
+      # Use PostgreSQL's ANY operator with array for efficient multi-term search
+      # This is much more efficient than multiple OR clauses
+      search_patterns = Enum.map(search_terms, &"%#{&1}%")
+
       from(ht in Hashtag,
-        where: fragment("LOWER(?) LIKE ?", ht.name, ^"%#{search_term}%"),
+        where: fragment("LOWER(?) LIKE ANY(?)", ht.name, ^search_patterns),
         order_by: [asc: ht.name],
         limit: ^limit,
         offset: ^offset
       )
       |> Repo.all()
       |> Enum.map(& &1.name)
-    end)
+    end
   end
 end
