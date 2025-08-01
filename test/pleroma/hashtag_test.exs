@@ -122,5 +122,25 @@ defmodule Pleroma.HashtagTest do
       assert "racecar" in results
       assert "nascar" in results
     end
+
+    test "handles hashtag symbols in search query" do
+      {:ok, _} = Hashtag.get_or_create_by_name("computer")
+      {:ok, _} = Hashtag.get_or_create_by_name("laptop")
+      {:ok, _} = Hashtag.get_or_create_by_name("phone")
+
+      results_with_hash = Hashtag.search("#computer #laptop")
+      results_without_hash = Hashtag.search("computer laptop")
+
+      assert results_with_hash == results_without_hash
+
+      results_mixed = Hashtag.search("#computer laptop #phone")
+      assert "computer" in results_mixed
+      assert "laptop" in results_mixed
+      assert "phone" in results_mixed
+
+      results_only_hash = Hashtag.search("#computer")
+      results_no_hash = Hashtag.search("computer")
+      assert results_only_hash == results_no_hash
+    end
   end
 end

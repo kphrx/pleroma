@@ -141,6 +141,8 @@ defmodule Pleroma.Hashtag do
       |> String.trim()
       |> String.split(~r/\s+/)
       |> Enum.filter(&(&1 != ""))
+      |> Enum.map(&String.trim_leading(&1, "#"))
+      |> Enum.filter(&(&1 != ""))
 
     if Enum.empty?(search_terms) do
       []
