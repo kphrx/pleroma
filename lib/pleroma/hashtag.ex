@@ -149,9 +149,39 @@ defmodule Pleroma.Hashtag do
       # This is much more efficient than multiple OR clauses
       search_patterns = Enum.map(search_terms, &"%#{&1}%")
 
-      from(ht in Hashtag,
-        where: fragment("LOWER(?) LIKE ANY(?)", ht.name, ^search_patterns),
-        order_by: [asc: ht.name],
+      # Create ranking query that prioritizes exact matches and closer matches
+      # Use a subquery to properly handle computed columns in ORDER BY
+      base_query =
+        from(ht in Hashtag,
+          where: fragment("LOWER(?) LIKE ANY(?)", ht.name, ^search_patterns),
+          select: %{
+            name: ht.name,
+            # Ranking: exact matches get highest priority (0), then prefix matches (1), then contains (2)
+            match_rank:
+              fragment(
+                """
+                  CASE
+                    WHEN LOWER(?) = ANY(?) THEN 0
+                    WHEN LOWER(?) LIKE ANY(?) THEN 1
+                    ELSE 2
+                  END
+                """,
+                ht.name,
+                ^search_terms,
+                ht.name,
+                ^Enum.map(search_terms, &"#{&1}%")
+              ),
+            # Secondary sort by name length (shorter names first)
+            name_length: fragment("LENGTH(?)", ht.name)
+          }
+        )
+
+      from(result in subquery(base_query),
+        order_by: [
+          asc: result.match_rank,
+          asc: result.name_length,
+          asc: result.name
+        ],
         limit: ^limit,
         offset: ^offset
       )

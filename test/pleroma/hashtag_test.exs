@@ -39,7 +39,6 @@ defmodule Pleroma.HashtagTest do
     end
 
     test "searches hashtags by multiple words in query" do
-      # Create some hashtags
       {:ok, _} = Hashtag.get_or_create_by_name("computer")
       {:ok, _} = Hashtag.get_or_create_by_name("laptop")
       {:ok, _} = Hashtag.get_or_create_by_name("desktop")
@@ -80,19 +79,48 @@ defmodule Pleroma.HashtagTest do
       assert length(results) == 2
     end
 
-    test "handles many search terms efficiently" do
-      # Create hashtags
+    test "handles matching many search terms" do
       {:ok, _} = Hashtag.get_or_create_by_name("computer")
       {:ok, _} = Hashtag.get_or_create_by_name("laptop")
       {:ok, _} = Hashtag.get_or_create_by_name("phone")
       {:ok, _} = Hashtag.get_or_create_by_name("tablet")
 
-      # Search with many terms - should be efficient with PostgreSQL ANY operator
       results = Hashtag.search("new fast computer laptop phone tablet device")
       assert "computer" in results
       assert "laptop" in results
       assert "phone" in results
       assert "tablet" in results
+    end
+
+    test "ranks results by match quality" do
+      {:ok, _} = Hashtag.get_or_create_by_name("my_computer")
+      {:ok, _} = Hashtag.get_or_create_by_name("computer_science")
+      {:ok, _} = Hashtag.get_or_create_by_name("computer")
+
+      results = Hashtag.search("computer")
+
+      # Exact match first
+      assert Enum.at(results, 0) == "computer"
+
+      # Prefix match would be next
+      assert Enum.at(results, 1) == "computer_science"
+
+      # worst match is last
+      assert Enum.at(results, 2) == "my_computer"
+    end
+
+    test "prioritizes shorter names when ranking is equal" do
+      # Create hashtags with same ranking but different lengths
+      {:ok, _} = Hashtag.get_or_create_by_name("car")
+      {:ok, _} = Hashtag.get_or_create_by_name("racecar")
+      {:ok, _} = Hashtag.get_or_create_by_name("nascar")
+
+      # Search for "car" - shorter names should come first
+      results = Hashtag.search("car")
+      # Shortest exact match first
+      assert Enum.at(results, 0) == "car"
+      assert "racecar" in results
+      assert "nascar" in results
     end
   end
 end
