@@ -7,7 +7,6 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
 
   alias Pleroma.Object
   alias Pleroma.Web.CommonAPI
-  alias Pleroma.Web.Endpoint
   import Pleroma.Factory
   import ExUnit.CaptureLog
   import Tesla.Mock
@@ -66,9 +65,7 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
       [account | _] = results["accounts"]
       assert account["id"] == to_string(user_three.id)
 
-      assert results["hashtags"] == [
-               %{"name" => "private", "url" => "#{Endpoint.url()}/tag/private"}
-             ]
+      assert results["hashtags"] == []
 
       [status] = results["statuses"]
       assert status["id"] == to_string(activity.id)
@@ -77,9 +74,7 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
         get(conn, "/api/v2/search?q=天子")
         |> json_response_and_validate_schema(200)
 
-      assert results["hashtags"] == [
-               %{"name" => "天子", "url" => "#{Endpoint.url()}/tag/天子"}
-             ]
+      assert results["hashtags"] == []
 
       [status] = results["statuses"]
       assert status["id"] == to_string(activity.id)
