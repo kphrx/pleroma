@@ -1,0 +1,1 @@
+Docs: Restore DB schema before data to avoid long restore times

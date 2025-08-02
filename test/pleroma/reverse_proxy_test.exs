@@ -395,4 +395,40 @@ defmodule Pleroma.ReverseProxyTest do
       assert Conn.get_resp_header(conn, "content-type") == ["application/octet-stream"]
     end
   end
+
+  # Hackey is used for Reverse Proxy when Hackney or Finch is the Tesla Adapter
+  # Gun is able to proxy through Tesla, so it does not need testing as the
+  # test cases in the Pleroma.HTTPTest module are sufficient
+  describe "Hackney URL encoding:" do
+    setup do
+      ClientMock
+      |> expect(:request, fn :get,
+                             "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz",
+                             _headers,
+                             _body,
+                             _opts ->
+        {:ok, 200, [{"content-type", "image/png"}], "It works!"}
+      end)
+      |> stub(:stream_body, fn _ -> :done end)
+      |> stub(:close, fn _ -> :ok end)
+
+      :ok
+    end
+
+    test "properly encodes URLs with spaces", %{conn: conn} do
+      url_with_space = "https://example.com/emoji/Pack 1/koronebless.png?foo=bar baz"
+
+      result = ReverseProxy.call(conn, url_with_space)
+
+      assert result.status == 200
+    end
+
+    test "properly encoded URL should not be altered", %{conn: conn} do
+      properly_encoded_url = "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz"
+
+      result = ReverseProxy.call(conn, properly_encoded_url)
+
+      assert result.status == 200
+    end
+  end
 end
