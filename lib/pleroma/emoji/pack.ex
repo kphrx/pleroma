@@ -227,11 +227,10 @@ defmodule Pleroma.Emoji.Pack do
 
   def download_zip(name, opts \\ %{}) do
     pack_path =
-      Path.join([
-        Pleroma.Config.get!([:instance, :static_dir]),
-        "emoji",
+      path_join_name_safe(
+        Path.join(Pleroma.Config.get!([:instance, :static_dir]), "emoji"),
         name
-      ])
+      )
 
     with {_, false} <-
            {"Pack already exists, refusing to import #{name}", File.exists?(pack_path)},
