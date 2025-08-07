@@ -226,63 +226,86 @@ defmodule Pleroma.Emoji.Pack do
   end
 
   def download_zip(name, opts \\ %{}) do
-    pack_path =
-      path_join_name_safe(
-        Path.join(Pleroma.Config.get!([:instance, :static_dir]), "emoji"),
-        name
+    with :ok <- validate_not_empty([name]),
+         :ok <- validate_new_pack(name),
+         {:ok, archive_data} <- fetch_archive_data(opts),
+         pack_path <- path_join_name_safe(emoji_path(), name),
+         :ok <- File.mkdir_p(pack_path),
+         :ok <- safe_unzip(archive_data, pack_path) do
+      ensure_pack_json(pack_path, archive_data, opts)
+    else
+      {:error, reason} when is_binary(reason) -> {:error, reason}
+      _ -> {:error, "Could not process pack"}
+    end
+  end
+
+  defp safe_unzip(archive_data, pack_path) do
+    case SafeZip.unzip_data(archive_data, pack_path) do
+      {:ok, _} -> :ok
+      {:error, reason} when is_binary(reason) -> {:error, reason}
+      _ -> {:error, "Could not unzip pack"}
+    end
+  end
+
+  defp validate_new_pack(name) do
+    pack_path = path_join_name_safe(emoji_path(), name)
+
+    if File.exists?(pack_path) do
+      {:error, "Pack already exists, refusing to import #{name}"}
+    else
+      :ok
+    end
+  end
+
+  defp fetch_archive_data(%{url: url}) do
+    case Pleroma.HTTP.get(url) do
+      {:ok, %{status: 200, body: data}} -> {:ok, data}
+      _ -> {:error, "Could not download pack"}
+    end
+  end
+
+  defp fetch_archive_data(%{file: %Plug.Upload{path: path}}) do
+    case File.read(path) do
+      {:ok, data} -> {:ok, data}
+      _ -> {:error, "Could not read the uploaded pack file"}
+    end
+  end
+
+  defp fetch_archive_data(_) do
+    {:error, "Neither file nor URL was present in the request"}
+  end
+
+  defp ensure_pack_json(pack_path, archive_data, opts) do
+    pack_json_path = Path.join(pack_path, "pack.json")
+
+    if not File.exists?(pack_json_path) do
+      create_pack_json(pack_path, pack_json_path, archive_data, opts)
+    end
+
+    :ok
+  end
+
+  defp create_pack_json(pack_path, pack_json_path, archive_data, opts) do
+    emoji_map =
+      Pleroma.Emoji.Loader.make_shortcode_to_file_map(
+        pack_path,
+        Map.get(opts, :exts, [".png", ".gif", ".jpg"])
       )
 
-    with {_, false} <-
-           {"Pack already exists, refusing to import #{name}", File.exists?(pack_path)},
-         {_, :ok} <- {"Could not create the pack directory", File.mkdir_p(pack_path)},
-         {_, {:ok, %{body: binary_archive}}} <-
-           (case opts do
-              %{url: url} ->
-                {"Could not download pack", Pleroma.HTTP.get(url)}
+    archive_sha = :crypto.hash(:sha256, archive_data) |> Base.encode16()
 
-              %{file: file} ->
-                case File.read(file.path) do
-                  {:ok, data} -> {nil, {:ok, %{body: data}}}
-                  {:error, _e} -> {"Could not read the uploaded pack file", :error}
-                end
+    pack_json = %{
+      pack: %{
+        license: Map.get(opts, :license, ""),
+        homepage: Map.get(opts, :homepage, ""),
+        description: Map.get(opts, :description, ""),
+        src: Map.get(opts, :url),
+        src_sha256: archive_sha
+      },
+      files: emoji_map
+    }
 
-              _ ->
-                {"Neither file nor URL was present in the request", :error}
-            end),
-         {_, {:ok, _}} <-
-           {"Could not unzip pack",
-            :zip.unzip(binary_archive, cwd: String.to_charlist(pack_path))} do
-      pack_json_path = Path.join([pack_path, "pack.json"])
-      # Make a json if it does not exist
-      if not File.exists?(pack_json_path) do
-        # Make a list of the emojis
-        emoji_map =
-          Pleroma.Emoji.Loader.make_shortcode_to_file_map(
-            pack_path,
-            Map.get(opts, :exts, [".png", ".gif", ".jpg"])
-          )
-
-        # Calculate the pack SHA. Only needed when there's no pack.json, as it would already include a hash
-        archive_sha = :crypto.hash(:sha256, binary_archive) |> Base.encode16()
-
-        pack_json = %{
-          pack: %{
-            license: Map.get(opts, :license, ""),
-            homepage: Map.get(opts, :homepage, ""),
-            description: Map.get(opts, :description, ""),
-            src: Map.get(opts, :url),
-            src_sha256: archive_sha
-          },
-          files: emoji_map
-        }
-
-        File.write!(pack_json_path, Jason.encode!(pack_json, pretty: true))
-      end
-
-      :ok
-    else
-      {err, _} -> {:error, err}
-    end
+    File.write!(pack_json_path, Jason.encode!(pack_json, pretty: true))
   end
 
   @spec download(String.t(), String.t(), String.t()) :: {:ok, t()} | {:error, atom()}
