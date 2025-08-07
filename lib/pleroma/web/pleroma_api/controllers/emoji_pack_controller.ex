@@ -115,31 +115,23 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackController do
   end
 
   def download_zip(
-        %{private: %{open_api_spex: %{body_params: %{url: url, name: name}}}} = conn,
+        %{private: %{open_api_spex: %{body_params: params}}} = conn,
         _
       ) do
-    with :ok <- Pack.download_zip(name, %{url: url}) do
-      json(conn, "ok")
-    else
-      {:error, error} ->
-        conn
-        |> put_status(:bad_request)
-        |> json(%{error: error})
-    end
-  end
+    name = Map.get(params, :name)
 
-  def download_zip(
-        %{private: %{open_api_spex: %{body_params: %{file: %Plug.Upload{} = file, name: name}}}} =
-          conn,
-        _
-      ) do
-    with :ok <- Pack.download_zip(name, %{file: file}) do
+    with :ok <- Pack.download_zip(name, params) do
       json(conn, "ok")
     else
-      {:error, error} ->
+      {:error, error} when is_binary(error) ->
         conn
         |> put_status(:bad_request)
         |> json(%{error: error})
+
+      {:error, _} ->
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "Could not process pack"})
     end
   end
 
