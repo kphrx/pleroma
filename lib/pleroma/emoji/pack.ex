@@ -252,9 +252,6 @@ defmodule Pleroma.Emoji.Pack do
          {_, {:ok, _}} <-
            {"Could not unzip pack",
             :zip.unzip(binary_archive, cwd: String.to_charlist(pack_path))} do
-      # Get the pack SHA
-      archive_sha = :crypto.hash(:sha256, binary_archive) |> Base.encode16()
-
       pack_json_path = Path.join([pack_path, "pack.json"])
       # Make a json if it does not exist
       if not File.exists?(pack_json_path) do
@@ -264,6 +261,9 @@ defmodule Pleroma.Emoji.Pack do
             pack_path,
             Map.get(opts, :exts, [".png", ".gif", ".jpg"])
           )
+
+        # Calculate the pack SHA. Only needed when there's no pack.json, as it would already include a hash
+        archive_sha = :crypto.hash(:sha256, binary_archive) |> Base.encode16()
 
         pack_json = %{
           pack: %{
