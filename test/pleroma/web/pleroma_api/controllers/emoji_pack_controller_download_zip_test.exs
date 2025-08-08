@@ -199,6 +199,67 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
              }
     end
 
+    test "returns error when pack name is empty", %{admin_conn: admin_conn} do
+      {:ok, zip_path} = create_test_emoji_zip()
+
+      upload = %Plug.Upload{
+        content_type: "application/zip",
+        path: zip_path,
+        filename: "test_pack.zip"
+      }
+
+      assert admin_conn
+             |> put_req_header("content-type", "multipart/form-data")
+             |> post("/api/pleroma/emoji/packs/download_zip", %{
+               name: "",
+               file: upload
+             })
+             |> json_response_and_validate_schema(400) == %{
+               "error" => "Pack name cannot be empty"
+             }
+
+      # Clean up
+      File.rm!(zip_path)
+    end
+
+    test "returns error when unable to create pack directory", %{admin_conn: admin_conn} do
+      # Make the emoji directory read-only to trigger mkdir_p failure
+      emoji_path =
+        Path.join(
+          Pleroma.Config.get!([:instance, :static_dir]),
+          "emoji"
+        )
+
+      # Save original permissions
+      {:ok, %{mode: original_mode}} = File.stat(emoji_path)
+
+      # Make emoji directory read-only (no write permission)
+      File.chmod!(emoji_path, 0o555)
+
+      {:ok, zip_path} = create_test_emoji_zip()
+
+      upload = %Plug.Upload{
+        content_type: "application/zip",
+        path: zip_path,
+        filename: "test_pack.zip"
+      }
+
+      # Try to create a pack in the read-only emoji directory
+      assert admin_conn
+             |> put_req_header("content-type", "multipart/form-data")
+             |> post("/api/pleroma/emoji/packs/download_zip", %{
+               name: "test_readonly_pack",
+               file: upload
+             })
+             |> json_response_and_validate_schema(400) == %{
+               "error" => "Could not create the pack directory"
+             }
+
+      # Clean up - restore original permissions
+      File.chmod!(emoji_path, original_mode)
+      File.rm!(zip_path)
+    end
+
     test "preserves existing pack.json if present in ZIP", %{admin_conn: admin_conn} do
       # Create ZIP with pack.json
       {:ok, zip_path} = create_test_emoji_zip_with_pack_json()
