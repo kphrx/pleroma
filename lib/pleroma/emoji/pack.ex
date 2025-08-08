@@ -230,12 +230,20 @@ defmodule Pleroma.Emoji.Pack do
          :ok <- validate_new_pack(name),
          {:ok, archive_data} <- fetch_archive_data(opts),
          pack_path <- path_join_name_safe(emoji_path(), name),
-         :ok <- File.mkdir_p(pack_path),
+         :ok <- create_pack_dir(pack_path),
          :ok <- safe_unzip(archive_data, pack_path) do
       ensure_pack_json(pack_path, archive_data, opts)
     else
+      {:error, :empty_values} -> {:error, "Pack name cannot be empty"}
       {:error, reason} when is_binary(reason) -> {:error, reason}
       _ -> {:error, "Could not process pack"}
+    end
+  end
+
+  defp create_pack_dir(pack_path) do
+    case File.mkdir_p(pack_path) do
+      :ok -> :ok
+      {:error, _} -> {:error, "Could not create the pack directory"}
     end
   end
 
