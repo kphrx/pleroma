@@ -733,13 +733,11 @@ An example for SMTP adapter:
 ```elixir
 config :pleroma, Pleroma.Emails.Mailer,
   enabled: true,
-  adapter: Swoosh.Adapters.SMTP,
+  adapter: Swoosh.Adapters.Mua,
   relay: "smtp.gmail.com",
-  username: "YOUR_USERNAME@gmail.com",
-  password: "YOUR_SMTP_PASSWORD",
+  auth: [username: "YOUR_USERNAME@gmail.com", password: "YOUR_SMTP_PASSWORD"],
   port: 465,
-  ssl: true,
-  auth: :always
+  protocol: :ssl
 ```
 
 An example for Mua adapter:
