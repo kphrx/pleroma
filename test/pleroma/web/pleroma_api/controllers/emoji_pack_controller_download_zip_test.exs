@@ -8,12 +8,30 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
   import Tesla.Mock
   import Pleroma.Factory
 
-  @emoji_path Path.join(
-                Pleroma.Config.get!([:instance, :static_dir]),
-                "emoji"
-              )
+  setup_all do
+    # Create a base temp directory for this test module
+    base_temp_dir = Path.join(System.tmp_dir!(), "emoji_test_#{Ecto.UUID.generate()}")
 
-  setup do
+    # Clean up when all tests in module are done
+    on_exit(fn ->
+      File.rm_rf!(base_temp_dir)
+    end)
+
+    {:ok, %{base_temp_dir: base_temp_dir}}
+  end
+
+  setup %{base_temp_dir: base_temp_dir} do
+    # Create a unique subdirectory for each test
+    test_id = Ecto.UUID.generate()
+    temp_dir = Path.join(base_temp_dir, test_id)
+    emoji_dir = Path.join(temp_dir, "emoji")
+
+    # Create the directory structure
+    File.mkdir_p!(emoji_dir)
+
+    # Configure this test to use the temp directory
+    clear_config([:instance, :static_dir], temp_dir)
+
     admin = insert(:user, is_admin: true)
     token = insert(:oauth_admin_token, user: admin)
 
@@ -24,27 +42,7 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
 
     Pleroma.Emoji.reload()
 
-    # Clean up any test packs from previous runs
-    on_exit(fn ->
-      test_packs = [
-        "test_zip_pack",
-        "test_zip_pack_url",
-        "test_zip_pack_malicious",
-        "test_invalid_pack",
-        "test_bad_url_pack",
-        "test_no_source_pack"
-      ]
-
-      Enum.each(test_packs, fn pack_name ->
-        pack_path = Path.join(@emoji_path, pack_name)
-
-        if File.exists?(pack_path) do
-          File.rm_rf!(pack_path)
-        end
-      end)
-    end)
-
-    {:ok, %{admin_conn: admin_conn}}
+    {:ok, %{admin_conn: admin_conn, emoji_path: emoji_dir}}
   end
 
   describe "POST /api/pleroma/emoji/packs/download_zip" do
@@ -52,7 +50,7 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
       clear_config([:instance, :admin_privileges], [:emoji_manage_emoji])
     end
 
-    test "creates pack from uploaded ZIP file", %{admin_conn: admin_conn} do
+    test "creates pack from uploaded ZIP file", %{admin_conn: admin_conn, emoji_path: emoji_path} do
       # Create a test ZIP file with emojis
       {:ok, zip_path} = create_test_emoji_zip()
 
@@ -71,11 +69,11 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
              |> json_response_and_validate_schema(200) == "ok"
 
       # Verify pack was created
-      assert File.exists?("#{@emoji_path}/test_zip_pack/pack.json")
-      assert File.exists?("#{@emoji_path}/test_zip_pack/test_emoji.png")
+      assert File.exists?("#{emoji_path}/test_zip_pack/pack.json")
+      assert File.exists?("#{emoji_path}/test_zip_pack/test_emoji.png")
 
       # Verify pack.json contents
-      {:ok, pack_json} = File.read("#{@emoji_path}/test_zip_pack/pack.json")
+      {:ok, pack_json} = File.read("#{emoji_path}/test_zip_pack/pack.json")
       pack_data = Jason.decode!(pack_json)
 
       assert pack_data["files"]["test_emoji"] == "test_emoji.png"
@@ -85,7 +83,7 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
       File.rm!(zip_path)
     end
 
-    test "creates pack from URL", %{admin_conn: admin_conn} do
+    test "creates pack from URL", %{admin_conn: admin_conn, emoji_path: emoji_path} do
       # Mock HTTP request to download ZIP
       {:ok, zip_path} = create_test_emoji_zip()
       {:ok, zip_data} = File.read(zip_path)
@@ -104,11 +102,11 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
              |> json_response_and_validate_schema(200) == "ok"
 
       # Verify pack was created
-      assert File.exists?("#{@emoji_path}/test_zip_pack_url/pack.json")
-      assert File.exists?("#{@emoji_path}/test_zip_pack_url/test_emoji.png")
+      assert File.exists?("#{emoji_path}/test_zip_pack_url/pack.json")
+      assert File.exists?("#{emoji_path}/test_zip_pack_url/test_emoji.png")
 
       # Verify pack.json has URL as source
-      {:ok, pack_json} = File.read("#{@emoji_path}/test_zip_pack_url/pack.json")
+      {:ok, pack_json} = File.read("#{emoji_path}/test_zip_pack_url/pack.json")
       pack_data = Jason.decode!(pack_json)
 
       assert pack_data["pack"]["src"] == "https://example.com/emoji_pack.zip"
@@ -118,9 +116,9 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
       File.rm!(zip_path)
     end
 
-    test "refuses to overwrite existing pack", %{admin_conn: admin_conn} do
+    test "refuses to overwrite existing pack", %{admin_conn: admin_conn, emoji_path: emoji_path} do
       # Create existing pack
-      pack_path = Path.join(@emoji_path, "test_zip_pack")
+      pack_path = Path.join(emoji_path, "test_zip_pack")
       File.mkdir_p!(pack_path)
       File.write!(Path.join(pack_path, "pack.json"), Jason.encode!(%{files: %{}}))
 
@@ -222,13 +220,11 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
       File.rm!(zip_path)
     end
 
-    test "returns error when unable to create pack directory", %{admin_conn: admin_conn} do
+    test "returns error when unable to create pack directory", %{
+      admin_conn: admin_conn,
+      emoji_path: emoji_path
+    } do
       # Make the emoji directory read-only to trigger mkdir_p failure
-      emoji_path =
-        Path.join(
-          Pleroma.Config.get!([:instance, :static_dir]),
-          "emoji"
-        )
 
       # Save original permissions
       {:ok, %{mode: original_mode}} = File.stat(emoji_path)
@@ -260,7 +256,10 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
       File.rm!(zip_path)
     end
 
-    test "preserves existing pack.json if present in ZIP", %{admin_conn: admin_conn} do
+    test "preserves existing pack.json if present in ZIP", %{
+      admin_conn: admin_conn,
+      emoji_path: emoji_path
+    } do
       # Create ZIP with pack.json
       {:ok, zip_path} = create_test_emoji_zip_with_pack_json()
 
@@ -273,13 +272,13 @@ defmodule Pleroma.Web.PleromaAPI.EmojiPackControllerDownloadZipTest do
       assert admin_conn
              |> put_req_header("content-type", "multipart/form-data")
              |> post("/api/pleroma/emoji/packs/download_zip", %{
-               name: "test_zip_pack",
+               name: "test_zip_pack_with_json",
                file: upload
              })
              |> json_response_and_validate_schema(200) == "ok"
 
       # Verify original pack.json was preserved
-      {:ok, pack_json} = File.read("#{@emoji_path}/test_zip_pack/pack.json")
+      {:ok, pack_json} = File.read("#{emoji_path}/test_zip_pack_with_json/pack.json")
       pack_data = Jason.decode!(pack_json)
 
       assert pack_data["pack"]["description"] == "Test pack from ZIP"
