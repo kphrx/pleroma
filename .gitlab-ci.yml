@@ -132,10 +132,25 @@ unit-testing-1.14.5-otp-25:
   - name: postgres:13-alpine
     alias: postgres
     command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
+  before_script: &testing_before_script
+    - echo $MIX_ENV
+    - rm -rf _build/*/lib/pleroma
+    # Create a non-root user for running tests
+    - useradd -m -s /bin/bash testuser
+    # Install dependencies as root first
+    - mix deps.get
+    # Set proper ownership for everything
+    - chown -R testuser:testuser .
+    - chown -R testuser:testuser /root/.mix || true
+    - chown -R testuser:testuser /root/.hex || true
+    # Create user-specific directories
+    - su testuser -c "HOME=/home/testuser mix local.hex --force"
+    - su testuser -c "HOME=/home/testuser mix local.rebar --force"
   script: &testing_script
-    - mix ecto.create
-    - mix ecto.migrate
-    - mix pleroma.test_runner --cover --preload-modules
+    # Run tests as non-root user
+    - su testuser -c "HOME=/home/testuser mix ecto.create"
+    - su testuser -c "HOME=/home/testuser mix ecto.migrate"
+    - su testuser -c "HOME=/home/testuser mix pleroma.test_runner --cover --preload-modules"
   coverage: '/^Line total: ([^ ]*%)$/'
   artifacts:
     reports:
@@ -151,6 +166,7 @@ unit-testing-1.18.3-otp-27:
   image: git.pleroma.social:5050/pleroma/pleroma/ci-base:elixir-1.18.3-otp-27
   cache: *testing_cache_policy
   services: *testing_services
+  before_script: *testing_before_script
   script: *testing_script
 
 formatting-1.15:

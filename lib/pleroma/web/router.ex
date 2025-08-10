@@ -466,6 +466,7 @@ defmodule Pleroma.Web.Router do
       get("/import", EmojiPackController, :import_from_filesystem)
       get("/remote", EmojiPackController, :remote)
       post("/download", EmojiPackController, :download)
+      post("/download_zip", EmojiPackController, :download_zip)
 
       post("/files", EmojiFileController, :create)
       patch("/files", EmojiFileController, :update)
