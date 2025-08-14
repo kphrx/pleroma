@@ -14,6 +14,7 @@ defmodule Pleroma.HTTP do
   alias Tesla.Env
 
   require Logger
+  require Pleroma.Constants
 
   @type t :: __MODULE__
   @type method() :: :get | :post | :put | :delete | :head
@@ -145,10 +146,19 @@ defmodule Pleroma.HTTP do
 
   defp encode_path(nil), do: nil
 
+  # URI.encode/2 deliberately does not encode all chars that are forbidden
+  # in the path component of a URI. It only encodes chars that are forbidden
+  # in the whole URI. A predicate in the 2nd argument is used to fix that here.
+  # URI.encode/2 uses the predicate function to determine whether each byte
+  # (in an integer representation) should be encoded or not.
   defp encode_path(path) when is_binary(path) do
     path
     |> URI.decode()
-    |> URI.encode()
+    |> URI.encode(fn byte ->
+      URI.char_unreserved?(byte) || Enum.any?(
+        Pleroma.Constants.uri_path_allowed_reserved_chars, fn char ->
+          char == byte end)
+    end)
   end
 
   defp encode_query(nil), do: nil
