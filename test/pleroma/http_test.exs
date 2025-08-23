@@ -28,6 +28,15 @@ defmodule Pleroma.HTTPTest do
 
       %{method: :get, url: "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz"} ->
         %Tesla.Env{status: 200, body: "emoji data"}
+
+      %{
+        method: :get,
+        url: "https://example.com/media/foo/bar%20!$&'()*+,;=/:%20@a%20%5Bbaz%5D.mp4"
+      } ->
+        %Tesla.Env{status: 200, body: "video data"}
+
+      %{method: :get, url: "https://example.com/media/unicode%20%F0%9F%99%82%20.gif"} ->
+        %Tesla.Env{status: 200, body: "unicode data"}
     end)
 
     :ok
@@ -83,6 +92,18 @@ defmodule Pleroma.HTTPTest do
     properly_encoded_url = "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz"
 
     {:ok, result} = HTTP.get(properly_encoded_url)
+
+    assert result.status == 200
+
+    url_with_reserved_chars = "https://example.com/media/foo/bar !$&'()*+,;=/: @a [baz].mp4"
+
+    {:ok, result} = HTTP.get(url_with_reserved_chars)
+
+    assert result.status == 200
+
+    url_with_unicode = "https://example.com/media/unicode 🙂 .gif"
+
+    {:ok, result} = HTTP.get(url_with_unicode)
 
     assert result.status == 200
   end

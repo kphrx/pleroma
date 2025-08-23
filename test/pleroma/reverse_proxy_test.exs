@@ -402,12 +402,27 @@ defmodule Pleroma.ReverseProxyTest do
   describe "Hackney URL encoding:" do
     setup do
       ClientMock
-      |> expect(:request, fn :get,
-                             "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz",
-                             _headers,
-                             _body,
-                             _opts ->
-        {:ok, 200, [{"content-type", "image/png"}], "It works!"}
+      |> expect(:request, fn
+        :get,
+            "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz",
+            _headers,
+            _body,
+            _opts ->
+          {:ok, 200, [{"content-type", "image/png"}], "It works!"}
+
+        :get,
+            "https://example.com/media/foo/bar%20!$&'()*+,;=/:%20@a%20%5Bbaz%5D.mp4",
+            _headers,
+            _body,
+            _opts ->
+          {:ok, 200, [{"content-type", "video/mp4"}], "Allowed reserved chars."}
+
+        :get,
+            "https://example.com/media/unicode%20%F0%9F%99%82%20.gif",
+            _headers,
+            _body,
+            _opts ->
+          {:ok, 200, [{"content-type", "image/gif"}], "Unicode emoji in path"}
       end)
       |> stub(:stream_body, fn _ -> :done end)
       |> stub(:close, fn _ -> :ok end)
@@ -427,6 +442,22 @@ defmodule Pleroma.ReverseProxyTest do
       properly_encoded_url = "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz"
 
       result = ReverseProxy.call(conn, properly_encoded_url)
+
+      assert result.status == 200
+    end
+
+    test "properly encodes URLs with allowed reserved characters", %{conn: conn} do
+      url_with_reserved_chars = "https://example.com/media/foo/bar !$&'()*+,;=/: @a [baz].mp4"
+
+      result = ReverseProxy.call(conn, url_with_reserved_chars)
+
+      assert result.status == 200
+    end
+
+    test "properly encodes URLs with unicode in path", %{conn: conn} do
+      url_with_unicode = "https://example.com/media/unicode 🙂 .gif"
+
+      result = ReverseProxy.call(conn, url_with_unicode)
 
       assert result.status == 200
     end
