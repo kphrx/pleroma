@@ -17,6 +17,8 @@ defmodule Pleroma.ReverseProxy do
   @failed_request_ttl :timer.seconds(60)
   @methods ~w(GET HEAD)
 
+  @allowed_mime_types Pleroma.Config.get([Pleroma.Upload, :allowed_mime_types], [])
+
   @cachex Pleroma.Config.get([:cachex, :provider], Cachex)
 
   def max_read_duration_default, do: @max_read_duration
@@ -155,6 +157,8 @@ defmodule Pleroma.ReverseProxy do
   defp request(method, url, headers, opts) do
     Logger.debug("#{__MODULE__} #{method} #{url} #{inspect(headers)}")
     method = method |> String.downcase() |> String.to_existing_atom()
+
+    url = maybe_encode_url(url)
 
     case client().request(method, url, headers, "", opts) do
       {:ok, code, headers, client} when code in @valid_resp_codes ->
@@ -301,8 +305,24 @@ defmodule Pleroma.ReverseProxy do
     headers
     |> Enum.filter(fn {k, _} -> k in @keep_resp_headers end)
     |> build_resp_cache_headers(opts)
+    |> sanitise_content_type()
     |> build_resp_content_disposition_header(opts)
     |> Keyword.merge(Keyword.get(opts, :resp_headers, []))
+  end
+
+  defp sanitise_content_type(headers) do
+    original_ct = get_content_type(headers)
+
+    safe_ct =
+      Pleroma.Web.Plugs.Utils.get_safe_mime_type(
+        %{allowed_mime_types: @allowed_mime_types},
+        original_ct
+      )
+
+    [
+      {"content-type", safe_ct}
+      | Enum.filter(headers, fn {k, _v} -> k != "content-type" end)
+    ]
   end
 
   defp build_resp_cache_headers(headers, _opts) do
@@ -429,6 +449,20 @@ defmodule Pleroma.ReverseProxy do
       conn
     else
       _ -> delete_resp_header(conn, "content-length")
+    end
+  end
+
+  # Only when Tesla adapter is Hackney or Finch does the URL
+  # need encoding before Reverse Proxying as both end up
+  # using the raw Hackney client and cannot leverage our
+  # EncodeUrl Tesla middleware
+  # Also do it for test environment
+  defp maybe_encode_url(url) do
+    case Application.get_env(:tesla, :adapter) do
+      Tesla.Adapter.Hackney -> Pleroma.HTTP.encode_url(url)
+      {Tesla.Adapter.Finch, _} -> Pleroma.HTTP.encode_url(url)
+      Tesla.Mock -> Pleroma.HTTP.encode_url(url)
+      _ -> url
     end
   end
 end

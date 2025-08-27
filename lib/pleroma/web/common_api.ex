@@ -27,9 +27,9 @@ defmodule Pleroma.Web.CommonAPI do
   require Logger
 
   @spec block(User.t(), User.t()) :: {:ok, Activity.t()} | Pipeline.errors()
-  def block(blocked, blocker) do
-    with {:ok, block_data, _} <- Builder.block(blocker, blocked),
-         {:ok, block, _} <- Pipeline.common_pipeline(block_data, local: true) do
+  def block(blocked, blocker, params \\ %{}) do
+    with {:ok, block_data, meta} <- Builder.block(blocker, blocked, params),
+         {:ok, block, _} <- Pipeline.common_pipeline(block_data, meta ++ [local: true]) do
       {:ok, block}
     end
   end

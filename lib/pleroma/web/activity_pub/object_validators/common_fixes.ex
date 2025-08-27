@@ -4,12 +4,18 @@
 
 defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
+  alias Pleroma.Language.LanguageDetector
   alias Pleroma.Maps
   alias Pleroma.Object
   alias Pleroma.Object.Containment
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.ActivityPub.Utils
+
+  import Pleroma.EctoType.ActivityPub.ObjectValidators.LanguageCode,
+    only: [good_locale_code?: 1]
+
+  import Pleroma.Web.Utils.Guards, only: [not_empty_string: 1]
 
   require Pleroma.Constants
 
@@ -114,6 +120,13 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
 
   def fix_quote_url(data), do: data
 
+  # On Mastodon, `"likes"` attribute includes an inlined `Collection` with `totalItems`,
+  # not a list of users.
+  # https://github.com/mastodon/mastodon/pull/32007
+  def fix_likes(%{"likes" => %{}} = data), do: Map.drop(data, ["likes"])
+
+  def fix_likes(data), do: data
+
   # https://codeberg.org/fediverse/fep/src/branch/main/fep/e232/fep-e232.md
   def object_link_tag?(%{
         "type" => "Link",
@@ -125,4 +138,75 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   end
 
   def object_link_tag?(_), do: false
+
+  def maybe_add_language_from_activity(object, activity) do
+    language = get_language_from_context(activity)
+
+    if language do
+      Map.put(object, "language", language)
+    else
+      object
+    end
+  end
+
+  def maybe_add_language(object) do
+    language =
+      [
+        &get_language_from_context/1,
+        &get_language_from_content_map/1,
+        &get_language_from_content/1
+      ]
+      |> Enum.find_value(fn get_language ->
+        language = get_language.(object)
+
+        if good_locale_code?(language) do
+          language
+        else
+          nil
+        end
+      end)
+
+    if language do
+      Map.put(object, "language", language)
+    else
+      object
+    end
+  end
+
+  defp get_language_from_context(%{"@context" => context}) when is_list(context) do
+    case context
+         |> Enum.find(fn
+           %{"@language" => language} -> language != "und"
+           _ -> nil
+         end) do
+      %{"@language" => language} -> language
+      _ -> nil
+    end
+  end
+
+  defp get_language_from_context(_), do: nil
+
+  defp get_language_from_content_map(%{"contentMap" => content_map, "content" => source_content}) do
+    content_groups = Map.to_list(content_map)
+
+    case Enum.find(content_groups, fn {_, content} -> content == source_content end) do
+      {language, _} -> language
+      _ -> nil
+    end
+  end
+
+  defp get_language_from_content_map(_), do: nil
+
+  defp get_language_from_content(%{"content" => content} = object) do
+    LanguageDetector.detect("#{object["summary"] || ""} #{content}")
+  end
+
+  defp get_language_from_content(_), do: nil
+
+  def maybe_add_content_map(%{"language" => language, "content" => content} = object)
+      when not_empty_string(language) do
+    Map.put(object, "contentMap", Map.put(%{}, language, content))
+  end
+
+  def maybe_add_content_map(object), do: object
 end

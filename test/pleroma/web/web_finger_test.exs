@@ -39,6 +39,23 @@ defmodule Pleroma.Web.WebFingerTest do
     end
   end
 
+  test "requires exact match for Endpoint host or WebFinger domain" do
+    clear_config([Pleroma.Web.WebFinger, :domain], "pleroma.dev")
+    user = insert(:user)
+
+    assert {:error, "Couldn't find user"} ==
+             WebFinger.webfinger("#{user.nickname}@#{Pleroma.Web.Endpoint.host()}xxxx", "JSON")
+
+    assert {:error, "Couldn't find user"} ==
+             WebFinger.webfinger("#{user.nickname}@pleroma.devxxxx", "JSON")
+
+    assert {:ok, _} =
+             WebFinger.webfinger("#{user.nickname}@#{Pleroma.Web.Endpoint.host()}", "JSON")
+
+    assert {:ok, _} =
+             WebFinger.webfinger("#{user.nickname}@pleroma.dev", "JSON")
+  end
+
   describe "fingering" do
     test "returns error for nonsensical input" do
       assert {:error, _} = WebFinger.finger("bliblablu")

@@ -98,7 +98,7 @@ To add configuration to your config file, you can copy it from the base config. 
 * `moderator_privileges`: A list of privileges a moderator has (e.g. delete messages, manage reports...)
     * Possible values are the same as for `admin_privileges`
 
-## :database
+## :features
 * `improved_hashtag_timeline`: Setting to force toggle / force disable improved hashtags timeline. `:enabled` forces hashtags to be fetched from `hashtags` table for hashtags timeline. `:disabled` forces object-embedded hashtags to be used (slower). Keep it `:auto` for automatic behaviour (it is auto-set to `:enabled` [unless overridden] when HashtagsTableMigrator completes).
 
 ## Background migrations
@@ -733,13 +733,26 @@ An example for SMTP adapter:
 ```elixir
 config :pleroma, Pleroma.Emails.Mailer,
   enabled: true,
-  adapter: Swoosh.Adapters.SMTP,
+  adapter: Swoosh.Adapters.Mua,
   relay: "smtp.gmail.com",
-  username: "YOUR_USERNAME@gmail.com",
-  password: "YOUR_SMTP_PASSWORD",
+  auth: [username: "YOUR_USERNAME@gmail.com", password: "YOUR_SMTP_PASSWORD"],
   port: 465,
-  ssl: true,
-  auth: :always
+  protocol: :ssl
+```
+
+An example for Mua adapter:
+
+```elixir
+config :pleroma, Pleroma.Emails.Mailer,
+  enabled: true,
+  adapter: Swoosh.Adapters.Mua,
+  relay: "mail.example.com",
+  port: 465,
+  auth: [
+    username: "YOUR_USERNAME@domain.tld",
+    password: "YOUR_SMTP_PASSWORD"
+  ],
+  protocol: :ssl
 ```
 
 ### :email_notifications

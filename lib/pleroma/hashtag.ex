@@ -12,6 +12,7 @@ defmodule Pleroma.Hashtag do
   alias Pleroma.Hashtag
   alias Pleroma.Object
   alias Pleroma.Repo
+  alias Pleroma.User.HashtagFollow
 
   schema "hashtags" do
     field(:name, :string)
@@ -25,6 +26,14 @@ defmodule Pleroma.Hashtag do
     name
     |> String.downcase()
     |> String.trim()
+  end
+
+  def get_by_id(id) do
+    Repo.get(Hashtag, id)
+  end
+
+  def get_by_name(name) do
+    Repo.get_by(Hashtag, name: normalize_name(name))
   end
 
   def get_or_create_by_name(name) do
@@ -101,6 +110,86 @@ defmodule Pleroma.Hashtag do
   def delete_unreferenced(ids) do
     with {:ok, %{num_rows: deleted_count}} <- Repo.query(@delete_unreferenced_query, [ids]) do
       {:ok, deleted_count}
+    end
+  end
+
+  def get_followers(%Hashtag{id: hashtag_id}) do
+    from(hf in HashtagFollow)
+    |> where([hf], hf.hashtag_id == ^hashtag_id)
+    |> join(:inner, [hf], u in assoc(hf, :user))
+    |> select([hf, u], u.id)
+    |> Repo.all()
+  end
+
+  def get_recipients_for_activity(%Pleroma.Activity{object: %{hashtags: tags}})
+      when is_list(tags) do
+    tags
+    |> Enum.map(&get_followers/1)
+    |> List.flatten()
+    |> Enum.uniq()
+  end
+
+  def get_recipients_for_activity(_activity), do: []
+
+  def search(query, options \\ []) do
+    limit = Keyword.get(options, :limit, 20)
+    offset = Keyword.get(options, :offset, 0)
+
+    search_terms =
+      query
+      |> String.downcase()
+      |> String.trim()
+      |> String.split(~r/\s+/)
+      |> Enum.filter(&(&1 != ""))
+      |> Enum.map(&String.trim_leading(&1, "#"))
+      |> Enum.filter(&(&1 != ""))
+
+    if Enum.empty?(search_terms) do
+      []
+    else
+      # Use PostgreSQL's ANY operator with array for efficient multi-term search
+      # This is much more efficient than multiple OR clauses
+      search_patterns = Enum.map(search_terms, &"%#{&1}%")
+
+      # Create ranking query that prioritizes exact matches and closer matches
+      # Use a subquery to properly handle computed columns in ORDER BY
+      base_query =
+        from(ht in Hashtag,
+          where: fragment("LOWER(?) LIKE ANY(?)", ht.name, ^search_patterns),
+          select: %{
+            name: ht.name,
+            # Ranking: exact matches get highest priority (0)
+            # then prefix matches (1), then contains (2)
+            match_rank:
+              fragment(
+                """
+                  CASE
+                    WHEN LOWER(?) = ANY(?) THEN 0
+                    WHEN LOWER(?) LIKE ANY(?) THEN 1
+                    ELSE 2
+                  END
+                """,
+                ht.name,
+                ^search_terms,
+                ht.name,
+                ^Enum.map(search_terms, &"#{&1}%")
+              ),
+            # Secondary sort by name length (shorter names first)
+            name_length: fragment("LENGTH(?)", ht.name)
+          }
+        )
+
+      from(result in subquery(base_query),
+        order_by: [
+          asc: result.match_rank,
+          asc: result.name_length,
+          asc: result.name
+        ],
+        limit: ^limit,
+        offset: ^offset
+      )
+      |> Repo.all()
+      |> Enum.map(& &1.name)
     end
   end
 end

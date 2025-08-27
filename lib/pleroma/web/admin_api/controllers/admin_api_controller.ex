@@ -335,13 +335,13 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIController do
 
       if params["password"] do
         User.force_password_reset_async(user)
-      end
 
-      ModerationLog.insert_log(%{
-        actor: admin,
-        subject: [user],
-        action: "force_password_reset"
-      })
+        ModerationLog.insert_log(%{
+          actor: admin,
+          subject: [user],
+          action: "force_password_reset"
+        })
+      end
 
       json(conn, %{status: "success"})
     else

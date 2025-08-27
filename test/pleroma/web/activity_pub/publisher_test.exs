@@ -6,13 +6,11 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
   use Oban.Testing, repo: Pleroma.Repo
   use Pleroma.Web.ConnCase
 
-  import ExUnit.CaptureLog
   import Pleroma.Factory
   import Tesla.Mock
   import Mock
 
   alias Pleroma.Activity
-  alias Pleroma.Instances
   alias Pleroma.Object
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.Web.ActivityPub.Publisher
@@ -166,115 +164,6 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
                  unreachable_since: true
                })
                |> Publisher.publish_one()
-    end
-
-    test_with_mock "calls `Instances.set_reachable` on successful federation if `unreachable_since` is set",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert {:ok, _} =
-               Publisher.prepare_one(%{
-                 inbox: inbox,
-                 activity_id: activity.id,
-                 unreachable_since: NaiveDateTime.utc_now() |> NaiveDateTime.to_string()
-               })
-               |> Publisher.publish_one()
-
-      assert called(Instances.set_reachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_reachable` on successful federation if `unreachable_since` is nil",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert {:ok, _} =
-               Publisher.prepare_one(%{
-                 inbox: inbox,
-                 activity_id: activity.id,
-                 unreachable_since: nil
-               })
-               |> Publisher.publish_one()
-
-      refute called(Instances.set_reachable(inbox))
-    end
-
-    test_with_mock "calls `Instances.set_unreachable` on target inbox on non-2xx HTTP response code",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://404.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert {:cancel, _} =
-               Publisher.prepare_one(%{inbox: inbox, activity_id: activity.id})
-               |> Publisher.publish_one()
-
-      assert called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "it calls `Instances.set_unreachable` on target inbox on request error of any kind",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://connrefused.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert capture_log(fn ->
-               assert {:error, _} =
-                        Publisher.prepare_one(%{
-                          inbox: inbox,
-                          activity_id: activity.id
-                        })
-                        |> Publisher.publish_one()
-             end) =~ "connrefused"
-
-      assert called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_unreachable` if target is reachable",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert {:ok, _} =
-               Publisher.prepare_one(%{inbox: inbox, activity_id: activity.id})
-               |> Publisher.publish_one()
-
-      refute called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_unreachable` if target instance has non-nil `unreachable_since`",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      _actor = insert(:user)
-      inbox = "http://connrefused.site/users/nick1/inbox"
-      activity = insert(:note_activity)
-
-      assert capture_log(fn ->
-               assert {:error, _} =
-                        Publisher.prepare_one(%{
-                          inbox: inbox,
-                          activity_id: activity.id,
-                          unreachable_since: NaiveDateTime.utc_now() |> NaiveDateTime.to_string()
-                        })
-                        |> Publisher.publish_one()
-             end) =~ "connrefused"
-
-      refute called(Instances.set_unreachable(inbox))
     end
   end
 
@@ -519,5 +408,106 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
     {:ok, decoded} = Jason.decode(json)
 
     assert decoded["cc"] == []
+  end
+
+  test "unlisted activities retain public address in cc" do
+    user = insert(:user)
+
+    # simulate unlistd activity by only having
+    # public address in cc
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public],
+          "to" => [user.follower_address]
+        }
+      )
+
+    assert @as_public in activity.data["cc"]
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert @as_public in decoded["cc"]
+
+    # maybe we also have another inbox in cc
+    # during Publishing
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public],
+          "to" => [user.follower_address]
+        }
+      )
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: ["https://remote.instance/users/someone_else/inbox"]
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert decoded["cc"] == [@as_public, "https://remote.instance/users/someone_else/inbox"]
+  end
+
+  test "public address in cc parameter is preserved" do
+    user = insert(:user)
+
+    cc_with_public = [@as_public, "https://example.org/users/other"]
+
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => cc_with_public,
+          "to" => [user.follower_address]
+        }
+      )
+
+    assert @as_public in activity.data["cc"]
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: cc_with_public
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert cc_with_public == decoded["cc"]
+  end
+
+  test "cc parameter is preserved" do
+    user = insert(:user)
+
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => ["https://example.com/specific/user"],
+          "to" => [user.follower_address]
+        }
+      )
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: ["https://example.com/specific/user"]
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert decoded["cc"] == ["https://example.com/specific/user"]
   end
 end

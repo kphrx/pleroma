@@ -1,0 +1,1 @@
+Don't require an Accept header for WebFinger queries and default to JSON.

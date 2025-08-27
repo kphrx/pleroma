@@ -227,7 +227,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       mentions: mentions,
       tags: reblogged[:tags] || [],
       application: build_application(object.data["generator"]),
-      language: nil,
+      language: get_language(object),
       emojis: [],
       pleroma: %{
         local: activity.local,
@@ -445,7 +445,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       mentions: mentions,
       tags: build_tags(tags),
       application: build_application(object.data["generator"]),
-      language: nil,
+      language: get_language(object),
       emojis: build_emojis(object.data["emoji"]),
       pleroma: %{
         local: activity.local,
@@ -681,6 +681,14 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     }
   end
 
+  def render("translation.json", %{
+        content: content,
+        detected_source_language: detected_source_language,
+        provider: provider
+      }) do
+    %{content: content, detected_source_language: detected_source_language, provider: provider}
+  end
+
   def get_reply_to(activity, %{replied_to_activities: replied_to_activities}) do
     object = Object.normalize(activity, fetch: false)
 
@@ -828,6 +836,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   defp get_source_content_type(_source) do
     Utils.get_content_type(nil)
   end
+
+  defp get_language(%{data: %{"language" => "und"}}), do: nil
+
+  defp get_language(object), do: object.data["language"]
 
   defp proxied_url(url, page_url_data) do
     if is_binary(url) do
