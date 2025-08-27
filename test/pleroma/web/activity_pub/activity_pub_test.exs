@@ -1270,6 +1270,16 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     assert activity == expected_activity
   end
 
+  test "includes only reblogs on request" do
+    user = insert(:user)
+    {:ok, _} = ActivityBuilder.insert(%{"type" => "Create"}, %{:user => user})
+    {:ok, expected_activity} = ActivityBuilder.insert(%{"type" => "Announce"}, %{:user => user})
+
+    [activity] = ActivityPub.fetch_user_activities(user, nil, %{only_reblogs: true})
+
+    assert activity == expected_activity
+  end
+
   describe "irreversible filters" do
     setup do
       user = insert(:user)

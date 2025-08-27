@@ -1065,6 +1065,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     from(activity in query, where: fragment("?->>'type' != 'Announce'", activity.data))
   end
 
+  defp restrict_reblogs(query, %{only_reblogs: true}) do
+    from(activity in query, where: fragment("?->>'type' = 'Announce'", activity.data))
+  end
+
   defp restrict_reblogs(query, _), do: query
 
   defp restrict_muted(query, %{with_muted: true}), do: query
