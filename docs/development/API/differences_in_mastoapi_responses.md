@@ -88,6 +88,7 @@ The `id` parameter can also be the `nickname` of the user. This only works in th
 - `only_media`: include only statuses with media attached
 - `with_muted`: include statuses/reactions from muted accounts
 - `exclude_reblogs`: exclude reblogs
+- `only_reblogs`: include only reblogs
 - `exclude_replies`: exclude replies
 - `exclude_visibilities`: exclude visibilities
 

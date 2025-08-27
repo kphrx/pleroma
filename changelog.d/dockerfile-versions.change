@@ -1,0 +1,1 @@
+Update Dockerfile to use Elixir 1.17.3, Erlang 26.2.5.6, and Alpine 3.17.9 to match CI release builds
