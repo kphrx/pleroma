@@ -241,7 +241,8 @@ defmodule Pleroma.Upload do
     path =
       HTTP.encode_url(path, encode_opts) <>
         if Pleroma.Config.get([__MODULE__, :link_name], false) do
-          "?name=#{URI.encode_query(name)}"
+          enum = %{name: name}
+          "?#{URI.encode_query(enum)}"
         else
           ""
         end

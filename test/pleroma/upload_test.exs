@@ -282,4 +282,23 @@ defmodule Pleroma.UploadTest do
       refute String.starts_with?(url, base_url <> "/media/")
     end
   end
+
+  describe "Setting a link_name for uploaded media" do
+    setup do: clear_config([Pleroma.Upload, :link_name], true)
+
+    test "encodes name parameter in query" do
+      File.cp!("test/fixtures/image.jpg", "test/fixtures/image_tmp.jpg")
+
+      file = %Plug.Upload{
+        content_type: "image/jpeg",
+        path: Path.absname("test/fixtures/image_tmp.jpg"),
+        filename: "test file.jpg"
+      }
+
+      {:ok, data} = Upload.store(file)
+      [attachment_url | _] = data["url"]
+
+      assert Path.basename(attachment_url["href"]) == "test%20file.jpg?name=test+file.jpg"
+    end
+  end
 end
