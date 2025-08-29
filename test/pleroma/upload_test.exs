@@ -242,6 +242,21 @@ defmodule Pleroma.UploadTest do
       assert Path.basename(attachment_url["href"]) ==
                "%3A%3F%23%5B%5D%40%21%24%26%5C%27%28%29%2A%2B%2C%3B%3D.jpg"
     end
+
+    test "double %-encodes filename" do
+      File.cp!("test/fixtures/image.jpg", "test/fixtures/image_tmp.jpg")
+
+      file = %Plug.Upload{
+        content_type: "image/jpeg",
+        path: Path.absname("test/fixtures/image_tmp.jpg"),
+        filename: "file with %20.jpg"
+      }
+
+      {:ok, data} = Upload.store(file)
+      [attachment_url | _] = data["url"]
+
+      assert Path.basename(attachment_url["href"]) == "file%20with%20%2520.jpg"
+    end
   end
 
   describe "Setting a custom base_url for uploaded media" do

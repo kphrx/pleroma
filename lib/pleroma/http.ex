@@ -133,32 +133,51 @@ defmodule Pleroma.HTTP do
   defp default_middleware,
     do: [Tesla.Middleware.FollowRedirects, Pleroma.Tesla.Middleware.EncodeUrl]
 
-  def encode_url(url) when is_binary(url) do
-    URI.parse(url)
-    |> then(fn parsed ->
-      path = encode_path(parsed.path)
-      query = encode_query(parsed.query)
+  # We don't always want to decode the path first, like is the case in
+  # Pleroma.Upload.url_from_spec/3.
+  def encode_url(url, opts \\ []) when is_binary(url) and is_list(opts) do
+    bypass_parse = Keyword.get(opts, :bypass_parse, false)
+    bypass_decode = Keyword.get(opts, :bypass_decode, false)
 
-      %{parsed | path: path, query: query}
-    end)
-    |> URI.to_string()
+    cond do
+      bypass_parse ->
+        encode_path(url, bypass_decode)
+
+      true ->
+        URI.parse(url)
+        |> then(fn parsed ->
+          path = encode_path(parsed.path, bypass_decode)
+          query = encode_query(parsed.query)
+
+          %{parsed | path: path, query: query}
+        end)
+        |> URI.to_string()
+    end
   end
 
-  defp encode_path(nil), do: nil
+  defp encode_path(nil, _bypass_decode), do: nil
 
   # URI.encode/2 deliberately does not encode all chars that are forbidden
   # in the path component of a URI. It only encodes chars that are forbidden
   # in the whole URI. A predicate in the 2nd argument is used to fix that here.
   # URI.encode/2 uses the predicate function to determine whether each byte
   # (in an integer representation) should be encoded or not.
-  defp encode_path(path) when is_binary(path) do
+  defp encode_path(path, bypass_decode) when is_binary(path) do
+    path =
+      cond do
+        bypass_decode ->
+          path
+
+        true ->
+          URI.decode(path)
+      end
+
     path
-    |> URI.decode()
     |> URI.encode(fn byte ->
       URI.char_unreserved?(byte) || Enum.any?(
         Pleroma.Constants.uri_path_allowed_reserved_chars, fn char ->
           char == byte end)
-    end)
+      end)
   end
 
   defp encode_query(nil), do: nil
