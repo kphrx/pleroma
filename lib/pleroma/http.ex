@@ -174,10 +174,14 @@ defmodule Pleroma.HTTP do
 
     path
     |> URI.encode(fn byte ->
-      URI.char_unreserved?(byte) || Enum.any?(
-        Pleroma.Constants.uri_path_allowed_reserved_chars, fn char ->
-          char == byte end)
-      end)
+      URI.char_unreserved?(byte) ||
+        Enum.any?(
+          Pleroma.Constants.uri_path_allowed_reserved_chars(),
+          fn char ->
+            char == byte
+          end
+        )
+    end)
   end
 
   defp encode_query(nil), do: nil

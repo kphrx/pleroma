@@ -404,24 +404,20 @@ defmodule Pleroma.ReverseProxyTest do
       ClientMock
       |> expect(:request, fn
         :get,
-            "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz",
-            _headers,
-            _body,
-            _opts ->
+        "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz",
+        _headers,
+        _body,
+        _opts ->
           {:ok, 200, [{"content-type", "image/png"}], "It works!"}
 
         :get,
-            "https://example.com/media/foo/bar%20!$&'()*+,;=/:%20@a%20%5Bbaz%5D.mp4",
-            _headers,
-            _body,
-            _opts ->
+        "https://example.com/media/foo/bar%20!$&'()*+,;=/:%20@a%20%5Bbaz%5D.mp4",
+        _headers,
+        _body,
+        _opts ->
           {:ok, 200, [{"content-type", "video/mp4"}], "Allowed reserved chars."}
 
-        :get,
-            "https://example.com/media/unicode%20%F0%9F%99%82%20.gif",
-            _headers,
-            _body,
-            _opts ->
+        :get, "https://example.com/media/unicode%20%F0%9F%99%82%20.gif", _headers, _body, _opts ->
           {:ok, 200, [{"content-type", "image/gif"}], "Unicode emoji in path"}
       end)
       |> stub(:stream_body, fn _ -> :done end)

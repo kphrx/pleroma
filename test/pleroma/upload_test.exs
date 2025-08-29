@@ -227,20 +227,20 @@ defmodule Pleroma.UploadTest do
       assert Path.basename(attachment_url["href"]) == "an%E2%80%A6%20image.jpg"
     end
 
-    test "escapes reserved uri characters" do
+    test "escapes disallowed reserved characters in uri path" do
       File.cp!("test/fixtures/image.jpg", "test/fixtures/image_tmp.jpg")
 
       file = %Plug.Upload{
         content_type: "image/jpeg",
         path: Path.absname("test/fixtures/image_tmp.jpg"),
-        filename: ":?#[]@!$&\\'()*+,;=.jpg"
+        filename: ":?#[]@!$&'()*+,;=.jpg"
       }
 
       {:ok, data} = Upload.store(file)
       [attachment_url | _] = data["url"]
 
       assert Path.basename(attachment_url["href"]) ==
-               "%3A%3F%23%5B%5D%40%21%24%26%5C%27%28%29%2A%2B%2C%3B%3D.jpg"
+               ":%3F%23%5B%5D@!$&'()*+,;=.jpg"
     end
 
     test "double %-encodes filename" do

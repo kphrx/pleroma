@@ -107,4 +107,24 @@ defmodule Pleroma.HTTPTest do
 
     assert result.status == 200
   end
+
+  test "decodes URL first by default" do
+    clear_config(:test_url_encoding, true)
+
+    normal_url = "https://example.com/media/file%20with%20space.jpg?name=a+space.jpg"
+
+    result = HTTP.encode_url(normal_url)
+
+    assert result == "https://example.com/media/file%20with%20space.jpg?name=a+space.jpg"
+  end
+
+  test "doesn't decode URL first when specified" do
+    clear_config(:test_url_encoding, true)
+
+    normal_url = "https://example.com/media/file%20with%20space.jpg"
+
+    result = HTTP.encode_url(normal_url, bypass_decode: true)
+
+    assert result == "https://example.com/media/file%2520with%2520space.jpg"
+  end
 end
