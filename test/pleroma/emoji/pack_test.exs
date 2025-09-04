@@ -13,6 +13,9 @@ defmodule Pleroma.Emoji.PackTest do
               )
 
   setup do
+    # Reload emoji to ensure a clean state
+    Emoji.reload()
+
     pack_path = Path.join(@emoji_path, "dump_pack")
     File.mkdir(pack_path)
 

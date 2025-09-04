@@ -143,4 +143,40 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.LikeHandlingTest do
     assert {:ok, activity} = Transmogrifier.handle_incoming(data)
     assert activity.data["type"] == "Like"
   end
+
+  test "it changes incoming dislikes into emoji reactions" do
+    user = insert(:user)
+
+    {:ok, activity} = CommonAPI.post(user, %{status: "hello"})
+
+    data =
+      File.read!("test/fixtures/friendica-dislike.json")
+      |> Jason.decode!()
+      |> Map.put("object", activity.data["object"])
+
+    _actor = insert(:user, ap_id: data["actor"], local: false)
+
+    {:ok, %Activity{data: data, local: false} = activity} = Transmogrifier.handle_incoming(data)
+
+    refute Enum.empty?(activity.recipients)
+
+    assert data["actor"] == "https://my-place.social/profile/vaartis"
+    assert data["type"] == "EmojiReact"
+    assert data["content"] == "👎"
+    assert data["id"] == "https://my-place.social/objects/e599373b-1368-4b20-cd24-837166957182"
+    assert data["object"] == activity.data["object"]
+
+    data =
+      File.read!("test/fixtures/friendica-dislike-undo.json")
+      |> Jason.decode!()
+      |> put_in(["object", "object"], activity.data["object"])
+
+    {:ok, %Activity{data: data, local: false}} = Transmogrifier.handle_incoming(data)
+
+    assert data["actor"] == "https://my-place.social/profile/vaartis"
+    assert data["type"] == "Undo"
+
+    assert data["object"] ==
+             "https://my-place.social/objects/e599373b-1368-4b20-cd24-837166957182"
+  end
 end

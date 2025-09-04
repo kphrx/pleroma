@@ -1,0 +1,1 @@
+- Fix building "captcha" library with OpenBSD make
