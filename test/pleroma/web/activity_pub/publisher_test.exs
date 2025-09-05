@@ -12,9 +12,9 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
   alias Pleroma.Activity
   alias Pleroma.Object
   alias Pleroma.Tests.ObanHelpers
+  alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Publisher
   alias Pleroma.Web.ActivityPub.Utils
-  alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.CommonAPI
 
   @as_public "https://www.w3.org/ns/activitystreams#Public"
