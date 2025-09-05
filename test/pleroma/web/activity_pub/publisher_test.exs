@@ -8,12 +8,13 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
   import Pleroma.Factory
   import Tesla.Mock
-  import Mock
 
   alias Pleroma.Activity
   alias Pleroma.Object
   alias Pleroma.Tests.ObanHelpers
+  alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Publisher
+  alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.CommonAPI
 
   @as_public "https://www.w3.org/ns/activitystreams#Public"
@@ -168,10 +169,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
   end
 
   describe "publish/2" do
-    test_with_mock "doesn't publish a non-public activity to quarantined instances.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "doesn't publish a non-public activity to quarantined instances." do
       Config.put([:instance, :quarantined_instances], [{"domain.com", "some reason"}])
 
       follower =
@@ -206,10 +204,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       )
     end
 
-    test_with_mock "Publishes a non-public activity to non-quarantined instances.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "Publishes a non-public activity to non-quarantined instances." do
       Config.put([:instance, :quarantined_instances], [{"somedomain.com", "some reason"}])
 
       follower =
@@ -245,10 +240,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       )
     end
 
-    test_with_mock "Publishes to directly addressed actors with higher priority.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "Publishes to directly addressed actors with higher priority." do
       note_activity = insert(:direct_note_activity)
 
       actor = Pleroma.User.get_by_ap_id(note_activity.data["actor"])
@@ -257,21 +249,58 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
       assert res == :ok
 
-      assert called(
-               Publisher.enqueue_one(
-                 %{
-                   inbox: :_,
-                   activity_id: note_activity.id
-                 },
-                 priority: 0
-               )
-             )
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "op" => "publish_one",
+          "params" => %{"activity_id" => note_activity.id}
+        },
+        priority: 0
+      )
     end
 
-    test_with_mock "publishes an activity with BCC to all relevant peers.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "Publishes with the new actor if prepare_outgoing changes the actor." do
+      mock(fn
+        %{method: :post, url: "https://domain.com/users/nick1/inbox", body: body} ->
+          {:ok, %Tesla.Env{status: 200, body: body}}
+      end)
+
+      other_user =
+        insert(:user, %{
+          local: false,
+          inbox: "https://domain.com/users/nick1/inbox"
+        })
+
+      actor = insert(:user)
+      replaced_actor = insert(:user)
+
+      note_activity =
+        insert(:note_activity,
+          user: actor,
+          data_attrs: %{"to" => [other_user.ap_id]}
+        )
+
+      Pleroma.Web.ActivityPub.TransmogrifierMock
+      |> Mox.expect(:prepare_outgoing, fn data ->
+        {:ok, Map.put(data, "actor", replaced_actor.ap_id)}
+      end)
+
+      prepared =
+        Publisher.prepare_one(%{
+          inbox: "https://domain.com/users/nick1/inbox",
+          activity_id: note_activity.id,
+          cc: ["https://domain.com/users/nick2/inbox"]
+        })
+
+      {:ok, decoded} = Jason.decode(prepared.json)
+      assert decoded["actor"] == replaced_actor.ap_id
+
+      {:ok, published} = Publisher.publish_one(prepared)
+      sent_activity = Jason.decode!(published.body)
+      assert sent_activity["actor"] == replaced_actor.ap_id
+    end
+
+    test "publishes an activity with BCC to all relevant peers." do
       follower =
         insert(:user, %{
           local: false,
@@ -303,10 +332,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       )
     end
 
-    test_with_mock "publishes a delete activity to peers who signed fetch requests to the create acitvity/object.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "publishes a delete activity to peers who signed fetch requests to the create acitvity/object." do
       fetcher =
         insert(:user,
           local: false,
@@ -509,5 +535,44 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
     {:ok, decoded} = Jason.decode(prepared.json)
 
     assert decoded["cc"] == ["https://example.com/specific/user"]
+  end
+
+  describe "prepare_one/1 with reporter anonymization" do
+    test "signs with the anonymized actor keys when Transmogrifier changes actor" do
+      Pleroma.SignatureMock
+      |> Mox.stub(:signed_date, fn -> Pleroma.Signature.signed_date() end)
+      |> Mox.expect(:sign, fn %Pleroma.User{} = user, _headers ->
+        send(self(), {:signed_as, user.ap_id})
+        "TESTSIG"
+      end)
+
+      placeholder = insert(:user)
+      reporter = insert(:user)
+      target_account = insert(:user)
+
+      clear_config([:activitypub, :anonymize_reporter], true)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+
+      {:ok, reported} = CommonAPI.post(target_account, %{status: "content"})
+      context = Utils.generate_context_id()
+
+      {:ok, activity} =
+        ActivityPub.flag(%{
+          actor: reporter,
+          context: context,
+          account: target_account,
+          statuses: [reported],
+          content: "reason"
+        })
+
+      _prepared =
+        Publisher.prepare_one(%{
+          inbox: "http://remote.example/users/alice/inbox",
+          activity_id: activity.id
+        })
+
+      assert_received {:signed_as, ap_id}
+      assert ap_id == placeholder.ap_id
+    end
   end
 end

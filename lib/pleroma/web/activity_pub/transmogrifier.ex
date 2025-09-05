@@ -6,6 +6,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   @moduledoc """
   A module to handle coding from internal to wire ActivityPub and back.
   """
+  @behaviour Pleroma.Web.ActivityPub.Transmogrifier.API
   alias Pleroma.Activity
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
   alias Pleroma.Maps
@@ -906,6 +907,14 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
         |> Map.merge(Utils.make_json_ld_header())
 
       {:ok, data}
+    end
+  end
+
+  def prepare_outgoing(%{"type" => "Flag"} = data) do
+    with {:ok, stripped_activity} <- Utils.strip_report_status_data(data),
+         stripped_activity <- Utils.maybe_anonymize_reporter(stripped_activity),
+         stripped_activity <- Map.merge(stripped_activity, Utils.make_json_ld_header()) do
+      {:ok, stripped_activity}
     end
   end
 

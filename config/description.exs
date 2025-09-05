@@ -1797,6 +1797,23 @@ config :pleroma, :config_description, [
         key: :client_api_enabled,
         type: :boolean,
         description: "Allow client to server ActivityPub interactions"
+      },
+      %{
+        key: :anonymize_reporter,
+        type: :boolean,
+        label: "Anonymize local reports",
+        description:
+          "If true, replace local reporters with the designated local user for the copy to be sent to remote servers"
+      },
+      %{
+        key: :anonymize_reporter_local_nickname,
+        type: :string,
+        label: "Anonymized reporter",
+        description:
+          "The nickname of the designated local user that replaces the actual reporter in the copy to be sent to remote servers",
+        suggestions: [
+          "lain"
+        ]
       }
     ]
   },

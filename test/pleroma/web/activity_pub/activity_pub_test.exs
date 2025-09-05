@@ -1691,32 +1691,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
              } = activity
     end
 
-    test_with_mock "strips status data from Flag, before federating it",
-                   %{
-                     reporter: reporter,
-                     context: context,
-                     target_account: target_account,
-                     reported_activity: reported_activity,
-                     object_ap_id: object_ap_id,
-                     content: content
-                   },
-                   Utils,
-                   [:passthrough],
-                   [] do
-      {:ok, activity} =
-        ActivityPub.flag(%{
-          actor: reporter,
-          context: context,
-          account: target_account,
-          statuses: [reported_activity],
-          content: content
-        })
-
-      new_data = put_in(activity.data, ["object"], [target_account.ap_id, object_ap_id])
-
-      assert_called(Utils.maybe_federate(%{activity | data: new_data}))
-    end
-
     test_with_mock "reverts on error",
                    %{
                      reporter: reporter,
