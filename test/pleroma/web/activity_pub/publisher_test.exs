@@ -556,13 +556,14 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
   end
 
   describe "prepare_one/1 with reporter anonymization" do
-    test_with_mock "signs with the anonymized actor keys when Transmogrifier changes actor",
-                   Pleroma.Signature,
-                   [:passthrough],
-                   sign: fn %Pleroma.User{} = user, headers ->
-                     send(self(), {:signed_as, user.ap_id})
-                     "TESTSIG"
-                   end do
+    test "signs with the anonymized actor keys when Transmogrifier changes actor" do
+      Pleroma.SignatureMock
+      |> Mox.stub(:signed_date, fn -> Pleroma.Signature.signed_date() end)
+      |> Mox.expect(:sign, fn %Pleroma.User{} = user, _headers ->
+        send(self(), {:signed_as, user.ap_id})
+        "TESTSIG"
+      end)
+
       placeholder = insert(:user)
       reporter = insert(:user)
       target_account = insert(:user)

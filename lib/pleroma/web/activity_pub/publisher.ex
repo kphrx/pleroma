@@ -26,6 +26,12 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   ActivityPub outgoing federation module.
   """
 
+  @signature_impl Application.compile_env(
+                    :pleroma,
+                    [__MODULE__, :signature_impl],
+                    Pleroma.Signature
+                  )
+
   @doc """
   Enqueue publishing a single activity.
   """
@@ -125,10 +131,10 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
 
     digest = "SHA-256=" <> (:crypto.hash(:sha256, json) |> Base.encode64())
 
-    date = Pleroma.Signature.signed_date()
+    date = @signature_impl.signed_date()
 
     signature =
-      Pleroma.Signature.sign(actor, %{
+      @signature_impl.sign(actor, %{
         "(request-target)": "post #{path}",
         host: signature_host(uri),
         "content-length": byte_size(json),

@@ -170,6 +170,7 @@ config :pleroma, Pleroma.Upload.Filter.Mogrify, config_impl: Pleroma.StaticStubb
 config :pleroma, Pleroma.Upload.Filter.Mogrify, mogrify_impl: Pleroma.MogrifyMock
 
 config :pleroma, Pleroma.Signature, http_signatures_impl: Pleroma.StubbedHTTPSignaturesMock
+config :pleroma, Pleroma.Web.ActivityPub.Publisher, signature_impl: Pleroma.SignatureMock
 
 peer_module =
   if String.to_integer(System.otp_release()) >= 25 do
