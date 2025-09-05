@@ -13,7 +13,6 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.Publisher.Prepared
   alias Pleroma.Web.ActivityPub.Relay
-  alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Workers.PublisherWorker
 
   require Pleroma.Constants
@@ -31,6 +30,12 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
                     [__MODULE__, :signature_impl],
                     Pleroma.Signature
                   )
+
+  @transmogrifier_impl Application.compile_env(
+                         :pleroma,
+                         [__MODULE__, :transmogrifier_impl],
+                         Pleroma.Web.ActivityPub.Transmogrifier
+                       )
 
   @doc """
   Enqueue publishing a single activity.
@@ -74,7 +79,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   Determine if an activity can be represented by running it through Transmogrifier.
   """
   def representable?(%Activity{} = activity) do
-    with {:ok, _data} <- Transmogrifier.prepare_outgoing(activity.data) do
+    with {:ok, _data} <- @transmogrifier_impl.prepare_outgoing(activity.data) do
       true
     else
       _e ->
@@ -97,7 +102,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     Logger.debug("Federating #{ap_id} to #{inbox}")
     uri = %{path: path} = URI.parse(inbox)
 
-    {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+    {:ok, data} = @transmogrifier_impl.prepare_outgoing(activity.data)
 
     {actor, data} =
       with {_, false} <- {:actor_changed?, data["actor"] != activity.data["actor"]} do

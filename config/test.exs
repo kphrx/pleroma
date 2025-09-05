@@ -172,6 +172,9 @@ config :pleroma, Pleroma.Upload.Filter.Mogrify, mogrify_impl: Pleroma.MogrifyMoc
 config :pleroma, Pleroma.Signature, http_signatures_impl: Pleroma.StubbedHTTPSignaturesMock
 config :pleroma, Pleroma.Web.ActivityPub.Publisher, signature_impl: Pleroma.SignatureMock
 
+config :pleroma, Pleroma.Web.ActivityPub.Publisher,
+  transmogrifier_impl: Pleroma.Web.ActivityPub.TransmogrifierMock
+
 peer_module =
   if String.to_integer(System.otp_release()) >= 25 do
     :peer
