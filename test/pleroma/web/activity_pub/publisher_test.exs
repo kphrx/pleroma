@@ -14,6 +14,8 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
   alias Pleroma.Object
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.Web.ActivityPub.Publisher
+  alias Pleroma.Web.ActivityPub.Utils
+  alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.CommonAPI
 
   @as_public "https://www.w3.org/ns/activitystreams#Public"
@@ -551,5 +553,43 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
     {:ok, decoded} = Jason.decode(prepared.json)
 
     assert decoded["cc"] == ["https://example.com/specific/user"]
+  end
+
+  describe "prepare_one/1 with reporter anonymization" do
+    test_with_mock "signs with the anonymized actor keys when Transmogrifier changes actor",
+                   Pleroma.Signature,
+                   [:passthrough],
+                   sign: fn %Pleroma.User{} = user, headers ->
+                     send(self(), {:signed_as, user.ap_id})
+                     "TESTSIG"
+                   end do
+      placeholder = insert(:user)
+      reporter = insert(:user)
+      target_account = insert(:user)
+
+      clear_config([:activitypub, :anonymize_reporter], true)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+
+      {:ok, reported} = CommonAPI.post(target_account, %{status: "content"})
+      context = Utils.generate_context_id()
+
+      {:ok, activity} =
+        ActivityPub.flag(%{
+          actor: reporter,
+          context: context,
+          account: target_account,
+          statuses: [reported],
+          content: "reason"
+        })
+
+      _prepared =
+        Publisher.prepare_one(%{
+          inbox: "http://remote.example/users/alice/inbox",
+          activity_id: activity.id
+        })
+
+      assert_received {:signed_as, ap_id}
+      assert ap_id == placeholder.ap_id
+    end
   end
 end
