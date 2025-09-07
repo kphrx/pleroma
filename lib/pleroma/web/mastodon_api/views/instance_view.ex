@@ -5,10 +5,17 @@
 defmodule Pleroma.Web.MastodonAPI.InstanceView do
   use Pleroma.Web, :view
 
+  import Pleroma.Web.Utils.Guards, only: [not_empty_string: 1]
+
   alias Pleroma.Config
   alias Pleroma.Web.ActivityPub.MRF
 
   @mastodon_api_level "2.7.2"
+
+  @block_severities %{
+    federated_timeline_removal: "silence",
+    reject: "suspend"
+  }
 
   def render("show.json", _) do
     instance = Config.get(:instance)
@@ -88,6 +95,48 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       text: rule.text,
       hint: rule.hint || ""
     }
+  end
+
+  def render("domain_blocks.json", _) do
+    if Config.get([:mrf, :transparency]) do
+      exclusions = Config.get([:mrf, :transparency_exclusions]) |> MRF.instance_list_from_tuples()
+
+      domain_blocks =
+        Config.get(:mrf_simple)
+        |> Enum.map(fn {rule, instances} ->
+          instances
+          |> Enum.map(fn
+            {host, reason} when not_empty_string(host) and not_empty_string(reason) ->
+              {host, reason}
+
+            {host, _reason} when not_empty_string(host) ->
+              {host, ""}
+
+            host when not_empty_string(host) ->
+              {host, ""}
+
+            _ ->
+              nil
+          end)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.reject(fn {host, _} ->
+            host in exclusions or not Map.has_key?(@block_severities, rule)
+          end)
+          |> Enum.map(fn {host, reason} ->
+            %{
+              domain: host,
+              digest: :crypto.hash(:sha256, host) |> Base.encode16(case: :lower),
+              severity: Map.get(@block_severities, rule),
+              comment: reason
+            }
+          end)
+        end)
+        |> List.flatten()
+
+      domain_blocks
+    else
+      []
+    end
   end
 
   def render("translation_languages.json", _) do
