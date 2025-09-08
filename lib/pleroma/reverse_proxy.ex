@@ -155,10 +155,11 @@ defmodule Pleroma.ReverseProxy do
   end
 
   defp request(method, url, headers, opts) do
-    Logger.debug("#{__MODULE__} #{method} #{url} #{inspect(headers)}")
     method = method |> String.downcase() |> String.to_existing_atom()
 
     url = maybe_encode_url(url)
+
+    Logger.debug("#{__MODULE__} #{method} #{url} #{inspect(headers)}")
 
     case client().request(method, url, headers, "", opts) do
       {:ok, code, headers, client} when code in @valid_resp_codes ->
