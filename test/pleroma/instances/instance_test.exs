@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Instances.InstanceTest do
-  alias Pleroma.Instances
   alias Pleroma.Instances.Instance
   alias Pleroma.Repo
 
@@ -12,8 +11,6 @@ defmodule Pleroma.Instances.InstanceTest do
 
   import ExUnit.CaptureLog
   import Pleroma.Factory
-
-  setup_all do: clear_config([:instance, :federation_reachability_timeout_days], 1)
 
   describe "set_reachable/1" do
     test "clears `unreachable_since` of existing matching Instance record having non-nil `unreachable_since`" do
@@ -29,6 +26,32 @@ defmodule Pleroma.Instances.InstanceTest do
 
       assert {:ok, instance} = Instance.set_reachable(instance.host)
       refute instance.unreachable_since
+    end
+
+    test "cancels all ReachabilityWorker jobs for the domain" do
+      domain = "cancelme.example.org"
+      insert(:instance, host: domain, unreachable_since: NaiveDateTime.utc_now())
+
+      # Insert a ReachabilityWorker job for this domain, scheduled 5 minutes in the future
+      scheduled_at = DateTime.add(DateTime.utc_now(), 300, :second)
+
+      {:ok, job} =
+        Pleroma.Workers.ReachabilityWorker.new(
+          %{"domain" => domain, "phase" => "phase_1min", "attempt" => 1},
+          scheduled_at: scheduled_at
+        )
+        |> Oban.insert()
+
+      # Ensure the job is present
+      job = Pleroma.Repo.get(Oban.Job, job.id)
+      assert job
+
+      # Call set_reachable, which should delete the job
+      assert {:ok, _} = Instance.set_reachable(domain)
+
+      # Reload the job and assert it is deleted
+      job = Pleroma.Repo.get(Oban.Job, job.id)
+      refute job
     end
   end
 
@@ -144,7 +167,11 @@ defmodule Pleroma.Instances.InstanceTest do
     end
 
     test "Doesn't scrapes unreachable instances" do
-      instance = insert(:instance, unreachable_since: Instances.reachability_datetime_threshold())
+      instance =
+        insert(:instance,
+          unreachable_since: NaiveDateTime.utc_now() |> NaiveDateTime.add(-:timer.hours(24))
+        )
+
       url = "https://" <> instance.host
 
       assert capture_log(fn -> assert nil == Instance.get_or_update_favicon(URI.parse(url)) end) =~
@@ -212,14 +239,44 @@ defmodule Pleroma.Instances.InstanceTest do
     end
   end
 
-  test "delete_users_and_activities/1 schedules a job to delete the instance and users" do
+  test "delete/1 schedules a job to delete the instance and users" do
     insert(:user, nickname: "mario@mushroom.kingdom", name: "Mario")
 
-    {:ok, _job} = Instance.delete_users_and_activities("mushroom.kingdom")
+    {:ok, _job} = Instance.delete("mushroom.kingdom")
 
     assert_enqueued(
       worker: Pleroma.Workers.DeleteWorker,
       args: %{"op" => "delete_instance", "host" => "mushroom.kingdom"}
     )
+  end
+
+  describe "check_unreachable/1" do
+    test "schedules a ReachabilityWorker job for the given domain" do
+      domain = "test.example.com"
+
+      # Call check_unreachable
+      assert {:ok, _job} = Instance.check_unreachable(domain)
+
+      # Verify that a ReachabilityWorker job was scheduled
+      jobs = all_enqueued(worker: Pleroma.Workers.ReachabilityWorker)
+      assert length(jobs) == 1
+      [job] = jobs
+      assert job.args["domain"] == domain
+    end
+
+    test "handles multiple calls for the same domain (uniqueness enforced)" do
+      domain = "duplicate.example.com"
+
+      assert {:ok, _job1} = Instance.check_unreachable(domain)
+
+      # Second call for the same domain
+      assert {:ok, %Oban.Job{conflict?: true}} = Instance.check_unreachable(domain)
+
+      # Should only have one job due to uniqueness
+      jobs = all_enqueued(worker: Pleroma.Workers.ReachabilityWorker)
+      assert length(jobs) == 1
+      [job] = jobs
+      assert job.args["domain"] == domain
+    end
   end
 end

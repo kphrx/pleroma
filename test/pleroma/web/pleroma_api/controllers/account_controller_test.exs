@@ -292,10 +292,14 @@ defmodule Pleroma.Web.PleromaAPI.AccountControllerTest do
       User.endorse(user1, user2)
       User.endorse(user1, user3)
 
-      [%{"id" => ^id2}, %{"id" => ^id3}] =
+      response =
         conn
         |> get("/api/v1/pleroma/accounts/#{id1}/endorsements")
         |> json_response_and_validate_schema(200)
+
+      assert length(response) == 2
+      assert Enum.any?(response, fn user -> user["id"] == id2 end)
+      assert Enum.any?(response, fn user -> user["id"] == id3 end)
     end
 
     test "returns 404 error when specified user is not exist", %{conn: conn} do

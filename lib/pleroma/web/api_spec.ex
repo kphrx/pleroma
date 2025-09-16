@@ -158,6 +158,6 @@ defmodule Pleroma.Web.ApiSpec do
       }
     }
     # discover request/response schemas from path specs
-    |> OpenApiSpex.resolve_schema_modules()
+    |> then(&OpenApiSpex.resolve_schema_modules/1)
   end
 end

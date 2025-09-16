@@ -53,7 +53,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   )
 
   plug(:log_inbox_metadata when action in [:inbox])
-  plug(:set_requester_reachable when action in [:inbox])
   plug(:relay_active? when action in [:relay])
 
   defp relay_active?(conn, _) do
@@ -274,13 +273,37 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   end
 
   def inbox(%{assigns: %{valid_signature: true}} = conn, %{"nickname" => nickname} = params) do
-    with %User{is_active: true} = recipient <- User.get_cached_by_nickname(nickname),
-         {:ok, %User{is_active: true} = actor} <- User.get_or_fetch_by_ap_id(params["actor"]),
+    with {:recipient_exists, %User{} = recipient} <-
+           {:recipient_exists, User.get_cached_by_nickname(nickname)},
+         {:sender_exists, {:ok, %User{} = actor}} <-
+           {:sender_exists, User.get_or_fetch_by_ap_id(params["actor"])},
+         {:recipient_active, true} <- {:recipient_active, recipient.is_active},
+         {:sender_active, true} <- {:sender_active, actor.is_active},
          true <- Utils.recipient_in_message(recipient, actor, params),
          params <- Utils.maybe_splice_recipient(recipient.ap_id, params) do
       Federator.incoming_ap_doc(params)
       json(conn, "ok")
     else
+      {:recipient_exists, _} ->
+        conn
+        |> put_status(:not_found)
+        |> json("User does not exist")
+
+      {:sender_exists, _} ->
+        conn
+        |> put_status(:not_found)
+        |> json("Sender does not exist")
+
+      {:recipient_active, _} ->
+        conn
+        |> put_status(:not_found)
+        |> json("User deactivated")
+
+      {:sender_active, _} ->
+        conn
+        |> put_status(:not_found)
+        |> json("Sender deactivated")
+
       _ ->
         conn
         |> put_status(:bad_request)
@@ -518,15 +541,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     conn
     |> put_status(:internal_server_error)
     |> json(dgettext("errors", "error"))
-  end
-
-  defp set_requester_reachable(%Plug.Conn{} = conn, _) do
-    with actor <- conn.params["actor"],
-         true <- is_binary(actor) do
-      Pleroma.Instances.set_reachable(actor)
-    end
-
-    conn
   end
 
   defp log_inbox_metadata(%{params: %{"actor" => actor, "type" => type}} = conn, _) do

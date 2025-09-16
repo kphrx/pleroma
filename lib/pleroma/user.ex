@@ -801,13 +801,6 @@ defmodule Pleroma.User do
       when is_nil(password) do
     params = Map.put_new(params, :accepts_chat_messages, true)
 
-    params =
-      if Map.has_key?(params, :email) do
-        Map.put_new(params, :email, params[:email])
-      else
-        params
-      end
-
     struct
     |> cast(params, [
       :name,

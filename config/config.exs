@@ -194,7 +194,6 @@ config :pleroma, :instance,
   account_approval_required: false,
   federating: true,
   federation_incoming_replies_max_depth: 100,
-  federation_reachability_timeout_days: 7,
   allow_relay: true,
   public: true,
   quarantined_instances: [],
@@ -365,7 +364,9 @@ config :pleroma, :activitypub,
   note_replies_output_limit: 5,
   sign_object_fetches: true,
   authorized_fetch_mode: false,
-  client_api_enabled: false
+  client_api_enabled: false,
+  anonymize_reporter: false,
+  anonymize_reporter_local_nickname: ""
 
 config :pleroma, :streamer,
   workers: 3,
@@ -590,6 +591,7 @@ config :pleroma, Pleroma.User,
 # value or it cannot enforce uniqueness.
 config :pleroma, Oban,
   repo: Pleroma.Repo,
+  notifier: Oban.Notifiers.PG,
   log: false,
   queues: [
     activity_expiration: 10,
@@ -600,7 +602,7 @@ config :pleroma, Oban,
     search_indexing: [limit: 10, paused: true],
     slow: 5
   ],
-  plugins: [{Oban.Plugins.Pruner, max_age: 900}],
+  plugins: [Oban.Plugins.Lazarus, {Oban.Plugins.Pruner, max_age: 900}],
   crontab: [
     {"0 0 * * 0", Pleroma.Workers.Cron.DigestEmailsWorker},
     {"0 0 * * *", Pleroma.Workers.Cron.NewUsersDigestWorker},
