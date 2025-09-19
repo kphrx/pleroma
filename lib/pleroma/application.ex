@@ -278,7 +278,8 @@ defmodule Pleroma.Application do
     config = Config.get(ConcurrentLimiter, [])
 
     [
-      Pleroma.Search
+      Pleroma.Search,
+      Pleroma.Webhook.Notify
     ]
     |> Enum.each(fn module ->
       mod_config = Keyword.get(config, module, [])

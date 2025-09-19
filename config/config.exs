@@ -926,7 +926,8 @@ config :pleroma, Pleroma.User.Backup,
   timeout: :timer.minutes(30)
 
 config :pleroma, ConcurrentLimiter, [
-  {Pleroma.Search, [max_running: 30, max_waiting: 50]}
+  {Pleroma.Search, [max_running: 30, max_waiting: 50]},
+  {Pleroma.Webhook.Notify, [max_running: 5, max_waiting: 200]}
 ]
 
 config :pleroma, Pleroma.Web.WebFinger, domain: nil, update_nickname_on_user_fetch: true
