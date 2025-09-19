@@ -146,6 +146,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       "pleroma_emoji_reactions",
       "pleroma_custom_emoji_reactions",
       "pleroma_chat_messages",
+      "pleroma:pin_chats",
       if Config.get([:instance, :show_reactions]) do
         "exposable_reactions"
       end,
