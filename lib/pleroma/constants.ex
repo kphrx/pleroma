@@ -22,7 +22,8 @@ defmodule Pleroma.Constants do
       "generator",
       "rules",
       "language",
-      "voters"
+      "voters",
+      "assigned_account"
     ]
   )
 
