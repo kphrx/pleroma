@@ -1964,6 +1964,12 @@ defmodule Pleroma.User do
 
   def approve(%User{} = user), do: {:ok, user}
 
+  def reject(%User{is_approved: false} = user) do
+    delete(user)
+  end
+
+  def reject(%User{} = _user), do: {:error, "User is approved"}
+
   def confirm(users) when is_list(users) do
     Repo.transaction(fn ->
       Enum.map(users, fn user ->
