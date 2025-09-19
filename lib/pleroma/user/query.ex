@@ -302,6 +302,11 @@ defmodule Pleroma.User.Query do
     where(query, [u], u.is_admin == true or u.is_moderator == true)
   end
 
+  defp compose_query({:domain, domain}, query) do
+    query
+    |> where([u], like(u.nickname, ^"%@#{domain}"))
+  end
+
   defp compose_query(_unsupported_param, query), do: query
 
   defp location_query(query, local) do

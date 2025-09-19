@@ -458,6 +458,13 @@ defmodule Pleroma.Web.Router do
     post("/reports/:id/reopen", ReportController, :reopen)
   end
 
+  # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
+  scope "/api/v2/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through([:require_privileged_role_users_read])
+
+    get("/accounts", AccountController, :index2)
+  end
+
   # AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
   scope "/api/v1/pleroma/admin", Pleroma.Web.AdminAPI do
     pipe_through(:require_privileged_role_emoji_manage_emoji)

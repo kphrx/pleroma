@@ -22,7 +22,7 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
   alias Pleroma.Web.Plugs.OAuthScopesPlug
 
   @filter_params ~W(
-    local external active needing_approval deactivated nickname name email staff
+    local external active needing_approval deactivated nickname name domain email staff origin status
   )
 
   plug(Pleroma.Web.ApiSpec.CastAndValidate)
@@ -30,7 +30,7 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
   plug(
     OAuthScopesPlug,
     %{scopes: ["admin:read:accounts"]}
-    when action in [:index, :show]
+    when action in [:index, :index2, :show]
   )
 
   plug(
@@ -63,6 +63,18 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
     users =
       params
       |> build_criteria()
+      |> User.Query.build()
+      |> Pagination.fetch_paginated(params)
+
+    conn
+    |> add_link_headers(users)
+    |> render("index.json", users: users)
+  end
+
+  def index2(conn, params) do
+    users =
+      params
+      |> build_criteria_v2()
       |> User.Query.build()
       |> Pagination.fetch_paginated(params)
 
@@ -162,8 +174,19 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
     |> maybe_filter_deactivated(params)
     |> maybe_filter_nickname(params)
     |> maybe_filter_name(params)
+    |> maybe_filter_domain(params)
     |> maybe_filter_email(params)
     |> maybe_filter_staff(params)
+  end
+
+  defp build_criteria_v2(params) do
+    %{}
+    |> maybe_filter_origin(params)
+    |> maybe_filter_status(params)
+    |> maybe_filter_nickname(params)
+    |> maybe_filter_name(params)
+    |> maybe_filter_domain(params)
+    |> maybe_filter_email(params)
   end
 
   defp maybe_filter_local(criteria, %{local: true} = _params),
@@ -178,6 +201,12 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
   defp maybe_filter_external(criteria, %{remote: false} = _params),
     do: Map.put(criteria, :local, true)
 
+  defp maybe_filter_origin(criteria, %{origin: "local"} = _params),
+    do: Map.put(criteria, :local, true)
+
+  defp maybe_filter_origin(criteria, %{origin: "remote"} = _params),
+    do: Map.put(criteria, :external, true)
+
   defp maybe_filter_active(criteria, %{active: active} = _params),
     do: Map.put(criteria, :active, active)
 
@@ -187,11 +216,26 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
   defp maybe_filter_deactivated(criteria, %{disabled: deactivated} = _params),
     do: Map.put(criteria, :deactivated, deactivated)
 
+  defp maybe_filter_status(criteria, %{status: "active"} = _params),
+    do: Map.put(criteria, :active, true)
+
+  defp maybe_filter_status(criteria, %{status: "inactive"} = _params),
+    do: Map.put(criteria, :active, false)
+
+  defp maybe_filter_status(criteria, %{status: "pending"} = _params),
+    do: Map.put(criteria, :need_approval, true)
+
+  defp maybe_filter_status(criteria, %{status: "disabled"} = _params),
+    do: Map.put(criteria, :deactivated, true)
+
   defp maybe_filter_nickname(criteria, %{username: nickname} = _params),
     do: Map.put(criteria, :nickname, nickname)
 
   defp maybe_filter_name(criteria, %{display_name: name} = _params),
     do: Map.put(criteria, :name, name)
+
+  defp maybe_filter_domain(criteria, %{by_domain: domain} = _params),
+    do: Map.put(criteria, :domain, domain)
 
   defp maybe_filter_email(criteria, %{email: email} = _params),
     do: Map.put(criteria, :email, email)

@@ -19,7 +19,7 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.AccountOperation do
   def index_operation do
     %Operation{
       tags: ["User administration (Mastodon API)"],
-      summary: "View accounts by criteria",
+      summary: "View accounts by criteria (v1)",
       operationId: "MastodonAdmin.AccountController.index",
       description: "View accounts matching certain criteria for filtering, up to 40 at a time.",
       security: [%{"oAuth" => ["admin:read:accounts"]}],
@@ -27,12 +27,6 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.AccountOperation do
         [
           Operation.parameter(:local, :query, :boolean, "Filter for local accounts?"),
           Operation.parameter(:remote, :query, :boolean, "Filter for remote accounts?"),
-          Operation.parameter(
-            :by_domain,
-            :query,
-            :string,
-            "Filter by the given domain (not implemented yet)"
-          ),
           Operation.parameter(
             :active,
             :query,
@@ -52,12 +46,6 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.AccountOperation do
             "Filter for currently disabled accounts?"
           ),
           Operation.parameter(
-            :sensitized,
-            :query,
-            :boolean,
-            "Filter for currently sensitized accounts? (not implemented yet)"
-          ),
-          Operation.parameter(
             :silenced,
             :query,
             :boolean,
@@ -69,16 +57,114 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.AccountOperation do
             :boolean,
             "Filter for currently suspended accounts? (not implemented yet)"
           ),
-          Operation.parameter(:username, :query, :string, "Username to search for"),
-          Operation.parameter(:display_name, :query, :string, "Display name to search for"),
+          Operation.parameter(
+            :sensitized,
+            :query,
+            :boolean,
+            "Filter for accounts force-marked as sensitive? (not implemented yet)"
+          ),
+          Operation.parameter(:username, :query, :string, "Search for the given username"),
+          Operation.parameter(
+            :display_name,
+            :query,
+            :string,
+            "Search for the given display name"
+          ),
+          Operation.parameter(
+            :by_domain,
+            :query,
+            :string,
+            "Filter by the given domain"
+          ),
           Operation.parameter(:email, :query, :string, "Lookup a user with this email"),
           Operation.parameter(
             :ip,
             :query,
             :string,
-            "Lookup users by this IP address (not implemented yet)"
+            "Lookup users with this IP address (not implemented yet)"
           ),
           Operation.parameter(:staff, :query, :boolean, "Filter for staff accounts?")
+        ] ++
+          pagination_params(),
+      responses: %{
+        200 =>
+          Operation.response("Account", "application/json", %Schema{
+            title: "ArrayOfAccounts",
+            type: :array,
+            items: account()
+          }),
+        401 => Operation.response("Error", "application/json", ApiError)
+      }
+    }
+  end
+
+  def index2_operation do
+    %Operation{
+      tags: ["User administration (Mastodon API)"],
+      summary: "View accounts by criteria (v2)",
+      operationId: "MastodonAdmin.AccountController.index2",
+      description: "View accounts matching certain criteria for filtering, up to 40 at a time.",
+      security: [%{"oAuth" => ["admin:read:accounts"]}],
+      parameters:
+        [
+          Operation.parameter(
+            :origin,
+            :query,
+            %Schema{type: :string, enum: ["local", "remote"]},
+            "Filter for local or remote accounts"
+          ),
+          Operation.parameter(
+            :status,
+            :query,
+            %Schema{
+              type: :string,
+              enum: ["active", "inactive", "pending", "disabled", "silenced", "suspended"]
+            },
+            "Filter for active, pending, disabled, silenced or suspended accounts"
+          ),
+          Operation.parameter(
+            :permissions,
+            :query,
+            :string,
+            "Filter for accounts with staff permissions (users that can manage reports). (not implemented yet)"
+          ),
+          Operation.parameter(
+            :role_ids,
+            :query,
+            %Schema{
+              oneOf: [
+                %Schema{type: :array, items: %Schema{type: :string}},
+                %Schema{type: :string}
+              ]
+            },
+            "Filter for users with these roles. (not implemented yet)"
+          ),
+          Operation.parameter(
+            :invited_by,
+            :query,
+            :string,
+            "Lookup users invited by the account with this ID. (not implemented yet)"
+          ),
+          Operation.parameter(:username, :query, :string, "Search for the given username"),
+          Operation.parameter(
+            :display_name,
+            :query,
+            :string,
+            "Search for the given display name"
+          ),
+          Operation.parameter(
+            :by_domain,
+            :query,
+            :string,
+            "Filter by the given domain"
+          ),
+          Operation.parameter(:email, :query, :string, "Lookup a user with this email"),
+          Operation.parameter(
+            :ip,
+            :query,
+            :string,
+            "Lookup users with this IP address (not implemented yet)"
+          )
         ] ++
           pagination_params(),
       responses: %{
