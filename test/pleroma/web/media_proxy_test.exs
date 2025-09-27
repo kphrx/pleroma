@@ -73,7 +73,7 @@ defmodule Pleroma.Web.MediaProxyTest do
     end
 
     test "encodes and decodes URL and ignores query params for the path" do
-      url = "https://pleroma.soykaf.com/static/logo.png?93939393939&bunny=true"
+      url = "https://pleroma.soykaf.com/static/logo.png?93939393939=&bunny=true"
       encoded = MediaProxy.url(url)
       assert String.ends_with?(encoded, "/logo.png")
       assert decode_result(encoded) == url
