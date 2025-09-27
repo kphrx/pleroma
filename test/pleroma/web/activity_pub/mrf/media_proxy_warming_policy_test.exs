@@ -58,10 +58,13 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicyTest do
       {:ok, %Tesla.Env{status: 200, body: ""}}
     end)
 
-    with_mock HTTP, get: fn _, _, _ -> {:ok, []} end do
-      MediaProxyWarmingPolicy.filter(@message)
+    with_mock HTTP,
+      get: fn _, _, _ -> {:ok, []} end,
+      encode_url: fn url -> :meck.passthrough([url]) end,
+      encode_url: fn url, opts -> :meck.passthrough([url, opts]) end do
+        MediaProxyWarmingPolicy.filter(@message)
 
-      assert called(HTTP.get(:_, :_, :_))
+        assert called(HTTP.get(:_, :_, :_))
     end
   end
 
@@ -85,10 +88,13 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicyTest do
       {:ok, %Tesla.Env{status: 200, body: ""}}
     end)
 
-    with_mock HTTP, get: fn _, _, _ -> {:ok, []} end do
-      MRF.filter_one(MediaProxyWarmingPolicy, @message_with_history)
+    with_mock HTTP,
+      get: fn _, _, _ -> {:ok, []} end,
+      encode_url: fn url -> :meck.passthrough([url]) end,
+      encode_url: fn url, opts -> :meck.passthrough([url, opts]) end do
+        MRF.filter_one(MediaProxyWarmingPolicy, @message_with_history)
 
-      assert called(HTTP.get(:_, :_, :_))
+        assert called(HTTP.get(:_, :_, :_))
     end
   end
 
@@ -97,8 +103,11 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicyTest do
       {:ok, %Tesla.Env{status: 200, body: ""}}
     end)
 
-    with_mock HTTP, get: fn _, _, _ -> {:ok, []} end do
-      MRF.filter_one(MediaProxyWarmingPolicy, @message_with_history |> Map.put("type", "Update"))
+    with_mock HTTP,
+      get: fn _, _, _ -> {:ok, []} end,
+      encode_url: fn url -> :meck.passthrough([url]) end,
+      encode_url: fn url, opts -> :meck.passthrough([url, opts]) end do
+        MRF.filter_one(MediaProxyWarmingPolicy, @message_with_history |> Map.put("type", "Update"))
 
       assert called(HTTP.get(:_, :_, :_))
     end
