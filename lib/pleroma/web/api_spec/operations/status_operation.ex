@@ -549,6 +549,27 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
     }
   end
 
+  def quotes_operation do
+    %Operation{
+      tags: ["Retrieve status information"],
+      summary: "Quoted by",
+      description: "View quotes for a given status",
+      operationId: "StatusController.quotes",
+      parameters: [id_param() | pagination_params()],
+      security: [%{"oAuth" => ["read:statuses"]}],
+      responses: %{
+        200 =>
+          Operation.response(
+            "Array of Status",
+            "application/json",
+            array_of_statuses()
+          ),
+        403 => Operation.response("Forbidden", "application/json", ApiError),
+        404 => Operation.response("Not Found", "application/json", ApiError)
+      }
+    }
+  end
+
   def array_of_statuses do
     %Schema{type: :array, items: Status, example: [Status.schema().example]}
   end

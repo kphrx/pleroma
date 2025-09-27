@@ -447,6 +447,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       application: build_application(object.data["generator"]),
       language: get_language(object),
       emojis: build_emojis(object.data["emoji"]),
+      quotes_count: object.data["quotesCount"] || 0,
       pleroma: %{
         local: activity.local,
         conversation_id: get_context_id(activity),
