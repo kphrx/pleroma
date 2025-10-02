@@ -3558,7 +3558,8 @@ config :pleroma, :config_description, [
         type: :module,
         suggestions: [
           Pleroma.Language.Translation.Deepl,
-          Pleroma.Language.Translation.Libretranslate
+          Pleroma.Language.Translation.Libretranslate,
+          Pleroma.Language.Translation.TranslateLocally
         ]
       },
       %{
@@ -3588,6 +3589,14 @@ config :pleroma, :config_description, [
         label: "LibreTranslate API Key",
         type: :string,
         suggestions: ["YOUR_API_KEY"]
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.TranslateLocally},
+        key: :intermediate_language,
+        label:
+          "translateLocally intermediate language (used when direct source->target model is not available)",
+        type: :string,
+        suggestions: ["en"]
       }
     ]
   }
