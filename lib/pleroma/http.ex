@@ -147,6 +147,7 @@ defmodule Pleroma.HTTP do
         URI.parse(url)
         |> then(fn parsed ->
           path = encode_path(parsed.path, bypass_decode)
+          |> maybe_apply_path_encoding_quirks()
           query = encode_query(parsed.query)
 
           %{parsed | path: path, query: query}
@@ -186,9 +187,53 @@ defmodule Pleroma.HTTP do
 
   defp encode_query(nil), do: nil
 
+  # Order of kv pairs in query is not preserved when using URI.decode_query.
+  # URI.query_decoder/2 returns a stream which so far appears to not change order.
+  # Immediately switch to a list to prevent breakage for sites that expect
+  # the order of query keys to be always the same.
   defp encode_query(query) when is_binary(query) do
     query
-    |> URI.decode_query()
-    |> URI.encode_query()
+    |> URI.query_decoder()
+    |> Enum.to_list()
+    |> do_encode_query()
+  end
+  
+  defp maybe_apply_path_encoding_quirks(path), do: path
+
+  # Always uses www_form encoding
+  defp do_encode_query(enumerable) do
+    Enum.map_join(enumerable, "&", &maybe_apply_query_quirk(&1))
+  end
+
+  defp maybe_apply_query_quirk({key, value}) do
+    case key do
+      "precrop" ->
+        query_encode_kv_pair({key, value}, ~c":,")
+
+      key ->
+        query_encode_kv_pair({key, value})
+    end
+  end
+
+  defp query_encode_kv_pair({key, value}, rules \\ []) when is_list(rules) do
+    cond do
+      length(rules) > 0 ->
+        # URI.encode_query/2 does not appear to follow spec and encodes all parts of our URI path Constant.
+        # This appears to work outside of edge-cases like The Guardian Rich Media Cards,
+        # keeping behavior same as with URI.encode_query/2 unless otherwise specified via rules.
+        URI.encode_www_form(Kernel.to_string(key)) <> "=" <>
+          URI.encode(value, fn byte ->
+            URI.char_unreserved?(byte) ||
+              Enum.any?(
+                rules,
+                fn char ->
+                  char == byte
+                end)
+              end)
+            |> String.replace("%20", "+")
+
+      true ->
+        URI.encode_www_form(Kernel.to_string(key)) <> "=" <> URI.encode_www_form(Kernel.to_string(value))
+    end
   end
 end
