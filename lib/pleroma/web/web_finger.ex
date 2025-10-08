@@ -35,9 +35,9 @@ defmodule Pleroma.Web.WebFinger do
 
     regex =
       if webfinger_domain = Pleroma.Config.get([__MODULE__, :domain]) do
-        ~r/(acct:)?(?<username>[a-z0-9A-Z_\.-]+)@(#{host}|#{webfinger_domain})/
+        ~r/(acct:)?(?<username>[a-z0-9A-Z_\.-]+)@(#{host}|#{webfinger_domain})$/
       else
-        ~r/(acct:)?(?<username>[a-z0-9A-Z_\.-]+)@#{host}/
+        ~r/(acct:)?(?<username>[a-z0-9A-Z_\.-]+)@#{host}$/
       end
 
     with %{"username" => username} <- Regex.named_captures(regex, resource),

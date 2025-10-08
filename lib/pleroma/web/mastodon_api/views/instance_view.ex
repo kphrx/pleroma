@@ -157,7 +157,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       "pleroma:bookmark_folders",
       if Pleroma.Language.LanguageDetector.configured?() do
         "pleroma:language_detection"
-      end
+      end,
+      "pleroma:block_expiration"
     ]
     |> Enum.filter(& &1)
   end
@@ -286,7 +287,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
         birthday_required: Config.get([:instance, :birthday_required]),
         birthday_min_age: Config.get([:instance, :birthday_min_age]),
         translation: supported_languages(),
-        base_urls: base_urls
+        base_urls: base_urls,
+        markup: markup()
       },
       stats: %{mau: Pleroma.User.active_user_count()},
       vapid_public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
@@ -335,6 +337,14 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     %{
       source_languages: source_languages,
       target_languages: target_languages
+    }
+  end
+
+  defp markup do
+    %{
+      allow_inline_images: Config.get([:markup, :allow_inline_images]),
+      allow_headings: Config.get([:markup, :allow_headings]),
+      allow_tables: Config.get([:markup, :allow_tables])
     }
   end
 end

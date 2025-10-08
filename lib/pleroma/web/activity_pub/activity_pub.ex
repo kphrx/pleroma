@@ -414,10 +414,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
     with flag_data <- make_flag_data(params, additional),
          {:ok, activity} <- insert(flag_data, local),
-         {:ok, stripped_activity} <- strip_report_status_data(activity),
          _ <- notify_and_stream(activity),
-         :ok <-
-           maybe_federate(stripped_activity) do
+         :ok <- maybe_federate(activity) do
       User.all_users_with_privilege(:reports_manage_reports)
       |> Enum.filter(fn user -> user.ap_id != actor end)
       |> Enum.filter(fn user -> not is_nil(user.email) end)
@@ -1063,6 +1061,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_reblogs(query, %{exclude_reblogs: true}) do
     from(activity in query, where: fragment("?->>'type' != 'Announce'", activity.data))
+  end
+
+  defp restrict_reblogs(query, %{only_reblogs: true}) do
+    from(activity in query, where: fragment("?->>'type' = 'Announce'", activity.data))
   end
 
   defp restrict_reblogs(query, _), do: query

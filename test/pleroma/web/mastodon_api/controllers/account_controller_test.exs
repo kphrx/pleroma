@@ -469,6 +469,17 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
       assert [%{"id" => ^post_id}] = json_response_and_validate_schema(conn, 200)
     end
 
+    test "gets only a user's reblogs", %{user: user, conn: conn} do
+      {:ok, %{id: post_id}} = CommonAPI.post(user, %{status: "HI!!!"})
+      {:ok, %{id: reblog_id}} = CommonAPI.repeat(post_id, user)
+
+      conn = get(conn, "/api/v1/accounts/#{user.id}/statuses?only_reblogs=true")
+      assert [%{"id" => ^reblog_id}] = json_response_and_validate_schema(conn, 200)
+
+      conn = get(conn, "/api/v1/accounts/#{user.id}/statuses?only_reblogs=1")
+      assert [%{"id" => ^reblog_id}] = json_response_and_validate_schema(conn, 200)
+    end
+
     test "filters user's statuses by a hashtag", %{user: user, conn: conn} do
       {:ok, %{id: post_id}} = CommonAPI.post(user, %{status: "#hashtag"})
       {:ok, _post} = CommonAPI.post(user, %{status: "hashtag"})

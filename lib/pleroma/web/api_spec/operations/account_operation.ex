@@ -143,6 +143,12 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
             "Include statuses from muted accounts."
           ),
           Operation.parameter(:exclude_reblogs, :query, BooleanLike.schema(), "Exclude reblogs"),
+          Operation.parameter(
+            :only_reblogs,
+            :query,
+            BooleanLike.schema(),
+            "Include only reblogs"
+          ),
           Operation.parameter(:exclude_replies, :query, BooleanLike.schema(), "Exclude replies"),
           Operation.parameter(
             :exclude_visibilities,
@@ -284,18 +290,6 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
           :query,
           %Schema{allOf: [BooleanLike], default: true},
           "Mute notifications in addition to statuses? Defaults to `true`."
-        ),
-        Operation.parameter(
-          :duration,
-          :query,
-          %Schema{type: :integer},
-          "Expire the mute in `duration` seconds. Default 0 for infinity"
-        ),
-        Operation.parameter(
-          :expires_in,
-          :query,
-          %Schema{type: :integer, default: 0},
-          "Deprecated, use `duration` instead"
         )
       ],
       responses: %{
@@ -323,12 +317,33 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
       tags: ["Account actions"],
       summary: "Block",
       operationId: "AccountController.block",
+      requestBody: request_body("Parameters", block_request()),
       security: [%{"oAuth" => ["follow", "write:blocks"]}],
       description:
         "Block the given account. Clients should filter statuses from this account if received (e.g. due to a boost in the Home timeline)",
-      parameters: [%Reference{"$ref": "#/components/parameters/accountIdOrNickname"}],
+      parameters: [
+        %Reference{"$ref": "#/components/parameters/accountIdOrNickname"}
+      ],
       responses: %{
         200 => Operation.response("Relationship", "application/json", AccountRelationship)
+      }
+    }
+  end
+
+  defp block_request do
+    %Schema{
+      title: "AccountBlockRequest",
+      description: "POST body for blocking an account",
+      type: :object,
+      properties: %{
+        duration: %Schema{
+          type: :integer,
+          nullable: true,
+          description: "Expire the mute in `duration` seconds. Default 0 for infinity"
+        }
+      },
+      example: %{
+        "duration" => 86_400
       }
     }
   end

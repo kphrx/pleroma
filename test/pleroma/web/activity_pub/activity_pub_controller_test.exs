@@ -8,7 +8,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
   alias Pleroma.Activity
   alias Pleroma.Delivery
-  alias Pleroma.Instances
   alias Pleroma.Object
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
@@ -601,23 +600,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert Activity.get_by_ap_id(data["id"])
     end
 
-    test "it clears `unreachable` federation status of the sender", %{conn: conn} do
-      data = File.read!("test/fixtures/mastodon-post-activity.json") |> Jason.decode!()
-
-      sender_url = data["actor"]
-      Instances.set_consistently_unreachable(sender_url)
-      refute Instances.reachable?(sender_url)
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/inbox", data)
-
-      assert "ok" == json_response(conn, 200)
-      assert Instances.reachable?(sender_url)
-    end
-
     test "accept follow activity", %{conn: conn} do
       clear_config([:instance, :federating], true)
       relay = Relay.get_actor()
@@ -941,23 +923,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert Activity.get_by_ap_id(data["id"])
     end
 
-    test "it rejects an invalid incoming activity", %{conn: conn, data: data} do
-      user = insert(:user, is_active: false)
-
-      data =
-        data
-        |> Map.put("bcc", [user.ap_id])
-        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/users/#{user.nickname}/inbox", data)
-
-      assert "Invalid request." == json_response(conn, 400)
-    end
-
     test "it accepts messages with to as string instead of array", %{conn: conn, data: data} do
       user = insert(:user)
 
@@ -1108,24 +1073,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert response(conn, 200) =~ note_object.data["content"]
     end
 
-    test "it clears `unreachable` federation status of the sender", %{conn: conn, data: data} do
-      user = insert(:user)
-      data = Map.put(data, "bcc", [user.ap_id])
-
-      sender_host = URI.parse(data["actor"]).host
-      Instances.set_consistently_unreachable(sender_host)
-      refute Instances.reachable?(sender_host)
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/users/#{user.nickname}/inbox", data)
-
-      assert "ok" == json_response(conn, 200)
-      assert Instances.reachable?(sender_host)
-    end
-
     test "it removes all follower collections but actor's", %{conn: conn} do
       [actor, recipient] = insert_pair(:user)
 
@@ -1205,9 +1152,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
           }
         ],
         "actor" => actor.ap_id,
-        "cc" => [
-          reported_user.ap_id
-        ],
+        # CC and TO might either not exist at all, or be empty. We should be able to handle either.
+        # "cc" => [],
         "content" => "test",
         "context" => "context",
         "id" => "http://#{remote_domain}/activities/02be56cf-35e3-46b4-b2c6-47ae08dfee9e",
@@ -1340,6 +1286,50 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert "ok" == json_response(conn, 200)
       ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
       assert Activity.get_by_ap_id(data["id"])
+    end
+
+    test "it returns an error when receiving an activity sent to a deactivated user", %{
+      conn: conn,
+      data: data
+    } do
+      user = insert(:user)
+      {:ok, _} = User.set_activation(user, false)
+
+      data =
+        data
+        |> Map.put("bcc", [user.ap_id])
+        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
+
+      conn =
+        conn
+        |> assign(:valid_signature, true)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/inbox", data)
+
+      assert "User deactivated" == json_response(conn, 404)
+    end
+
+    test "it returns an error when receiving an activity sent from a deactivated user", %{
+      conn: conn,
+      data: data
+    } do
+      sender = insert(:user)
+      user = insert(:user)
+      {:ok, _} = User.set_activation(sender, false)
+
+      data =
+        data
+        |> Map.put("bcc", [user.ap_id])
+        |> Map.put("actor", sender.ap_id)
+        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
+
+      conn =
+        conn
+        |> assign(:valid_signature, true)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/inbox", data)
+
+      assert "Sender deactivated" == json_response(conn, 404)
     end
   end
 

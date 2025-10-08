@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Signature do
+  @behaviour Pleroma.Signature.API
   @behaviour HTTPSignatures.Adapter
 
   alias Pleroma.EctoType.ActivityPub.ObjectValidators

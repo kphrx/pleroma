@@ -111,6 +111,17 @@ defmodule Pleroma.Web.CommonAPITest do
       end
     end
 
+    test "add expiring block", %{blocker: blocker, blocked: blocked} do
+      {:ok, _} = CommonAPI.block(blocked, blocker, %{expires_in: 60})
+      assert User.blocks?(blocker, blocked)
+
+      worker = Pleroma.Workers.MuteExpireWorker
+      args = %{"op" => "unblock_user", "blocker_id" => blocker.id, "blocked_id" => blocked.id}
+
+      assert :ok = perform_job(worker, args)
+      refute User.blocks?(blocker, blocked)
+    end
+
     test "it blocks and does not federate if outgoing blocks are disabled", %{
       blocker: blocker,
       blocked: blocked

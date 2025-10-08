@@ -40,3 +40,9 @@ Mox.defmock(Pleroma.Language.LanguageDetectorMock,
 
 Mox.defmock(Pleroma.DateTimeMock, for: Pleroma.DateTime)
 Mox.defmock(Pleroma.MogrifyMock, for: Pleroma.MogrifyBehaviour)
+
+Mox.defmock(Pleroma.SignatureMock, for: Pleroma.Signature.API)
+
+Mox.defmock(Pleroma.Web.ActivityPub.TransmogrifierMock,
+  for: Pleroma.Web.ActivityPub.Transmogrifier.API
+)

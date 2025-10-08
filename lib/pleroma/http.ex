@@ -105,20 +105,57 @@ defmodule Pleroma.HTTP do
   end
 
   defp adapter_middlewares(Tesla.Adapter.Gun, extra_middleware) do
-    [Tesla.Middleware.FollowRedirects, Pleroma.Tesla.Middleware.ConnectionPool] ++
+    default_middleware() ++
+      [Pleroma.Tesla.Middleware.ConnectionPool] ++
       extra_middleware
-  end
-
-  defp adapter_middlewares({Tesla.Adapter.Finch, _}, extra_middleware) do
-    [Tesla.Middleware.FollowRedirects] ++ extra_middleware
   end
 
   defp adapter_middlewares(_, extra_middleware) do
-    if Pleroma.Config.get(:env) == :test do
-      # Emulate redirects in test env, which are handled by adapters in other environments
-      [Tesla.Middleware.FollowRedirects]
-    else
-      extra_middleware
+    # A lot of tests are written expecting unencoded URLs
+    # and the burden of fixing that is high. Also it makes
+    # them hard to read. Tests will opt-in when we want to validate
+    # the encoding is being done correctly.
+    cond do
+      Pleroma.Config.get(:env) == :test and Pleroma.Config.get(:test_url_encoding) ->
+        default_middleware()
+
+      Pleroma.Config.get(:env) == :test ->
+        # Emulate redirects in test env, which are handled by adapters in other environments
+        [Tesla.Middleware.FollowRedirects]
+
+      # Hackney and Finch
+      true ->
+        default_middleware() ++ extra_middleware
     end
+  end
+
+  defp default_middleware,
+    do: [Tesla.Middleware.FollowRedirects, Pleroma.Tesla.Middleware.EncodeUrl]
+
+  def encode_url(url) when is_binary(url) do
+    URI.parse(url)
+    |> then(fn parsed ->
+      path = encode_path(parsed.path)
+      query = encode_query(parsed.query)
+
+      %{parsed | path: path, query: query}
+    end)
+    |> URI.to_string()
+  end
+
+  defp encode_path(nil), do: nil
+
+  defp encode_path(path) when is_binary(path) do
+    path
+    |> URI.decode()
+    |> URI.encode()
+  end
+
+  defp encode_query(nil), do: nil
+
+  defp encode_query(query) when is_binary(query) do
+    query
+    |> URI.decode_query()
+    |> URI.encode_query()
   end
 end
