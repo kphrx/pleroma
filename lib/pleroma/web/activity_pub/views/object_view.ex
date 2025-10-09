@@ -6,10 +6,10 @@ defmodule Pleroma.Web.ActivityPub.ObjectView do
   use Pleroma.Web, :view
   alias Pleroma.Activity
   alias Pleroma.Object
-  alias Pleroma.Web.ActivityPub.CollectionViewHelper
-  alias Pleroma.Web.ControllerHelper
-  alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.ActivityPub.ActivityPub
+  alias Pleroma.Web.ActivityPub.CollectionViewHelper
+  alias Pleroma.Web.ActivityPub.Transmogrifier
+  alias Pleroma.Web.ControllerHelper
 
   def render("object.json", %{object: %Object{} = object}) do
     base = Pleroma.Web.ActivityPub.Utils.make_json_ld_header(object.data)
