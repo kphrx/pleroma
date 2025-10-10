@@ -38,13 +38,25 @@ defmodule Pleroma.HTTPTest do
       %{method: :get, url: "https://example.com/media/unicode%20%F0%9F%99%82%20.gif"} ->
         %Tesla.Env{status: 200, body: "unicode data"}
 
-      %{method: :get, url: "https://i.guim.co.uk/img/media/1069ef13c447908272c4de94174cec2b6352cb2f/0_91_2000_1201/master/2000.jpg?width=1200&height=630&quality=85&auto=format&fit=crop&precrop=40:21,offset-x50,offset-y0&overlay-align=bottom%2Cleft&overlay-width=100p&overlay-base64=L2ltZy9zdGF0aWMvb3ZlcmxheXMvdGctb3BpbmlvbnMtYWdlLTIwMTkucG5n&enable=upscale&s=cba21427a73512fdc9863c486c03fdd8"} ->
+      %{
+        method: :get,
+        url:
+          "https://i.guim.co.uk/img/media/1069ef13c447908272c4de94174cec2b6352cb2f/0_91_2000_1201/master/2000.jpg?width=1200&height=630&quality=85&auto=format&fit=crop&precrop=40:21,offset-x50,offset-y0&overlay-align=bottom%2Cleft&overlay-width=100p&overlay-base64=L2ltZy9zdGF0aWMvb3ZlcmxheXMvdGctb3BpbmlvbnMtYWdlLTIwMTkucG5n&enable=upscale&s=cba21427a73512fdc9863c486c03fdd8"
+      } ->
         %Tesla.Env{status: 200, body: "Guardian image quirk"}
 
-      %{method: :get, url: "https://example.com/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"} ->
+      %{
+        method: :get,
+        url:
+          "https://example.com/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"
+      } ->
         %Tesla.Env{status: 200, body: "Space in query with Guardian quirk"}
 
-      %{method: :get, url: "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=accessKEY%2F20130721%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130721T201207Z&X-Amz-Expires=86400&X-Amz-Signature=SIGNATURE&X-Amz-SignedHeaders=host"} ->
+      %{
+        method: :get,
+        url:
+          "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=accessKEY%2F20130721%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130721T201207Z&X-Amz-Expires=86400&X-Amz-Signature=SIGNATURE&X-Amz-SignedHeaders=host"
+      } ->
         %Tesla.Env{status: 200, body: "AWS S3 data"}
     end)
 
@@ -140,7 +152,8 @@ defmodule Pleroma.HTTPTest do
   test "properly applies Guardian image query quirk" do
     clear_config(:test_url_encoding, true)
 
-    url = "https://i.guim.co.uk/img/media/1069ef13c447908272c4de94174cec2b6352cb2f/0_91_2000_1201/master/2000.jpg?width=1200&height=630&quality=85&auto=format&fit=crop&precrop=40:21,offset-x50,offset-y0&overlay-align=bottom%2Cleft&overlay-width=100p&overlay-base64=L2ltZy9zdGF0aWMvb3ZlcmxheXMvdGctb3BpbmlvbnMtYWdlLTIwMTkucG5n&enable=upscale&s=cba21427a73512fdc9863c486c03fdd8"
+    url =
+      "https://i.guim.co.uk/img/media/1069ef13c447908272c4de94174cec2b6352cb2f/0_91_2000_1201/master/2000.jpg?width=1200&height=630&quality=85&auto=format&fit=crop&precrop=40:21,offset-x50,offset-y0&overlay-align=bottom%2Cleft&overlay-width=100p&overlay-base64=L2ltZy9zdGF0aWMvb3ZlcmxheXMvdGctb3BpbmlvbnMtYWdlLTIwMTkucG5n&enable=upscale&s=cba21427a73512fdc9863c486c03fdd8"
 
     result = HTTP.encode_url(url)
 
@@ -154,9 +167,11 @@ defmodule Pleroma.HTTPTest do
   test "properly encodes spaces as \"pluses\" in query when using quirks" do
     clear_config(:test_url_encoding, true)
 
-    url = "https://example.com/emoji/Pack 1/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar baz"
+    url =
+      "https://example.com/emoji/Pack 1/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar baz"
 
-    properly_encoded_url = "https://example.com/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"
+    properly_encoded_url =
+      "https://example.com/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"
 
     result = HTTP.encode_url(url)
 
@@ -170,8 +185,11 @@ defmodule Pleroma.HTTPTest do
   test "properly encode AWS S3 queries" do
     clear_config(:test_url_encoding, true)
 
-    url = "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=accessKEY%2F20130721%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130721T201207Z&X-Amz-Expires=86400&X-Amz-Signature=SIGNATURE&X-Amz-SignedHeaders=host"
-    unencoded_url = "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=accessKEY/20130721/us-east-1/s3/aws4_request&X-Amz-Date=20130721T201207Z&X-Amz-Expires=86400&X-Amz-Signature=SIGNATURE&X-Amz-SignedHeaders=host"
+    url =
+      "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=accessKEY%2F20130721%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130721T201207Z&X-Amz-Expires=86400&X-Amz-Signature=SIGNATURE&X-Amz-SignedHeaders=host"
+
+    unencoded_url =
+      "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=accessKEY/20130721/us-east-1/s3/aws4_request&X-Amz-Date=20130721T201207Z&X-Amz-Expires=86400&X-Amz-Signature=SIGNATURE&X-Amz-SignedHeaders=host"
 
     result = HTTP.encode_url(url)
     result_unencoded = HTTP.encode_url(unencoded_url)
@@ -182,7 +200,6 @@ defmodule Pleroma.HTTPTest do
     {:ok, result_get} = HTTP.get(result)
 
     assert result_get.status == 200
-
   end
 
   test "preserves query key order" do

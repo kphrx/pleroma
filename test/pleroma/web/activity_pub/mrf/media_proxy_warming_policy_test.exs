@@ -62,9 +62,9 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicyTest do
       get: fn _, _, _ -> {:ok, []} end,
       encode_url: fn url -> :meck.passthrough([url]) end,
       encode_url: fn url, opts -> :meck.passthrough([url, opts]) end do
-        MediaProxyWarmingPolicy.filter(@message)
+      MediaProxyWarmingPolicy.filter(@message)
 
-        assert called(HTTP.get(:_, :_, :_))
+      assert called(HTTP.get(:_, :_, :_))
     end
   end
 
@@ -92,9 +92,9 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicyTest do
       get: fn _, _, _ -> {:ok, []} end,
       encode_url: fn url -> :meck.passthrough([url]) end,
       encode_url: fn url, opts -> :meck.passthrough([url, opts]) end do
-        MRF.filter_one(MediaProxyWarmingPolicy, @message_with_history)
+      MRF.filter_one(MediaProxyWarmingPolicy, @message_with_history)
 
-        assert called(HTTP.get(:_, :_, :_))
+      assert called(HTTP.get(:_, :_, :_))
     end
   end
 
@@ -107,7 +107,7 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicyTest do
       get: fn _, _, _ -> {:ok, []} end,
       encode_url: fn url -> :meck.passthrough([url]) end,
       encode_url: fn url, opts -> :meck.passthrough([url, opts]) end do
-        MRF.filter_one(MediaProxyWarmingPolicy, @message_with_history |> Map.put("type", "Update"))
+      MRF.filter_one(MediaProxyWarmingPolicy, @message_with_history |> Map.put("type", "Update"))
 
       assert called(HTTP.get(:_, :_, :_))
     end

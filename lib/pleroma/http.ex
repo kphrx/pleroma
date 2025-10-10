@@ -146,8 +146,10 @@ defmodule Pleroma.HTTP do
       true ->
         URI.parse(url)
         |> then(fn parsed ->
-          path = encode_path(parsed.path, bypass_decode)
-          |> maybe_apply_path_encoding_quirks()
+          path =
+            encode_path(parsed.path, bypass_decode)
+            |> maybe_apply_path_encoding_quirks()
+
           query = encode_query(parsed.query)
 
           %{parsed | path: path, query: query}
@@ -197,7 +199,7 @@ defmodule Pleroma.HTTP do
     |> Enum.to_list()
     |> do_encode_query()
   end
-  
+
   defp maybe_apply_path_encoding_quirks(path), do: path
 
   # Always uses www_form encoding
@@ -221,19 +223,22 @@ defmodule Pleroma.HTTP do
         # URI.encode_query/2 does not appear to follow spec and encodes all parts of our URI path Constant.
         # This appears to work outside of edge-cases like The Guardian Rich Media Cards,
         # keeping behavior same as with URI.encode_query/2 unless otherwise specified via rules.
-        URI.encode_www_form(Kernel.to_string(key)) <> "=" <>
-          URI.encode(value, fn byte ->
-            URI.char_unreserved?(byte) ||
-              Enum.any?(
-                rules,
-                fn char ->
-                  char == byte
-                end)
-              end)
-            |> String.replace("%20", "+")
+        (URI.encode_www_form(Kernel.to_string(key)) <>
+           "=" <>
+           URI.encode(value, fn byte ->
+             URI.char_unreserved?(byte) ||
+               Enum.any?(
+                 rules,
+                 fn char ->
+                   char == byte
+                 end
+               )
+           end))
+        |> String.replace("%20", "+")
 
       true ->
-        URI.encode_www_form(Kernel.to_string(key)) <> "=" <> URI.encode_www_form(Kernel.to_string(value))
+        URI.encode_www_form(Kernel.to_string(key)) <>
+          "=" <> URI.encode_www_form(Kernel.to_string(value))
     end
   end
 end
