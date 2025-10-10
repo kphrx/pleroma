@@ -83,6 +83,8 @@ defmodule Pleroma.HTML.Scrubber.Default do
     "quote-inline"
   ])
 
+  Meta.allow_tag_with_this_attribute_values(:p, "class", ["quote-inline"])
+
   Meta.allow_tag_with_these_attributes(:span, ["lang"])
 
   Meta.allow_tag_with_this_attribute_values(:code, "class", ["inline"])
