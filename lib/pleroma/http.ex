@@ -222,7 +222,7 @@ defmodule Pleroma.HTTP do
       length(rules) > 0 ->
         # URI.encode_query/2 does not appear to follow spec and encodes all part
         # of our URI path Constant. This appears to work outside of edge-cases
-        # like The Guardian Rich Media Cards, keeping behavior same as with 
+        # like The Guardian Rich Media Cards, keeping behavior same as with
         # URI.encode_query/2 unless otherwise specified via rules.
         (URI.encode_www_form(Kernel.to_string(key)) <>
            "=" <>
