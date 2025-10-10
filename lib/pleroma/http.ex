@@ -220,9 +220,10 @@ defmodule Pleroma.HTTP do
   defp query_encode_kv_pair({key, value}, rules \\ []) when is_list(rules) do
     cond do
       length(rules) > 0 ->
-        # URI.encode_query/2 does not appear to follow spec and encodes all parts of our URI path Constant.
-        # This appears to work outside of edge-cases like The Guardian Rich Media Cards,
-        # keeping behavior same as with URI.encode_query/2 unless otherwise specified via rules.
+        # URI.encode_query/2 does not appear to follow spec and encodes all part
+        # of our URI path Constant. This appears to work outside of edge-cases
+        # like The Guardian Rich Media Cards, keeping behavior same as with 
+        # URI.encode_query/2 unless otherwise specified via rules.
         (URI.encode_www_form(Kernel.to_string(key)) <>
            "=" <>
            URI.encode(value, fn byte ->

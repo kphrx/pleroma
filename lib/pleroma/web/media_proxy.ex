@@ -101,10 +101,11 @@ defmodule Pleroma.Web.MediaProxy do
   end
 
   # The URL coming into MediaProxy from the outside might have wrong %-encoding
-  # (like older Pleroma versions)
+  # (like older Pleroma versions).
   # This would cause an inconsistency with the encoded URL here and the requested
   # URL fixed with Pleroma.Tesla.Middleware.EncodeUrl.
-  # End result is a failing HEAD request in Pleroma.Web.MediaProxy.MediaProxyController.handle_preview/2
+  # End result is a failing HEAD request in
+  # Pleroma.Web.MediaProxy.MediaProxyController.handle_preview/2
   def encode_url(url) do
     url = HTTP.encode_url(url)
     {base64, sig64} = base64_sig64(url)
