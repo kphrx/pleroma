@@ -74,6 +74,7 @@ defmodule Pleroma.Notification do
     reblog
     poll
     status
+    update
   }
 
   def changeset(%Notification{} = notification, attrs) do

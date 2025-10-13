@@ -40,9 +40,12 @@ Has these additional fields under the `pleroma` object:
 - `parent_visible`: If the parent of this post is visible to the user or not.
 - `pinned_at`: a datetime (iso8601) when status was pinned, `null` otherwise.
 - `quotes_count`: the count of status quotes.
-- `non_anonymous`: true if the source post specifies the poll results are not anonymous. Currently only implemented by Smithereen.
 - `bookmark_folder`: the ID of the folder bookmark is stored within (if any).
 - `list_id`: the ID of the list the post is addressed to (if any, only returned to author).
+
+Has these additional fields under the `poll.pleroma` object:
+
+- `non_anonymous`: true if the source post specifies the poll results are not anonymous. Currently only implemented by Smithereen.
 
 The `GET /api/v1/statuses/:id/source` endpoint additionally has the following attributes:
 
@@ -98,6 +101,9 @@ Endpoints which accept `with_relationships` parameter:
 - `/api/v1/accounts/:id/followers`
 - `/api/v1/accounts/:id/following`
 - `/api/v1/mutes`
+- `/api/v1/blocks`
+- `/api/v1/search`
+- `/api/v2/search`
 
 Has these additional fields under the `pleroma` object:
 
