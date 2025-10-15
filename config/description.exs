@@ -3558,7 +3558,8 @@ config :pleroma, :config_description, [
         type: :module,
         suggestions: [
           Pleroma.Language.Translation.Deepl,
-          Pleroma.Language.Translation.Libretranslate
+          Pleroma.Language.Translation.Libretranslate,
+          Pleroma.Language.Translation.Mozhi
         ]
       },
       %{
