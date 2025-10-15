@@ -8,6 +8,7 @@ defmodule Mix.Tasks.Pleroma.DatabaseTest do
 
   alias Pleroma.Activity
   alias Pleroma.Bookmark
+  alias Pleroma.Hashtag
   alias Pleroma.Object
   alias Pleroma.Repo
   alias Pleroma.User
@@ -549,6 +550,39 @@ defmodule Mix.Tasks.Pleroma.DatabaseTest do
              )
 
       assert length(activities) == 3
+    end
+
+    test "it prunes hashtags with no objects associated", %{old_insert_date: old_insert_date} do
+      user = insert(:user)
+
+      {:ok, hashtag_post_activity} =
+        CommonAPI.post(user, %{status: "morning #cofe", local: true})
+
+      hashtag_post_object = Object.normalize(hashtag_post_activity)
+
+      {:ok, hashtag_post2_activity} =
+        CommonAPI.post(user, %{status: "morning #cawfee", local: true})
+
+      hashtag_post2_object = Object.normalize(hashtag_post2_activity)
+
+      hashtag_post_object
+      |> Ecto.Changeset.change(%{updated_at: old_insert_date})
+      |> Repo.update!()
+
+      hashtag_post2_object
+      |> Ecto.Changeset.change(%{updated_at: old_insert_date})
+      |> Repo.update!()
+
+      # Test whether hashtags with follow relationships are kept
+      User.follow_hashtag(user, Hashtag.get_by_name("cofe"))
+
+      assert length(Repo.all(Hashtag)) == 2
+      assert length(Repo.all(Object)) == 2
+
+      Mix.Tasks.Pleroma.Database.run(["prune_objects"])
+      assert length(Repo.all(Hashtag)) == 1
+      assert length(Repo.all(Object)) == 0
+      assert Repo.one(Hashtag) |> Map.fetch!(:name) == "cofe"
     end
   end
 
