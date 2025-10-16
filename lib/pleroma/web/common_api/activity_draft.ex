@@ -88,7 +88,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     |> validate()
   end
 
-  defp listen_object(draft) do
+  defp listen_object(%__MODULE__{} = draft) do
     object =
       draft.params
       |> Map.take([:album, :artist, :title, :length])
@@ -102,20 +102,20 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     %__MODULE__{draft | object: object}
   end
 
-  defp put_params(draft, params) do
+  defp put_params(%__MODULE__{} = draft, params) do
     params = Map.put_new(params, :in_reply_to_status_id, params[:in_reply_to_id])
     %__MODULE__{draft | params: params}
   end
 
-  defp status(%{params: %{status: status}} = draft) do
+  defp status(%__MODULE__{params: %{status: status}} = draft) do
     %__MODULE__{draft | status: String.trim(status)}
   end
 
-  defp summary(%{params: params} = draft) do
+  defp summary(%__MODULE__{params: params} = draft) do
     %__MODULE__{draft | summary: Map.get(params, :spoiler_text, "")}
   end
 
-  defp full_payload(%{status: status, summary: summary} = draft) do
+  defp full_payload(%__MODULE__{status: status, summary: summary} = draft) do
     full_payload = String.trim(status <> summary)
 
     case Utils.validate_character_limit(full_payload, draft.attachments) do
@@ -124,7 +124,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     end
   end
 
-  defp attachments(%{params: params} = draft) do
+  defp attachments(%__MODULE__{params: params} = draft) do
     attachments = Utils.attachments_from_ids(params, draft.user)
     draft = %__MODULE__{draft | attachments: attachments}
 
@@ -134,9 +134,9 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     end
   end
 
-  defp in_reply_to(%{params: %{in_reply_to_status_id: ""}} = draft), do: draft
+  defp in_reply_to(%__MODULE__{params: %{in_reply_to_status_id: ""}} = draft), do: draft
 
-  defp in_reply_to(%{params: %{in_reply_to_status_id: id}} = draft) when is_binary(id) do
+  defp in_reply_to(%__MODULE__{params: %{in_reply_to_status_id: id}} = draft) when is_binary(id) do
     # If a post was deleted all its activities (except the newly added Delete) are purged too,
     # thus lookup by Create db ID will yield nil just as if it never existed in the first place.
     #
@@ -166,13 +166,13 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     end
   end
 
-  defp in_reply_to(%{params: %{in_reply_to_status_id: %Activity{} = in_reply_to}} = draft) do
+  defp in_reply_to(%__MODULE__{params: %{in_reply_to_status_id: %Activity{} = in_reply_to}} = draft) do
     %__MODULE__{draft | in_reply_to: in_reply_to}
   end
 
   defp in_reply_to(draft), do: draft
 
-  defp quote_post(%{params: %{quoted_status_id: id}} = draft) when not_empty_string(id) do
+  defp quote_post(%__MODULE__{params: %{quoted_status_id: id}} = draft) when not_empty_string(id) do
     case Activity.get_by_id_with_object(id) do
       %Activity{} = activity ->
         %__MODULE__{draft | quote_post: activity}
@@ -188,12 +188,12 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
 
   defp quote_post(draft), do: draft
 
-  defp in_reply_to_conversation(draft) do
+  defp in_reply_to_conversation(%__MODULE__{} = draft) do
     in_reply_to_conversation = Participation.get(draft.params[:in_reply_to_conversation_id])
     %__MODULE__{draft | in_reply_to_conversation: in_reply_to_conversation}
   end
 
-  defp visibility(%{params: params} = draft) do
+  defp visibility(%__MODULE__{params: params} = draft) do
     case CommonAPI.get_visibility(params, draft.in_reply_to, draft.in_reply_to_conversation) do
       {visibility, "direct"} when visibility != "direct" ->
         add_error(draft, dgettext("errors", "The message visibility must be direct"))
@@ -226,14 +226,14 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
 
   defp quoting_visibility(draft), do: draft
 
-  defp expires_at(draft) do
+  defp expires_at(%__MODULE__{} = draft) do
     case CommonAPI.check_expiry_date(draft.params[:expires_in]) do
       {:ok, expires_at} -> %__MODULE__{draft | expires_at: expires_at}
       {:error, message} -> add_error(draft, message)
     end
   end
 
-  defp poll(draft) do
+  defp poll(%__MODULE__{} = draft) do
     case Utils.make_poll_data(draft.params) do
       {:ok, {poll, poll_emoji}} ->
         %__MODULE__{draft | extra: poll, emoji: Map.merge(draft.emoji, poll_emoji)}
@@ -243,7 +243,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     end
   end
 
-  defp content(%{mentions: mentions} = draft) do
+  defp content(%__MODULE__{mentions: mentions} = draft) do
     {content_html, mentioned_users, tags} = Utils.make_content_html(draft)
 
     mentioned_ap_ids =
@@ -257,22 +257,22 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     %__MODULE__{draft | content_html: content_html, mentions: mentions, tags: tags}
   end
 
-  defp to_and_cc(draft) do
+  defp to_and_cc(%__MODULE__{} = draft) do
     {to, cc} = Utils.get_to_and_cc(draft)
     %__MODULE__{draft | to: to, cc: cc}
   end
 
-  defp context(draft) do
+  defp context(%__MODULE__{} = draft) do
     context = Utils.make_context(draft.in_reply_to, draft.in_reply_to_conversation)
     %__MODULE__{draft | context: context}
   end
 
-  defp sensitive(draft) do
+  defp sensitive(%__MODULE__{} = draft) do
     sensitive = draft.params[:sensitive]
     %__MODULE__{draft | sensitive: sensitive}
   end
 
-  defp language(draft) do
+  defp language(%__MODULE__{} = draft) do
     language =
       with language <- draft.params[:language],
            true <- good_locale_code?(language) do
@@ -284,7 +284,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     %__MODULE__{draft | language: language}
   end
 
-  defp object(draft) do
+  defp object(%__MODULE__{} = draft) do
     emoji = Map.merge(Pleroma.Emoji.Formatter.get_emoji_map(draft.full_payload), draft.emoji)
 
     # Sometimes people create posts with subject containing emoji,
@@ -328,12 +328,12 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     %__MODULE__{draft | object: object}
   end
 
-  defp preview?(draft) do
+  defp preview?(%__MODULE__{} = draft) do
     preview? = Pleroma.Web.Utils.Params.truthy_param?(draft.params[:preview])
     %__MODULE__{draft | preview?: preview?}
   end
 
-  defp changes(draft) do
+  defp changes(%__MODULE__{} = draft) do
     direct? = draft.visibility == "direct"
     additional = %{"cc" => draft.cc, "directMessage" => direct?}
 
@@ -359,7 +359,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
   defp with_valid(%{valid?: true} = draft, func), do: func.(draft)
   defp with_valid(draft, _func), do: draft
 
-  defp add_error(draft, message) do
+  defp add_error(%__MODULE__{} = draft, message) do
     %__MODULE__{draft | valid?: false, errors: [message | draft.errors]}
   end
 
