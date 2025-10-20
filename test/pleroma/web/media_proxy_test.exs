@@ -182,11 +182,13 @@ defmodule Pleroma.Web.MediaProxyTest do
       assert decode_result(encoded) == url
     end
 
-    test "preserve unicode characters" do
+    # Improperly encoded URLs should not happen even when input was wrong.
+    test "does not preserve unicode characters" do
       url = "https://ko.wikipedia.org/wiki/위키백과:대문"
+      encoded_url = "https://ko.wikipedia.org/wiki/%EC%9C%84%ED%82%A4%EB%B0%B1%EA%B3%BC:%EB%8C%80%EB%AC%B8"
 
       encoded = MediaProxy.url(url)
-      assert decode_result(encoded) == url
+      assert decode_result(encoded) == encoded_url
     end
   end
 
