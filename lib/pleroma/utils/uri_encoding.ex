@@ -11,24 +11,44 @@ defmodule Pleroma.Utils.URIEncoding do
 
   # We don't always want to decode the path first, like is the case in
   # Pleroma.Upload.url_from_spec/3.
+  @doc """
+  Wraps URI encoding/decoding functions from Elixir's standard library to fix usually unintended side-effects.
+
+  Supports two URL processing options in the optional 2nd argument with the default being `false`:
+
+    * `bypass_parse` - Bypasses `URI.parse` stage, useful when it's not desirable to parse to URL first
+      before encoding it. Supports only encoding as the Path segment of a URI.
+    * `bypass_decode` - Bypasses `URI.decode` stage for the Path segment of a URI. Used when a URL
+      has to be double %-encoded for internal reasons.
+
+  Options must be specified as a Keyword with tuples with booleans, otherwise
+  `{:error, :invalid_opts}` is returned. Example:
+  `encode_url(url, [bypass_parse: true, bypass_decode: true])`
+  """
+  @spec encode_url(String.t(), Keyword.t()) :: String.t() | {:error, :invalid_opts}
   def encode_url(url, opts \\ []) when is_binary(url) and is_list(opts) do
     bypass_parse = Keyword.get(opts, :bypass_parse, false)
     bypass_decode = Keyword.get(opts, :bypass_decode, false)
 
-    cond do
-      bypass_parse ->
-        encode_path(url, bypass_decode)
+    with true <- is_boolean(bypass_parse),
+         true <- is_boolean(bypass_decode) do
+      cond do
+        bypass_parse ->
+          encode_path(url, bypass_decode)
 
-      true ->
-        URI.parse(url)
-        |> then(fn parsed ->
-          path = encode_path(parsed.path, bypass_decode)
+        true ->
+          URI.parse(url)
+          |> then(fn parsed ->
+            path = encode_path(parsed.path, bypass_decode)
 
-          query = encode_query(parsed.query)
+            query = encode_query(parsed.query)
 
-          %{parsed | path: path, query: query}
-        end)
-        |> URI.to_string()
+            %{parsed | path: path, query: query}
+          end)
+          |> URI.to_string()
+      end
+    else
+      _ -> {:error, :invalid_opts}
     end
   end
 
