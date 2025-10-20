@@ -22,9 +22,7 @@ defmodule Pleroma.Utils.URIEncoding do
       true ->
         URI.parse(url)
         |> then(fn parsed ->
-          path =
-            encode_path(parsed.path, bypass_decode)
-            |> maybe_apply_path_encoding_quirks()
+          path = encode_path(parsed.path, bypass_decode)
 
           query = encode_query(parsed.query)
 
@@ -75,8 +73,6 @@ defmodule Pleroma.Utils.URIEncoding do
     |> Enum.to_list()
     |> do_encode_query()
   end
-
-  defp maybe_apply_path_encoding_quirks(path), do: path
 
   # Always uses www_form encoding
   defp do_encode_query(enumerable) do
