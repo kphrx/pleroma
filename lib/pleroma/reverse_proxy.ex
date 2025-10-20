@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.ReverseProxy do
+  alias Pleroma.Utils.URIEncoding
+
   @range_headers ~w(range if-range)
   @keep_req_headers ~w(accept accept-encoding cache-control if-modified-since) ++
                       ~w(if-unmodified-since if-none-match) ++ @range_headers
@@ -460,9 +462,9 @@ defmodule Pleroma.ReverseProxy do
   # Also do it for test environment
   defp maybe_encode_url(url) do
     case Application.get_env(:tesla, :adapter) do
-      Tesla.Adapter.Hackney -> Pleroma.HTTP.encode_url(url)
-      {Tesla.Adapter.Finch, _} -> Pleroma.HTTP.encode_url(url)
-      Tesla.Mock -> Pleroma.HTTP.encode_url(url)
+      Tesla.Adapter.Hackney -> URIEncoding.encode_url(url)
+      {Tesla.Adapter.Finch, _} -> URIEncoding.encode_url(url)
+      Tesla.Mock -> URIEncoding.encode_url(url)
       _ -> url
     end
   end

@@ -5,8 +5,11 @@
 defmodule Pleroma.HTTPTest do
   use ExUnit.Case, async: true
   use Pleroma.Tests.Helpers
+
   import Tesla.Mock
+
   alias Pleroma.HTTP
+  alias Pleroma.Utils.URIEncoding
 
   setup do
     mock(fn
@@ -134,7 +137,7 @@ defmodule Pleroma.HTTPTest do
 
     normal_url = "https://example.com/media/file%20with%20space.jpg?name=a+space.jpg"
 
-    result = HTTP.encode_url(normal_url)
+    result = URIEncoding.encode_url(normal_url)
 
     assert result == "https://example.com/media/file%20with%20space.jpg?name=a+space.jpg"
   end
@@ -144,7 +147,7 @@ defmodule Pleroma.HTTPTest do
 
     normal_url = "https://example.com/media/file%20with%20space.jpg"
 
-    result = HTTP.encode_url(normal_url, bypass_decode: true)
+    result = URIEncoding.encode_url(normal_url, bypass_decode: true)
 
     assert result == "https://example.com/media/file%2520with%2520space.jpg"
   end
@@ -155,7 +158,7 @@ defmodule Pleroma.HTTPTest do
     url =
       "https://i.guim.co.uk/img/media/1069ef13c447908272c4de94174cec2b6352cb2f/0_91_2000_1201/master/2000.jpg?width=1200&height=630&quality=85&auto=format&fit=crop&precrop=40:21,offset-x50,offset-y0&overlay-align=bottom%2Cleft&overlay-width=100p&overlay-base64=L2ltZy9zdGF0aWMvb3ZlcmxheXMvdGctb3BpbmlvbnMtYWdlLTIwMTkucG5n&enable=upscale&s=cba21427a73512fdc9863c486c03fdd8"
 
-    result = HTTP.encode_url(url)
+    result = URIEncoding.encode_url(url)
 
     assert result == url
 
@@ -173,7 +176,7 @@ defmodule Pleroma.HTTPTest do
     properly_encoded_url =
       "https://example.com/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"
 
-    result = HTTP.encode_url(url)
+    result = URIEncoding.encode_url(url)
 
     assert result == properly_encoded_url
 
@@ -191,8 +194,8 @@ defmodule Pleroma.HTTPTest do
     unencoded_url =
       "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=accessKEY/20130721/us-east-1/s3/aws4_request&X-Amz-Date=20130721T201207Z&X-Amz-Expires=86400&X-Amz-Signature=SIGNATURE&X-Amz-SignedHeaders=host"
 
-    result = HTTP.encode_url(url)
-    result_unencoded = HTTP.encode_url(unencoded_url)
+    result = URIEncoding.encode_url(url)
+    result_unencoded = URIEncoding.encode_url(unencoded_url)
 
     assert result == url
     assert result == result_unencoded
@@ -207,7 +210,7 @@ defmodule Pleroma.HTTPTest do
 
     url = "https://example.com/foo?hjkl=qwertz&xyz=abc&bar=baz"
 
-    result = HTTP.encode_url(url)
+    result = URIEncoding.encode_url(url)
 
     assert result == url
   end
