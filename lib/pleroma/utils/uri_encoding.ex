@@ -41,7 +41,7 @@ defmodule Pleroma.Utils.URIEncoding do
           |> then(fn parsed ->
             path = encode_path(parsed.path, bypass_decode)
 
-            query = encode_query(parsed.query)
+            query = encode_query(parsed.query, parsed.host)
 
             %{parsed | path: path, query: query}
           end)
@@ -81,25 +81,27 @@ defmodule Pleroma.Utils.URIEncoding do
     end)
   end
 
-  defp encode_query(nil), do: nil
-
   # Order of kv pairs in query is not preserved when using URI.decode_query.
   # URI.query_decoder/2 returns a stream which so far appears to not change order.
   # Immediately switch to a list to prevent breakage for sites that expect
   # the order of query keys to be always the same.
-  defp encode_query(query) when is_binary(query) do
+  defp encode_query(query, host) when is_binary(query) do
     query
     |> URI.query_decoder()
     |> Enum.to_list()
-    |> do_encode_query()
+    |> do_encode_query(host)
   end
 
-  # Always uses www_form encoding
-  defp do_encode_query(enumerable) do
-    Enum.map_join(enumerable, "&", &maybe_apply_query_quirk(&1))
+  defp encode_query(nil, _), do: nil
+
+  # Always uses www_form encoding.
+  # Taken from Elixir's URI module.
+  defp do_encode_query(enumerable, host) do
+    Enum.map_join(enumerable, "&", &maybe_apply_query_quirk(&1, host))
   end
 
-  defp maybe_apply_query_quirk({key, value}) do
+  # https://git.pleroma.social/pleroma/pleroma/-/issues/1055
+  defp maybe_apply_query_quirk({key, value}, "i.guim.co.uk" = _host) do
     case key do
       "precrop" ->
         query_encode_kv_pair({key, value}, ~c":,")
@@ -109,6 +111,9 @@ defmodule Pleroma.Utils.URIEncoding do
     end
   end
 
+  defp maybe_apply_query_quirk({key, value}, _), do: query_encode_kv_pair({key, value})
+
+  # Taken from Elixir's URI module and modified to support quirks.
   defp query_encode_kv_pair({key, value}, rules \\ []) when is_list(rules) do
     cond do
       length(rules) > 0 ->

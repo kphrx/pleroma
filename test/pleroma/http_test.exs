@@ -51,7 +51,7 @@ defmodule Pleroma.HTTPTest do
       %{
         method: :get,
         url:
-          "https://example.com/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"
+          "https://i.guim.co.uk/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"
       } ->
         %Tesla.Env{status: 200, body: "Space in query with Guardian quirk"}
 
@@ -171,10 +171,10 @@ defmodule Pleroma.HTTPTest do
     clear_config(:test_url_encoding, true)
 
     url =
-      "https://example.com/emoji/Pack 1/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar baz"
+      "https://i.guim.co.uk/emoji/Pack 1/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar baz"
 
     properly_encoded_url =
-      "https://example.com/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"
+      "https://i.guim.co.uk/emoji/Pack%201/koronebless.png?precrop=40:21,overlay-x0,overlay-y0&foo=bar+baz"
 
     result = URIEncoding.encode_url(url)
 
