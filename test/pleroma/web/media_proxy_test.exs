@@ -173,10 +173,27 @@ defmodule Pleroma.Web.MediaProxyTest do
     # Improperly encoded URLs should not happen even when input was wrong.
     test "does not preserve unicode characters" do
       url = "https://ko.wikipedia.org/wiki/위키백과:대문"
-      encoded_url = "https://ko.wikipedia.org/wiki/%EC%9C%84%ED%82%A4%EB%B0%B1%EA%B3%BC:%EB%8C%80%EB%AC%B8"
+
+      encoded_url =
+        "https://ko.wikipedia.org/wiki/%EC%9C%84%ED%82%A4%EB%B0%B1%EA%B3%BC:%EB%8C%80%EB%AC%B8"
 
       encoded = MediaProxy.url(url)
       assert decode_result(encoded) == encoded_url
+    end
+
+    # If we preserve wrongly encoded URLs in MediaProxy, it will get fixed
+    # when we GET these URLs and will result in 424 when MediaProxy previews are enabled.
+    test "does not preserve incorrect URLs when making MediaProxy link" do
+      incorrect_original_url = "https://example.com/media/cofe%20%28with%20milk%29.png"
+      corrected_original_url = "https://example.com/media/cofe%20(with%20milk).png"
+
+      unpreserved_encoded_original_url =
+        "http://localhost:4001/proxy/Sv6tt6xjA72_i4d8gXbuMAOXQSs/aHR0cHM6Ly9leGFtcGxlLmNvbS9tZWRpYS9jb2ZlJTIwKHdpdGglMjBtaWxrKS5wbmc/cofe%20(with%20milk).png"
+
+      encoded = MediaProxy.url(incorrect_original_url)
+
+      assert encoded == unpreserved_encoded_original_url
+      assert decode_result(encoded) == corrected_original_url
     end
   end
 
