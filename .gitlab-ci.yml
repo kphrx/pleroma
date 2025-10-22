@@ -1,5 +1,9 @@
 image: git.pleroma.social:5050/pleroma/pleroma/ci-base:elixir-1.14.5-otp-25
 
+default:
+    artifacts:
+        expire_in: 1 week
+
 variables: &global_variables
   # Only used for the release
   ELIXIR_VER: 1.17.3
