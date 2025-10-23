@@ -216,7 +216,7 @@ docs-deploy:
   stage: deploy
   trigger:
     project: pleroma/docs
-    branch: develop
+    branch: master
     strategy: depend
   only:
   - stable@pleroma/pleroma
@@ -256,7 +256,7 @@ spec-deploy:
   stage: deploy
   trigger:
     project: pleroma/api-docs
-    branch: develop
+    branch: master
     strategy: depend
   only:
     - develop@pleroma/pleroma
