@@ -214,16 +214,14 @@ dialyzer:
 
 docs-deploy:
   stage: deploy
-  artifacts: *default_artifacts
-  cache: *testing_cache_policy
-  image: alpine:latest
+  trigger:
+    project: pleroma/docs
+    branch: develop
+    strategy: depend
   only:
   - stable@pleroma/pleroma
   - develop@pleroma/pleroma
-  before_script:
-  - apk add curl
-  script:
-  - curl --fail-with-body -X POST -F"token=$CI_JOB_TOKEN" -F'ref=master' -F"variables[BRANCH]=$CI_COMMIT_REF_NAME" https://git.pleroma.social/api/v4/projects/673/trigger/pipeline
+
 review_app:
   image: alpine:3.9
   stage: deploy
@@ -256,18 +254,12 @@ review_app:
 
 spec-deploy:
   stage: deploy
-  artifacts:
-    paths:
-    - spec.json
-    expire_in: 30 days
+  trigger:
+    project: pleroma/api-docs
+    branch: develop
+    strategy: depend
   only:
     - develop@pleroma/pleroma
-  image: alpine:latest
-  before_script:
-    - apk add curl
-  script:
-    - curl --fail-with-body -X POST -F"token=$CI_JOB_TOKEN" -F'ref=master' -F"variables[BRANCH]=$CI_COMMIT_REF_NAME" -F"variables[JOB_REF]=$CI_JOB_ID" https://git.pleroma.social/api/v4/projects/1130/trigger/pipeline
-
 
 stop_review_app:
   image: alpine:3.9
