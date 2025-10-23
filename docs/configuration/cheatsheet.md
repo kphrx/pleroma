@@ -917,7 +917,7 @@ To enable them, both the `rum_enabled` flag has to be set and the following spec
     - `mix ecto.migrate --migrations-path priv/repo/optional_migrations/rum_indexing/`
   * OTP install:
     - Stop Pleroma
-    - `pleroma_ctl migrate --migrations-path <install location>/lib/pleroma-<version>/priv/repo/optional_migrations/rum_indexing/`
+    - `pleroma_ctl migrate --migrations-path priv/repo/optional_migrations/rum_indexing/`
 
 This will probably take a long time.
 
