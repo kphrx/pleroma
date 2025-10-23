@@ -1,9 +1,5 @@
 image: git.pleroma.social:5050/pleroma/pleroma/ci-base:elixir-1.15.8-otp-26
 
-default:
-    artifacts:
-        expire_in: 1 week
-
 variables: &global_variables
   # Only used for the release
   ELIXIR_VER: 1.17.3
@@ -22,6 +18,10 @@ workflow:
     - if: $CI_COMMIT_BRANCH == "stable"
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
+
+# Default artifacts configuration
+.default_artifacts: &default_artifacts
+  expire_in: 30 days
 
 cache: &global_cache_policy
   key: $CI_JOB_IMAGE-$CI_COMMIT_SHORT_SHA
@@ -60,6 +60,7 @@ check-changelog:
   before_script: ''
   after_script: ''
   cache: {}
+  artifacts: *default_artifacts
   script:
     - apk add git
     - sh ./tools/check-changelog
@@ -75,6 +76,7 @@ check-changelog:
 .using-ci-base:
   tags:
     - amd64
+  artifacts: *default_artifacts
 
 build-1.15.8-otp-26:
   extends:
@@ -105,6 +107,7 @@ spec-build:
   artifacts:
     paths:
     - spec.json
+    expire_in: 42 years
   script:
   - mix pleroma.openapi_spec spec.json
 
@@ -157,6 +160,7 @@ unit-testing-1.15.8-otp-26:
     - su testuser -c "HOME=/home/testuser mix pleroma.test_runner --cover --preload-modules"
   coverage: '/^Line total: ([^ ]*%)$/'
   artifacts:
+    expire_in: 30 days
     reports:
       coverage_report:
         coverage_format: cobertura
@@ -175,6 +179,7 @@ unit-testing-1.18.3-otp-27:
 
 formatting-1.15:
   extends: .build_changes_policy
+  artifacts: *default_artifacts
   image: &formatting_elixir elixir:1.15-alpine
   stage: lint
   cache: *testing_cache_policy
@@ -189,6 +194,7 @@ formatting-1.15:
 
 cycles-1.15:
   extends: .build_changes_policy
+  artifacts: *default_artifacts
   image: *formatting_elixir
   stage: lint
   cache: {}
@@ -212,7 +218,7 @@ dialyzer:
   - .using-ci-base
   stage: lint
   allow_failure: true
-  when: manual 
+  when: manual
   cache: *testing_cache_policy
   tags:
     - feld
@@ -221,6 +227,7 @@ dialyzer:
 
 docs-deploy:
   stage: deploy
+  artifacts: *default_artifacts
   cache: *testing_cache_policy
   image: alpine:latest
   only:
@@ -245,6 +252,7 @@ review_app:
   except:
     - master
     - develop
+  artifacts: *default_artifacts
   script:
     - echo "$CI_ENVIRONMENT_SLUG"
     - mkdir -p ~/.ssh
@@ -264,6 +272,7 @@ spec-deploy:
   artifacts:
     paths:
     - spec.json
+    expire_in: 30 days
   only:
     - develop@pleroma/pleroma
   image: alpine:latest
@@ -276,6 +285,7 @@ spec-deploy:
 stop_review_app:
   image: alpine:3.9
   stage: deploy
+  artifacts: *default_artifacts
   before_script:
     - apk update && apk add openssh-client git
   when: manual
