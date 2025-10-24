@@ -109,9 +109,12 @@ spec-build:
   artifacts:
     paths:
     - spec.json
+    reports:
+      dotenv: build.env
     expire_in: 42 years
   script:
   - mix pleroma.openapi_spec spec.json
+  - echo "SPEC_BUILD_JOB_ID=$CI_JOB_ID" >> build.env
 
 benchmark:
   extends:
@@ -275,7 +278,7 @@ spec-deploy:
   only:
     - develop@pleroma/pleroma
   variables:
-    PIPELINE_ID: $CI_PIPELINE_ID
+    SPEC_BUILD_JOB_ID: $SPEC_BUILD_JOB_ID
 
 stop_review_app:
   image: alpine:3.9
