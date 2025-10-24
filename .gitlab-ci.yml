@@ -14,9 +14,17 @@ variables: &global_variables
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "stable"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_COMMIT_TAG
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH
+
+# Default artifacts configuration
+.default_artifacts: &default_artifacts
+  expire_in: 30 days
 
 cache: &global_cache_policy
   key: $CI_JOB_IMAGE-$CI_COMMIT_SHORT_SHA
@@ -55,6 +63,7 @@ check-changelog:
   before_script: ''
   after_script: ''
   cache: {}
+  artifacts: *default_artifacts
   script:
     - apk add git
     - sh ./tools/check-changelog
@@ -70,6 +79,7 @@ check-changelog:
 .using-ci-base:
   tags:
     - amd64
+  artifacts: *default_artifacts
 
 build-1.14.5-otp-25:
   extends:
@@ -100,8 +110,12 @@ spec-build:
   artifacts:
     paths:
     - spec.json
+    reports:
+      dotenv: build.env
+    expire_in: 42 years
   script:
   - mix pleroma.openapi_spec spec.json
+  - echo "SPEC_BUILD_JOB_ID=$CI_JOB_ID" >> build.env
 
 benchmark:
   extends:
@@ -137,6 +151,7 @@ unit-testing-1.14.5-otp-25:
     - mix pleroma.test_runner --cover --preload-modules
   coverage: '/^Line total: ([^ ]*%)$/'
   artifacts:
+    expire_in: 30 days
     reports:
       coverage_report:
         coverage_format: cobertura
@@ -154,6 +169,7 @@ unit-testing-1.17.1-otp-26:
 
 formatting-1.15:
   extends: .build_changes_policy
+  artifacts: *default_artifacts
   image: &formatting_elixir elixir:1.15-alpine
   stage: lint
   cache: *testing_cache_policy
@@ -168,6 +184,7 @@ formatting-1.15:
 
 cycles-1.15:
   extends: .build_changes_policy
+  artifacts: *default_artifacts
   image: *formatting_elixir
   stage: lint
   cache: {}
@@ -191,7 +208,7 @@ dialyzer:
   - .using-ci-base
   stage: lint
   allow_failure: true
-  when: manual 
+  when: manual
   cache: *testing_cache_policy
   tags:
     - feld
@@ -200,15 +217,14 @@ dialyzer:
 
 docs-deploy:
   stage: deploy
-  cache: *testing_cache_policy
-  image: alpine:latest
+  trigger:
+    project: pleroma/docs
+    branch: master
+    strategy: depend
   only:
   - stable@pleroma/pleroma
   - develop@pleroma/pleroma
-  before_script:
-  - apk add curl
-  script:
-  - curl --fail-with-body -X POST -F"token=$CI_JOB_TOKEN" -F'ref=master' -F"variables[BRANCH]=$CI_COMMIT_REF_NAME" https://git.pleroma.social/api/v4/projects/673/trigger/pipeline
+
 review_app:
   image: alpine:3.9
   stage: deploy
@@ -224,6 +240,7 @@ review_app:
   except:
     - master
     - develop
+  artifacts: *default_artifacts
   script:
     - echo "$CI_ENVIRONMENT_SLUG"
     - mkdir -p ~/.ssh
@@ -240,21 +257,19 @@ review_app:
 
 spec-deploy:
   stage: deploy
-  artifacts:
-    paths:
-    - spec.json
+  trigger:
+    project: pleroma/api-docs
+    branch: master
+    strategy: depend
   only:
     - develop@pleroma/pleroma
-  image: alpine:latest
-  before_script:
-    - apk add curl
-  script:
-    - curl --fail-with-body -X POST -F"token=$CI_JOB_TOKEN" -F'ref=master' -F"variables[BRANCH]=$CI_COMMIT_REF_NAME" -F"variables[JOB_REF]=$CI_JOB_ID" https://git.pleroma.social/api/v4/projects/1130/trigger/pipeline
-
+  variables:
+    SPEC_BUILD_JOB_ID: $SPEC_BUILD_JOB_ID
 
 stop_review_app:
   image: alpine:3.9
   stage: deploy
+  artifacts: *default_artifacts
   before_script:
     - apk update && apk add openssh-client git
   when: manual
