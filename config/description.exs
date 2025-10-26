@@ -2131,6 +2131,11 @@ config :pleroma, :config_description, [
         description:
           "Amount of milliseconds after which the HTTP request is forcibly terminated.",
         suggestions: [5_000]
+      },
+      %{
+        key: :user_agent,
+        type: :string,
+        description: "Custom User-Agent header to be used when fetching rich media content."
       }
     ]
   },
