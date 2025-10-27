@@ -396,7 +396,7 @@ defmodule Pleroma.ReverseProxyTest do
     end
   end
 
-  # Hackey is used for Reverse Proxy when Hackney or Finch is the Tesla Adapter
+  # Hackney is used for Reverse Proxy when Hackney or Finch is the Tesla Adapter
   # Gun is able to proxy through Tesla, so it does not need testing as the
   # test cases in the Pleroma.HTTPTest module are sufficient
   describe "Hackney URL encoding:" do
