@@ -599,6 +599,20 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
           nullable: true,
           description: "ISO 639 language code for this status."
         },
+        visibility: %Schema{
+          nullable: true,
+          anyOf: [
+            VisibilityScope,
+            %Schema{type: :string, description: "`list:LIST_ID`", example: "LIST:123"}
+          ],
+          description:
+            "Visibility of the posted status. Besides standard MastoAPI values (`direct`, `private`, `unlisted` or `public`) it can be used to address a List by setting it to `list:LIST_ID`"
+        },
+        quoted_status_id: %Schema{
+          nullable: true,
+          allOf: [FlakeID],
+          description: "ID of the status being quoted, if any"
+        },
         # Pleroma-specific properties:
         preview: %Schema{
           allOf: [BooleanLike],
@@ -619,15 +633,6 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
           description:
             "A list of nicknames (like `lain@soykaf.club` or `lain` on the local server) that will be used to determine who is going to be addressed by this post. Using this will disable the implicit addressing by mentioned names in the `status` body, only the people in the `to` list will be addressed. The normal rules for for post visibility are not affected by this and will still apply"
         },
-        visibility: %Schema{
-          nullable: true,
-          anyOf: [
-            VisibilityScope,
-            %Schema{type: :string, description: "`list:LIST_ID`", example: "LIST:123"}
-          ],
-          description:
-            "Visibility of the posted status. Besides standard MastoAPI values (`direct`, `private`, `unlisted` or `public`) it can be used to address a List by setting it to `list:LIST_ID`"
-        },
         expires_in: %Schema{
           nullable: true,
           type: :integer,
@@ -643,7 +648,8 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
         quote_id: %Schema{
           nullable: true,
           allOf: [FlakeID],
-          description: "ID of the status being quoted, if any"
+          description: "Deprecated in favor of `quoted_status_id`",
+          deprecated: true
         }
       },
       example: %{

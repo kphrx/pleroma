@@ -831,7 +831,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
 
       {:ok, activity} = CommonAPI.post(user, %{status: "1", visibility: "public"})
       ap_id = activity.data["id"]
-      quote_data = %{status: "1", quote_id: activity.id}
+      quote_data = %{status: "1", quoted_status_id: activity.id}
 
       # public
       {:ok, _} = CommonAPI.post(user2, Map.put(quote_data, :visibility, "public"))
