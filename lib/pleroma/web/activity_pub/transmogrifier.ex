@@ -104,6 +104,22 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
+  @doc """
+  Bovine compatibility
+  https://codeberg.org/bovine/bovine/issues/53
+  """
+  def fix_addressing_public(map, field) do
+    Map.put(
+      map,
+      field,
+      Enum.map(Map.get(map, field), fn
+        "Public" -> Pleroma.Constants.as_public()
+        "as:Public" -> Pleroma.Constants.as_public()
+        x -> x
+      end)
+    )
+  end
+
   # if directMessage flag is set to true, leave the addressing alone
   def fix_explicit_addressing(%{"directMessage" => true} = object, _follower_collection),
     do: object
@@ -161,6 +177,10 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> fix_addressing_list("cc")
     |> fix_addressing_list("bto")
     |> fix_addressing_list("bcc")
+    |> fix_addressing_public("to")
+    |> fix_addressing_public("cc")
+    |> fix_addressing_public("bto")
+    |> fix_addressing_public("bcc")
     |> fix_explicit_addressing(follower_collection)
     |> fix_implicit_addressing(follower_collection)
   end

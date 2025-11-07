@@ -20,6 +20,12 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   require Pleroma.Constants
 
   def cast_and_filter_recipients(message, field, follower_collection, field_fallback \\ []) do
+    # calling this here since we need to fix as:Public address before ObjectID cast throws it out
+    message =
+      message
+      |> Transmogrifier.fix_addressing_list(field)
+      |> Transmogrifier.fix_addressing_public(field)
+
     {:ok, data} = ObjectValidators.Recipients.cast(message[field] || field_fallback)
 
     data =

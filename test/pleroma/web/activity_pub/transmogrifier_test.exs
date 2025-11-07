@@ -123,6 +123,29 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       assert activity.data["context"] == object.data["context"]
     end
 
+    test "it fixes the public scope addressing" do
+      insert(:user,
+        ap_id: "https://mymath.rocks/endpoints/SYn3cl_N4HAPfPHgo2x37XunLEmhV9LnxCggcYwyec0"
+      )
+
+      object =
+        "test/fixtures/bovine-bogus-public-note.json"
+        |> File.read!()
+        |> Jason.decode!()
+
+      message = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "actor" => "https://mymath.rocks/endpoints/SYn3cl_N4HAPfPHgo2x37XunLEmhV9LnxCggcYwyec0",
+        "object" => object
+      }
+
+      assert {:ok, activity} = Transmogrifier.handle_incoming(message)
+
+      object = Object.normalize(activity, fetch: false)
+      assert "https://www.w3.org/ns/activitystreams#Public" in object.data["to"]
+    end
+
     test "it keeps link tags" do
       insert(:user, ap_id: "https://example.org/users/alice")
 
