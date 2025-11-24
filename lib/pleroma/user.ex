@@ -233,8 +233,8 @@ defmodule Pleroma.User do
   for {_relationship_type, [{_outgoing_relation, outgoing_relation_target}, _]} <-
         @user_relationships_config do
     # `def blocked_users_relation/2`, `def muted_users_relation/2`,
-    #   `def reblog_muted_users_relation/2`, `def notification_muted_users/2`,
-    #   `def subscriber_users/2`, `def endorsed_users_relation/2`
+    #   `def reblog_muted_users_relation/2`, `def notification_muted_users_relation/2`,
+    #   `def subscriber_users_relation/2`, `def endorsed_users_relation/2`
     def unquote(:"#{outgoing_relation_target}_relation")(user, restrict_deactivated? \\ false) do
       target_users_query = assoc(user, unquote(outgoing_relation_target))
 

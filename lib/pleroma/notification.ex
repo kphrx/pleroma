@@ -526,9 +526,7 @@ defmodule Pleroma.Notification do
         %Activity{data: %{"type" => "Create"}} = activity,
         local_only
       ) do
-    notification_enabled_ap_ids =
-      []
-      |> Utils.maybe_notify_subscribers(activity)
+    notification_enabled_ap_ids = Utils.get_notified_subscribers(activity)
 
     potential_receivers =
       User.get_users_from_set(notification_enabled_ap_ids, local_only: local_only)
