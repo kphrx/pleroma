@@ -488,7 +488,7 @@ defmodule Pleroma.NotificationTest do
     end
 
     @tag needs_streamer: true
-    test "it send updated marker to the 'user' and the 'user:notification' stream" do
+    test "it sends updated marker to the 'user' and the 'user:notification' stream" do
       %{user: user, token: oauth_token} = oauth_access(["read"])
       other_user = insert(:user)
 
