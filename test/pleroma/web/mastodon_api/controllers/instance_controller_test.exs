@@ -194,4 +194,28 @@ defmodule Pleroma.Web.MastodonAPI.InstanceControllerTest do
     refute Map.has_key?(result["pleroma"]["metadata"]["base_urls"], "media_proxy")
     refute Map.has_key?(result["pleroma"]["metadata"]["base_urls"], "upload")
   end
+
+  test "display timeline access restrictions", %{conn: conn} do
+    clear_config([:restrict_unauthenticated, :timelines, :local], true)
+    clear_config([:restrict_unauthenticated, :timelines, :federated], false)
+
+    conn = get(conn, "/api/v2/instance")
+
+    assert result = json_response_and_validate_schema(conn, 200)
+
+    assert result["configuration"]["timelines_access"] == %{
+             "live_feeds" => %{
+               "local" => "authenticated",
+               "remote" => "public"
+             },
+             "hashtag_feeds" => %{
+               "local" => "authenticated",
+               "remote" => "public"
+             },
+             "trending_link_feeds" => %{
+               "local" => "disabled",
+               "remote" => "disabled"
+             }
+           }
+  end
 end
