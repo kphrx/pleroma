@@ -11,8 +11,8 @@ defmodule Pleroma.Web.ApiSpec.PleromaFrontendSettingsOperation do
 
   def available_frontends_operation() do
     %Operation{
-      tags: ["Frontends"],
-      summary: "Frontend Settings Profiles",
+      tags: ["Preferred frontends"],
+      summary: "Frontend settings profiles",
       description: "List frontend setting profiles",
       operationId: "PleromaAPI.FrontendSettingsController.available_frontends",
       responses: %{
@@ -29,7 +29,7 @@ defmodule Pleroma.Web.ApiSpec.PleromaFrontendSettingsOperation do
 
   def update_preferred_frontend_operation() do
     %Operation{
-      tags: ["Frontends"],
+      tags: ["Preferred frontends"],
       summary: "Update preferred frontend setting",
       description: "Store preferred frontend in cookies",
       operationId: "PleromaAPI.FrontendSettingsController.update_preferred_frontend",
