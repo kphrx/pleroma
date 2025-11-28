@@ -1,0 +1,1 @@
+Redirect /users/:nickname.rss to /users/:nickname/feed.rss instead of .atom

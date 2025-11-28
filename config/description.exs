@@ -3559,6 +3559,7 @@ config :pleroma, :config_description, [
         suggestions: [
           Pleroma.Language.Translation.Deepl,
           Pleroma.Language.Translation.Libretranslate,
+          Pleroma.Language.Translation.Mozhi,
           Pleroma.Language.Translation.TranslateLocally
         ]
       },
@@ -3592,11 +3593,24 @@ config :pleroma, :config_description, [
       },
       %{
         group: {:subgroup, Pleroma.Language.Translation.TranslateLocally},
-        key: :intermediate_language,
+        key: :intermediary_language,
         label:
-          "translateLocally intermediate language (used when direct source->target model is not available)",
+          "translateLocally intermediary language (used when direct source->target model is not available)",
         type: :string,
         suggestions: ["en"]
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Mozhi},
+        key: :base_url,
+        label: "Mozhi instance URL",
+        type: :string
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Mozhi},
+        key: :engine,
+        label: "Engine used for Mozhi",
+        type: :string,
+        suggestions: ["libretranslate"]
       }
     ]
   }

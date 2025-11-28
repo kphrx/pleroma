@@ -608,7 +608,6 @@ defmodule Pleroma.Web.Router do
     scope [] do
       pipe_through(:api)
       get("/accounts/:id/favourites", AccountController, :favourites)
-      get("/accounts/:id/endorsements", AccountController, :endorsements)
 
       get("/statuses/:id/quotes", StatusController, :quotes)
     end
@@ -637,6 +636,11 @@ defmodule Pleroma.Web.Router do
     get("/accounts/:id/scrobbles", ScrobbleController, :index)
   end
 
+  scope "/api/v1/pleroma", Pleroma.Web.MastodonAPI do
+    pipe_through(:api)
+    get("/accounts/:id/endorsements", AccountController, :endorsements)
+  end
+
   scope "/api/v2/pleroma", Pleroma.Web.PleromaAPI do
     scope [] do
       pipe_through(:authenticated_api)
@@ -653,7 +657,7 @@ defmodule Pleroma.Web.Router do
     get("/accounts/relationships", AccountController, :relationships)
     get("/accounts/familiar_followers", AccountController, :familiar_followers)
     get("/accounts/:id/lists", AccountController, :lists)
-    get("/endorsements", AccountController, :endorsements)
+    get("/endorsements", AccountController, :own_endorsements)
     get("/blocks", AccountController, :blocks)
     get("/mutes", AccountController, :mutes)
 
@@ -667,6 +671,8 @@ defmodule Pleroma.Web.Router do
     post("/accounts/:id/note", AccountController, :note)
     post("/accounts/:id/pin", AccountController, :endorse)
     post("/accounts/:id/unpin", AccountController, :unendorse)
+    post("/accounts/:id/endorse", AccountController, :endorse)
+    post("/accounts/:id/unendorse", AccountController, :unendorse)
     post("/accounts/:id/remove_from_followers", AccountController, :remove_from_followers)
 
     get("/conversations", ConversationController, :index)
@@ -782,6 +788,7 @@ defmodule Pleroma.Web.Router do
     get("/accounts/:id/statuses", AccountController, :statuses)
     get("/accounts/:id/followers", AccountController, :followers)
     get("/accounts/:id/following", AccountController, :following)
+    get("/accounts/:id/endorsements", AccountController, :endorsements)
     get("/accounts/:id", AccountController, :show)
 
     post("/accounts", AccountController, :create)
