@@ -3558,7 +3558,8 @@ config :pleroma, :config_description, [
         type: :module,
         suggestions: [
           Pleroma.Language.Translation.Deepl,
-          Pleroma.Language.Translation.Libretranslate
+          Pleroma.Language.Translation.Libretranslate,
+          Pleroma.Language.Translation.Mozhi
         ]
       },
       %{
@@ -3588,6 +3589,19 @@ config :pleroma, :config_description, [
         label: "LibreTranslate API Key",
         type: :string,
         suggestions: ["YOUR_API_KEY"]
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Mozhi},
+        key: :base_url,
+        label: "Mozhi instance URL",
+        type: :string
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Mozhi},
+        key: :engine,
+        label: "Engine used for Mozhi",
+        type: :string,
+        suggestions: ["libretranslate"]
       }
     ]
   }
