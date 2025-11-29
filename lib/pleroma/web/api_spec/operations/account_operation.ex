@@ -913,7 +913,10 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
           }
         ]
       },
-      example: [Account.schema().example]
+      example: [
+        Account.schema().example
+        |> Map.put("mute_expires_at", "2025-11-29T16:23:13Z")
+      ]
     }
   end
 
@@ -934,7 +937,10 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
           }
         ]
       },
-      example: [Account.schema().example]
+      example: [
+        Account.schema().example
+        |> Map.put("block_expires_at", "2025-11-29T16:23:13Z")
+      ]
     }
   end
 
