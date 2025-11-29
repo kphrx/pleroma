@@ -1,8 +1,6 @@
 defmodule Pleroma.Web.PleromaAPI.FrontendSettingsControllerTest do
   use Pleroma.Web.ConnCase, async: false
 
-  import Pleroma.Factory
-
   describe "PUT /api/v1/pleroma/preferred_frontend" do
     test "sets a cookie with selected frontend" do
       %{conn: conn} = oauth_access(["read"])

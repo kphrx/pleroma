@@ -9,7 +9,7 @@ defmodule Pleroma.Web.ApiSpec.PleromaFrontendSettingsOperation do
     apply(__MODULE__, operation, [])
   end
 
-  def available_frontends_operation() do
+  def available_frontends_operation do
     %Operation{
       tags: ["Preferred frontends"],
       summary: "Frontend settings profiles",
@@ -27,7 +27,7 @@ defmodule Pleroma.Web.ApiSpec.PleromaFrontendSettingsOperation do
     }
   end
 
-  def update_preferred_frontend_operation() do
+  def update_preferred_frontend_operation do
     %Operation{
       tags: ["Preferred frontends"],
       summary: "Update preferred frontend setting",
@@ -50,10 +50,13 @@ defmodule Pleroma.Web.ApiSpec.PleromaFrontendSettingsOperation do
         ),
       responses: %{
         200 =>
-          Operation.response("Frontends", "application/json", %Schema{
-            type: :array,
-            items: %Schema{
-              type: :string
+          Operation.response("Preferred frontend", "application/json", %Schema{
+            type: :object,
+            properties: %{
+              frontend_name: %Schema{
+                type: :string,
+                description: "Frontend name"
+              }
             }
           })
       }

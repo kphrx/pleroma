@@ -15,6 +15,6 @@ defmodule Pleroma.Web.FrontendSwitcher.FrontendSwitcherController do
   def do_switch(conn, params) do
     conn
     |> put_resp_cookie("preferred_frontend", params["frontend"])
-    |> html("<meta http-equiv=\"refresh\" content=\"0; url=/\">")
+    |> html(~s(<meta http-equiv="refresh" content="0; url=/">))
   end
 end
