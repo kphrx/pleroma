@@ -319,6 +319,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
   @doc "DELETE /api/v1/statuses/:id"
   def delete(%{assigns: %{user: user}, private: %{open_api_spex: %{params: %{id: id}}}} = conn, _) do
     with %Activity{} = activity <- Activity.get_by_id_with_object(id),
+         # CommonAPI already checks whether user is allowed to delete
          {:ok, %Activity{}} <- CommonAPI.delete(id, user) do
       try_render(conn, "show.json",
         activity: activity,
@@ -340,6 +341,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         _
       ) do
     with {:ok, announce} <- CommonAPI.repeat(ap_id_or_id, user, params),
+         # CommonAPI already checks whether user is allowed to reblog
          %Activity{} = announce <- Activity.normalize(announce.data) do
       try_render(conn, "show.json", %{activity: announce, for: user, as: :activity})
     end
@@ -364,6 +366,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         _
       ) do
     with {:ok, _fav} <- CommonAPI.favorite(activity_id, user),
+         # CommonAPI already checks whether user is allowed to reblog
          %Activity{} = activity <- Activity.get_by_id(activity_id) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
     end

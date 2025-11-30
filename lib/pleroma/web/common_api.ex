@@ -258,7 +258,7 @@ defmodule Pleroma.Web.CommonAPI do
       {:ok, _} = res ->
         res
 
-      {:error, :not_found} = res ->
+      {:error, reason} = res when reason in [:not_found, :forbidden] ->
         res
 
       {:error, e} ->
@@ -269,6 +269,7 @@ defmodule Pleroma.Web.CommonAPI do
 
   defp favorite_helper(user, id) do
     with {_, %Activity{object: object}} <- {:find_object, Activity.get_by_id_with_object(id)},
+         {_, true} <- {:visible, Visibility.visible_for_user?(object, user)},
          {_, {:ok, like_object, meta}} <- {:build_object, Builder.like(user, object)},
          {_, {:ok, %Activity{} = activity, _meta}} <-
            {:common_pipeline,
@@ -277,6 +278,9 @@ defmodule Pleroma.Web.CommonAPI do
     else
       {:find_object, _} ->
         {:error, :not_found}
+
+      {:visible, _} ->
+        {:error, :forbidden}
 
       {:common_pipeline, {:error, {:validate, {:error, changeset}}}} = e ->
         if {:object, {"already liked by this actor", []}} in changeset.errors do
@@ -311,11 +315,15 @@ defmodule Pleroma.Web.CommonAPI do
           {:ok, Activity.t()} | {:error, String.t()}
   def react_with_emoji(id, user, emoji) do
     with %Activity{} = activity <- Activity.get_by_id(id),
+         {_, true} <- {:visible, Visibility.visible_for_user?(activity, user)},
          object <- Object.normalize(activity, fetch: false),
          {:ok, emoji_react, _} <- Builder.emoji_react(user, object, emoji),
          {:ok, activity, _} <- Pipeline.common_pipeline(emoji_react, local: true) do
       {:ok, activity}
     else
+      {:visible, _} ->
+        {:error, dgettext("errors", "Must be able to access post to interact with it")}
+
       _ ->
         {:error, dgettext("errors", "Could not add reaction emoji")}
     end
