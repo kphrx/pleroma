@@ -483,7 +483,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   end
 
   defp validate_visibility(%User{} = user, %{"type" => type, "object" => object} = activity) do
-    with {_, %Object{} = normalized_object} <- {:normalize, Object.normalize(object, fetch: false)},
+    with {_, %Object{} = normalized_object} <-
+           {:normalize, Object.normalize(object, fetch: false)},
          {_, true} <- {:visibility, Visibility.visible_for_user?(normalized_object, user)} do
       {:ok, activity}
     else

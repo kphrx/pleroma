@@ -291,7 +291,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
     end
 
     test "replying to own DM succeeds", %{user: user, conn: conn} do
-      # this is an "edge" case for visibility: replying user is not part of addressed users (but is the author)
+      # this is an "edge" case for visibility: replying user is not
+      # part of addressed users (but is the author)
       stranger = insert(:user)
 
       {:ok, %{id: dm_id} = dm_post_act} =
@@ -1546,7 +1547,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       assert match?(%{"error" => _}, resp1)
 
-      # unreblog by reblog ID (reblog IDs are accepted by some APIs; ensure it fails here one way or another)
+      # unreblog by reblog ID (reblog IDs are accepted by some APIs;
+      # ensure it fails here one way or another)
       resp2 =
         build_conn()
         |> assign(:user, user)

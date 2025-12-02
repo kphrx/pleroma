@@ -140,9 +140,10 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     # If a post was deleted all its activities (except the newly added Delete) are purged too,
     # thus lookup by Create db ID will yield nil just as if it never existed in the first place.
     #
-    # We allow replying to Announce here, due to a Pleroma-FE quirk where if presented with an Announce id
-    # it will render it as if it was just the normal referenced post, but use the Announce id for replies
-    # in the in_reply_to_id key of a POST request to /api/v1/statuses, or as an :id in /api/v1/statuses/:id/*.
+    # We allow replying to Announce here, due to a Pleroma-FE quirk where if presented with
+    # an Announce id it will render it as if it was just the normal referenced post, but
+    # use the Announce id for replies in the in_reply_to_id key of a POST request to
+    # /api/v1/statuses, or as an :id in /api/v1/statuses/:id/*.
     # TODO: Fix this quirk in FE and remove here and other affected places
     with %Activity{} = activity <- Activity.get_by_id(id),
          true <- Visibility.visible_for_user?(activity, draft.user),
@@ -156,8 +157,12 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
         add_error(draft, dgettext("errors", "Replying to a status that is not visibile to user"))
 
       {:type, type} ->
-        add_error(draft, dgettext("errors", "Can only reply to posts, not %{type} activities",
-          type: inspect(type)))
+        add_error(
+          draft,
+          dgettext("errors", "Can only reply to posts, not %{type} activities",
+            type: inspect(type)
+          )
+        )
     end
   end
 
