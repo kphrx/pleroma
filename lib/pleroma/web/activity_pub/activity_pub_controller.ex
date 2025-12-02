@@ -482,6 +482,24 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     {:ok, activity}
   end
 
+  defp validate_visibility(%User{} = user, %{"type" => type, "object" => object} = activity) do
+    with {_, %Object{} = normalized_object} <- {:normalize, Object.normalize(object, fetch: false)},
+         {_, true} <- {:visibility, Visibility.visible_for_user?(normalized_object, user)} do
+      {:ok, activity}
+    else
+      {:normalize, _} ->
+        if user.local and type == "Create" do
+          # Creating new object via C2S
+          {:ok, activity}
+        else
+          {:error, "No such object found"}
+        end
+
+      {:visibility, _} ->
+        {:forbidden, "You can't interact with this object"}
+    end
+  end
+
   def update_outbox(
         %{assigns: %{user: %User{nickname: nickname, ap_id: actor} = user}} = conn,
         %{"nickname" => nickname} = params
@@ -493,7 +511,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
       |> Map.put("actor", actor)
 
     with {:ok, params} <- fix_user_message(user, params),
-         {:ok, activity, _} <- Pipeline.common_pipeline(params, local: true),
+         {:ok, activity} <- validate_visibility(user, params),
+         {:ok, activity, _} <- Pipeline.common_pipeline(activity, local: true),
          %Activity{data: activity_data} <- Activity.normalize(activity) do
       conn
       |> put_status(:created)

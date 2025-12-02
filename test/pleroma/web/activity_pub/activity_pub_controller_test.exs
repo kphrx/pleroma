@@ -1706,6 +1706,82 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert note_object == Object.normalize(note_activity, fetch: false)
     end
 
+    test "it rejects like activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "Like",
+        object: %{
+          id: post_object.data["id"]
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
+    end
+
+    test "it rejects announce activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "Announce",
+        object: %{
+          id: post_object.data["id"]
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
+    end
+
+    test "it rejects emojireact activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "EmojiReact",
+        object: %{
+          id: post_object.data["id"]
+        },
+        content: "😀"
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
+    end
+
     test "it increases like count when receiving a like action", %{conn: conn} do
       note_activity = insert(:note_activity)
       note_object = Object.normalize(note_activity, fetch: false)
