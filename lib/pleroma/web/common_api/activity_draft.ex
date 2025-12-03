@@ -147,7 +147,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     # TODO: Fix this quirk in FE and remove here and other affected places
     with %Activity{} = activity <- Activity.get_by_id(id),
          true <- Visibility.visible_for_user?(activity, draft.user),
-         {:type, type} when type in ["Create", "Announce"] <- {:type, activity.data["type"]} do
+         {_, type} when type in ["Create", "Announce"] <- {:type, activity.data["type"]} do
       %__MODULE__{draft | in_reply_to: activity}
     else
       nil ->
