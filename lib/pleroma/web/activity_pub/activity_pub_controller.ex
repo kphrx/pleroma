@@ -489,8 +489,9 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
       {:ok, activity}
     else
       {:normalize, _} ->
-        if user.local and type == "Create" do
-          # Creating new object via C2S
+        if type in ["Create", "Listen"] do
+          # Creating new object via C2S; user is local and authenticated
+          # via the :authenticate Plug pipeline.
           {:ok, activity}
         else
           {:error, "No such object found"}
