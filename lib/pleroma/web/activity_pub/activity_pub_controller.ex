@@ -482,6 +482,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     {:ok, activity}
   end
 
+  # We currently lack a Flag ObjectValidator since both CommonAPI and Transmogrifier
+  # both send it straight to ActivityPub.flag and C2S currently has to go through
+  # the normal pipeline which requires an ObjectValidator.
+  # TODO: Add a Flag Activity ObjectValidator
+  defp validate_visibility(_, %{"type" => "Flag"}) do
+    {:error, "Flag activities aren't currently supported in C2S"}
+  end
+
   defp validate_visibility(%User{} = user, %{"type" => type, "object" => object} = activity) do
     with {_, %Object{} = normalized_object} <-
            {:normalize, Object.normalize(object, fetch: false)},

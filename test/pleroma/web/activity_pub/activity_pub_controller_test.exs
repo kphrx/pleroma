@@ -1712,6 +1712,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
 
       assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
 
       post_object = Object.normalize(post, fetch: false)
 
@@ -1737,6 +1738,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
 
       assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
 
       post_object = Object.normalize(post, fetch: false)
 
@@ -1762,6 +1764,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
 
       assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
 
       post_object = Object.normalize(post, fetch: false)
 
