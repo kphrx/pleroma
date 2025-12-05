@@ -566,6 +566,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
     test "it can handle Listen activities" do
       listen_activity = insert(:listen)
 
+      # This has an inlined object as in ObjectView
       {:ok, modified} = Transmogrifier.prepare_outgoing(listen_activity.data)
 
       assert modified["type"] == "Listen"
@@ -574,7 +575,36 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
 
       {:ok, activity} = CommonAPI.listen(user, %{"title" => "lain radio episode 1"})
 
-      {:ok, _modified} = Transmogrifier.prepare_outgoing(activity.data)
+      user_ap_id = user.ap_id
+      activity_ap_id = activity.data["id"]
+      activity_to = activity.data["to"]
+      activity_cc = activity.data["cc"]
+      object_ap_id = activity.data["object"]
+      object_type = activity.object.data["type"]
+
+      # This does not have an inlined object
+      {:ok, modified2} = Transmogrifier.prepare_outgoing(activity.data)
+
+      assert match?(
+               %{
+                 "@context" => [_ | _],
+                 "type" => "Listen",
+                 "actor" => ^user_ap_id,
+                 "to" => ^activity_to,
+                 "cc" => ^activity_cc,
+                 "context" => "http://localhost" <> _,
+                 "id" => ^activity_ap_id,
+                 "object" => %{
+                   "actor" => ^user_ap_id,
+                   "attributedTo" => ^user_ap_id,
+                   "id" => ^object_ap_id,
+                   "type" => ^object_type,
+                   "to" => ^activity_to,
+                   "cc" => ^activity_cc
+                 }
+               },
+               modified2
+             )
     end
 
     test "custom emoji urls are URI encoded" do
