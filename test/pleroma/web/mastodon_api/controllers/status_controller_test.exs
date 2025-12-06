@@ -1769,6 +1769,17 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
 
+    test "/unpin: returns 422 error when activity not owned by user", %{activity: activity} do
+      %{conn: conn} = oauth_access(["write:accounts"])
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unpin")
+             |> json_response_and_validate_schema(422) == %{
+               "error" => "Someone else's status cannot be unpinned"
+             }
+    end
+
     test "max pinned statuses", %{conn: conn, user: user, activity: activity_one} do
       {:ok, activity_two} = CommonAPI.post(user, %{status: "HI!!!"})
 
@@ -1976,6 +1987,30 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
                # |> assign(:user, user)
                |> post("/api/v1/statuses/#{activity.id}/unmute")
                |> json_response_and_validate_schema(200)
+    end
+
+    test "cannot mute not visible conversation", %{user: user} do
+      {:ok, activity} = CommonAPI.post(user, %{status: "Invisible!", visibility: "private"})
+      %{conn: conn} = oauth_access(["write:mutes"])
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/mute")
+             |> json_response_and_validate_schema(404) == %{
+               "error" => "Record not found"
+             }
+    end
+
+    test "cannot unmute not visible conversation", %{user: user} do
+      {:ok, activity} = CommonAPI.post(user, %{status: "Invisible!", visibility: "private"})
+      %{conn: conn} = oauth_access(["write:mutes"])
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unmute")
+             |> json_response_and_validate_schema(404) == %{
+               "error" => "Record not found"
+             }
     end
   end
 

@@ -413,8 +413,15 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
           conn,
         _
       ) do
+    # CommonAPI already checks whether user can unpin
     with {:ok, activity} <- CommonAPI.unpin(ap_id_or_id, user) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      {:error, :ownership_error} ->
+        {:error, :unprocessable_entity, "Someone else's status cannot be unpinned"}
+
+      error ->
+        error
     end
   end
 
@@ -462,8 +469,15 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         _
       ) do
     with %Activity{} = activity <- Activity.get_by_id(id),
+         # CommonAPI already checks whether user is allowed to mute
          {:ok, activity} <- CommonAPI.add_mute(activity, user, params) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      {:error, :visibility_error} ->
+        {:error, :not_found, "Record not found"}
+
+      error ->
+        error
     end
   end
 
@@ -476,8 +490,15 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         _
       ) do
     with %Activity{} = activity <- Activity.get_by_id(id),
+         # CommonAPI already checks whether user is allowed to unmute
          {:ok, activity} <- CommonAPI.remove_mute(activity, user) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      {:error, :visibility_error} ->
+        {:error, :not_found, "Record not found"}
+
+      error ->
+        error
     end
   end
 
