@@ -178,6 +178,7 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
       parameters: [id_param()],
       responses: %{
         200 => status_response(),
+        400 => Operation.response("Error", "application/json", ApiError),
         404 => Operation.response("Not Found", "application/json", ApiError)
       }
     }
@@ -246,7 +247,7 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
         404 =>
           Operation.response("Not found", "application/json", %Schema{
             allOf: [ApiError],
-            title: "Unprocessable Entity",
+            title: "Not Found",
             example: %{
               "error" => "Record not found"
             }
@@ -340,7 +341,7 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
         400 => Operation.response("Error", "application/json", ApiError),
         404 =>
           Operation.response(
-            "Unprocessable Entity",
+            "Not Found",
             "application/json",
             %Schema{
               allOf: [ApiError],
@@ -366,7 +367,7 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
         400 => Operation.response("Error", "application/json", ApiError),
         404 =>
           Operation.response(
-            "Error",
+            "Not Found",
             "application/json",
             %Schema{
               allOf: [ApiError],

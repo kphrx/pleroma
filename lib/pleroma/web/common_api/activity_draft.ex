@@ -154,7 +154,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
         add_error(draft, dgettext("errors", "Cannot reply to a deleted status"))
 
       false ->
-        add_error(draft, dgettext("errors", "Replying to a status that is not visibile to user"))
+        add_error(draft, dgettext("errors", "Record not found"))
 
       {:type, type} ->
         add_error(

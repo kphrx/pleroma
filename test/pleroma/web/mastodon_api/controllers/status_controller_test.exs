@@ -1597,22 +1597,17 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       {:ok, activity} =
         CommonAPI.post(stranger, %{status: "it can eternal lie", visibility: "private"})
 
-      resp =
-        conn
-        |> put_req_header("content-type", "application/json")
-        |> post("/api/v1/statuses/#{activity.id}/favourite")
-        |> json_response_and_validate_schema(403)
-
-      assert match?(%{"error" => _}, resp)
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/favourite")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
 
     test "returns 404 error for a wrong id", %{conn: conn} do
-      conn =
-        conn
-        |> put_req_header("content-type", "application/json")
-        |> post("/api/v1/statuses/1/favourite")
-
-      assert json_response_and_validate_schema(conn, 404) == %{"error" => "Record not found"}
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/1/favourite")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
   end
 
@@ -1639,13 +1634,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       activity = insert(:note_activity)
 
       # using base post ID
-      resp =
-        conn
-        |> put_req_header("content-type", "application/json")
-        |> post("/api/v1/statuses/#{activity.id}/unfavourite")
-        |> json_response(400)
-
-      assert match?(%{"error" => "Could not unfavorite"}, resp)
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unfavourite")
+             |> json_response_and_validate_schema(400) == %{"error" => "Could not unfavorite"}
     end
 
     test "can't unfavourite other user's favs", %{conn: conn} do
@@ -1655,13 +1647,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       {:ok, _} = CommonAPI.favorite(activity.id, other)
 
       # using base post ID
-      resp =
-        conn
-        |> put_req_header("content-type", "application/json")
-        |> post("/api/v1/statuses/#{activity.id}/unfavourite")
-        |> json_response(400)
-
-      assert match?(%{"error" => "Could not unfavorite"}, resp)
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unfavourite")
+             |> json_response_and_validate_schema(400) == %{"error" => "Could not unfavorite"}
     end
 
     test "can't unfavourite other user's favs using their activity", %{conn: conn} do
@@ -1670,13 +1659,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       other = insert(:user)
       {:ok, fav_activity} = CommonAPI.favorite(activity.id, other)
       # some APIs (used to) take IDs of any activity type, make sure this fails one way or another
-      resp =
-        conn
-        |> put_req_header("content-type", "application/json")
-        |> post("/api/v1/statuses/#{fav_activity.id}/unfavourite")
-        |> json_response_and_validate_schema(404)
-
-      assert match?(%{"error" => _}, resp)
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{fav_activity.id}/unfavourite")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
 
     test "returns 404 error for a wrong id", %{conn: conn} do
@@ -1722,7 +1708,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              |> json_response(403) == %{"error" => "Invalid credentials."}
     end
 
-    test "/pin: returns 400 error when activity is not public", %{conn: conn, user: user} do
+    test "/pin: returns 422 error when activity is not public", %{conn: conn, user: user} do
       {:ok, dm} = CommonAPI.post(user, %{status: "test", visibility: "direct"})
 
       conn =
@@ -1769,8 +1755,23 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
 
+    test "/unpin: returns 404 error when activity not visible to user", %{user: user} do
+      %{conn: conn, user: stranger} = oauth_access(["write:accounts"])
+      {:ok, activity} = CommonAPI.post(user, %{status: "yumi", visibility: "private"})
+
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+      assert conn
+             |> assign(:user, stranger)
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unpin")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
+    end
+
     test "/unpin: returns 422 error when activity not owned by user", %{activity: activity} do
-      %{conn: conn} = oauth_access(["write:accounts"])
+      %{conn: conn, user: user} = oauth_access(["write:accounts"])
+
+      assert Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, user)
 
       assert conn
              |> put_req_header("content-type", "application/json")
@@ -2169,6 +2170,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     test "fails when base post not visible to current user", %{user: user} do
       other_user = insert(:user, local: true)
+      %{conn: conn} = oauth_access(["read:accounts"])
 
       {:ok, activity} =
         CommonAPI.post(user, %{
@@ -2176,14 +2178,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
           visibility: "private"
         })
 
-      resp =
-        build_conn()
-        |> assign(:user, other_user)
-        |> assign(:token, insert(:oauth_token, user: other_user, scopes: ["read:accounts"]))
-        |> get("/api/v1/statuses/#{activity.id}/favourited_by")
-        |> json_response_and_validate_schema(404)
-
-      assert match?(%{"error" => _}, resp)
+      assert conn
+             |> assign(:user, other_user)
+             |> get("/api/v1/statuses/#{activity.id}/favourited_by")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
 
     test "returns empty array when :show_reactions is disabled", %{conn: conn, activity: activity} do

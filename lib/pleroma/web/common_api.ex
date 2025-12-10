@@ -258,7 +258,7 @@ defmodule Pleroma.Web.CommonAPI do
       {:ok, _} = res ->
         res
 
-      {:error, reason} = res when reason in [:not_found, :forbidden] ->
+      {:error, :not_found} = res ->
         res
 
       {:error, e} ->
@@ -280,7 +280,7 @@ defmodule Pleroma.Web.CommonAPI do
         {:error, :not_found}
 
       {:visible, _} ->
-        {:error, :forbidden}
+        {:error, :not_found}
 
       {:common_pipeline, {:error, {:validate, {:error, changeset}}}} = e ->
         if {:object, {"already liked by this actor", []}} in changeset.errors do
@@ -539,6 +539,14 @@ defmodule Pleroma.Web.CommonAPI do
   defp activity_belongs_to_actor(%{actor: actor}, actor), do: true
   defp activity_belongs_to_actor(_, _), do: {:error, :ownership_error}
 
+  defp activity_visible_to_actor(activity, %User{} = user) do
+    if Visibility.visible_for_user?(activity, user) do
+      true
+    else
+      {:error, :visibility_error}
+    end
+  end
+
   defp object_type_is_allowed_for_pin(%{data: %{"type" => type}}) do
     with false <- type in ["Note", "Article", "Question"] do
       {:error, :not_allowed}
@@ -553,7 +561,11 @@ defmodule Pleroma.Web.CommonAPI do
 
   @spec unpin(String.t(), User.t()) :: {:ok, Activity.t()} | Pipeline.errors()
   def unpin(id, user) do
+    # Order of visibility/belonging matters for MastoAPI responses.
+    # post not visible -> 404
+    # post visible, not owned -> 422
     with %Activity{} = activity <- create_activity_by_id(id),
+         true <- activity_visible_to_actor(activity, user),
          true <- activity_belongs_to_actor(activity, user.ap_id),
          {:ok, unpin_data, _} <- Builder.unpin(user, activity.object),
          {:ok, _unpin, _} <-

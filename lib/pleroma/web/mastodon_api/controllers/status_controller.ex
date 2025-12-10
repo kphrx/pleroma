@@ -417,6 +417,11 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
     with {:ok, activity} <- CommonAPI.unpin(ap_id_or_id, user) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
     else
+      # Order matters, if status is not owned by user and is not visible to user
+      # return 404 just like other endpoints
+      {:error, :visibility_error} ->
+        {:error, :not_found, "Record not found"}
+
       {:error, :ownership_error} ->
         {:error, :unprocessable_entity, "Someone else's status cannot be unpinned"}
 
