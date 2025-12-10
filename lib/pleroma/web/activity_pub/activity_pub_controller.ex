@@ -486,9 +486,17 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   # both send it straight to ActivityPub.flag and C2S currently has to go through
   # the normal pipeline which requires an ObjectValidator.
   # TODO: Add a Flag Activity ObjectValidator
-  defp validate_visibility(_, %{"type" => "Flag"}) do
+  defp check_allowed_action(_, %{"type" => "Flag"}) do
     {:error, "Flag activities aren't currently supported in C2S"}
   end
+
+  # It would respond with 201 and silently fail with:
+  # Could not decode featured collection at fetch #{user.ap_id} \
+  # {:error, "Trying to fetch local resource"}
+  defp check_allowed_action(%{ap_id: ap_id}, %{"type" => "Update", "object" => %{"id" => ap_id}}),
+    do: {:error, "Updating profile is not currently supported in C2S"}
+
+  defp check_allowed_action(_, activity), do: {:ok, activity}
 
   defp validate_visibility(%User{} = user, %{"type" => type, "object" => object} = activity) do
     with {_, %Object{} = normalized_object} <-
@@ -521,8 +529,9 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
       |> Map.put("actor", actor)
 
     with {:ok, params} <- fix_user_message(user, params),
-         {:ok, activity} <- validate_visibility(user, params),
-         {:ok, activity, _} <- Pipeline.common_pipeline(activity, local: true),
+         {:ok, params} <- check_allowed_action(user, params),
+         {:ok, params} <- validate_visibility(user, params),
+         {:ok, activity, _} <- Pipeline.common_pipeline(params, local: true),
          %Activity{data: activity_data} <- Activity.normalize(activity) do
       conn
       |> put_status(:created)

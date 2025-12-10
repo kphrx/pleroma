@@ -1716,7 +1716,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       data = %{
         type: "Add",
-        target: "#{Pleroma.Web.Endpoint.url()}/users/#{target_user.nickname}/collections/featured",
+        target:
+          "#{Pleroma.Web.Endpoint.url()}/users/#{target_user.nickname}/collections/featured",
         object: object_id
       }
 
@@ -1739,7 +1740,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       data = %{
         type: "Remove",
-        target: "#{Pleroma.Web.Endpoint.url()}/users/#{target_user.nickname}/collections/featured",
+        target:
+          "#{Pleroma.Web.Endpoint.url()}/users/#{target_user.nickname}/collections/featured",
         object: object_id
       }
 
@@ -1750,6 +1752,105 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         |> post("/users/#{user.nickname}/outbox", data)
 
       assert json_response(conn, 400)
+    end
+
+    test "it rejects updating Actor's profile", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+      user_object_new = Map.put(user_object, "name", "lain")
+
+      data = %{
+        type: "Update",
+        object: user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      updated_user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+
+      assert updated_user_object == user_object
+      assert json_response(conn, 400)
+    end
+
+    # Actor publicKey tests are redundant with above test,
+    # left here for the case that Updating Actors is ever supported
+    test "it rejects updating Actor's publicKey", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      {:ok, pem} = Pleroma.Keys.generate_rsa_pem()
+      {:ok, _, public_key} = Pleroma.Keys.keys_from_pem(pem)
+      # Taken from UserView
+      public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+      public_key = :public_key.pem_encode([public_key])
+
+      user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+      user_object_public_key = Map.fetch!(user_object, "publicKey")
+      user_object_public_key = Map.put(user_object_public_key, "publicKeyPem", public_key)
+      user_object_new = Map.put(user_object, "publicKey", user_object_public_key)
+
+      refute user_object == user_object_new
+
+      data = %{
+        type: "Update",
+        object: user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      new_user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+
+      assert user_object == new_user_object
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects updating Actor's publicKey of another user", %{conn: conn} do
+      user = insert(:user)
+      target_user = insert(:user, local: true)
+
+      {:ok, pem} = Pleroma.Keys.generate_rsa_pem()
+      {:ok, _, public_key} = Pleroma.Keys.keys_from_pem(pem)
+      # Taken from UserView
+      public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+      public_key = :public_key.pem_encode([public_key])
+
+      target_user_object =
+        Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: target_user})
+
+      target_user_object_public_key = Map.fetch!(target_user_object, "publicKey")
+
+      target_user_object_public_key =
+        Map.put(target_user_object_public_key, "publicKeyPem", public_key)
+
+      target_user_object_new =
+        Map.put(target_user_object, "publicKey", target_user_object_public_key)
+
+      refute target_user_object == target_user_object_new
+
+      data = %{
+        type: "Update",
+        object: target_user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{target_user.nickname}/outbox", data)
+
+      new_target_user_object =
+        Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: target_user})
+
+      assert target_user_object == new_target_user_object
+      assert json_response(conn, 403)
     end
 
     test "it rejects creating Actors of type Application", %{conn: conn} do
