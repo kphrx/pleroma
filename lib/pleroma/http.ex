@@ -131,31 +131,4 @@ defmodule Pleroma.HTTP do
 
   defp default_middleware,
     do: [Tesla.Middleware.FollowRedirects, Pleroma.Tesla.Middleware.EncodeUrl]
-
-  def encode_url(url) when is_binary(url) do
-    URI.parse(url)
-    |> then(fn parsed ->
-      path = encode_path(parsed.path)
-      query = encode_query(parsed.query)
-
-      %{parsed | path: path, query: query}
-    end)
-    |> URI.to_string()
-  end
-
-  defp encode_path(nil), do: nil
-
-  defp encode_path(path) when is_binary(path) do
-    path
-    |> URI.decode()
-    |> URI.encode()
-  end
-
-  defp encode_query(nil), do: nil
-
-  defp encode_query(query) when is_binary(query) do
-    query
-    |> URI.decode_query()
-    |> URI.encode_query()
-  end
 end
