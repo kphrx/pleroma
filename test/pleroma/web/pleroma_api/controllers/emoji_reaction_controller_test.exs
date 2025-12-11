@@ -182,9 +182,9 @@ defmodule Pleroma.Web.PleromaAPI.EmojiReactionControllerTest do
     resp =
       prepare_conn_of_user(conn, stranger)
       |> put("/api/v1/pleroma/statuses/#{activity_id}/reactions/🐈")
-      |> json_response_and_validate_schema(400)
+      |> json_response_and_validate_schema(404)
 
-    assert match?(%{"error" => _}, resp)
+    assert match?(%{"error" => "Record not found"}, resp)
   end
 
   test "DELETE /api/v1/pleroma/statuses/:id/reactions/:emoji", %{conn: conn} do
@@ -408,12 +408,9 @@ defmodule Pleroma.Web.PleromaAPI.EmojiReactionControllerTest do
     assert match?([%{"name" => _, "count" => _} | _], resp)
 
     # Fails for stranger
-    resp =
-      prepare_conn_of_user(conn, stranger)
-      |> get("/api/v1/pleroma/statuses/#{activity_id}/reactions")
-      |> json_response_and_validate_schema(403)
-
-    assert match?(%{"error" => _}, resp)
+    assert prepare_conn_of_user(conn, stranger)
+           |> get("/api/v1/pleroma/statuses/#{activity_id}/reactions")
+           |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
   end
 
   test "GET /api/v1/pleroma/statuses/:id/reactions with :show_reactions disabled", %{conn: conn} do
@@ -471,13 +468,13 @@ defmodule Pleroma.Web.PleromaAPI.EmojiReactionControllerTest do
     {%{id: activity_id} = _activity, _author, follower, stranger} = prepare_reacted_post()
 
     # Works for follower
-    prepare_conn_of_user(conn, follower)
-    |> get("/api/v1/pleroma/statuses/#{activity_id}/reactions/🐈")
-    |> json_response_and_validate_schema(200)
+    assert prepare_conn_of_user(conn, follower)
+           |> get("/api/v1/pleroma/statuses/#{activity_id}/reactions/🐈")
+           |> json_response_and_validate_schema(200)
 
     # Fails for stranger
-    prepare_conn_of_user(conn, stranger)
-    |> get("/api/v1/pleroma/statuses/#{activity_id}/reactions/🐈")
-    |> json_response_and_validate_schema(403)
+    assert prepare_conn_of_user(conn, stranger)
+           |> get("/api/v1/pleroma/statuses/#{activity_id}/reactions/🐈")
+           |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
   end
 end

@@ -39,7 +39,7 @@ defmodule Pleroma.Web.PleromaAPI.EmojiReactionController do
 
       render(conn, "index.json", emoji_reactions: reactions, user: user)
     else
-      {:visible, _} -> {:error, :forbidden}
+      {:visible, _} -> {:error, :not_found}
       _e -> json(conn, [])
     end
   end

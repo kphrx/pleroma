@@ -322,7 +322,7 @@ defmodule Pleroma.Web.CommonAPI do
       {:ok, activity}
     else
       {:visible, _} ->
-        {:error, dgettext("errors", "Must be able to access post to interact with it")}
+        {:error, :not_found}
 
       _ ->
         {:error, dgettext("errors", "Could not add reaction emoji")}
