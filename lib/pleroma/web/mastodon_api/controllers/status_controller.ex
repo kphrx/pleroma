@@ -393,6 +393,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
     with {:ok, activity} <- CommonAPI.pin(ap_id_or_id, user) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
     else
+      # Order matters, if status is not owned by user and is not visible to user
+      # return 404 just like other endpoints
       {:error, :pinned_statuses_limit_reached} ->
         {:error, "You have already pinned the maximum number of statuses"}
 
@@ -400,6 +402,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         {:error, :unprocessable_entity, "Someone else's status cannot be pinned"}
 
       {:error, :visibility_error} ->
+        {:error, :not_found, "Record not found"}
+
+      {:error, :non_public_error} ->
         {:error, :unprocessable_entity, "Non-public status cannot be pinned"}
 
       error ->
@@ -449,6 +454,12 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
            ),
          {:ok, _bookmark} <- Bookmark.create(user.id, activity.id, folder_id) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      false ->
+        {:error, :not_found, "Record not found"}
+
+      error ->
+        error
     end
   end
 
@@ -462,6 +473,12 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
          true <- Visibility.visible_for_user?(activity, user),
          {:ok, _bookmark} <- Bookmark.destroy(user.id, activity.id) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      false ->
+        {:error, :not_found, "Record not found"}
+
+      error ->
+        error
     end
   end
 

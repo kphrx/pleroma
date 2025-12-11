@@ -1072,7 +1072,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
     test "only public can be pinned", %{user: user} do
       {:ok, activity} = CommonAPI.post(user, %{status: "private status", visibility: "private"})
-      {:error, :visibility_error} = CommonAPI.pin(activity.id, user)
+      {:error, :non_public_error} = CommonAPI.pin(activity.id, user)
     end
 
     test "unpin status", %{user: user, activity: activity} do

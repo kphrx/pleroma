@@ -1630,6 +1630,19 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert to_string(activity.id) == id
     end
 
+    test "can't unfavourite post that isn't visible to user" do
+      user = insert(:user)
+      %{conn: conn, user: stranger} = oauth_access(["write:favourites"])
+      {:ok, activity} = CommonAPI.post(user, %{status: "invisible", visibility: "private"})
+
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unfavourite")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
+    end
+
     test "can't unfavourite post that isn't favourited", %{conn: conn} do
       activity = insert(:note_activity)
 
@@ -1673,6 +1686,19 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       assert json_response_and_validate_schema(conn, 404) == %{"error" => "Record not found"}
     end
+  end
+
+  test "can't favourite post that isn't visible to user" do
+    user = insert(:user)
+    %{conn: conn, user: stranger} = oauth_access(["write:favourites"])
+    {:ok, activity} = CommonAPI.post(user, %{status: "invisible", visibility: "private"})
+
+    refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+    assert conn
+           |> put_req_header("content-type", "application/json")
+           |> post("/api/v1/statuses/#{activity.id}/favourite")
+           |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
   end
 
   describe "pinned statuses" do
@@ -1719,6 +1745,18 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert json_response_and_validate_schema(conn, 422) == %{
                "error" => "Non-public status cannot be pinned"
              }
+    end
+
+    test "/pin: returns 404 error when activity not visible to user", %{user: user} do
+      %{conn: conn, user: stranger} = oauth_access(["write:accounts"])
+      {:ok, activity} = CommonAPI.post(user, %{status: "invisible", visibility: "private"})
+
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/pin")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
 
     test "pin by another user", %{activity: activity} do
@@ -1890,6 +1928,28 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     assert [json_response_and_validate_schema(response2, 200)] ==
              json_response_and_validate_schema(bookmarks, 200)
+  end
+
+  test "cannot bookmark invisible post" do
+    user = insert(:user)
+    %{conn: conn, user: stranger} = oauth_access(["write:bookmarks"])
+    {:ok, activity} = CommonAPI.post(user, %{status: "mocha", visibility: "private"})
+
+    refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+    resp1 =
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/v1/statuses/#{activity.id}/bookmark")
+
+    assert json_response_and_validate_schema(resp1, 404) == %{"error" => "Record not found"}
+
+    resp2 =
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/v1/statuses/#{activity.id}/unbookmark")
+
+    assert json_response_and_validate_schema(resp2, 404) == %{"error" => "Record not found"}
   end
 
   test "bookmark folders" do

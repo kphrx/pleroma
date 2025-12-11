@@ -300,6 +300,7 @@ defmodule Pleroma.Web.CommonAPI do
     with {_, %Activity{data: %{"type" => "Create"}} = activity} <-
            {:find_activity, Activity.get_by_id(id)},
          %Object{} = note <- Object.normalize(activity, fetch: false),
+         {_, true} <- {:visibility, activity_visible_to_actor(note, user)},
          %Activity{} = like <- Utils.get_existing_like(user.ap_id, note),
          {_, {:ok, _}} <- {:cancel_jobs, maybe_cancel_jobs(like)},
          {:ok, undo, _} <- Builder.undo(user, like),
@@ -307,6 +308,7 @@ defmodule Pleroma.Web.CommonAPI do
       {:ok, activity}
     else
       {:find_activity, _} -> {:error, :not_found}
+      {:visibility, _} -> {:error, :not_found}
       _ -> {:error, dgettext("errors", "Could not unfavorite")}
     end
   end
@@ -514,6 +516,7 @@ defmodule Pleroma.Web.CommonAPI do
   @spec pin(String.t(), User.t()) :: {:ok, Activity.t()} | Pipeline.errors()
   def pin(id, %User{} = user) do
     with %Activity{} = activity <- create_activity_by_id(id),
+         true <- activity_visible_to_actor(activity, user),
          true <- activity_belongs_to_actor(activity, user.ap_id),
          true <- object_type_is_allowed_for_pin(activity.object),
          true <- activity_is_public(activity),
@@ -555,7 +558,7 @@ defmodule Pleroma.Web.CommonAPI do
 
   defp activity_is_public(activity) do
     with false <- Visibility.public?(activity) do
-      {:error, :visibility_error}
+      {:error, :non_public_error}
     end
   end
 
