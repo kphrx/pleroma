@@ -1580,6 +1580,41 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert object["content"] == activity["object"]["content"]
     end
 
+    test "it inserts an incoming reply create activity into the database", %{conn: conn} do
+      user = insert(:user)
+      replying_user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "cofe"})
+
+      data = %{
+        type: "Create",
+        object: %{
+          to: [Pleroma.Constants.as_public(), user.ap_id],
+          cc: [replying_user.follower_address],
+          inReplyTo: activity.object.data["id"],
+          content: "green tea",
+          type: "Note"
+        }
+      }
+
+      result =
+        conn
+        |> assign(:user, replying_user)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{replying_user.nickname}/outbox", data)
+        |> json_response(201)
+
+      updated_object = Object.normalize(activity.object.data["id"], fetch: false)
+
+      assert Activity.get_by_ap_id(result["id"])
+      assert result["object"]
+      assert %Object{data: object} = Object.normalize(result["object"], fetch: false)
+      assert object["content"] == data.object.content
+      assert Pleroma.Web.ActivityPub.Visibility.public?(object)
+      assert object["inReplyTo"] == activity.object.data["id"]
+      assert updated_object.data["repliesCount"] == 1
+    end
+
     test "it rejects anything beyond 'Note' creations", %{conn: conn, activity: activity} do
       user = insert(:user)
 
