@@ -163,7 +163,6 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
       parameters: [id_param()],
       responses: %{
         200 => status_response(),
-        403 => Operation.response("Access denied", "application/json", ApiError),
         404 => Operation.response("Not Found", "application/json", ApiError)
       }
     }
@@ -416,7 +415,6 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
             "application/json",
             AccountOperation.array_of_accounts()
           ),
-        403 => Operation.response("Access denied", "application/json", ApiError),
         404 => Operation.response("Not Found", "application/json", ApiError)
       }
     }
