@@ -269,7 +269,7 @@ defmodule Pleroma.Web.CommonAPI do
 
   defp favorite_helper(user, id) do
     with {_, %Activity{object: object}} <- {:find_object, Activity.get_by_id_with_object(id)},
-         {_, true} <- {:visible, Visibility.visible_for_user?(object, user)},
+         {_, true} <- {:visibility_error, activity_visible_to_actor(object, user)},
          {_, {:ok, like_object, meta}} <- {:build_object, Builder.like(user, object)},
          {_, {:ok, %Activity{} = activity, _meta}} <-
            {:common_pipeline,
@@ -279,7 +279,7 @@ defmodule Pleroma.Web.CommonAPI do
       {:find_object, _} ->
         {:error, :not_found}
 
-      {:visible, _} ->
+      {:visibility_error, _} ->
         {:error, :not_found}
 
       {:common_pipeline, {:error, {:validate, {:error, changeset}}}} = e ->
@@ -300,7 +300,7 @@ defmodule Pleroma.Web.CommonAPI do
     with {_, %Activity{data: %{"type" => "Create"}} = activity} <-
            {:find_activity, Activity.get_by_id(id)},
          %Object{} = note <- Object.normalize(activity, fetch: false),
-         {_, true} <- {:visibility, activity_visible_to_actor(note, user)},
+         {_, true} <- {:visibility_error, activity_visible_to_actor(note, user)},
          %Activity{} = like <- Utils.get_existing_like(user.ap_id, note),
          {_, {:ok, _}} <- {:cancel_jobs, maybe_cancel_jobs(like)},
          {:ok, undo, _} <- Builder.undo(user, like),
@@ -308,7 +308,7 @@ defmodule Pleroma.Web.CommonAPI do
       {:ok, activity}
     else
       {:find_activity, _} -> {:error, :not_found}
-      {:visibility, _} -> {:error, :not_found}
+      {:visibility_error, _} -> {:error, :not_found}
       _ -> {:error, dgettext("errors", "Could not unfavorite")}
     end
   end
@@ -317,13 +317,13 @@ defmodule Pleroma.Web.CommonAPI do
           {:ok, Activity.t()} | {:error, String.t()}
   def react_with_emoji(id, user, emoji) do
     with %Activity{} = activity <- Activity.get_by_id(id),
-         {_, true} <- {:visible, Visibility.visible_for_user?(activity, user)},
+         {_, true} <- {:visibility_error, activity_visible_to_actor(activity, user)},
          object <- Object.normalize(activity, fetch: false),
          {:ok, emoji_react, _} <- Builder.emoji_react(user, object, emoji),
          {:ok, activity, _} <- Pipeline.common_pipeline(emoji_react, local: true) do
       {:ok, activity}
     else
-      {:visible, _} ->
+      {:visibility_error, _} ->
         {:error, :not_found}
 
       _ ->
@@ -586,7 +586,7 @@ defmodule Pleroma.Web.CommonAPI do
   def add_mute(activity, user, params \\ %{}) do
     expires_in = Map.get(params, :expires_in, 0)
 
-    with true <- Visibility.visible_for_user?(activity, user),
+    with true <- activity_visible_to_actor(activity, user),
          {:ok, _} <- ThreadMute.add_mute(user.id, activity.data["context"]),
          _ <- Pleroma.Notification.mark_context_as_read(user, activity.data["context"]) do
       if expires_in > 0 do
@@ -599,18 +599,19 @@ defmodule Pleroma.Web.CommonAPI do
 
       {:ok, activity}
     else
+      {:error, :visibility_error} -> {:error, :visibility_error}
       {:error, _} -> {:error, dgettext("errors", "conversation is already muted")}
-      false -> {:error, :visibility_error}
     end
   end
 
   @spec remove_mute(Activity.t(), User.t()) :: {:ok, Activity.t()} | {:error, any()}
   def remove_mute(%Activity{} = activity, %User{} = user) do
-    if Visibility.visible_for_user?(activity, user) do
-      ThreadMute.remove_mute(user.id, activity.data["context"])
-      {:ok, activity}
-    else
-      {:error, :visibility_error}
+    case activity_visible_to_actor(activity, user) do
+      true ->
+        ThreadMute.remove_mute(user.id, activity.data["context"])
+        {:ok, activity}
+      error ->
+        error
     end
   end
 
@@ -655,7 +656,7 @@ defmodule Pleroma.Web.CommonAPI do
       })
     else
       false ->
-        {:error, :visibility}
+        {:error, :visibility_error}
 
       error ->
         error

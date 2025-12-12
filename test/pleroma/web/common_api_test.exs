@@ -1301,7 +1301,7 @@ defmodule Pleroma.Web.CommonAPITest do
         status_ids: [post.id]
       }
 
-      assert {:error, :visibility} = CommonAPI.report(reporter, report_data)
+      assert {:error, :visibility_error} = CommonAPI.report(reporter, report_data)
     end
 
     test "doesn't create a report when some posts are not visible to user" do
@@ -1324,7 +1324,7 @@ defmodule Pleroma.Web.CommonAPITest do
         status_ids: [visible_activity.id, invisibile_activity.id]
       }
 
-      assert {:error, :visibility} = CommonAPI.report(reporter, report_data_partial)
+      assert {:error, :visibility_error} = CommonAPI.report(reporter, report_data_partial)
     end
 
     test "updates report state" do

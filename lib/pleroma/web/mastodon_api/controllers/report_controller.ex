@@ -17,7 +17,7 @@ defmodule Pleroma.Web.MastodonAPI.ReportController do
     with {:ok, activity} <- Pleroma.Web.CommonAPI.report(user, params) do
       render(conn, "show.json", activity: activity)
     else
-      {:error, :visibility} ->
+      {:error, :visibility_error} ->
         {:error, :not_found, "Record not found"}
 
       error ->
