@@ -244,14 +244,7 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
               "error" => "You have already pinned the maximum number of statuses"
             }
           }),
-        404 =>
-          Operation.response("Not found", "application/json", %Schema{
-            allOf: [ApiError],
-            title: "Not Found",
-            example: %{
-              "error" => "Record not found"
-            }
-          }),
+        404 => Operation.response("Not found", "application/json", ApiNotFoundError),
         422 =>
           Operation.response(
             "Unprocessable Entity",
@@ -341,7 +334,7 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
       responses: %{
         200 => status_response(),
         400 => Operation.response("Error", "application/json", ApiError),
-        404 => Operation.response("Not found", "application/json", ApiError)
+        404 => Operation.response("Not found", "application/json", ApiNotFoundError)
       }
     }
   end
@@ -358,16 +351,7 @@ defmodule Pleroma.Web.ApiSpec.StatusOperation do
       responses: %{
         200 => status_response(),
         400 => Operation.response("Error", "application/json", ApiError),
-        404 =>
-          Operation.response(
-            "Not Found",
-            "application/json",
-            %Schema{
-              allOf: [ApiError],
-              title: "Error",
-              example: %{"error" => "Record not found"}
-            }
-          )
+        404 => Operation.response("Not Found", "application/json", ApiNotFoundError)
       }
     }
   end
