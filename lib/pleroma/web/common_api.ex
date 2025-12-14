@@ -610,6 +610,7 @@ defmodule Pleroma.Web.CommonAPI do
       true ->
         ThreadMute.remove_mute(user.id, activity.data["context"])
         {:ok, activity}
+
       error ->
         error
     end
