@@ -194,8 +194,10 @@ defmodule Pleroma.Web.WebFinger do
 
   defp get_address_from_domain(_, _), do: {:error, :webfinger_no_domain}
 
-  @spec finger(String.t(), boolean()) :: {:ok, map()} | {:error, any()}
-  def finger(account, follow_redirects \\ true) do
+  @spec finger(String.t()) :: {:ok, map()} | {:error, any()}
+  def finger(account), do: do_finger(account, true)
+
+  defp do_finger(account, follow_redirects) do
     account = String.trim_leading(account, "@")
 
     domain =
@@ -264,7 +266,7 @@ defmodule Pleroma.Web.WebFinger do
   end
 
   defp resolved_webfinger_matches?(_request_url, _resolved_url, %{"subject" => "acct:" <> acct}) do
-    with {:ok, %{"subject" => "acct:" <> new_acct}} <- finger(acct, false) do
+    with {:ok, %{"subject" => "acct:" <> new_acct}} <- do_finger(acct, false) do
       acct == new_acct
     else
       _ -> false
