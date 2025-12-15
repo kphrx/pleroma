@@ -234,7 +234,10 @@ defmodule Pleroma.Web.WebFingerTest do
 
     test "prevents forgeries" do
       Tesla.Mock.mock(fn
-        %{url: "https://fba.ryona.agency/.well-known/webfinger?resource=acct:graf@fba.ryona.agency"} ->
+        %{
+          url:
+            "https://fba.ryona.agency/.well-known/webfinger?resource=acct:graf@fba.ryona.agency"
+        } ->
           fake_webfinger =
             File.read!("test/fixtures/webfinger/graf-imposter-webfinger.json") |> Jason.decode!()
 
@@ -242,16 +245,21 @@ defmodule Pleroma.Web.WebFingerTest do
 
         %{url: url}
         when url in [
-                "https://poa.st/.well-known/webfinger?resource=acct:graf@poa.st",
-                "https://fba.ryona.agency/.well-known/host-meta"
-              ] ->
+               "https://poa.st/.well-known/webfinger?resource=acct:graf@poa.st",
+               "https://fba.ryona.agency/.well-known/host-meta"
+             ] ->
           {:ok, %Tesla.Env{status: 404}}
       end)
 
       assert {:error, _} = WebFinger.finger("graf@fba.ryona.agency")
     end
 
-    test "works for correctly set up split-domain instances" do
+    test "works for correctly set up split-domain instances implementing host-meta redirect" do
+      {:ok, _data} = WebFinger.finger("a@pleroma.example")
+      {:ok, _data} = WebFinger.finger("a@sub.pleroma.example")
+    end
+
+    test "works for correctly set up split-domain instances without host-meta redirect" do
       {:ok, _data} = WebFinger.finger("a@mastodon.example")
       {:ok, _data} = WebFinger.finger("a@sub.mastodon.example")
     end
