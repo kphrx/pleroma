@@ -93,7 +93,7 @@ defmodule Pleroma.Web.WebFingerTest do
       {:ok, _data} = WebFinger.finger(user)
     end
 
-    test "it work for AP-only user" do
+    test "it works for AP-only user" do
       user = "kpherox@mstdn.jp"
 
       {:ok, data} = WebFinger.finger(user)
@@ -224,24 +224,36 @@ defmodule Pleroma.Web.WebFingerTest do
              status: 200,
              body: File.read!("test/fixtures/tesla_mock/gleasonator.com_host_meta")
            }}
+
+        %{url: "https://whitehouse.gov/.well-known/webfinger?resource=acct:trump@whitehouse.gov"} ->
+          {:ok, %Tesla.Env{status: 404}}
       end)
 
       {:error, _data} = WebFinger.finger("alex@gleasonator.com")
     end
-  end
 
-  test "prevents forgeries" do
-    Tesla.Mock.mock(fn
-      %{url: "https://fba.ryona.agency/.well-known/webfinger?resource=acct:graf@fba.ryona.agency"} ->
-        fake_webfinger =
-          File.read!("test/fixtures/webfinger/graf-imposter-webfinger.json") |> Jason.decode!()
+    test "prevents forgeries" do
+      Tesla.Mock.mock(fn
+        %{url: "https://fba.ryona.agency/.well-known/webfinger?resource=acct:graf@fba.ryona.agency"} ->
+          fake_webfinger =
+            File.read!("test/fixtures/webfinger/graf-imposter-webfinger.json") |> Jason.decode!()
 
-        Tesla.Mock.json(fake_webfinger)
+          Tesla.Mock.json(fake_webfinger)
 
-      %{url: "https://fba.ryona.agency/.well-known/host-meta"} ->
-        {:ok, %Tesla.Env{status: 404}}
-    end)
+        %{url: url}
+        when url in [
+                "https://poa.st/.well-known/webfinger?resource=acct:graf@poa.st",
+                "https://fba.ryona.agency/.well-known/host-meta"
+              ] ->
+          {:ok, %Tesla.Env{status: 404}}
+      end)
 
-    assert {:error, _} = WebFinger.finger("graf@fba.ryona.agency")
+      assert {:error, _} = WebFinger.finger("graf@fba.ryona.agency")
+    end
+
+    test "works for correctly set up split-domain instances" do
+      {:ok, _data} = WebFinger.finger("a@mastodon.example")
+      {:ok, _data} = WebFinger.finger("a@sub.mastodon.example")
+    end
   end
 end

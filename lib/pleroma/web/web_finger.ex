@@ -194,8 +194,8 @@ defmodule Pleroma.Web.WebFinger do
 
   defp get_address_from_domain(_, _), do: {:error, :webfinger_no_domain}
 
-  @spec finger(String.t()) :: {:ok, map()} | {:error, any()}
-  def finger(account) do
+  @spec finger(String.t(), boolean()) :: {:ok, map()} | {:error, any()}
+  def finger(account, follow_redirects \\ true) do
     account = String.trim_leading(account, "@")
 
     domain =
@@ -229,8 +229,15 @@ defmodule Pleroma.Web.WebFinger do
           {:error, {:content_type, nil}}
       end
       |> case do
-        {:ok, data} -> validate_webfinger(address, data)
-        error -> error
+        {:ok, data} ->
+          if follow_redirects do
+            validate_webfinger(address, data)
+          else
+            {:ok, data}
+          end
+
+        error ->
+          error
       end
     else
       error ->
@@ -241,10 +248,8 @@ defmodule Pleroma.Web.WebFinger do
 
   defp validate_webfinger(request_url, %{"subject" => "acct:" <> acct = subject} = data) do
     with [_name, acct_host] <- String.split(acct, "@"),
-         {_, url} <- {:address, get_address_from_domain(acct_host, subject)},
-         %URI{host: request_host} <- URI.parse(request_url),
-         %URI{host: acct_host} <- URI.parse(url),
-         {_, true} <- {:hosts_match, acct_host == request_host} do
+         {_, resolved_url} <- {:address, get_address_from_domain(acct_host, subject)},
+         {_, true} <- {:url_match, resolved_webfinger_matches?(request_url, resolved_url, data)} do
       {:ok, data}
     else
       _ -> {:error, {:webfinger_invalid, request_url, data}}
@@ -252,4 +257,17 @@ defmodule Pleroma.Web.WebFinger do
   end
 
   defp validate_webfinger(url, data), do: {:error, {:webfinger_invalid, url, data}}
+
+  defp resolved_webfinger_matches?(request_url, resolved_url, _data)
+       when request_url == resolved_url do
+    true
+  end
+
+  defp resolved_webfinger_matches?(_request_url, _resolved_url, %{"subject" => "acct:" <> acct}) do
+    with {:ok, %{"subject" => "acct:" <> new_acct}} <- finger(acct, false) do
+      acct == new_acct
+    else
+      _ -> false
+    end
+  end
 end

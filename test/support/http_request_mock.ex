@@ -1229,7 +1229,8 @@ defmodule HttpRequestMock do
     {:ok, %Tesla.Env{status: 404, body: ""}}
   end
 
-  def get("https://mstdn.jp/.well-known/webfinger?resource=acct:kpherox@mstdn.jp", _, _, _) do
+  def get("https://mstdn.jp/.well-known/webfinger?resource=acct:" <> acct, _, _, _)
+      when acct in ["kpherox@mstdn.jp", "kPherox@mstdn.jp"] do
     {:ok,
      %Tesla.Env{
        status: 200,
