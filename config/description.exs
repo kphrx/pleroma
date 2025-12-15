@@ -3539,9 +3539,7 @@ config :pleroma, :config_description, [
       %{
         key: :provider,
         type: :module,
-        suggestions: [
-          Pleroma.Language.LanguageDetector.Fasttext
-        ]
+        suggestions: {:list_behaviour_implementations, Pleroma.Language.LanguageDetector.Provider}
       },
       %{
         group: {:subgroup, Pleroma.Language.LanguageDetector.Fasttext},
@@ -3561,12 +3559,7 @@ config :pleroma, :config_description, [
       %{
         key: :provider,
         type: :module,
-        suggestions: [
-          Pleroma.Language.Translation.Deepl,
-          Pleroma.Language.Translation.Libretranslate,
-          Pleroma.Language.Translation.Mozhi,
-          Pleroma.Language.Translation.TranslateLocally
-        ]
+        suggestions: {:list_behaviour_implementations, Pleroma.Language.Translation.Provider}
       },
       %{
         group: {:subgroup, Pleroma.Language.Translation.Deepl},
