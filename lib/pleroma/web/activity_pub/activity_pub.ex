@@ -1569,12 +1569,19 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp get_actor_url(_url), do: nil
 
-  defp normalize_image(%{"url" => url} = data) do
+  defp normalize_image(%{"url" => url} = data) when is_binary(url) do
     %{
       "type" => "Image",
       "url" => [%{"href" => url}]
     }
     |> maybe_put_description(data)
+  end
+
+  defp normalize_image(%{"url" => urls}) when is_list(urls) do
+    url = urls |> List.first()
+
+    %{"url" => url}
+    |> normalize_image()
   end
 
   defp normalize_image(urls) when is_list(urls), do: urls |> List.first() |> normalize_image()
