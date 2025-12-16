@@ -561,6 +561,18 @@ defmodule Pleroma.Web.Router do
     get("/apps", AppController, :index)
     get("/statuses/:id/reactions/:emoji", EmojiReactionController, :index)
     get("/statuses/:id/reactions", EmojiReactionController, :index)
+
+    get(
+      "/preferred_frontend/available",
+      FrontendSettingsController,
+      :available_frontends
+    )
+
+    put(
+      "/preferred_frontend",
+      FrontendSettingsController,
+      :update_preferred_frontend
+    )
   end
 
   scope "/api/v0/pleroma", Pleroma.Web.PleromaAPI do
@@ -906,7 +918,11 @@ defmodule Pleroma.Web.Router do
 
   scope "/", Pleroma.Web do
     pipe_through(:browser)
+
     get("/mailer/unsubscribe/:token", Mailer.SubscriptionController, :unsubscribe)
+
+    get("/frontend_switcher", FrontendSwitcher.FrontendSwitcherController, :switch)
+    post("/frontend_switcher", FrontendSwitcher.FrontendSwitcherController, :do_switch)
   end
 
   pipeline :ap_service_actor do
