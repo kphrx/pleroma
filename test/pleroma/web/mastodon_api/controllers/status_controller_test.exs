@@ -1867,18 +1867,29 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       %{activity: activity}
     end
 
-    test "returns users who have favorited the status", %{conn: conn, activity: activity} do
-      other_user = insert(:user)
-      {:ok, _} = CommonAPI.favorite(activity.id, other_user)
+    test "returns users who have favorited the status ordered from newest to oldest", %{
+      conn: conn,
+      activity: activity
+    } do
+      [other_user_1, other_user_2] = insert_pair(:user)
+      [other_user_3, other_user_4] = insert_pair(:user)
+
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user_1)
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user_3)
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user_2)
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user_4)
 
       response =
         conn
         |> get("/api/v1/statuses/#{activity.id}/favourited_by")
         |> json_response_and_validate_schema(:ok)
 
-      [%{"id" => id}] = response
+      [%{"id" => id1}, %{"id" => id2}, %{"id" => id3}, %{"id" => id4}] = response
 
-      assert id == other_user.id
+      assert id1 == other_user_4.id
+      assert id2 == other_user_2.id
+      assert id3 == other_user_3.id
+      assert id4 == other_user_1.id
     end
 
     test "returns empty array when status has not been favorited yet", %{
