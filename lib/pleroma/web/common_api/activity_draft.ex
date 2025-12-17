@@ -160,7 +160,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
 
   defp in_reply_to(draft), do: draft
 
-  defp quote_post(%{params: %{quote_id: id}} = draft) when not_empty_string(id) do
+  defp quote_post(%{params: %{quoted_status_id: id}} = draft) when not_empty_string(id) do
     case Activity.get_by_id_with_object(id) do
       %Activity{} = activity ->
         %__MODULE__{draft | quote_post: activity}
@@ -168,6 +168,10 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
       _ ->
         draft
     end
+  end
+
+  defp quote_post(%{params: %{quote_id: id}} = draft) when not_empty_string(id) do
+    quote_post(%{draft | params: Map.put(draft.params, :quoted_status_id, id)})
   end
 
   defp quote_post(draft), do: draft
