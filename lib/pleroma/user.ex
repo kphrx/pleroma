@@ -233,8 +233,8 @@ defmodule Pleroma.User do
   for {_relationship_type, [{_outgoing_relation, outgoing_relation_target}, _]} <-
         @user_relationships_config do
     # `def blocked_users_relation/2`, `def muted_users_relation/2`,
-    #   `def reblog_muted_users_relation/2`, `def notification_muted_users/2`,
-    #   `def subscriber_users/2`, `def endorsed_users_relation/2`
+    #   `def reblog_muted_users_relation/2`, `def notification_muted_users_relation/2`,
+    #   `def subscriber_users_relation/2`, `def endorsed_users_relation/2`
     def unquote(:"#{outgoing_relation_target}_relation")(user, restrict_deactivated? \\ false) do
       target_users_query = assoc(user, unquote(outgoing_relation_target))
 
@@ -288,6 +288,7 @@ defmodule Pleroma.User do
   defdelegate following?(follower, followed), to: FollowingRelationship
   defdelegate following_ap_ids(user), to: FollowingRelationship
   defdelegate get_follow_requests(user), to: FollowingRelationship
+  defdelegate get_outgoing_follow_requests(user), to: FollowingRelationship
   defdelegate search(query, opts \\ []), to: User.Search
 
   @doc """
@@ -1357,7 +1358,7 @@ defmodule Pleroma.User do
   @spec get_by_nickname(String.t()) :: User.t() | nil
   def get_by_nickname(nickname) do
     Repo.get_by(User, nickname: nickname) ||
-      if Regex.match?(~r(@#{Pleroma.Web.Endpoint.host()})i, nickname) do
+      if Regex.match?(~r(@#{Pleroma.Web.Endpoint.host()}$)i, nickname) do
         Repo.get_by(User, nickname: local_nickname(nickname))
       end
   end
@@ -2306,6 +2307,15 @@ defmodule Pleroma.User do
   end
 
   def public_key(_), do: {:error, "key not found"}
+
+  def get_or_fetch_public_key_for_ap_id(ap_id) do
+    with {:ok, %User{} = user} <- get_or_fetch_by_ap_id(ap_id),
+         {:ok, public_key} <- public_key(user) do
+      {:ok, public_key}
+    else
+      _ -> :error
+    end
+  end
 
   def get_public_key_for_ap_id(ap_id) do
     with %User{} = user <- get_cached_by_ap_id(ap_id),

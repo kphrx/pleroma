@@ -16,10 +16,10 @@ defmodule Pleroma.Web.PleromaAPI.ScrobbleController do
 
   plug(
     OAuthScopesPlug,
-    %{scopes: ["read"], fallback: :proceed_unauthenticated} when action == :index
+    %{scopes: ["read:scrobbles"], fallback: :proceed_unauthenticated} when action == :index
   )
 
-  plug(OAuthScopesPlug, %{scopes: ["write"]} when action == :create)
+  plug(OAuthScopesPlug, %{scopes: ["write:scrobbles"]} when action == :create)
 
   defdelegate open_api_operation(action), to: Pleroma.Web.ApiSpec.PleromaScrobbleOperation
 

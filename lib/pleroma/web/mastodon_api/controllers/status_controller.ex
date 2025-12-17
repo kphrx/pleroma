@@ -9,6 +9,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
     only: [try_render: 3, add_link_headers: 2]
 
   require Ecto.Query
+  require Pleroma.Constants
 
   alias Pleroma.Activity
   alias Pleroma.Bookmark
@@ -41,7 +42,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
            :show,
            :context,
            :show_history,
-           :show_source
+           :show_source,
+           :quotes
          ]
   )
 
@@ -488,6 +490,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
       users =
         User
         |> Ecto.Query.where([u], u.ap_id in ^likes)
+        |> Ecto.Query.order_by([u], fragment("array_position(?, ?)", ^likes, u.ap_id))
         |> Repo.all()
         |> Enum.filter(&(not User.blocks?(user, &1)))
 
@@ -523,6 +526,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
       users =
         User
         |> Ecto.Query.where([u], u.ap_id in ^announces)
+        |> Ecto.Query.order_by([u], fragment("array_position(?, ?)", ^announces, u.ap_id))
         |> Repo.all()
         |> Enum.filter(&(not User.blocks?(user, &1)))
 
@@ -627,6 +631,45 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
       for: user,
       as: :activity
     )
+  end
+
+  @doc "GET /api/v1/statuses/:id/quotes"
+  def quotes(
+        %{assigns: %{user: user}, private: %{open_api_spex: %{params: %{id: id} = params}}} =
+          conn,
+        _
+      ) do
+    with %Activity{object: object} = activity <- Activity.get_by_id_with_object(id),
+         true <- Visibility.visible_for_user?(activity, user) do
+      params =
+        params
+        |> Map.put(:type, "Create")
+        |> Map.put(:blocking_user, user)
+        |> Map.put(:quote_url, object.data["id"])
+
+      recipients =
+        if user do
+          [Pleroma.Constants.as_public()] ++ [user.ap_id | User.following(user)]
+        else
+          [Pleroma.Constants.as_public()]
+        end
+
+      activities =
+        recipients
+        |> ActivityPub.fetch_activities(params)
+        |> Enum.reverse()
+
+      conn
+      |> add_link_headers(activities)
+      |> render("index.json",
+        activities: activities,
+        for: user,
+        as: :activity
+      )
+    else
+      nil -> {:error, :not_found}
+      false -> {:error, :not_found}
+    end
   end
 
   defp put_application(params, %{assigns: %{token: %Token{user: %User{} = user} = token}} = _conn) do
