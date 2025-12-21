@@ -143,6 +143,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       assert {:ok, activity} = Transmogrifier.handle_incoming(message)
 
       object = Object.normalize(activity, fetch: false)
+      assert "https://www.w3.org/ns/activitystreams#Public" in activity.data["to"]
       assert "https://www.w3.org/ns/activitystreams#Public" in object.data["to"]
     end
 
