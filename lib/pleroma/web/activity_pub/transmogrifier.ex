@@ -109,10 +109,12 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   https://codeberg.org/bovine/bovine/issues/53
   """
   def fix_addressing_public(map, field) do
+    addrs = Map.get(map, field, []) |> List.wrap()
+
     Map.put(
       map,
       field,
-      Enum.map(Map.get(map, field), fn
+      Enum.map(addrs, fn
         "Public" -> Pleroma.Constants.as_public()
         "as:Public" -> Pleroma.Constants.as_public()
         x -> x
