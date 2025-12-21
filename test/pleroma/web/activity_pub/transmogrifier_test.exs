@@ -9,7 +9,10 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
   alias Pleroma.Activity
   alias Pleroma.Object
   alias Pleroma.User
+  alias Pleroma.Web.ActivityPub.Builder
+  alias Pleroma.Web.ActivityPub.Pipeline
   alias Pleroma.Web.ActivityPub.Transmogrifier
+  alias Pleroma.Web.ActivityPub.UserView
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.AdminAPI.AccountView
   alias Pleroma.Web.CommonAPI
@@ -642,6 +645,30 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
                  ]
                }
              } = prepared["object"]
+    end
+
+    test "Updates of Actors are handled" do
+      user = insert(:user, local: true)
+
+      changeset = User.update_changeset(user, %{name: "new name"})
+      {:ok, unpersisted_user} = Ecto.Changeset.apply_action(changeset, :update)
+
+      updated_object =
+        UserView.render("user.json", user: unpersisted_user)
+        |> Map.delete("@context")
+
+      {:ok, update_data, []} = Builder.update(user, updated_object)
+
+      {:ok, activity, _} =
+        Pipeline.common_pipeline(update_data,
+          local: true,
+          user_update_changeset: changeset
+        )
+
+      assert {:ok, prepared} = Transmogrifier.prepare_outgoing(activity.data)
+      assert prepared["type"] == "Update"
+      assert prepared["@context"]
+      assert prepared["object"]["type"] == user.actor_type
     end
 
     test "Correctly handles Undo activities" do
