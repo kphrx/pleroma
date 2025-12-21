@@ -265,11 +265,23 @@ defmodule Pleroma.Web.WebFinger do
     true
   end
 
-  defp resolved_webfinger_matches?(_request_url, _resolved_url, %{"subject" => "acct:" <> acct}) do
-    with {:ok, %{"subject" => "acct:" <> new_acct}} <- do_finger(acct, false) do
-      acct == new_acct
+  defp resolved_webfinger_matches?(
+         _request_url,
+         _resolved_url,
+         %{"subject" => "acct:" <> acct} = data
+       ) do
+    with {:ok, %{"subject" => "acct:" <> new_acct} = new_data} <- do_finger(acct, false),
+         true <- acct == new_acct,
+         true <- webfinger_data_matches?(data, new_data) do
+      true
     else
       _ -> false
     end
   end
+
+  defp webfinger_data_matches?(%{"ap_id" => ap_id}, %{"ap_id" => ap_id}) when ap_id != "" do
+    true
+  end
+
+  defp webfinger_data_matches?(_data, _new_data), do: false
 end
