@@ -254,6 +254,46 @@ defmodule Pleroma.Web.WebFingerTest do
       assert {:error, _} = WebFinger.finger("graf@fba.ryona.agency")
     end
 
+    test "prevents forgeries even when the spoofed subject exists on the target domain" do
+      Tesla.Mock.mock(fn
+        %{url: url}
+        when url in [
+               "https://attacker.example/.well-known/host-meta",
+               "https://victim.example/.well-known/host-meta"
+             ] ->
+          {:ok, %Tesla.Env{status: 404}}
+
+        %{
+          url:
+            "https://attacker.example/.well-known/webfinger?resource=acct:alice@attacker.example"
+        } ->
+          Tesla.Mock.json(%{
+            "subject" => "acct:alice@victim.example",
+            "links" => [
+              %{
+                "rel" => "self",
+                "type" => "application/activity+json",
+                "href" => "https://attacker.example/users/alice"
+              }
+            ]
+          })
+
+        %{url: "https://victim.example/.well-known/webfinger?resource=acct:alice@victim.example"} ->
+          Tesla.Mock.json(%{
+            "subject" => "acct:alice@victim.example",
+            "links" => [
+              %{
+                "rel" => "self",
+                "type" => "application/activity+json",
+                "href" => "https://victim.example/users/alice"
+              }
+            ]
+          })
+      end)
+
+      assert {:error, _} = WebFinger.finger("alice@attacker.example")
+    end
+
     test "works for correctly set up split-domain instances implementing host-meta redirect" do
       {:ok, _data} = WebFinger.finger("a@pleroma.example")
       {:ok, _data} = WebFinger.finger("a@sub.pleroma.example")
