@@ -759,9 +759,17 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
   end
 
   defp local_and_remote_activities do
+    remote_user = insert(:user, local: false, domain: "example.com")
+    announce_user = insert(:user)
     local = insert(:note_activity)
-    remote = insert(:note_activity, local: false)
-    {:ok, local: local, remote: remote}
+    remote = insert(:note_activity, local: false, object_local: false, user: remote_user)
+    remote_note = insert(:note_activity, local: false, object_local: false)
+
+    local_activity_remote_object =
+      insert(:announce_activity, note_activity: remote_note, user: announce_user)
+
+    {:ok,
+     local: local, remote: remote, local_activity_remote_object: local_activity_remote_object}
   end
 
   defp local_and_remote_context_activities do
@@ -814,7 +822,12 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     setup do: clear_config([:restrict_unauthenticated, :activities, :remote], true)
 
-    test "if user is unauthenticated", %{conn: conn, local: local, remote: remote} do
+    test "if user is unauthenticated", %{
+      conn: conn,
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       res_conn = get(conn, "/api/v1/statuses/#{local.id}")
 
       assert json_response_and_validate_schema(res_conn, :not_found) == %{
@@ -822,18 +835,31 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              }
 
       res_conn = get(conn, "/api/v1/statuses/#{remote.id}")
+
+      assert json_response_and_validate_schema(res_conn, :not_found) == %{
+               "error" => "Record not found"
+             }
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_activity_remote_object.id}")
 
       assert json_response_and_validate_schema(res_conn, :not_found) == %{
                "error" => "Record not found"
              }
     end
 
-    test "if user is authenticated", %{local: local, remote: remote} do
+    test "if user is authenticated", %{
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       %{conn: conn} = oauth_access(["read"])
       res_conn = get(conn, "/api/v1/statuses/#{local.id}")
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
 
       res_conn = get(conn, "/api/v1/statuses/#{remote.id}")
+      assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_activity_remote_object.id}")
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
     end
   end
@@ -843,8 +869,19 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     setup do: clear_config([:restrict_unauthenticated, :activities, :local], true)
 
-    test "if user is unauthenticated", %{conn: conn, local: local, remote: remote} do
+    test "if user is unauthenticated", %{
+      conn: conn,
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       res_conn = get(conn, "/api/v1/statuses/#{local.id}")
+
+      assert json_response_and_validate_schema(res_conn, :not_found) == %{
+               "error" => "Record not found"
+             }
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_activity_remote_object.id}")
 
       assert json_response_and_validate_schema(res_conn, :not_found) == %{
                "error" => "Record not found"
@@ -854,12 +891,19 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
     end
 
-    test "if user is authenticated", %{local: local, remote: remote} do
+    test "if user is authenticated", %{
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       %{conn: conn} = oauth_access(["read"])
       res_conn = get(conn, "/api/v1/statuses/#{local.id}")
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
 
       res_conn = get(conn, "/api/v1/statuses/#{remote.id}")
+      assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_activity_remote_object.id}")
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
     end
   end
@@ -869,7 +913,12 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     setup do: clear_config([:restrict_unauthenticated, :activities, :remote], true)
 
-    test "if user is unauthenticated", %{conn: conn, local: local, remote: remote} do
+    test "if user is unauthenticated", %{
+      conn: conn,
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       res_conn = get(conn, "/api/v1/statuses/#{local.id}")
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
 
@@ -878,14 +927,27 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert json_response_and_validate_schema(res_conn, :not_found) == %{
                "error" => "Record not found"
              }
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_activity_remote_object.id}")
+
+      assert json_response_and_validate_schema(res_conn, :not_found) == %{
+               "error" => "Record not found"
+             }
     end
 
-    test "if user is authenticated", %{local: local, remote: remote} do
+    test "if user is authenticated", %{
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       %{conn: conn} = oauth_access(["read"])
       res_conn = get(conn, "/api/v1/statuses/#{local.id}")
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
 
       res_conn = get(conn, "/api/v1/statuses/#{remote.id}")
+      assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_activity_remote_object.id}")
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
     end
   end
@@ -946,18 +1008,35 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     setup do: clear_config([:restrict_unauthenticated, :activities, :remote], true)
 
-    test "if user is unauthenticated", %{conn: conn, local: local, remote: remote} do
-      res_conn = get(conn, "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}")
+    test "if user is unauthenticated", %{
+      conn: conn,
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
+      res_conn =
+        get(
+          conn,
+          "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}&id[]=#{local_activity_remote_object.id}"
+        )
 
       assert json_response_and_validate_schema(res_conn, 200) == []
     end
 
-    test "if user is authenticated", %{local: local, remote: remote} do
+    test "if user is authenticated", %{
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       %{conn: conn} = oauth_access(["read"])
 
-      res_conn = get(conn, "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}")
+      res_conn =
+        get(
+          conn,
+          "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}&id[]=#{local_activity_remote_object.id}"
+        )
 
-      assert length(json_response_and_validate_schema(res_conn, 200)) == 2
+      assert length(json_response_and_validate_schema(res_conn, 200)) == 3
     end
   end
 
@@ -966,19 +1045,36 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     setup do: clear_config([:restrict_unauthenticated, :activities, :local], true)
 
-    test "if user is unauthenticated", %{conn: conn, local: local, remote: remote} do
-      res_conn = get(conn, "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}")
+    test "if user is unauthenticated", %{
+      conn: conn,
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
+      res_conn =
+        get(
+          conn,
+          "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}&id[]=#{local_activity_remote_object.id}"
+        )
 
       remote_id = remote.id
       assert [%{"id" => ^remote_id}] = json_response_and_validate_schema(res_conn, 200)
     end
 
-    test "if user is authenticated", %{local: local, remote: remote} do
+    test "if user is authenticated", %{
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       %{conn: conn} = oauth_access(["read"])
 
-      res_conn = get(conn, "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}")
+      res_conn =
+        get(
+          conn,
+          "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}&id[]=#{local_activity_remote_object.id}"
+        )
 
-      assert length(json_response_and_validate_schema(res_conn, 200)) == 2
+      assert length(json_response_and_validate_schema(res_conn, 200)) == 3
     end
   end
 
@@ -987,19 +1083,36 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     setup do: clear_config([:restrict_unauthenticated, :activities, :remote], true)
 
-    test "if user is unauthenticated", %{conn: conn, local: local, remote: remote} do
-      res_conn = get(conn, "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}")
+    test "if user is unauthenticated", %{
+      conn: conn,
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
+      res_conn =
+        get(
+          conn,
+          "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}&id[]=#{local_activity_remote_object.id}"
+        )
 
       local_id = local.id
       assert [%{"id" => ^local_id}] = json_response_and_validate_schema(res_conn, 200)
     end
 
-    test "if user is authenticated", %{local: local, remote: remote} do
+    test "if user is authenticated", %{
+      local: local,
+      remote: remote,
+      local_activity_remote_object: local_activity_remote_object
+    } do
       %{conn: conn} = oauth_access(["read"])
 
-      res_conn = get(conn, "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}")
+      res_conn =
+        get(
+          conn,
+          "/api/v1/statuses?id[]=#{local.id}&id[]=#{remote.id}&id[]=#{local_activity_remote_object.id}"
+        )
 
-      assert length(json_response_and_validate_schema(res_conn, 200)) == 2
+      assert length(json_response_and_validate_schema(res_conn, 200)) == 3
     end
   end
 
