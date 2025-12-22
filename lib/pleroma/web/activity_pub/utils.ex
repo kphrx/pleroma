@@ -20,6 +20,7 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   alias Pleroma.Web.Router.Helpers
 
   import Ecto.Query
+  import Pleroma.Web.Utils.Guards, only: [not_empty_string: 1]
 
   require Logger
   require Pleroma.Constants
@@ -81,7 +82,11 @@ defmodule Pleroma.Web.ActivityPub.Utils do
   def unaddressed_message?(params),
     do:
       [params["to"], params["cc"], params["bto"], params["bcc"]]
-      |> Enum.all?(&is_nil(&1))
+      |> Enum.all?(fn
+        nil -> true
+        [] -> true
+        _ -> false
+      end)
 
   @spec recipient_in_message(User.t(), User.t(), map()) :: boolean()
   def recipient_in_message(%User{ap_id: ap_id} = recipient, %User{} = actor, params),
@@ -109,17 +114,23 @@ defmodule Pleroma.Web.ActivityPub.Utils do
     end
   end
 
-  def make_json_ld_header do
+  def make_json_ld_header(data \\ %{}) do
     %{
       "@context" => [
         "https://www.w3.org/ns/activitystreams",
         "#{Endpoint.url()}/schemas/litepub-0.1.jsonld",
         %{
-          "@language" => "und"
+          "@language" => get_language(data)
         }
       ]
     }
   end
+
+  defp get_language(%{"language" => language}) when not_empty_string(language) do
+    language
+  end
+
+  defp get_language(_), do: "und"
 
   def make_date do
     DateTime.utc_now() |> DateTime.to_iso8601()
@@ -852,8 +863,14 @@ defmodule Pleroma.Web.ActivityPub.Utils do
 
   def update_report_state(_, _), do: {:error, "Unsupported state"}
 
-  def strip_report_status_data(activity) do
-    [actor | reported_activities] = activity.data["object"]
+  def strip_report_status_data(%Activity{} = activity) do
+    with {:ok, new_data} <- strip_report_status_data(activity.data) do
+      {:ok, %{activity | data: new_data}}
+    end
+  end
+
+  def strip_report_status_data(data) do
+    [actor | reported_activities] = data["object"]
 
     stripped_activities =
       Enum.reduce(reported_activities, [], fn act, acc ->
@@ -863,9 +880,36 @@ defmodule Pleroma.Web.ActivityPub.Utils do
         end
       end)
 
-    new_data = put_in(activity.data, ["object"], [actor | stripped_activities])
+    new_data = put_in(data, ["object"], [actor | stripped_activities])
 
-    {:ok, %{activity | data: new_data}}
+    {:ok, new_data}
+  end
+
+  def get_anonymized_reporter do
+    with true <- Pleroma.Config.get([:activitypub, :anonymize_reporter]),
+         nickname when is_binary(nickname) <-
+           Pleroma.Config.get([:activitypub, :anonymize_reporter_local_nickname]),
+         %User{ap_id: ap_id, local: true} <- User.get_cached_by_nickname(nickname) do
+      ap_id
+    else
+      _ -> nil
+    end
+  end
+
+  def maybe_anonymize_reporter(%Activity{data: data} = activity) do
+    new_data = maybe_anonymize_reporter(data)
+    %Activity{activity | actor: new_data["actor"], data: new_data}
+  end
+
+  def maybe_anonymize_reporter(activity) do
+    ap_id = get_anonymized_reporter()
+
+    if is_binary(ap_id) do
+      activity
+      |> Map.put("actor", ap_id)
+    else
+      activity
+    end
   end
 
   def update_activity_visibility(activity, visibility) when visibility in @valid_visibilities do

@@ -29,15 +29,16 @@ defmodule Pleroma.Web.ActivityPub.MRF.QuietReply do
         } = activity
       ) do
     with true <- is_binary(in_reply_to),
-         false <- match?([], cc),
+         true <- Pleroma.Constants.as_public() in to,
          %User{follower_address: followers_collection, local: true} <-
            User.get_by_ap_id(actor) do
       updated_to =
-        to
-        |> Kernel.++([followers_collection])
+        [followers_collection | to]
         |> Kernel.--([Pleroma.Constants.as_public()])
 
-      updated_cc = [Pleroma.Constants.as_public()]
+      updated_cc =
+        [Pleroma.Constants.as_public() | cc]
+        |> Kernel.--([followers_collection])
 
       updated_activity =
         activity

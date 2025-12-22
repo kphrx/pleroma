@@ -955,7 +955,7 @@ defmodule HttpRequestMock do
     {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/ogp.html")}}
   end
 
-  def get("http://localhost:4001/users/masto_closed/followers", _, _, _) do
+  def get("https://remote.org/users/masto_closed/followers", _, _, _) do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -964,7 +964,7 @@ defmodule HttpRequestMock do
      }}
   end
 
-  def get("http://localhost:4001/users/masto_closed/followers?page=1", _, _, _) do
+  def get("https://remote.org/users/masto_closed/followers?page=1", _, _, _) do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -973,7 +973,7 @@ defmodule HttpRequestMock do
      }}
   end
 
-  def get("http://localhost:4001/users/masto_closed/following", _, _, _) do
+  def get("https://remote.org/users/masto_closed/following", _, _, _) do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -982,7 +982,7 @@ defmodule HttpRequestMock do
      }}
   end
 
-  def get("http://localhost:4001/users/masto_closed/following?page=1", _, _, _) do
+  def get("https://remote.org/users/masto_closed/following?page=1", _, _, _) do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -991,7 +991,7 @@ defmodule HttpRequestMock do
      }}
   end
 
-  def get("http://localhost:8080/followers/fuser3", _, _, _) do
+  def get("https://remote.org/followers/fuser3", _, _, _) do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -1000,7 +1000,7 @@ defmodule HttpRequestMock do
      }}
   end
 
-  def get("http://localhost:8080/following/fuser3", _, _, _) do
+  def get("https://remote.org/following/fuser3", _, _, _) do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -1009,7 +1009,7 @@ defmodule HttpRequestMock do
      }}
   end
 
-  def get("http://localhost:4001/users/fuser2/followers", _, _, _) do
+  def get("https://remote.org/users/fuser2/followers", _, _, _) do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -1018,7 +1018,7 @@ defmodule HttpRequestMock do
      }}
   end
 
-  def get("http://localhost:4001/users/fuser2/following", _, _, _) do
+  def get("https://remote.org/users/fuser2/following", _, _, _) do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -1229,7 +1229,8 @@ defmodule HttpRequestMock do
     {:ok, %Tesla.Env{status: 404, body: ""}}
   end
 
-  def get("https://mstdn.jp/.well-known/webfinger?resource=acct:kpherox@mstdn.jp", _, _, _) do
+  def get("https://mstdn.jp/.well-known/webfinger?resource=acct:" <> acct, _, _, _)
+      when acct in ["kpherox@mstdn.jp", "kPherox@mstdn.jp"] do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -1494,6 +1495,11 @@ defmodule HttpRequestMock do
     {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/twitter_card.html")}}
   end
 
+  def get("https://instagram.com/longtext", _, _, _) do
+    {:ok,
+     %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/instagram_longtext.html")}}
+  end
+
   def get("https://example.com/non-ogp", _, _, _) do
     {:ok,
      %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/non_ogp_embed.html")}}
@@ -1521,14 +1527,6 @@ defmodule HttpRequestMock do
      }}
   end
 
-  def get("https://mastodon.example/.well-known/host-meta", _, _, _) do
-    {:ok,
-     %Tesla.Env{
-       status: 302,
-       headers: [{"location", "https://sub.mastodon.example/.well-known/host-meta"}]
-     }}
-  end
-
   def get("https://sub.mastodon.example/.well-known/host-meta", _, _, _) do
     {:ok,
      %Tesla.Env{
@@ -1541,11 +1539,15 @@ defmodule HttpRequestMock do
   end
 
   def get(
-        "https://sub.mastodon.example/.well-known/webfinger?resource=acct:a@mastodon.example",
+        url,
         _,
         _,
         _
-      ) do
+      )
+      when url in [
+             "https://sub.mastodon.example/.well-known/webfinger?resource=acct:a@mastodon.example",
+             "https://sub.mastodon.example/.well-known/webfinger?resource=acct:a@sub.mastodon.example"
+           ] do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -1556,6 +1558,22 @@ defmodule HttpRequestMock do
          |> String.replace("{{domain}}", "mastodon.example")
          |> String.replace("{{subdomain}}", "sub.mastodon.example"),
        headers: [{"content-type", "application/jrd+json"}]
+     }}
+  end
+
+  def get(
+        "https://mastodon.example/.well-known/webfinger?resource=acct:a@mastodon.example",
+        _,
+        _,
+        _
+      ) do
+    {:ok,
+     %Tesla.Env{
+       status: 302,
+       headers: [
+         {"location",
+          "https://sub.mastodon.example/.well-known/webfinger?resource=acct:a@mastodon.example"}
+       ]
      }}
   end
 
@@ -1604,11 +1622,15 @@ defmodule HttpRequestMock do
   end
 
   def get(
-        "https://sub.pleroma.example/.well-known/webfinger?resource=acct:a@pleroma.example",
+        url,
         _,
         _,
         _
-      ) do
+      )
+      when url in [
+             "https://sub.pleroma.example/.well-known/webfinger?resource=acct:a@pleroma.example",
+             "https://sub.pleroma.example/.well-known/webfinger?resource=acct:a@sub.pleroma.example"
+           ] do
     {:ok,
      %Tesla.Env{
        status: 200,
@@ -1701,6 +1723,24 @@ defmodule HttpRequestMock do
      }}
   end
 
+  def post("https://api-free.deepl.com/v2/translate" <> _, _, _, _) do
+    {:ok,
+     %Tesla.Env{
+       status: 200,
+       body: File.read!("test/fixtures/tesla_mock/deepl-translation.json"),
+       headers: [{"content-type", "application/json"}]
+     }}
+  end
+
+  def post("https://api-free.deepl.com/v2/languages" <> _, _, _, _) do
+    {:ok,
+     %Tesla.Env{
+       status: 200,
+       body: File.read!("test/fixtures/tesla_mock/deepl-languages-list.json"),
+       headers: [{"content-type", "application/json"}]
+     }}
+  end
+
   def post(url, query, body, headers) do
     {:error,
      "Mock response not implemented for POST #{inspect(url)}, #{query}, #{inspect(body)}, #{inspect(headers)}"}
@@ -1720,7 +1760,8 @@ defmodule HttpRequestMock do
     "https://example.com/twitter-card",
     "https://google.com/",
     "https://pleroma.local/notice/9kCP7V",
-    "https://yahoo.com/"
+    "https://yahoo.com/",
+    "https://instagram.com/longtext"
   ]
 
   def head(url, _query, _body, _headers) when url in @rich_media_mocks do

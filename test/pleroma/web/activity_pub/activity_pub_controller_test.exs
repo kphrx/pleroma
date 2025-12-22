@@ -8,7 +8,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
   alias Pleroma.Activity
   alias Pleroma.Delivery
-  alias Pleroma.Instances
   alias Pleroma.Object
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
@@ -26,7 +25,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   require Pleroma.Constants
 
   setup do
-    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Config)
+    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Test.StaticConfig)
     :ok
   end
 
@@ -601,23 +600,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert Activity.get_by_ap_id(data["id"])
     end
 
-    test "it clears `unreachable` federation status of the sender", %{conn: conn} do
-      data = File.read!("test/fixtures/mastodon-post-activity.json") |> Jason.decode!()
-
-      sender_url = data["actor"]
-      Instances.set_consistently_unreachable(sender_url)
-      refute Instances.reachable?(sender_url)
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/inbox", data)
-
-      assert "ok" == json_response(conn, 200)
-      assert Instances.reachable?(sender_url)
-    end
-
     test "accept follow activity", %{conn: conn} do
       clear_config([:instance, :federating], true)
       relay = Relay.get_actor()
@@ -941,23 +923,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert Activity.get_by_ap_id(data["id"])
     end
 
-    test "it rejects an invalid incoming activity", %{conn: conn, data: data} do
-      user = insert(:user, is_active: false)
-
-      data =
-        data
-        |> Map.put("bcc", [user.ap_id])
-        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/users/#{user.nickname}/inbox", data)
-
-      assert "Invalid request." == json_response(conn, 400)
-    end
-
     test "it accepts messages with to as string instead of array", %{conn: conn, data: data} do
       user = insert(:user)
 
@@ -1108,24 +1073,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert response(conn, 200) =~ note_object.data["content"]
     end
 
-    test "it clears `unreachable` federation status of the sender", %{conn: conn, data: data} do
-      user = insert(:user)
-      data = Map.put(data, "bcc", [user.ap_id])
-
-      sender_host = URI.parse(data["actor"]).host
-      Instances.set_consistently_unreachable(sender_host)
-      refute Instances.reachable?(sender_host)
-
-      conn =
-        conn
-        |> assign(:valid_signature, true)
-        |> put_req_header("content-type", "application/activity+json")
-        |> post("/users/#{user.nickname}/inbox", data)
-
-      assert "ok" == json_response(conn, 200)
-      assert Instances.reachable?(sender_host)
-    end
-
     test "it removes all follower collections but actor's", %{conn: conn} do
       [actor, recipient] = insert_pair(:user)
 
@@ -1205,9 +1152,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
           }
         ],
         "actor" => actor.ap_id,
-        "cc" => [
-          reported_user.ap_id
-        ],
+        # CC and TO might either not exist at all, or be empty. We should be able to handle either.
+        # "cc" => [],
         "content" => "test",
         "context" => "context",
         "id" => "http://#{remote_domain}/activities/02be56cf-35e3-46b4-b2c6-47ae08dfee9e",
@@ -1320,9 +1266,79 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         html_body: ~r/#{note.data["object"]}/i
       )
     end
+
+    test "it accepts an incoming Block", %{conn: conn, data: data} do
+      user = insert(:user)
+
+      data =
+        data
+        |> Map.put("type", "Block")
+        |> Map.put("to", [user.ap_id])
+        |> Map.put("cc", [])
+        |> Map.put("object", user.ap_id)
+
+      conn =
+        conn
+        |> assign(:valid_signature, true)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+      ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+      assert Activity.get_by_ap_id(data["id"])
+    end
+
+    test "it returns an error when receiving an activity sent to a deactivated user", %{
+      conn: conn,
+      data: data
+    } do
+      user = insert(:user)
+      {:ok, _} = User.set_activation(user, false)
+
+      data =
+        data
+        |> Map.put("bcc", [user.ap_id])
+        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
+
+      conn =
+        conn
+        |> assign(:valid_signature, true)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/inbox", data)
+
+      assert "User deactivated" == json_response(conn, 404)
+    end
+
+    test "it returns an error when receiving an activity sent from a deactivated user", %{
+      conn: conn,
+      data: data
+    } do
+      sender = insert(:user)
+      user = insert(:user)
+      {:ok, _} = User.set_activation(sender, false)
+
+      data =
+        data
+        |> Map.put("bcc", [user.ap_id])
+        |> Map.put("actor", sender.ap_id)
+        |> Kernel.put_in(["object", "bcc"], [user.ap_id])
+
+      conn =
+        conn
+        |> assign(:valid_signature, true)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/inbox", data)
+
+      assert "Sender deactivated" == json_response(conn, 404)
+    end
   end
 
   describe "GET /users/:nickname/outbox" do
+    setup do
+      Mox.stub_with(Pleroma.StaticStubbedConfigMock, Pleroma.Config)
+      :ok
+    end
+
     test "it paginates correctly", %{conn: conn} do
       user = insert(:user)
       conn = assign(conn, :user, user)
@@ -1411,6 +1427,22 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert %{"orderedItems" => []} = resp
     end
 
+    test "it does not return a local note activity when C2S API is disabled", %{conn: conn} do
+      clear_config([:activitypub, :client_api_enabled], false)
+      user = insert(:user)
+      reader = insert(:user)
+      {:ok, _note_activity} = CommonAPI.post(user, %{status: "mew mew", visibility: "local"})
+
+      resp =
+        conn
+        |> assign(:user, reader)
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/users/#{user.nickname}/outbox?page=true")
+        |> json_response(200)
+
+      assert %{"orderedItems" => []} = resp
+    end
+
     test "it returns a note activity in a collection", %{conn: conn} do
       note_activity = insert(:note_activity)
       note_object = Object.normalize(note_activity, fetch: false)
@@ -1461,6 +1493,35 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert [answer_outbox] = outbox_get["orderedItems"]
       assert answer_outbox["id"] == activity.data["id"]
+    end
+
+    test "it works with authorized fetch forced when authenticated" do
+      clear_config([:activitypub, :authorized_fetch_mode], true)
+
+      user = insert(:user)
+      outbox_endpoint = user.ap_id <> "/outbox"
+
+      conn =
+        build_conn()
+        |> assign(:user, user)
+        |> put_req_header("accept", "application/activity+json")
+        |> get(outbox_endpoint)
+
+      assert json_response(conn, 200)
+    end
+
+    test "it fails with authorized fetch forced when unauthenticated", %{conn: conn} do
+      clear_config([:activitypub, :authorized_fetch_mode], true)
+
+      user = insert(:user)
+      outbox_endpoint = user.ap_id <> "/outbox"
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get(outbox_endpoint)
+
+      assert response(conn, 401)
     end
   end
 
@@ -1621,6 +1682,28 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         |> post("/users/#{user.nickname}/outbox", data)
 
       assert json_response(conn, 403)
+    end
+
+    test "it rejects update activity of object from other actor", %{conn: conn} do
+      note_activity = insert(:note_activity)
+      note_object = Object.normalize(note_activity, fetch: false)
+      user = insert(:user)
+
+      data = %{
+        type: "Update",
+        object: %{
+          id: note_object.data["id"]
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+      assert note_object == Object.normalize(note_activity, fetch: false)
     end
 
     test "it increases like count when receiving a like action", %{conn: conn} do
@@ -2109,6 +2192,30 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       conn
       |> post("/api/ap/upload_media", %{"file" => image, "description" => desc})
       |> json_response(403)
+    end
+
+    test "they don't work when C2S API is disabled", %{conn: conn} do
+      clear_config([:activitypub, :client_api_enabled], false)
+
+      user = insert(:user)
+
+      assert conn
+             |> assign(:user, user)
+             |> get("/api/ap/whoami")
+             |> response(403)
+
+      desc = "Description of the image"
+
+      image = %Plug.Upload{
+        content_type: "image/jpeg",
+        path: Path.absname("test/fixtures/image.jpg"),
+        filename: "an_image.jpg"
+      }
+
+      assert conn
+             |> assign(:user, user)
+             |> post("/api/ap/upload_media", %{"file" => image, "description" => desc})
+             |> response(403)
     end
   end
 

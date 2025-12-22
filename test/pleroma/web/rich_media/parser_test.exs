@@ -54,12 +54,18 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
              {:ok,
               %{
                 "card" => "summary",
-                "site" => "@flickr",
                 "image" => "https://farm6.staticflickr.com/5510/14338202952_93595258ff_z.jpg",
                 "title" => "Small Island Developing States Photo Submission",
                 "description" => "View the album on Flickr.",
                 "url" => "https://example.com/twitter-card"
               }}
+  end
+
+  test "truncates title and description fields" do
+    {:ok, parsed} = Parser.parse("https://instagram.com/longtext")
+
+    assert String.length(parsed["title"]) == 120
+    assert String.length(parsed["description"]) == 200
   end
 
   test "parses OEmbed and filters HTML tags" do

@@ -111,6 +111,17 @@ defmodule Pleroma.Web.CommonAPITest do
       end
     end
 
+    test "add expiring block", %{blocker: blocker, blocked: blocked} do
+      {:ok, _} = CommonAPI.block(blocked, blocker, %{expires_in: 60})
+      assert User.blocks?(blocker, blocked)
+
+      worker = Pleroma.Workers.MuteExpireWorker
+      args = %{"op" => "unblock_user", "blocker_id" => blocker.id, "blocked_id" => blocked.id}
+
+      assert :ok = perform_job(worker, args)
+      refute User.blocks?(blocker, blocked)
+    end
+
     test "it blocks and does not federate if outgoing blocks are disabled", %{
       blocker: blocker,
       blocked: blocked
@@ -819,7 +830,9 @@ defmodule Pleroma.Web.CommonAPITest do
       user = insert(:user)
 
       {:ok, quoted} = CommonAPI.post(user, %{status: "Hello world"})
-      {:ok, quote_post} = CommonAPI.post(user, %{status: "nice post", quote_id: quoted.id})
+
+      {:ok, quote_post} =
+        CommonAPI.post(user, %{status: "nice post", quoted_status_id: quoted.id})
 
       quoted = Object.normalize(quoted)
       quote_post = Object.normalize(quote_post)
@@ -830,13 +843,25 @@ defmodule Pleroma.Web.CommonAPITest do
       refute quoted.data["actor"] in quote_post.data["to"]
     end
 
+    test "it supports fallback from `quote_id`" do
+      user = insert(:user)
+
+      {:ok, quoted} = CommonAPI.post(user, %{status: "Hello world"})
+      {:ok, quote_post} = CommonAPI.post(user, %{status: "nice post", quote_id: quoted.id})
+
+      quoted = Object.normalize(quoted)
+      quote_post = Object.normalize(quote_post)
+
+      assert quote_post.data["quoteUrl"] == quoted.data["id"]
+    end
+
     test "quote posting with explicit addressing doesn't mention the OP" do
       user = insert(:user)
 
       {:ok, quoted} = CommonAPI.post(user, %{status: "Hello world"})
 
       {:ok, quote_post} =
-        CommonAPI.post(user, %{status: "nice post", quote_id: quoted.id, to: []})
+        CommonAPI.post(user, %{status: "nice post", quoted_status_id: quoted.id, to: []})
 
       assert Object.normalize(quote_post).data["to"] == [Pleroma.Constants.as_public()]
     end
@@ -851,15 +876,15 @@ defmodule Pleroma.Web.CommonAPITest do
       {:ok, local} = CommonAPI.post(user, %{status: ".", visibility: "local"})
       {:ok, public} = CommonAPI.post(user, %{status: ".", visibility: "public"})
 
-      {:error, _} = CommonAPI.post(user, %{status: "nice", quote_id: direct.id})
-      {:ok, _} = CommonAPI.post(user, %{status: "nice", quote_id: private.id})
-      {:error, _} = CommonAPI.post(another_user, %{status: "nice", quote_id: private.id})
-      {:ok, _} = CommonAPI.post(user, %{status: "nice", quote_id: unlisted.id})
-      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quote_id: unlisted.id})
-      {:ok, _} = CommonAPI.post(user, %{status: "nice", quote_id: local.id})
-      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quote_id: local.id})
-      {:ok, _} = CommonAPI.post(user, %{status: "nice", quote_id: public.id})
-      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quote_id: public.id})
+      {:error, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: direct.id})
+      {:ok, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: private.id})
+      {:error, _} = CommonAPI.post(another_user, %{status: "nice", quoted_status_id: private.id})
+      {:ok, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: unlisted.id})
+      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quoted_status_id: unlisted.id})
+      {:ok, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: local.id})
+      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quoted_status_id: local.id})
+      {:ok, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: public.id})
+      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quoted_status_id: public.id})
     end
 
     test "it properly mentions punycode domain" do

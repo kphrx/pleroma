@@ -1,0 +1,1 @@
+Add `base_urls` to the /api/v1/instance pleroma metadata which provides information about the base URLs for media_proxy and uploads when configured

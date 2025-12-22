@@ -241,6 +241,7 @@ defmodule Pleroma.Factory do
 
   def question_factory(attrs \\ %{}) do
     user = attrs[:user] || insert(:user)
+    closed = attrs[:closed] || DateTime.utc_now() |> DateTime.add(86_400) |> DateTime.to_iso8601()
 
     data = %{
       "id" => Pleroma.Web.ActivityPub.Utils.generate_object_id(),
@@ -251,7 +252,7 @@ defmodule Pleroma.Factory do
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [user.follower_address],
       "context" => Pleroma.Web.ActivityPub.Utils.generate_context_id(),
-      "closed" => DateTime.utc_now() |> DateTime.add(86_400) |> DateTime.to_iso8601(),
+      "closed" => closed,
       "content" => "Which flavor of ice cream do you prefer?",
       "oneOf" => [
         %{
@@ -509,7 +510,8 @@ defmodule Pleroma.Factory do
     %Pleroma.Activity{
       data: data,
       actor: data["actor"],
-      recipients: data["to"]
+      recipients: data["to"],
+      local: user.local
     }
     |> Map.merge(attrs)
   end
@@ -665,5 +667,12 @@ defmodule Pleroma.Factory do
     }
     |> Map.merge(params)
     |> Pleroma.Announcement.add_rendered_properties()
+  end
+
+  def hashtag_factory(params \\ %{}) do
+    %Pleroma.Hashtag{
+      name: "test #{sequence(:hashtag_name, & &1)}"
+    }
+    |> Map.merge(params)
   end
 end

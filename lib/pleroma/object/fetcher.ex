@@ -4,7 +4,6 @@
 
 defmodule Pleroma.Object.Fetcher do
   alias Pleroma.HTTP
-  alias Pleroma.Instances
   alias Pleroma.Maps
   alias Pleroma.Object
   alias Pleroma.Object.Containment
@@ -146,17 +145,17 @@ defmodule Pleroma.Object.Fetcher do
 
     with {:scheme, true} <- {:scheme, String.starts_with?(id, "http")},
          {_, true} <- {:mrf, MRF.id_filter(id)},
+         {_, :ok} <- {:local_fetch, Containment.contain_local_fetch(id)},
          {:ok, body} <- get_object(id),
          {:ok, data} <- safe_json_decode(body),
          :ok <- Containment.contain_origin_from_id(id, data) do
-      if not Instances.reachable?(id) do
-        Instances.set_reachable(id)
-      end
-
       {:ok, data}
     else
       {:scheme, _} ->
         {:error, "Unsupported URI scheme"}
+
+      {:local_fetch, _} ->
+        {:error, "Trying to fetch local resource"}
 
       {:error, e} ->
         {:error, e}
@@ -172,6 +171,14 @@ defmodule Pleroma.Object.Fetcher do
   def fetch_and_contain_remote_object_from_id(_id),
     do: {:error, "id must be a string"}
 
+  defp check_crossdomain_redirect(final_host, _original_url) when is_nil(final_host) do
+    {:cross_domain_redirect, false}
+  end
+
+  defp check_crossdomain_redirect(final_host, original_url) do
+    {:cross_domain_redirect, final_host != URI.parse(original_url).host}
+  end
+
   defp get_object(id) do
     date = Pleroma.Signature.signed_date()
 
@@ -181,19 +188,29 @@ defmodule Pleroma.Object.Fetcher do
       |> sign_fetch(id, date)
 
     case HTTP.get(id, headers) do
+      {:ok, %{body: body, status: code, headers: headers, url: final_url}}
+      when code in 200..299 ->
+        remote_host = if final_url, do: URI.parse(final_url).host, else: nil
+
+        with {:cross_domain_redirect, false} <- check_crossdomain_redirect(remote_host, id),
+             {_, content_type} <- List.keyfind(headers, "content-type", 0),
+             {:ok, _media_type} <- verify_content_type(content_type) do
+          {:ok, body}
+        else
+          {:cross_domain_redirect, true} ->
+            {:error, {:cross_domain_redirect, true}}
+
+          error ->
+            error
+        end
+
+      # Handle the case where URL is not in the response (older HTTP library versions)
       {:ok, %{body: body, status: code, headers: headers}} when code in 200..299 ->
         case List.keyfind(headers, "content-type", 0) do
           {_, content_type} ->
-            case Plug.Conn.Utils.media_type(content_type) do
-              {:ok, "application", "activity+json", _} ->
-                {:ok, body}
-
-              {:ok, "application", "ld+json",
-               %{"profile" => "https://www.w3.org/ns/activitystreams"}} ->
-                {:ok, body}
-
-              _ ->
-                {:error, {:content_type, content_type}}
+            case verify_content_type(content_type) do
+              {:ok, _} -> {:ok, body}
+              error -> error
             end
 
           _ ->
@@ -216,4 +233,17 @@ defmodule Pleroma.Object.Fetcher do
 
   defp safe_json_decode(nil), do: {:ok, nil}
   defp safe_json_decode(json), do: Jason.decode(json)
+
+  defp verify_content_type(content_type) do
+    case Plug.Conn.Utils.media_type(content_type) do
+      {:ok, "application", "activity+json", _} ->
+        {:ok, :activity_json}
+
+      {:ok, "application", "ld+json", %{"profile" => "https://www.w3.org/ns/activitystreams"}} ->
+        {:ok, :ld_json}
+
+      _ ->
+        {:error, {:content_type, content_type}}
+    end
+  end
 end

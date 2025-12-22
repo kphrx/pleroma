@@ -5,11 +5,15 @@
 defmodule Pleroma.Web.CommonAPI.ActivityDraft do
   alias Pleroma.Activity
   alias Pleroma.Conversation.Participation
+  alias Pleroma.Language.LanguageDetector
   alias Pleroma.Object
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.CommonAPI.Utils
+
+  import Pleroma.EctoType.ActivityPub.ObjectValidators.LanguageCode,
+    only: [good_locale_code?: 1]
 
   import Pleroma.Web.Gettext
   import Pleroma.Web.Utils.Guards, only: [not_empty_string: 1]
@@ -38,6 +42,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
             cc: [],
             context: nil,
             sensitive: false,
+            language: nil,
             object: nil,
             preview?: false,
             changes: %{}
@@ -64,6 +69,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     |> content()
     |> with_valid(&to_and_cc/1)
     |> with_valid(&context/1)
+    |> with_valid(&language/1)
     |> sensitive()
     |> with_valid(&object/1)
     |> preview?()
@@ -85,7 +91,8 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
   defp listen_object(draft) do
     object =
       draft.params
-      |> Map.take([:album, :artist, :title, :length, :externalLink])
+      |> Map.take([:album, :artist, :title, :length])
+      |> Map.put(:externalLink, Map.get(draft.params, :external_link))
       |> Map.new(fn {key, value} -> {to_string(key), value} end)
       |> Map.put("type", "Audio")
       |> Map.put("to", draft.to)
@@ -153,7 +160,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
 
   defp in_reply_to(draft), do: draft
 
-  defp quote_post(%{params: %{quote_id: id}} = draft) when not_empty_string(id) do
+  defp quote_post(%{params: %{quoted_status_id: id}} = draft) when not_empty_string(id) do
     case Activity.get_by_id_with_object(id) do
       %Activity{} = activity ->
         %__MODULE__{draft | quote_post: activity}
@@ -161,6 +168,10 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
       _ ->
         draft
     end
+  end
+
+  defp quote_post(%{params: %{quote_id: id}} = draft) when not_empty_string(id) do
+    quote_post(%{draft | params: Map.put(draft.params, :quoted_status_id, id)})
   end
 
   defp quote_post(draft), do: draft
@@ -249,6 +260,18 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     %__MODULE__{draft | sensitive: sensitive}
   end
 
+  defp language(draft) do
+    language =
+      with language <- draft.params[:language],
+           true <- good_locale_code?(language) do
+        language
+      else
+        _ -> LanguageDetector.detect(draft.content_html <> " " <> draft.summary)
+      end
+
+    %__MODULE__{draft | language: language}
+  end
+
   defp object(draft) do
     emoji = Map.merge(Pleroma.Emoji.Formatter.get_emoji_map(draft.full_payload), draft.emoji)
 
@@ -288,6 +311,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
         "mediaType" => Utils.get_content_type(draft.params[:content_type])
       })
       |> Map.put("generator", draft.params[:generator])
+      |> Map.put("language", draft.language)
 
     %__MODULE__{draft | object: object}
   end

@@ -1867,18 +1867,29 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       %{activity: activity}
     end
 
-    test "returns users who have favorited the status", %{conn: conn, activity: activity} do
-      other_user = insert(:user)
-      {:ok, _} = CommonAPI.favorite(activity.id, other_user)
+    test "returns users who have favorited the status ordered from newest to oldest", %{
+      conn: conn,
+      activity: activity
+    } do
+      [other_user_1, other_user_2] = insert_pair(:user)
+      [other_user_3, other_user_4] = insert_pair(:user)
+
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user_1)
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user_3)
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user_2)
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user_4)
 
       response =
         conn
         |> get("/api/v1/statuses/#{activity.id}/favourited_by")
         |> json_response_and_validate_schema(:ok)
 
-      [%{"id" => id}] = response
+      [%{"id" => id1}, %{"id" => id2}, %{"id" => id3}, %{"id" => id4}] = response
 
-      assert id == other_user.id
+      assert id1 == other_user_4.id
+      assert id2 == other_user_2.id
+      assert id3 == other_user_3.id
+      assert id4 == other_user_1.id
     end
 
     test "returns empty array when status has not been favorited yet", %{
@@ -2481,6 +2492,107 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
         "spoiler_text" => "lol"
       })
       |> json_response_and_validate_schema(:not_found)
+    end
+  end
+
+  describe "translating statuses" do
+    setup do: clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
+
+    test "it translates a status to user language" do
+      user = insert(:user, language: "fr")
+      %{conn: conn} = oauth_access(["read:statuses"], user: user)
+      another_user = insert(:user)
+
+      {:ok, activity} =
+        CommonAPI.post(another_user, %{
+          status: "Cześć!",
+          visibility: "public",
+          language: "pl"
+        })
+
+      response =
+        conn
+        |> post("/api/v1/statuses/#{activity.id}/translate")
+        |> json_response_and_validate_schema(200)
+
+      assert response == %{
+               "content" => "!ćśezC",
+               "detected_source_language" => "pl",
+               "provider" => "TranslationMock"
+             }
+    end
+
+    test "it returns an error if no target language provided" do
+      %{conn: conn} = oauth_access(["read:statuses"])
+      another_user = insert(:user)
+
+      {:ok, activity} =
+        CommonAPI.post(another_user, %{
+          status: "Cześć!",
+          language: "pl"
+        })
+
+      assert conn
+             |> post("/api/v1/statuses/#{activity.id}/translate")
+             |> json_response_and_validate_schema(400)
+    end
+
+    test "it doesn't translate non-public statuses" do
+      %{conn: conn, user: user} = oauth_access(["read:statuses"])
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: "Cześć!",
+          visibility: "private",
+          language: "pl"
+        })
+
+      assert conn
+             |> post("/api/v1/statuses/#{activity.id}/translate")
+             |> json_response_and_validate_schema(404)
+    end
+  end
+
+  describe "getting quotes of a specified post" do
+    setup do
+      [current_user, user] = insert_pair(:user)
+      %{user: current_user, conn: conn} = oauth_access(["read:statuses"], user: current_user)
+      [current_user: current_user, user: user, conn: conn]
+    end
+
+    test "shows quotes of a post", %{conn: conn} do
+      user = insert(:user)
+      activity = insert(:note_activity)
+
+      {:ok, quote_post} = CommonAPI.post(user, %{status: "quoat", quote_id: activity.id})
+
+      response =
+        conn
+        |> get("/api/v1/statuses/#{activity.id}/quotes")
+        |> json_response_and_validate_schema(:ok)
+
+      [status] = response
+
+      assert length(response) == 1
+      assert status["id"] == quote_post.id
+    end
+
+    test "returns 404 error when a post can't be seen", %{conn: conn} do
+      activity = insert(:direct_note_activity)
+
+      response =
+        conn
+        |> get("/api/v1/statuses/#{activity.id}/quotes")
+
+      assert json_response_and_validate_schema(response, 404) == %{"error" => "Record not found"}
+    end
+
+    test "returns 404 error when a post does not exist", %{conn: conn} do
+      response =
+        conn
+        |> get("/api/v1/statuses/idontexist/quotes")
+
+      assert json_response_and_validate_schema(response, 404) == %{"error" => "Record not found"}
     end
   end
 end
