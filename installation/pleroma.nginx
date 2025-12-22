@@ -6,6 +6,8 @@
 # 3. Copy this file to /etc/nginx/sites-available/ and then add a symlink to it
 #    in /etc/nginx/sites-enabled/ and run 'nginx -s reload' or restart nginx.
 
+# Note: The cache directory must exist and be writable by nginx.
+# If nginx runs in a chroot, create it inside the chroot.
 proxy_cache_path /var/tmp/pleroma-media-cache levels=1:2 keys_zone=pleroma_media_cache:10m max_size=10g
                  inactive=720m use_temp_path=off;
 
@@ -137,6 +139,8 @@ server {
     # location /media/ {
     #     alias /var/lib/pleroma/uploads/;  # <-- make sure this is correct for your deployment
     #     allow all;
+    #     add_header X-Content-Type-Options "nosniff";
+    #     add_header Content-Security-Policy "sandbox";
     # }
 
 }
@@ -149,7 +153,7 @@ server {
 #
 #   # Assuming default media upload deployment (e.g., not S3 which will require a different domain anyway) --
 #   config :pleroma, Pleroma.Upload,
-#    base_url: "https://media.example.tld/uploads/",
+#    base_url: "https://media.example.tld/media/",
 #
 #   config :pleroma, Pleroma.Uploaders.Local, uploads: "/var/lib/pleroma/uploads"
 #
@@ -200,6 +204,8 @@ server {
 #     location /media/ {  # <-- make sure this path matches your Pleroma.Upload :base_url
 #         alias /var/lib/pleroma/uploads/;  # <-- make sure this is correct for your deployment
 #         allow all;
+#         add_header X-Content-Type-Options "nosniff";
+#         add_header Content-Security-Policy "sandbox";
 #     }
 #
 #     location /proxy {
