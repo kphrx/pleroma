@@ -815,6 +815,28 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
     %{locals: [id1, id2], remote: remote_activity.id, context: context}
   end
 
+  defp local_interactions_to_remote do
+    interacted_user = insert(:user, local: false, domain: "example.com")
+    interacting_user = insert(:user)
+
+    announced_post =
+      insert(:note_activity, local: false, object_local: false, user: interacted_user)
+
+    emoji_reacted_post =
+      insert(:note_activity, local: false, object_local: false, user: interacted_user)
+
+    announce = insert(:announce_activity, note_activity: announced_post, user: interacting_user)
+
+    emoji_react =
+      insert(:emoji_react_activity, note_activity: emoji_reacted_post, user: interacting_user)
+
+    {:ok,
+     announce: announce,
+     emoji_react: emoji_react,
+     interacted: interacted_user,
+     interacter: interacting_user}
+  end
+
   describe "status with restrict unauthenticated activities for local and remote" do
     setup do: local_and_remote_activities()
 
@@ -949,6 +971,50 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       res_conn = get(conn, "/api/v1/statuses/#{local_activity_remote_object.id}")
       assert %{"id" => _} = json_response_and_validate_schema(res_conn, 200)
+    end
+  end
+
+  # Rest of Activities like Create,Like,Flag,Add,Remove,... return 404.
+  describe "status has correct attribution when fetching as" do
+    setup do: local_interactions_to_remote()
+
+    test "Announce activity", %{
+      conn: conn,
+      announce: activity,
+      interacter: interacter,
+      interacted: user
+    } do
+      announce_id = activity.id
+      announced_activity = Pleroma.Activity.get_create_by_object_ap_id(activity.data["object"])
+      announced_id = announced_activity.id
+      interacter_ap_id = interacter.id
+      user_ap_id = user.id
+
+      result =
+        conn
+        |> get("/api/v1/statuses/#{activity.id}")
+        |> json_response_and_validate_schema(200)
+
+      assert match?(
+               %{
+                 "id" => ^announce_id,
+                 "account" => %{"id" => ^interacter_ap_id},
+                 "reblog" => %{"account" => %{"id" => ^user_ap_id}, "id" => ^announced_id}
+               },
+               result
+             )
+    end
+
+    test "EmojiReact activity", %{conn: conn, emoji_react: activity, interacted: user} do
+      emoji_react_id = activity.id
+      user_ap_id = user.id
+
+      result =
+        conn
+        |> get("/api/v1/statuses/#{emoji_react_id}")
+        |> json_response_and_validate_schema(200)
+
+      assert match?(%{"id" => ^emoji_react_id, "account" => %{"id" => ^user_ap_id}}, result)
     end
   end
 

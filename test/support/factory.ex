@@ -445,6 +445,28 @@ defmodule Pleroma.Factory do
     }
   end
 
+  def emoji_react_activity_factory(attrs \\ %{}) do
+    note_activity = attrs[:note_activity] || insert(:note_activity)
+    object = Object.normalize(note_activity, fetch: false)
+    user = attrs[:user] || insert(:user)
+
+    data = %{
+      "id" => Pleroma.Web.ActivityPub.Utils.generate_activity_id(),
+      "actor" => user.ap_id,
+      "type" => "EmojiReact",
+      "object" => object.data["id"],
+      "to" => [user.follower_address, object.data["actor"]],
+      "cc" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "published_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
+      "context" => object.data["context"],
+      "content" => "😀"
+    }
+
+    %Pleroma.Activity{
+      data: data
+    }
+  end
+
   def like_activity_factory(attrs \\ %{}) do
     note_activity = attrs[:note_activity] || insert(:note_activity)
     object = Object.normalize(note_activity, fetch: false)
