@@ -102,12 +102,13 @@ defmodule Pleroma.Factory do
 
     user = attrs[:user] || insert(:user)
 
-    object_id = if attrs[:object_local] == false do
-      # Must not match our Endpoint URL in the test env
-      "https://example.com/objects/#{Ecto.UUID.generate()}"
-    else
-      Pleroma.Web.ActivityPub.Utils.generate_object_id()
-    end
+    object_id =
+      if attrs[:object_local] == false do
+        # Must not match our Endpoint URL in the test env
+        "https://example.com/objects/#{Ecto.UUID.generate()}"
+      else
+        Pleroma.Web.ActivityPub.Utils.generate_object_id()
+      end
 
     data = %{
       "type" => "Note",
@@ -371,14 +372,15 @@ defmodule Pleroma.Factory do
     object_local = if attrs[:object_local] == false, do: false, else: true
     note = attrs[:note] || insert(:note, user: user, object_local: object_local)
 
-    activity_id = if attrs[:local] == false do
-      # Same domain as in note Object factory, it doesn't make sense
-      # to create mismatched Create Activities with an ID coming from
-      # a different domain than the Object
-      "https://example.com/activities/#{Ecto.UUID.generate()}"
-    else
-      Pleroma.Web.ActivityPub.Utils.generate_activity_id()
-    end
+    activity_id =
+      if attrs[:local] == false do
+        # Same domain as in note Object factory, it doesn't make sense
+        # to create mismatched Create Activities with an ID coming from
+        # a different domain than the Object
+        "https://example.com/activities/#{Ecto.UUID.generate()}"
+      else
+        Pleroma.Web.ActivityPub.Utils.generate_activity_id()
+      end
 
     data_attrs = attrs[:data_attrs] || %{}
     attrs = Map.drop(attrs, [:user, :note, :data_attrs, :object_local])
