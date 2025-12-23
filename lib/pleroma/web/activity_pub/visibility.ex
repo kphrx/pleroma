@@ -73,7 +73,7 @@ defmodule Pleroma.Web.ActivityPub.Visibility do
       |> Pleroma.List.member?(user)
   end
 
-  def visible_for_user?(%Activity{data: _, object: %Object{data: _} = object} = activity, nil) do
+  def visible_for_user?(%Activity{object: %Object{} = object} = activity, nil) do
     activity_visibility? = restrict_unauthenticated_access?(activity)
     activity_public? = public?(activity) and not local_public?(activity)
     object_visibility? = restrict_unauthenticated_access?(object)
@@ -81,9 +81,6 @@ defmodule Pleroma.Web.ActivityPub.Visibility do
 
     # Activity could be local, but object might not (Announce/Like)
     cond do
-      activity_visibility? == true and object_visibility? == true ->
-        false
-
       activity_visibility? or object_visibility? ->
         false
 
