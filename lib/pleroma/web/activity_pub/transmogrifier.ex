@@ -873,6 +873,27 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     {:ok, data}
   end
 
+  def prepare_outgoing(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
+      when objtype in Pleroma.Constants.actor_types() do
+    object =
+      object
+      |> maybe_fix_user_object()
+      |> strip_internal_fields()
+
+    data =
+      data
+      |> Map.put("object", object)
+      |> strip_internal_fields()
+      |> Map.merge(Utils.make_json_ld_header(object))
+      |> Map.delete("bcc")
+
+    {:ok, data}
+  end
+
+  def prepare_outgoing(%{"type" => "Update", "object" => %{}} = data) do
+    raise "Requested to serve an Update for non-updateable object type:  #{inspect(data)}"
+  end
+
   def prepare_outgoing(%{"type" => "Announce", "actor" => ap_id, "object" => object_id} = data) do
     object =
       object_id

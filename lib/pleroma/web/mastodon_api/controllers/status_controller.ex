@@ -319,6 +319,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
   @doc "DELETE /api/v1/statuses/:id"
   def delete(%{assigns: %{user: user}, private: %{open_api_spex: %{params: %{id: id}}}} = conn, _) do
     with %Activity{} = activity <- Activity.get_by_id_with_object(id),
+         # CommonAPI already checks whether user is allowed to delete
          {:ok, %Activity{}} <- CommonAPI.delete(id, user) do
       try_render(conn, "show.json",
         activity: activity,
@@ -340,6 +341,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         _
       ) do
     with {:ok, announce} <- CommonAPI.repeat(ap_id_or_id, user, params),
+         # CommonAPI already checks whether user is allowed to reblog
          %Activity{} = announce <- Activity.normalize(announce.data) do
       try_render(conn, "show.json", %{activity: announce, for: user, as: :activity})
     end
@@ -364,6 +366,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         _
       ) do
     with {:ok, _fav} <- CommonAPI.favorite(activity_id, user),
+         # CommonAPI already checks whether user is allowed to reblog
          %Activity{} = activity <- Activity.get_by_id(activity_id) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
     end
@@ -390,6 +393,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
     with {:ok, activity} <- CommonAPI.pin(ap_id_or_id, user) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
     else
+      # Order matters, if status is not owned by user and is not visible to user
+      # return 404 just like other endpoints
       {:error, :pinned_statuses_limit_reached} ->
         {:error, "You have already pinned the maximum number of statuses"}
 
@@ -397,6 +402,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         {:error, :unprocessable_entity, "Someone else's status cannot be pinned"}
 
       {:error, :visibility_error} ->
+        {:error, :not_found, "Record not found"}
+
+      {:error, :non_public_error} ->
         {:error, :unprocessable_entity, "Non-public status cannot be pinned"}
 
       error ->
@@ -410,8 +418,20 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
           conn,
         _
       ) do
+    # CommonAPI already checks whether user can unpin
     with {:ok, activity} <- CommonAPI.unpin(ap_id_or_id, user) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      # Order matters, if status is not owned by user and is not visible to user
+      # return 404 just like other endpoints
+      {:error, :visibility_error} ->
+        {:error, :not_found, "Record not found"}
+
+      {:error, :ownership_error} ->
+        {:error, :unprocessable_entity, "Someone else's status cannot be unpinned"}
+
+      error ->
+        error
     end
   end
 
@@ -434,6 +454,12 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
            ),
          {:ok, _bookmark} <- Bookmark.create(user.id, activity.id, folder_id) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      false ->
+        {:error, :not_found, "Record not found"}
+
+      error ->
+        error
     end
   end
 
@@ -447,6 +473,12 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
          true <- Visibility.visible_for_user?(activity, user),
          {:ok, _bookmark} <- Bookmark.destroy(user.id, activity.id) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      false ->
+        {:error, :not_found, "Record not found"}
+
+      error ->
+        error
     end
   end
 
@@ -459,8 +491,15 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         _
       ) do
     with %Activity{} = activity <- Activity.get_by_id(id),
+         # CommonAPI already checks whether user is allowed to mute
          {:ok, activity} <- CommonAPI.add_mute(activity, user, params) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      {:error, :visibility_error} ->
+        {:error, :not_found, "Record not found"}
+
+      error ->
+        error
     end
   end
 
@@ -473,8 +512,15 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
         _
       ) do
     with %Activity{} = activity <- Activity.get_by_id(id),
+         # CommonAPI already checks whether user is allowed to unmute
          {:ok, activity} <- CommonAPI.remove_mute(activity, user) do
       try_render(conn, "show.json", activity: activity, for: user, as: :activity)
+    else
+      {:error, :visibility_error} ->
+        {:error, :not_found, "Record not found"}
+
+      error ->
+        error
     end
   end
 

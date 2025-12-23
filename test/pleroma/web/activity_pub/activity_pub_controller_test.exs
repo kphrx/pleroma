@@ -1580,6 +1580,41 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert object["content"] == activity["object"]["content"]
     end
 
+    test "it inserts an incoming reply create activity into the database", %{conn: conn} do
+      user = insert(:user)
+      replying_user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "cofe"})
+
+      data = %{
+        type: "Create",
+        object: %{
+          to: [Pleroma.Constants.as_public(), user.ap_id],
+          cc: [replying_user.follower_address],
+          inReplyTo: activity.object.data["id"],
+          content: "green tea",
+          type: "Note"
+        }
+      }
+
+      result =
+        conn
+        |> assign(:user, replying_user)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{replying_user.nickname}/outbox", data)
+        |> json_response(201)
+
+      updated_object = Object.normalize(activity.object.data["id"], fetch: false)
+
+      assert Activity.get_by_ap_id(result["id"])
+      assert result["object"]
+      assert %Object{data: object} = Object.normalize(result["object"], fetch: false)
+      assert object["content"] == data.object.content
+      assert Pleroma.Web.ActivityPub.Visibility.public?(object)
+      assert object["inReplyTo"] == activity.object.data["id"]
+      assert updated_object.data["repliesCount"] == 1
+    end
+
     test "it rejects anything beyond 'Note' creations", %{conn: conn, activity: activity} do
       user = insert(:user)
 
@@ -1704,6 +1739,289 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert json_response(conn, 400)
       assert note_object == Object.normalize(note_activity, fetch: false)
+    end
+
+    test "it rejects Add to other user's collection", %{conn: conn} do
+      user = insert(:user)
+      target_user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "Post"})
+      object = Object.normalize(activity, fetch: false)
+      object_id = object.data["id"]
+
+      data = %{
+        type: "Add",
+        target:
+          "#{Pleroma.Web.Endpoint.url()}/users/#{target_user.nickname}/collections/featured",
+        object: object_id
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects Remove to other user's collection", %{conn: conn} do
+      user = insert(:user)
+      target_user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "Post"})
+      object = Object.normalize(activity, fetch: false)
+      object_id = object.data["id"]
+
+      data = %{
+        type: "Remove",
+        target:
+          "#{Pleroma.Web.Endpoint.url()}/users/#{target_user.nickname}/collections/featured",
+        object: object_id
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects updating Actor's profile", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+      user_object_new = Map.put(user_object, "name", "lain")
+
+      data = %{
+        type: "Update",
+        object: user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      updated_user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+
+      assert updated_user_object == user_object
+      assert json_response(conn, 400)
+    end
+
+    # Actor publicKey tests are redundant with above test,
+    # left here for the case that Updating Actors is ever supported
+    test "it rejects updating Actor's publicKey", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      {:ok, pem} = Pleroma.Keys.generate_rsa_pem()
+      {:ok, _, public_key} = Pleroma.Keys.keys_from_pem(pem)
+      # Taken from UserView
+      public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+      public_key = :public_key.pem_encode([public_key])
+
+      user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+      user_object_public_key = Map.fetch!(user_object, "publicKey")
+      user_object_public_key = Map.put(user_object_public_key, "publicKeyPem", public_key)
+      user_object_new = Map.put(user_object, "publicKey", user_object_public_key)
+
+      refute user_object == user_object_new
+
+      data = %{
+        type: "Update",
+        object: user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      new_user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+
+      assert user_object == new_user_object
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects updating Actor's publicKey of another user", %{conn: conn} do
+      user = insert(:user)
+      target_user = insert(:user, local: true)
+
+      {:ok, pem} = Pleroma.Keys.generate_rsa_pem()
+      {:ok, _, public_key} = Pleroma.Keys.keys_from_pem(pem)
+      # Taken from UserView
+      public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+      public_key = :public_key.pem_encode([public_key])
+
+      target_user_object =
+        Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: target_user})
+
+      target_user_object_public_key = Map.fetch!(target_user_object, "publicKey")
+
+      target_user_object_public_key =
+        Map.put(target_user_object_public_key, "publicKeyPem", public_key)
+
+      target_user_object_new =
+        Map.put(target_user_object, "publicKey", target_user_object_public_key)
+
+      refute target_user_object == target_user_object_new
+
+      data = %{
+        type: "Update",
+        object: target_user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{target_user.nickname}/outbox", data)
+
+      new_target_user_object =
+        Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: target_user})
+
+      assert target_user_object == new_target_user_object
+      assert json_response(conn, 403)
+    end
+
+    test "it rejects creating Actors of type Application", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      data = %{
+        type: "Create",
+        object: %{
+          type: "Application"
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects creating Actors of type Person", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      data = %{
+        type: "Create",
+        object: %{
+          type: "Person"
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects creating Actors of type Service", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      data = %{
+        type: "Create",
+        object: %{
+          type: "Service"
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects like activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "Like",
+        object: %{
+          id: post_object.data["id"]
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
+    end
+
+    test "it rejects announce activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "Announce",
+        object: %{
+          id: post_object.data["id"]
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
+    end
+
+    test "it rejects emojireact activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "EmojiReact",
+        object: %{
+          id: post_object.data["id"]
+        },
+        content: "😀"
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
     end
 
     test "it increases like count when receiving a like action", %{conn: conn} do

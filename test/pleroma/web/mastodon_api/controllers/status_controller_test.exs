@@ -17,6 +17,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Utils
+  alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Workers.ScheduledActivityWorker
 
@@ -265,6 +266,73 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
                  "error" => "The message visibility must be direct"
                }
       end)
+    end
+
+    test "replying to a post the current user can't access fails", %{user: user, conn: conn} do
+      stranger = insert(:user)
+
+      {:ok, priv_post_act} =
+        CommonAPI.post(stranger, %{status: "forbidden knowledge", visibility: "private"})
+
+      assert Visibility.visible_for_user?(priv_post_act, stranger)
+      refute Visibility.visible_for_user?(priv_post_act, user)
+
+      resp =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses", %{
+          "status" => "@#{stranger.nickname} :peek:",
+          "in_reply_to_id" => priv_post_act.id,
+          "visibility" => "private"
+        })
+        |> json_response_and_validate_schema(422)
+
+      assert match?(%{"error" => _}, resp)
+    end
+
+    test "replying to own DM succeeds", %{user: user, conn: conn} do
+      # this is an "edge" case for visibility: replying user is not
+      # part of addressed users (but is the author)
+      stranger = insert(:user)
+
+      {:ok, %{id: dm_id} = dm_post_act} =
+        CommonAPI.post(user, %{
+          status: "@#{stranger.nickname} wanna lose your mind to forbidden knowledge?",
+          visibility: "direct"
+        })
+
+      assert Visibility.visible_for_user?(dm_post_act, stranger)
+      assert Visibility.visible_for_user?(dm_post_act, user)
+
+      resp =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses", %{
+          "status" => "@#{stranger.nickname} :peek:",
+          "in_reply_to_id" => dm_id,
+          "visibility" => "direct"
+        })
+        |> json_response_and_validate_schema(200)
+
+      assert match?(%{"in_reply_to_id" => ^dm_id}, resp)
+    end
+
+    test "replying to a non-post activity fails", %{conn: conn, user: user} do
+      other_user = insert(:user)
+
+      {:ok, _, _, follow_activity} = CommonAPI.follow(other_user, user)
+      assert Visibility.visible_for_user?(follow_activity, user)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses", %{
+          "status" => "hiiii!",
+          "in_reply_to_id" => to_string(follow_activity.id)
+        })
+
+      assert %{"error" => "Can only reply to posts, not \"Follow\" activities"} =
+               json_response_and_validate_schema(conn, 422)
     end
 
     test "posting a status with an invalid in_reply_to_id", %{conn: conn} do
@@ -1416,6 +1484,24 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       assert to_string(activity.id) == id
     end
+
+    test "cannot reblog private status of others (even if visible)", %{conn: conn, user: user} do
+      followed = insert(:user, local: true)
+
+      {:ok, _, _, %{data: %{"state" => "accept"}}} = CommonAPI.follow(followed, user)
+
+      {:ok, activity} = CommonAPI.post(followed, %{status: "cofe", visibility: "private"})
+
+      assert Visibility.visible_for_user?(activity, user)
+
+      resp =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses/#{activity.id}/reblog")
+        |> json_response_and_validate_schema(404)
+
+      assert match?(%{"error" => _}, resp)
+    end
   end
 
   describe "unreblogging" do
@@ -1444,6 +1530,34 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
         |> post("/api/v1/statuses/foo/unreblog")
 
       assert json_response_and_validate_schema(conn, 404) == %{"error" => "Record not found"}
+    end
+
+    test "can't unreblog someone else's reblog", %{user: user, conn: conn} do
+      activity = insert(:note_activity)
+      other_user = insert(:user)
+
+      {:ok, %{id: reblog_id}} = CommonAPI.repeat(activity.id, other_user)
+
+      # unreblog by base post
+      resp1 =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses/#{activity.id}/unreblog")
+        |> json_response(400)
+
+      assert match?(%{"error" => _}, resp1)
+
+      # unreblog by reblog ID (reblog IDs are accepted by some APIs;
+      # ensure it fails here one way or another)
+      resp2 =
+        build_conn()
+        |> assign(:user, user)
+        |> assign(:token, insert(:oauth_token, user: user, scopes: ["write", "read"]))
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses/#{reblog_id}/unreblog")
+        |> json_response_and_validate_schema(404)
+
+      assert match?(%{"error" => _}, resp2)
     end
   end
 
@@ -1477,13 +1591,23 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              |> json_response_and_validate_schema(200)
     end
 
-    test "returns 404 error for a wrong id", %{conn: conn} do
-      conn =
-        conn
-        |> put_req_header("content-type", "application/json")
-        |> post("/api/v1/statuses/1/favourite")
+    test "a status you cannot see fails", %{conn: conn} do
+      stranger = insert(:user)
 
-      assert json_response_and_validate_schema(conn, 404) == %{"error" => "Record not found"}
+      {:ok, activity} =
+        CommonAPI.post(stranger, %{status: "it can eternal lie", visibility: "private"})
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/favourite")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
+    end
+
+    test "returns 404 error for a wrong id", %{conn: conn} do
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/1/favourite")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
   end
 
@@ -1506,6 +1630,54 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert to_string(activity.id) == id
     end
 
+    test "can't unfavourite post that isn't visible to user" do
+      user = insert(:user)
+      %{conn: conn, user: stranger} = oauth_access(["write:favourites"])
+      {:ok, activity} = CommonAPI.post(user, %{status: "invisible", visibility: "private"})
+
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unfavourite")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
+    end
+
+    test "can't unfavourite post that isn't favourited", %{conn: conn} do
+      activity = insert(:note_activity)
+
+      # using base post ID
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unfavourite")
+             |> json_response_and_validate_schema(400) == %{"error" => "Could not unfavorite"}
+    end
+
+    test "can't unfavourite other user's favs", %{conn: conn} do
+      activity = insert(:note_activity)
+
+      other = insert(:user)
+      {:ok, _} = CommonAPI.favorite(activity.id, other)
+
+      # using base post ID
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unfavourite")
+             |> json_response_and_validate_schema(400) == %{"error" => "Could not unfavorite"}
+    end
+
+    test "can't unfavourite other user's favs using their activity", %{conn: conn} do
+      activity = insert(:note_activity)
+
+      other = insert(:user)
+      {:ok, fav_activity} = CommonAPI.favorite(activity.id, other)
+      # some APIs (used to) take IDs of any activity type, make sure this fails one way or another
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{fav_activity.id}/unfavourite")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
+    end
+
     test "returns 404 error for a wrong id", %{conn: conn} do
       conn =
         conn
@@ -1514,6 +1686,19 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       assert json_response_and_validate_schema(conn, 404) == %{"error" => "Record not found"}
     end
+  end
+
+  test "can't favourite post that isn't visible to user" do
+    user = insert(:user)
+    %{conn: conn, user: stranger} = oauth_access(["write:favourites"])
+    {:ok, activity} = CommonAPI.post(user, %{status: "invisible", visibility: "private"})
+
+    refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+    assert conn
+           |> put_req_header("content-type", "application/json")
+           |> post("/api/v1/statuses/#{activity.id}/favourite")
+           |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
   end
 
   describe "pinned statuses" do
@@ -1549,7 +1734,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              |> json_response(403) == %{"error" => "Invalid credentials."}
     end
 
-    test "/pin: returns 400 error when activity is not public", %{conn: conn, user: user} do
+    test "/pin: returns 422 error when activity is not public", %{conn: conn, user: user} do
       {:ok, dm} = CommonAPI.post(user, %{status: "test", visibility: "direct"})
 
       conn =
@@ -1560,6 +1745,18 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert json_response_and_validate_schema(conn, 422) == %{
                "error" => "Non-public status cannot be pinned"
              }
+    end
+
+    test "/pin: returns 404 error when activity not visible to user", %{user: user} do
+      %{conn: conn, user: stranger} = oauth_access(["write:accounts"])
+      {:ok, activity} = CommonAPI.post(user, %{status: "invisible", visibility: "private"})
+
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/pin")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
     end
 
     test "pin by another user", %{activity: activity} do
@@ -1594,6 +1791,32 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              |> put_req_header("content-type", "application/json")
              |> post("/api/v1/statuses/1/unpin")
              |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
+    end
+
+    test "/unpin: returns 404 error when activity not visible to user", %{user: user} do
+      %{conn: conn, user: stranger} = oauth_access(["write:accounts"])
+      {:ok, activity} = CommonAPI.post(user, %{status: "yumi", visibility: "private"})
+
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+      assert conn
+             |> assign(:user, stranger)
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unpin")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
+    end
+
+    test "/unpin: returns 422 error when activity not owned by user", %{activity: activity} do
+      %{conn: conn, user: user} = oauth_access(["write:accounts"])
+
+      assert Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, user)
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unpin")
+             |> json_response_and_validate_schema(422) == %{
+               "error" => "Someone else's status cannot be unpinned"
+             }
     end
 
     test "max pinned statuses", %{conn: conn, user: user, activity: activity_one} do
@@ -1707,6 +1930,28 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              json_response_and_validate_schema(bookmarks, 200)
   end
 
+  test "cannot bookmark invisible post" do
+    user = insert(:user)
+    %{conn: conn, user: stranger} = oauth_access(["write:bookmarks"])
+    {:ok, activity} = CommonAPI.post(user, %{status: "mocha", visibility: "private"})
+
+    refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(activity, stranger)
+
+    resp1 =
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/v1/statuses/#{activity.id}/bookmark")
+
+    assert json_response_and_validate_schema(resp1, 404) == %{"error" => "Record not found"}
+
+    resp2 =
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/v1/statuses/#{activity.id}/unbookmark")
+
+    assert json_response_and_validate_schema(resp2, 404) == %{"error" => "Record not found"}
+  end
+
   test "bookmark folders" do
     %{conn: conn, user: user} = oauth_access(["write:bookmarks", "read:bookmarks"])
 
@@ -1803,6 +2048,30 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
                # |> assign(:user, user)
                |> post("/api/v1/statuses/#{activity.id}/unmute")
                |> json_response_and_validate_schema(200)
+    end
+
+    test "cannot mute not visible conversation", %{user: user} do
+      {:ok, activity} = CommonAPI.post(user, %{status: "Invisible!", visibility: "private"})
+      %{conn: conn} = oauth_access(["write:mutes"])
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/mute")
+             |> json_response_and_validate_schema(404) == %{
+               "error" => "Record not found"
+             }
+    end
+
+    test "cannot unmute not visible conversation", %{user: user} do
+      {:ok, activity} = CommonAPI.post(user, %{status: "Invisible!", visibility: "private"})
+      %{conn: conn} = oauth_access(["write:mutes"])
+
+      assert conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/statuses/#{activity.id}/unmute")
+             |> json_response_and_validate_schema(404) == %{
+               "error" => "Record not found"
+             }
     end
   end
 
@@ -1970,6 +2239,22 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert id == other_user.id
     end
 
+    test "fails when base post not visible to current user", %{user: user} do
+      other_user = insert(:user, local: true)
+      %{conn: conn} = oauth_access(["read:accounts"])
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: "craving tea and mochi rn",
+          visibility: "private"
+        })
+
+      assert conn
+             |> assign(:user, other_user)
+             |> get("/api/v1/statuses/#{activity.id}/favourited_by")
+             |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
+    end
+
     test "returns empty array when :show_reactions is disabled", %{conn: conn, activity: activity} do
       clear_config([:instance, :show_reactions], false)
 
@@ -2088,6 +2373,25 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       assert [] == response
     end
+
+    test "does fail when requesting for a non-visible status", %{user: user} do
+      other_user = insert(:user, local: true)
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: "deep below it sleeps and mustn't wake",
+          visibility: "private"
+        })
+
+      response =
+        build_conn()
+        |> assign(:user, other_user)
+        |> assign(:token, insert(:oauth_token, user: other_user, scopes: ["read"]))
+        |> get("/api/v1/statuses/#{activity.id}/reblogged_by")
+        |> json_response_and_validate_schema(404)
+
+      assert match?(%{"error" => _}, response)
+    end
   end
 
   test "context" do
@@ -2108,6 +2412,34 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              "ancestors" => [%{"id" => ^id1}, %{"id" => ^id2}],
              "descendants" => [%{"id" => ^id4}, %{"id" => ^id5}]
            } = response
+  end
+
+  test "context doesn't leak priv posts" do
+    %{user: user, conn: conn} = oauth_access(["read:statuses"])
+    stranger = insert(:user)
+
+    {:ok, %{id: id1}} = CommonAPI.post(stranger, %{status: "1", visibility: "public"})
+
+    {:ok, %{id: id2}} =
+      CommonAPI.post(stranger, %{status: "2", visibility: "unlisted", in_reply_to_status_id: id1})
+
+    {:ok, %{id: _id_boo} = act_boo} =
+      CommonAPI.post(stranger, %{status: "boo", visibility: "private", in_reply_to_status_id: id1})
+
+    refute Visibility.visible_for_user?(act_boo, user)
+
+    response =
+      conn
+      |> get("/api/v1/statuses/#{id1}/context")
+      |> json_response_and_validate_schema(:ok)
+
+    assert match?(
+             %{
+               "ancestors" => [],
+               "descendants" => [%{"id" => ^id2}]
+             },
+             response
+           )
   end
 
   test "favorites paginate correctly" do

@@ -1086,7 +1086,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
     test "only public can be pinned", %{user: user} do
       {:ok, activity} = CommonAPI.post(user, %{status: "private status", visibility: "private"})
-      {:error, :visibility_error} = CommonAPI.pin(activity.id, user)
+      {:error, :non_public_error} = CommonAPI.pin(activity.id, user)
     end
 
     test "unpin status", %{user: user, activity: activity} do
@@ -1298,6 +1298,47 @@ defmodule Pleroma.Web.CommonAPITest do
                  "state" => "open"
                }
              } = flag_activity
+    end
+
+    test "doesn't create a report when post is not visible to user" do
+      reporter = insert(:user)
+      target_user = insert(:user)
+      {:ok, post} = CommonAPI.post(target_user, %{status: "Eric", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, reporter)
+
+      # Fails when all status are invisible
+      report_data = %{
+        account_id: target_user.id,
+        comment: "foobar",
+        status_ids: [post.id]
+      }
+
+      assert {:error, :visibility_error} = CommonAPI.report(reporter, report_data)
+    end
+
+    test "doesn't create a report when some posts are not visible to user" do
+      reporter = insert(:user)
+      target_user = insert(:user)
+
+      {:ok, visible_activity} = CommonAPI.post(target_user, %{status: "cofe"})
+
+      {:ok, invisibile_activity} =
+        CommonAPI.post(target_user, %{status: "cawfee", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(invisibile_activity)
+      assert Pleroma.Web.ActivityPub.Visibility.public?(visible_activity)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(invisibile_activity, reporter)
+
+      # Fails when some statuses are invisible
+      report_data_partial = %{
+        account_id: target_user.id,
+        comment: "foobar",
+        status_ids: [visible_activity.id, invisibile_activity.id]
+      }
+
+      assert {:error, :visibility_error} = CommonAPI.report(reporter, report_data_partial)
     end
 
     test "updates report state" do

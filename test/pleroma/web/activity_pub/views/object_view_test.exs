@@ -95,4 +95,23 @@ defmodule Pleroma.Web.ActivityPub.ObjectViewTest do
     assert result["object"] == announce.data["id"]
     assert result["type"] == "Undo"
   end
+
+  test "renders a listen activity" do
+    audio = insert(:audio)
+    user = insert(:user)
+
+    {:ok, listen_activity} = CommonAPI.listen(user, audio.data)
+
+    result = ObjectView.render("object.json", %{object: listen_activity})
+
+    assert result["id"] == listen_activity.data["id"]
+    assert result["to"] == listen_activity.data["to"]
+    assert result["type"] == "Listen"
+    assert result["object"]["album"] == listen_activity.data["album"]
+    assert result["object"]["artist"] == listen_activity.data["artist"]
+    assert result["object"]["length"] == listen_activity.data["length"]
+    assert result["object"]["title"] == listen_activity.data["title"]
+    assert result["object"]["type"] == "Audio"
+    assert result["@context"]
+  end
 end
