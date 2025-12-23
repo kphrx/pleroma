@@ -812,7 +812,34 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
     {:ok, job} = Pleroma.Web.Federator.incoming_ap_doc(params)
     {:ok, remote_activity} = ObanHelpers.perform(job)
 
-    %{locals: [id1, id2], remote: remote_activity.id, context: context}
+    {:ok, %{id: local_to_local_react_id}} = CommonAPI.react_with_emoji(id1, local_user_2, "🦊")
+
+    {:ok, %{id: local_to_remote_react_id}} =
+      CommonAPI.react_with_emoji(remote_activity.id, local_user_1, "🦊")
+
+    {:ok, %{id: remote_to_local_react_id}} = CommonAPI.react_with_emoji(id1, remote_user, "🦊")
+
+    {:ok, %{id: remote_to_remote_react_id}} =
+      CommonAPI.react_with_emoji(remote_activity.id, remote_user, "🦊")
+
+    %{
+      locals: [id1, id2],
+      remote: remote_activity.id,
+      local_interactions: [local_to_local_react_id, local_to_remote_react_id],
+      remote_interactions: [remote_to_local_react_id, remote_to_remote_react_id],
+      context: context
+    }
+  end
+
+  defp extract_activity_ids_from_response(list) when is_list(list) do
+    list
+    |> Enum.map(& &1["id"])
+  end
+
+  defp all_ids_included?(checked, authority) when is_list(checked) and is_list(authority) do
+    set1 = MapSet.new(checked)
+    set2 = MapSet.new(authority)
+    MapSet.equal?(set1, set2)
   end
 
   defp local_interactions_to_remote do
@@ -1182,6 +1209,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
     end
   end
 
+  # Note: Context route on EmojiReact/Announce activities puts everything into the ancestors field
   describe "getting status contexts restricted unauthenticated for local and remote" do
     setup do: local_and_remote_context_activities()
 
@@ -1200,6 +1228,40 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
     test "if user is unauthenticated reply", %{conn: conn, locals: [_, reply_id]} do
       res_conn = get(conn, "/api/v1/statuses/#{reply_id}/context")
+
+      assert json_response_and_validate_schema(res_conn, 200) == %{
+               "ancestors" => [],
+               "descendants" => []
+             }
+    end
+
+    test "if user is unauthenticated Activity interactions", %{
+      conn: conn,
+      local_interactions: [local_to_local, local_to_remote],
+      remote_interactions: [remote_to_local, remote_to_remote]
+    } do
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_local}/context")
+
+      assert json_response_and_validate_schema(res_conn, 200) == %{
+               "ancestors" => [],
+               "descendants" => []
+             }
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_remote}/context")
+
+      assert json_response_and_validate_schema(res_conn, 200) == %{
+               "ancestors" => [],
+               "descendants" => []
+             }
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_local}/context")
+
+      assert json_response_and_validate_schema(res_conn, 200) == %{
+               "ancestors" => [],
+               "descendants" => []
+             }
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_remote}/context")
 
       assert json_response_and_validate_schema(res_conn, 200) == %{
                "ancestors" => [],
@@ -1239,6 +1301,47 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       assert post_id in ancestor_ids
       assert remote_reply_id in descendant_ids
+    end
+
+    test "if user is authenticated Activity interactions", %{
+      locals: [post_id, reply_id],
+      remote: remote_reply_id,
+      local_interactions: [local_to_local, local_to_remote],
+      remote_interactions: [remote_to_local, remote_to_remote]
+    } do
+      %{conn: conn} = oauth_access(["read"])
+      all_ids = [post_id, reply_id, remote_reply_id]
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_local}/context")
+
+      %{"ancestors" => ancestors1, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids1 = extract_activity_ids_from_response(ancestors1)
+      assert all_ids_included?(ancestor_ids1, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_remote}/context")
+
+      %{"ancestors" => ancestors2, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids2 = extract_activity_ids_from_response(ancestors2)
+      assert all_ids_included?(ancestor_ids2, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_local}/context")
+
+      %{"ancestors" => ancestors3, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids3 = extract_activity_ids_from_response(ancestors3)
+      assert all_ids_included?(ancestor_ids3, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_remote}/context")
+
+      %{"ancestors" => ancestors4, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids4 = extract_activity_ids_from_response(ancestors4)
+      assert all_ids_included?(ancestor_ids4, all_ids)
     end
   end
 
@@ -1289,6 +1392,45 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert remote_reply_id in descendant_ids
     end
 
+    test "if user is unauthenticated Activity interactions", %{
+      conn: conn,
+      remote: remote_reply_id,
+      local_interactions: [local_to_local, local_to_remote],
+      remote_interactions: [remote_to_local, remote_to_remote]
+    } do
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_local}/context")
+
+      %{"ancestors" => ancestors1, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids1 = extract_activity_ids_from_response(ancestors1)
+      assert all_ids_included?(ancestor_ids1, [remote_reply_id])
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_remote}/context")
+
+      %{"ancestors" => ancestors2, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids2 = extract_activity_ids_from_response(ancestors2)
+      assert all_ids_included?(ancestor_ids2, [remote_reply_id])
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_local}/context")
+
+      %{"ancestors" => ancestors3, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids3 = extract_activity_ids_from_response(ancestors3)
+      assert all_ids_included?(ancestor_ids3, [remote_reply_id])
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_remote}/context")
+
+      %{"ancestors" => ancestors4, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids4 = extract_activity_ids_from_response(ancestors4)
+      assert all_ids_included?(ancestor_ids4, [remote_reply_id])
+    end
+
     test "if user is authenticated", %{locals: [post_id, reply_id], remote: remote_reply_id} do
       %{conn: conn} = oauth_access(["read"])
       res_conn = get(conn, "/api/v1/statuses/#{post_id}/context")
@@ -1321,6 +1463,47 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       assert post_id in ancestor_ids
       assert remote_reply_id in descendant_ids
+    end
+
+    test "if user is authenticated Activity interactions", %{
+      locals: [post_id, reply_id],
+      remote: remote_reply_id,
+      local_interactions: [local_to_local, local_to_remote],
+      remote_interactions: [remote_to_local, remote_to_remote]
+    } do
+      %{conn: conn} = oauth_access(["read"])
+      all_ids = [post_id, reply_id, remote_reply_id]
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_local}/context")
+
+      %{"ancestors" => ancestors1, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids1 = extract_activity_ids_from_response(ancestors1)
+      assert all_ids_included?(ancestor_ids1, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_remote}/context")
+
+      %{"ancestors" => ancestors2, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids2 = extract_activity_ids_from_response(ancestors2)
+      assert all_ids_included?(ancestor_ids2, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_local}/context")
+
+      %{"ancestors" => ancestors3, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids3 = extract_activity_ids_from_response(ancestors3)
+      assert all_ids_included?(ancestor_ids3, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_remote}/context")
+
+      %{"ancestors" => ancestors4, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids4 = extract_activity_ids_from_response(ancestors4)
+      assert all_ids_included?(ancestor_ids4, all_ids)
     end
   end
 
@@ -1371,6 +1554,46 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       assert remote_reply_id not in descendant_ids
     end
 
+    test "if user is unauthenticated Activity interactions", %{
+      conn: conn,
+      locals: [post_id, reply_id],
+      local_interactions: [local_to_local, local_to_remote],
+      remote_interactions: [remote_to_local, remote_to_remote]
+    } do
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_local}/context")
+      all_ids = [post_id, reply_id]
+
+      %{"ancestors" => ancestors1, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids1 = extract_activity_ids_from_response(ancestors1)
+      assert all_ids_included?(ancestor_ids1, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_remote}/context")
+
+      %{"ancestors" => ancestors2, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids2 = extract_activity_ids_from_response(ancestors2)
+      assert all_ids_included?(ancestor_ids2, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_local}/context")
+
+      %{"ancestors" => ancestors3, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids3 = extract_activity_ids_from_response(ancestors3)
+      assert all_ids_included?(ancestor_ids3, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_remote}/context")
+
+      %{"ancestors" => ancestors4, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids4 = extract_activity_ids_from_response(ancestors4)
+      assert all_ids_included?(ancestor_ids4, all_ids)
+    end
+
     test "if user is authenticated", %{locals: [post_id, reply_id], remote: remote_reply_id} do
       %{conn: conn} = oauth_access(["read"])
       res_conn = get(conn, "/api/v1/statuses/#{post_id}/context")
@@ -1403,6 +1626,47 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
       assert post_id in ancestor_ids
       assert remote_reply_id in descendant_ids
+    end
+
+    test "if user is authenticated Activity interactions", %{
+      locals: [post_id, reply_id],
+      remote: remote_reply_id,
+      local_interactions: [local_to_local, local_to_remote],
+      remote_interactions: [remote_to_local, remote_to_remote]
+    } do
+      %{conn: conn} = oauth_access(["read"])
+      all_ids = [post_id, reply_id, remote_reply_id]
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_local}/context")
+
+      %{"ancestors" => ancestors1, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids1 = extract_activity_ids_from_response(ancestors1)
+      assert all_ids_included?(ancestor_ids1, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{local_to_remote}/context")
+
+      %{"ancestors" => ancestors2, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids2 = extract_activity_ids_from_response(ancestors2)
+      assert all_ids_included?(ancestor_ids2, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_local}/context")
+
+      %{"ancestors" => ancestors3, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids3 = extract_activity_ids_from_response(ancestors3)
+      assert all_ids_included?(ancestor_ids3, all_ids)
+
+      res_conn = get(conn, "/api/v1/statuses/#{remote_to_remote}/context")
+
+      %{"ancestors" => ancestors4, "descendants" => []} =
+        json_response_and_validate_schema(res_conn, 200)
+
+      ancestor_ids4 = extract_activity_ids_from_response(ancestors4)
+      assert all_ids_included?(ancestor_ids4, all_ids)
     end
   end
 
