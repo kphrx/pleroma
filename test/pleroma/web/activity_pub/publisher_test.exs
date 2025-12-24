@@ -332,6 +332,33 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       )
     end
 
+    test "activity with BCC is published to a list member." do
+      actor = insert(:user)
+      {:ok, list} = Pleroma.List.create("list", actor)
+      list_member = insert(:user, %{local: false})
+
+      Pleroma.List.follow(list, list_member)
+
+      note_activity =
+        insert(:note_activity,
+          # recipients: [follower.ap_id],
+          data_attrs: %{"bcc" => [list.ap_id]}
+        )
+
+      res = Publisher.publish(actor, note_activity)
+      assert res == :ok
+
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "params" => %{
+            inbox: list_member.inbox,
+            activity_id: note_activity.id
+          }
+        }
+      )
+    end
+
     test "publishes a delete activity to peers who signed fetch requests to the create acitvity/object." do
       fetcher =
         insert(:user,

@@ -21,7 +21,8 @@ defmodule Pleroma.Constants do
       "pleroma_internal",
       "generator",
       "rules",
-      "language"
+      "language",
+      "voters"
     ]
   )
 
@@ -130,6 +131,13 @@ defmodule Pleroma.Constants do
   # https://datatracker.ietf.org/doc/html/rfc2045#section-5.1
   const(mime_regex,
     do: ~r/^[^[:cntrl:] ()<>@,;:\\"\/\[\]?=]+\/[^[:cntrl:] ()<>@,;:\\"\/\[\]?=]+(; .*)?$/
+  )
+
+  # List of allowed chars in the path segment of a URI
+  # unreserved, sub-delims, ":", "@" and "/" allowed as the separator in path
+  # https://datatracker.ietf.org/doc/html/rfc3986
+  const(uri_path_allowed_reserved_chars,
+    do: ~c"!$&'()*+,;=/:@"
   )
 
   const(upload_object_types, do: ["Document", "Image"])

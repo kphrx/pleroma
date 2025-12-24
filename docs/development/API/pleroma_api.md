@@ -684,6 +684,7 @@ Audio scrobbling in Pleroma is **deprecated**.
 ### Creates a new Listen activity for an account
 * Method `POST`
 * Authentication: required
+* OAuth scope: `write:scrobbles`
 * Params:
   * `title`: the title of the media playing
   * `album`: the album of the media playing [optional]

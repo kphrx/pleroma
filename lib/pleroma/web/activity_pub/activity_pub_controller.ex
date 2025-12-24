@@ -482,6 +482,42 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     {:ok, activity}
   end
 
+  # We currently lack a Flag ObjectValidator since both CommonAPI and Transmogrifier
+  # both send it straight to ActivityPub.flag and C2S currently has to go through
+  # the normal pipeline which requires an ObjectValidator.
+  # TODO: Add a Flag Activity ObjectValidator
+  defp check_allowed_action(_, %{"type" => "Flag"}) do
+    {:error, "Flag activities aren't currently supported in C2S"}
+  end
+
+  # It would respond with 201 and silently fail with:
+  # Could not decode featured collection at fetch #{user.ap_id} \
+  # {:error, "Trying to fetch local resource"}
+  defp check_allowed_action(%{ap_id: ap_id}, %{"type" => "Update", "object" => %{"id" => ap_id}}),
+    do: {:error, "Updating profile is not currently supported in C2S"}
+
+  defp check_allowed_action(_, activity), do: {:ok, activity}
+
+  defp validate_visibility(%User{} = user, %{"type" => type, "object" => object} = activity) do
+    with {_, %Object{} = normalized_object} <-
+           {:normalize, Object.normalize(object, fetch: false)},
+         {_, true} <- {:visibility, Visibility.visible_for_user?(normalized_object, user)} do
+      {:ok, activity}
+    else
+      {:normalize, _} ->
+        if type in ["Create", "Listen"] do
+          # Creating new object via C2S; user is local and authenticated
+          # via the :authenticate Plug pipeline.
+          {:ok, activity}
+        else
+          {:error, "No such object found"}
+        end
+
+      {:visibility, _} ->
+        {:forbidden, "You can't interact with this object"}
+    end
+  end
+
   def update_outbox(
         %{assigns: %{user: %User{nickname: nickname, ap_id: actor} = user}} = conn,
         %{"nickname" => nickname} = params
@@ -493,6 +529,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
       |> Map.put("actor", actor)
 
     with {:ok, params} <- fix_user_message(user, params),
+         {:ok, params} <- check_allowed_action(user, params),
+         {:ok, params} <- validate_visibility(user, params),
          {:ok, activity, _} <- Pipeline.common_pipeline(params, local: true),
          %Activity{data: activity_data} <- Activity.normalize(activity) do
       conn

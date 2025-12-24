@@ -104,6 +104,24 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
+  @doc """
+  Bovine compatibility
+  https://codeberg.org/bovine/bovine/issues/53
+  """
+  def fix_addressing_public(map, field) do
+    addrs = Map.get(map, field, []) |> List.wrap()
+
+    Map.put(
+      map,
+      field,
+      Enum.map(addrs, fn
+        "Public" -> Pleroma.Constants.as_public()
+        "as:Public" -> Pleroma.Constants.as_public()
+        x -> x
+      end)
+    )
+  end
+
   # if directMessage flag is set to true, leave the addressing alone
   def fix_explicit_addressing(%{"directMessage" => true} = object, _follower_collection),
     do: object
@@ -161,6 +179,10 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> fix_addressing_list("cc")
     |> fix_addressing_list("bto")
     |> fix_addressing_list("bcc")
+    |> fix_addressing_public("to")
+    |> fix_addressing_public("cc")
+    |> fix_addressing_public("bto")
+    |> fix_addressing_public("bcc")
     |> fix_explicit_addressing(follower_collection)
     |> fix_implicit_addressing(follower_collection)
   end
@@ -849,6 +871,27 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
       |> Map.delete("bcc")
 
     {:ok, data}
+  end
+
+  def prepare_outgoing(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
+      when objtype in Pleroma.Constants.actor_types() do
+    object =
+      object
+      |> maybe_fix_user_object()
+      |> strip_internal_fields()
+
+    data =
+      data
+      |> Map.put("object", object)
+      |> strip_internal_fields()
+      |> Map.merge(Utils.make_json_ld_header(object))
+      |> Map.delete("bcc")
+
+    {:ok, data}
+  end
+
+  def prepare_outgoing(%{"type" => "Update", "object" => %{}} = data) do
+    raise "Requested to serve an Update for non-updateable object type:  #{inspect(data)}"
   end
 
   def prepare_outgoing(%{"type" => "Announce", "actor" => ap_id, "object" => object_id} = data) do

@@ -146,6 +146,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       "pleroma_emoji_reactions",
       "pleroma_custom_emoji_reactions",
       "pleroma_chat_messages",
+      "pleroma:pin_chats",
       if Config.get([:instance, :show_reactions]) do
         "exposable_reactions"
       end,
@@ -257,8 +258,32 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       vapid: %{
         public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
       },
-      translation: %{enabled: Pleroma.Language.Translation.configured?()}
+      translation: %{enabled: Pleroma.Language.Translation.configured?()},
+      timelines_access: %{
+        live_feeds: timelines_access(),
+        hashtag_feeds: timelines_access(),
+        # not implemented in Pleroma
+        trending_link_feeds: %{
+          local: "disabled",
+          remote: "disabled"
+        }
+      }
     })
+  end
+
+  defp timelines_access do
+    %{
+      local: timeline_access(:local),
+      remote: timeline_access(:federated)
+    }
+  end
+
+  defp timeline_access(kind) do
+    if Config.restrict_unauthenticated_access?(:timelines, kind) do
+      "authenticated"
+    else
+      "public"
+    end
   end
 
   defp pleroma_configuration(instance) do

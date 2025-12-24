@@ -884,7 +884,7 @@ defmodule Pleroma.Web.StreamerTest do
       assert Streamer.filtered_by_user?(topic, user1, notif)
     end
 
-    test "it send non-reblog notification for reblog-muted actors", %{
+    test "it sends non-reblog notification for reblog-muted actors", %{
       user: user1,
       token: user1_token
     } do

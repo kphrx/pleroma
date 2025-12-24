@@ -465,6 +465,40 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     end
   end
 
+  test "works with avatar/banner href as list" do
+    user_id = "https://queef.in/cute_cat"
+
+    user_data =
+      "test/fixtures/users_mock/href_as_array.json"
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.delete("featured")
+      |> Jason.encode!()
+
+    Tesla.Mock.mock(fn
+      %{
+        method: :get,
+        url: ^user_id
+      } ->
+        %Tesla.Env{
+          status: 200,
+          body: user_data,
+          headers: [{"content-type", "application/activity+json"}]
+        }
+    end)
+
+    {:ok, user} = ActivityPub.make_user_from_ap_id(user_id)
+
+    assert length(user.avatar["url"]) == 1
+    assert length(user.banner["url"]) == 1
+
+    assert user.avatar["url"] |> List.first() |> Map.fetch!("href") ==
+             "https://queef.in/storage/profile.webp"
+
+    assert user.banner["url"] |> List.first() |> Map.fetch!("href") ==
+             "https://queef.in/storage/banner.gif"
+  end
+
   test "it fetches the appropriate tag-restricted posts" do
     user = insert(:user)
 
@@ -831,7 +865,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
 
       {:ok, activity} = CommonAPI.post(user, %{status: "1", visibility: "public"})
       ap_id = activity.data["id"]
-      quote_data = %{status: "1", quote_id: activity.id}
+      quote_data = %{status: "1", quoted_status_id: activity.id}
 
       # public
       {:ok, _} = CommonAPI.post(user2, Map.put(quote_data, :visibility, "public"))
