@@ -698,9 +698,10 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
 
     test "still provides reply collection id even if activity doesn't have replies yet" do
       data = Jason.decode!(File.read!("test/fixtures/mastodon-post-activity.json"))
-      modified = Transmogrifier.set_replies(data)
+      object = data["object"] |> Map.delete("replies")
+      modified = Transmogrifier.set_replies(object)
 
-      refute data["replies"]
+      refute object["replies"]
       assert modified["replies"]
       assert match?(%{"id" => "http" <> _, "totalItems" => 0}, modified["replies"])
       # first page should be omitted if there are no entries anyway
