@@ -462,6 +462,44 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
              )
     end
 
+    test "first page id includes `?page=true`", %{conn: conn} do
+      user = insert(:user)
+      note = insert(:note_activity)
+      note = Pleroma.Activity.get_by_id_with_object(note.id)
+      uuid = String.split(note.object.data["id"], "/") |> List.last()
+
+      {:ok, _} =
+        CommonAPI.post(user, %{status: "reply1", in_reply_to_status_id: note.id})
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/objects/#{uuid}/replies")
+
+      %{"id" => collection_id, "first" => %{"id" => page_id, "partOf" => part_of}} =
+        json_response(conn, 200)
+
+      assert part_of == collection_id
+      assert String.contains?(page_id, "page=true")
+    end
+
+    test "unknown query params do not crash the endpoint", %{conn: conn} do
+      user = insert(:user)
+      note = insert(:note_activity)
+      note = Pleroma.Activity.get_by_id_with_object(note.id)
+      uuid = String.split(note.object.data["id"], "/") |> List.last()
+
+      {:ok, _} =
+        CommonAPI.post(user, %{status: "reply1", in_reply_to_status_id: note.id})
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/objects/#{uuid}/replies?unknown_param=1")
+
+      assert %{"type" => "OrderedCollection"} = json_response(conn, 200)
+    end
+
     test "it renders a collection page", %{
       conn: conn
     } do
@@ -500,6 +538,25 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   end
 
   describe "/activities/:uuid" do
+    test "it does not include a top-level replies collection on activities", %{conn: conn} do
+      clear_config([:activitypub, :note_replies_output_limit], 1)
+
+      activity = insert(:note_activity)
+      activity = Activity.get_by_id_with_object(activity.id)
+
+      uuid = String.split(activity.data["id"], "/") |> List.last()
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/activities/#{uuid}")
+
+      res = json_response(conn, 200)
+
+      refute Map.has_key?(res, "replies")
+      assert get_in(res, ["object", "replies", "id"]) == activity.object.data["id"] <> "/replies"
+    end
+
     test "it doesn't return a local-only activity", %{conn: conn} do
       user = insert(:user)
       {:ok, post} = CommonAPI.post(user, %{status: "test", visibility: "local"})
