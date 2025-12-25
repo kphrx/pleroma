@@ -742,8 +742,9 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   Inline first page of the `replies` collection,
   containing any replies in chronological order.
   """
-  def set_replies(obj_data) do
-    with obj_ap_id when obj_ap_id != nil <- obj_data["id"],
+  def set_replies(%{"type" => type} = obj_data)
+      when type in Pleroma.Constants.status_object_types() do
+    with obj_ap_id when is_binary(obj_ap_id) <- obj_data["id"],
          limit when limit > 0 <-
            Pleroma.Config.get([:activitypub, :note_replies_output_limit], 0),
          collection <-
@@ -756,6 +757,8 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
       _ -> obj_data
     end
   end
+
+  def set_replies(obj_data), do: obj_data
 
   # Prepares the object of an outgoing create activity.
   def prepare_object(object) do
