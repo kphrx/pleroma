@@ -106,7 +106,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectView do
   defp map_reply_collection_items(items), do: Enum.map(items, fn %{ap_id: ap_id} -> ap_id end)
 
   defp reply_collection_first_pagination(items, %{conn: %Plug.Conn{} = conn}) do
-    ControllerHelper.get_pagination_fields(conn, items, %{"page" => true}, :asc)
+    pagination = ControllerHelper.get_pagination_fields(conn, items, %{"page" => true}, :asc)
+    Map.put(pagination, "id", Phoenix.Controller.current_url(conn, %{"page" => true}))
   end
 
   defp reply_collection_first_pagination(items, %{render_params: %{object_ap_id: object_ap_id}}) do
