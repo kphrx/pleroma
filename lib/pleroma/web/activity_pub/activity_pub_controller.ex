@@ -31,6 +31,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
 
   @federating_only_actions [:internal_fetch, :relay, :relay_following, :relay_followers]
 
+  @object_replies_known_param_keys ["page", "min_id", "max_id", "since_id", "limit"]
+
   plug(FederatingPlug when action in @federating_only_actions)
 
   plug(
@@ -104,7 +106,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     # also convert our params to atoms here.
     params =
       params
-      |> Map.new(fn {k, v} -> {String.to_existing_atom(k), v} end)
+      |> Map.take(@object_replies_known_param_keys)
+      |> Enum.into(%{}, fn {k, v} -> {String.to_existing_atom(k), v} end)
       |> Map.put(:object_ap_id, object_ap_id)
       |> Map.put(:order_asc, true)
       |> Map.put(:conn, conn)
