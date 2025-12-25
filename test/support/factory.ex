@@ -305,27 +305,27 @@ defmodule Pleroma.Factory do
     featured_collection_activity(attrs, "Add")
   end
 
-  def remove_activity_factor(attrs \\ %{}) do
+  def remove_activity_factory(attrs \\ %{}) do
     featured_collection_activity(attrs, "Remove")
   end
 
   defp featured_collection_activity(attrs, type) do
     user = attrs[:user] || insert(:user)
-    note = attrs[:note] || insert(:note, user: user)
+    note_activity = attrs[:note_activity] || insert(:note_activity, user: user)
 
     data_attrs =
       attrs
       |> Map.get(:data_attrs, %{})
       |> Map.put(:type, type)
 
-    attrs = Map.drop(attrs, [:user, :note, :data_attrs])
+    attrs = Map.drop(attrs, [:user, :note_activity, :data_attrs])
 
     data =
       %{
         "id" => Pleroma.Web.ActivityPub.Utils.generate_activity_id(),
         "target" => user.featured_address,
-        "object" => note.data["object"],
-        "actor" => note.data["actor"],
+        "object" => note_activity.data["object"],
+        "actor" => note_activity.data["actor"],
         "type" => "Add",
         "to" => [Pleroma.Constants.as_public()],
         "cc" => [user.follower_address]
