@@ -852,16 +852,24 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
     emoji_reacted_post =
       insert(:note_activity, local: false, object_local: false, user: interacted_user)
 
+    favorited_post =
+      insert(:note_activity, local: false, object_local: false, user: interacted_user)
+
     announce = insert(:announce_activity, note_activity: announced_post, user: interacting_user)
 
     emoji_react =
       insert(:emoji_react_activity, note_activity: emoji_reacted_post, user: interacting_user)
 
-    {:ok,
-     announce: announce,
-     emoji_react: emoji_react,
-     interacted: interacted_user,
-     interacter: interacting_user}
+    {:ok, favorite} = CommonAPI.favorite(favorited_post.id, interacting_user)
+
+    {
+      :ok,
+      announce: announce,
+      emoji_react: emoji_react,
+      favorite: favorite,
+      interacted: interacted_user,
+      interacter: interacting_user
+    }
   end
 
   describe "status with restrict unauthenticated activities for local and remote" do
@@ -1001,9 +1009,33 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
     end
   end
 
-  # Rest of Activities like Create,Like,Flag,Add,Remove,... return 404.
+  # Note: Activities of type Flag,Follow,Delete,Accept,Reject,Undo return 404
   describe "status has correct attribution when fetching as" do
     setup do: local_interactions_to_remote()
+
+    test "Add/Remove activity", %{conn: conn, interacter: user} do
+      add = insert(:add_activity, user: user)
+      add_id = add.id
+      remove = insert(:remove_activity, user: user)
+      remove_id = remove.id
+      user_id = user.id
+
+      # Schema validation fails:
+      # null value where integer expected at /pleroma/conversation_id
+      result1 =
+        conn
+        |> get("/api/v1/statuses/#{add_id}")
+        |> json_response(200)
+
+      assert match?(%{"id" => ^add_id, "account" => %{"id" => ^user_id}}, result1)
+
+      result2 =
+        conn
+        |> get("/api/v1/statuses/#{remove_id}")
+        |> json_response(200)
+
+      assert match?(%{"id" => ^remove_id, "account" => %{"id" => ^user_id}}, result2)
+    end
 
     test "Announce activity", %{
       conn: conn,
@@ -1015,7 +1047,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       announced_activity = Pleroma.Activity.get_create_by_object_ap_id(activity.data["object"])
       announced_id = announced_activity.id
       interacter_ap_id = interacter.id
-      user_ap_id = user.id
+      user_id = user.id
 
       result =
         conn
@@ -1026,22 +1058,89 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
                %{
                  "id" => ^announce_id,
                  "account" => %{"id" => ^interacter_ap_id},
-                 "reblog" => %{"account" => %{"id" => ^user_ap_id}, "id" => ^announced_id}
+                 "reblog" => %{"account" => %{"id" => ^user_id}, "id" => ^announced_id}
                },
                result
              )
     end
 
+    test "Create activity", %{conn: conn, interacted: user} do
+      note_activity = insert(:note_activity, local: false, object_local: false, user: user)
+      note_activity_id = note_activity.id
+      user_id = user.id
+
+      result =
+        conn
+        |> get("/api/v1/statuses/#{note_activity_id}")
+        |> json_response_and_validate_schema(200)
+
+      assert match?(%{"id" => ^note_activity_id, "account" => %{"id" => ^user_id}}, result)
+    end
+
     test "EmojiReact activity", %{conn: conn, emoji_react: activity, interacted: user} do
       emoji_react_id = activity.id
-      user_ap_id = user.id
+      user_id = user.id
 
       result =
         conn
         |> get("/api/v1/statuses/#{emoji_react_id}")
         |> json_response_and_validate_schema(200)
 
-      assert match?(%{"id" => ^emoji_react_id, "account" => %{"id" => ^user_ap_id}}, result)
+      assert match?(%{"id" => ^emoji_react_id, "account" => %{"id" => ^user_id}}, result)
+    end
+
+    test "Like activity", %{conn: conn, favorite: activity, interacted: user} do
+      like_id = activity.id
+      user_id = user.id
+
+      result =
+        conn
+        |> get("/api/v1/statuses/#{like_id}")
+        |> json_response_and_validate_schema(200)
+
+      assert match?(%{"id" => ^like_id, "account" => %{"id" => ^user_id}}, result)
+    end
+
+    test "Update activity" do
+      %{conn: conn, user: user} = oauth_access(["write:statuses"])
+      user_id = user.id
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "This will be edited"})
+      {:ok, updated_activity} = CommonAPI.update(activity, user, %{status: "edited"})
+
+      activity_id = activity.id
+      updated_activity_id = updated_activity.id
+
+      result1 =
+        conn
+        |> get("/api/v1/statuses/#{activity_id}")
+        |> json_response_and_validate_schema(200)
+
+      # Even though we ask for the original Create activity, updated post is served
+      assert match?(
+               %{
+                 "id" => ^activity_id,
+                 "account" => %{"id" => ^user_id},
+                 "content" => "edited"
+               },
+               result1
+             )
+
+      # Schema validation fails:
+      # null value where integer expected at /pleroma/conversation_id
+      result2 =
+        conn
+        |> get("/api/v1/statuses/#{updated_activity_id}")
+        |> json_response(200)
+
+      assert match?(
+               %{
+                 "id" => ^updated_activity_id,
+                 "account" => %{"id" => ^user_id},
+                 "content" => "edited"
+               },
+               result2
+             )
     end
   end
 
