@@ -258,7 +258,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
             followers,
             "#{user.ap_id}/followers",
             1,
-            !user.hide_follows
+            showing_items
           )
         else
           "#{user.ap_id}/followers?page=1"
