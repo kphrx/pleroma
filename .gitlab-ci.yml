@@ -25,6 +25,10 @@ workflow:
 .default_artifacts: &default_artifacts
   expire_in: 30 days
 
+# Default artifacts configuration
+.default_artifacts: &default_artifacts
+  expire_in: 30 days
+
 cache: &global_cache_policy
   key: $CI_JOB_IMAGE-$CI_COMMIT_SHORT_SHA
   paths:
@@ -239,6 +243,11 @@ docs-deploy:
   only:
   - stable@pleroma/pleroma
   - develop@pleroma/pleroma
+  before_script:
+  - apk add curl
+  script:
+  - curl --fail-with-body -X POST -F"token=$CI_JOB_TOKEN" -F'ref=master' -F"variables[BRANCH]=$CI_COMMIT_REF_NAME" https://git.pleroma.social/api/v4/projects/673/trigger/pipeline
+
 review_app:
   image: alpine:3.9
   stage: deploy
