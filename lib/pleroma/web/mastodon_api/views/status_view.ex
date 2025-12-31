@@ -240,7 +240,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   def render("show.json", %{activity: %{data: %{"object" => _object}} = activity} = opts) do
     object = Object.normalize(activity, fetch: false)
 
-    user = CommonAPI.get_user(activity.data["actor"])
+    user = CommonAPI.get_user(object.data["actor"])
     user_follower_address = user.follower_address
 
     like_count = object.data["like_count"] || 0
