@@ -1,0 +1,22 @@
+services:
+  pleroma:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pleroma-host-release-wrapper:ubuntu24
+    init: true
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      HOME: /opt/pleroma
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      ELIXIR_ERL_OPTIONS: "+fnu"
+      # Set to 0 to skip running migrations on container start.
+      PLEROMA_RUN_MIGRATIONS: "1"
+    volumes:
+      # Existing OTP release installation (host)
+      - /opt/pleroma:/opt/pleroma:rw
+      # Existing config + uploads + static (host)
+      - /etc/pleroma:/etc/pleroma:rw
+      - /var/lib/pleroma:/var/lib/pleroma:rw

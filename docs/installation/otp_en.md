@@ -13,6 +13,9 @@ You will be running commands as root. If you aren't root already, please elevate
 
 Similarly to other binaries, OTP releases tend to be only compatible with the distro they are built on, as such this guide focuses only on Debian/Ubuntu and Alpine.
 
+!!! note
+    If you get `GLIBC_... not found` errors on Debian/Ubuntu, you can run the OTP release from `/opt/pleroma` inside a newer distro container without upgrading the host. See [`release_to_docker_en.md`](release_to_docker_en.md).
+
 ### Detecting flavour
 
 Paste the following into the shell:
