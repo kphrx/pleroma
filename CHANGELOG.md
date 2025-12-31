@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Security
 
 - Admin API: Fixed self-revocation vulnerability where admins could accidentally revoke their own admin status via the single-user permission endpoint
+- Fix bypass of the restrict unauthenticated setting by requesting local Activities
 
 ### Changed
 
@@ -104,6 +105,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - ObjectView: Do not leak unsanitized internal representation of non-Create/non-Undo Activities on fetches
 - Fix WebFinger for split-domain setups
 - Enforce an exact domain match for WebFinger resolution
+- MastodonAPI: Fix misattribution of statuses when fetched via non-Announce Activity ID
 
 ## 2.9.1
 
