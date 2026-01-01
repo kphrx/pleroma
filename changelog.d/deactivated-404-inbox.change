@@ -1,1 +1,0 @@
-Return 404 with a better error message instead of 400 when receiving an activity for a deactivated user
