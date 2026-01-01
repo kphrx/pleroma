@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     ffmpeg imagemagick libimage-exiftool-perl \
     libvips42t64 \
+    unzip \
+    curl \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/pleroma
