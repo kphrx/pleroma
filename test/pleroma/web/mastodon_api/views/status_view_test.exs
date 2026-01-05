@@ -54,7 +54,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
                count: 2,
                me: false,
                name: "dinosaur",
-               url: "http://localhost:4001/emoji/dino walking.gif",
+               url: "http://localhost:4001/emoji/dino%20walking.gif",
                account_ids: [other_user.id, user.id]
              },
              %{name: "🍵", count: 1, me: false, url: nil, account_ids: [third_user.id]}
@@ -70,7 +70,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
                count: 2,
                me: true,
                name: "dinosaur",
-               url: "http://localhost:4001/emoji/dino walking.gif",
+               url: "http://localhost:4001/emoji/dino%20walking.gif",
                account_ids: [other_user.id, user.id]
              },
              %{name: "🍵", count: 1, me: false, url: nil, account_ids: [third_user.id]}

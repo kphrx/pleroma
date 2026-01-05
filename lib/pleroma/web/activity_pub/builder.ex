@@ -64,15 +64,7 @@ defmodule Pleroma.Web.ActivityPub.Builder do
 
   defp add_emoji_content(data, emoji, url) do
     tag = [
-      %{
-        "id" => url,
-        "type" => "Emoji",
-        "name" => Emoji.maybe_quote(emoji),
-        "icon" => %{
-          "type" => "Image",
-          "url" => url
-        }
-      }
+      Emoji.build_emoji_tag({Emoji.maybe_strip_name(emoji), url})
     ]
 
     data

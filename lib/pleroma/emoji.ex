@@ -189,6 +189,18 @@ defmodule Pleroma.Emoji do
 
   def emoji_url(_), do: nil
 
+  def build_emoji_tag({name, url}) do
+    url = URI.encode(url)
+
+    %{
+      "icon" => %{"url" => "#{url}", "type" => "Image"},
+      "name" => ":" <> name <> ":",
+      "type" => "Emoji",
+      "updated" => "1970-01-01T00:00:00Z",
+      "id" => url
+    }
+  end
+
   def emoji_name_with_instance(name, url) do
     url = url |> URI.parse() |> Map.get(:host)
     "#{name}@#{url}"
