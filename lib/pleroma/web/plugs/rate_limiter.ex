@@ -67,6 +67,7 @@ defmodule Pleroma.Web.Plugs.RateLimiter do
   import Plug.Conn
 
   alias Pleroma.Config
+  alias Pleroma.Config.Holder
   alias Pleroma.User
   alias Pleroma.Web.Plugs.RateLimiter.LimiterSupervisor
 
@@ -143,7 +144,7 @@ defmodule Pleroma.Web.Plugs.RateLimiter do
 
   def action_settings(plug_opts) do
     with limiter_name when is_atom(limiter_name) <- plug_opts[:name],
-         limits when not is_nil(limits) <- Config.get([:rate_limit, limiter_name]) do
+         {:ok, limits} <- fetch_and_normalize_limits(limiter_name) do
       bucket_name_root = Keyword.get(plug_opts, :bucket_name, limiter_name)
 
       %{
@@ -151,8 +152,101 @@ defmodule Pleroma.Web.Plugs.RateLimiter do
         limits: limits,
         opts: plug_opts
       }
+    else
+      :disabled -> nil
     end
   end
+
+  defp fetch_and_normalize_limits(limiter_name) do
+    limits = Config.get([:rate_limit, limiter_name])
+
+    case normalize_limits(limits) do
+      {:ok, limits} ->
+        {:ok, limits}
+
+      :disabled ->
+        :disabled
+
+      :error ->
+        default_limits =
+          Holder.default_config(:pleroma, :rate_limit)
+          |> get_default_limits(limiter_name)
+
+        case normalize_limits(default_limits) do
+          {:ok, normalized_limits} ->
+            warn_invalid_limits_once(limiter_name, limits)
+            {:ok, normalized_limits}
+
+          _ ->
+            warn_invalid_limits_once(limiter_name, limits)
+            :disabled
+        end
+    end
+  end
+
+  defp get_default_limits(%{} = rate_limit, limiter_name), do: Map.get(rate_limit, limiter_name)
+
+  defp get_default_limits(rate_limit, limiter_name) when is_list(rate_limit) do
+    if Keyword.keyword?(rate_limit) do
+      Keyword.get(rate_limit, limiter_name)
+    else
+      nil
+    end
+  end
+
+  defp get_default_limits(_, _), do: nil
+
+  @invalid_limits_warned_key {__MODULE__, :invalid_limits_warned}
+
+  defp warn_invalid_limits_once(limiter_name, limits) do
+    warned = :persistent_term.get(@invalid_limits_warned_key, MapSet.new())
+
+    if MapSet.member?(warned, limiter_name) do
+      :ok
+    else
+      :persistent_term.put(@invalid_limits_warned_key, MapSet.put(warned, limiter_name))
+
+      Logger.warning(
+        "Invalid rate limiter config for #{inspect(limiter_name)}: #{inspect(limits)}. Falling back to defaults or disabling this limiter."
+      )
+    end
+  end
+
+  defp normalize_limits(nil), do: :disabled
+
+  defp normalize_limits({scale, limit}) do
+    with {:ok, scale} <- normalize_integer(scale),
+         {:ok, limit} <- normalize_integer(limit),
+         true <- scale >= 1 and limit >= 1 do
+      {:ok, {scale, limit}}
+    else
+      _ -> :error
+    end
+  end
+
+  defp normalize_limits([{_, _} = first, {_, _} = second]) do
+    with {:ok, first} <- normalize_limits(first),
+         {:ok, second} <- normalize_limits(second) do
+      {:ok, [first, second]}
+    else
+      _ -> :error
+    end
+  end
+
+  defp normalize_limits(_), do: :error
+
+  defp normalize_integer(value) when is_integer(value), do: {:ok, value}
+
+  defp normalize_integer(value) when is_binary(value) do
+    value = String.trim(value)
+
+    case Integer.parse(value) do
+      {number, ""} -> {:ok, number}
+      _ -> :error
+    end
+  end
+
+  defp normalize_integer(_), do: :error
 
   defp check_rate(action_settings) do
     bucket_name = make_bucket_name(action_settings)
