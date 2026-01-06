@@ -11,6 +11,8 @@ defmodule Pleroma.Emoji do
 
   alias Pleroma.Emoji.Combinations
   alias Pleroma.Emoji.Loader
+  alias Pleroma.Utils.URIEncoding
+  alias Pleroma.Web.Endpoint
 
   require Logger
 
@@ -189,8 +191,23 @@ defmodule Pleroma.Emoji do
 
   def emoji_url(_), do: nil
 
+  @spec local_url(String.t() | nil) :: String.t() | nil
+  def local_url(nil), do: nil
+
+  def local_url("http" <> _ = url) do
+    URIEncoding.encode_url(url)
+  end
+
+  def local_url("/" <> _ = path) do
+    URIEncoding.encode_url(Endpoint.url() <> path, bypass_decode: true)
+  end
+
+  def local_url(path) when is_binary(path) do
+    local_url("/" <> path)
+  end
+
   def build_emoji_tag({name, url}) do
-    url = URI.encode(url)
+    url = URIEncoding.encode_url(url)
 
     %{
       "icon" => %{"url" => "#{url}", "type" => "Image"},

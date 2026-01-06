@@ -17,7 +17,6 @@ defmodule Pleroma.Web.ActivityPub.Builder do
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Web.CommonAPI.ActivityDraft
-  alias Pleroma.Web.Endpoint
 
   require Pleroma.Constants
 
@@ -105,7 +104,7 @@ defmodule Pleroma.Web.ActivityPub.Builder do
 
   defp local_custom_emoji_react(data, emoji) do
     with %{file: path} = emojo <- Emoji.get(emoji) do
-      url = "#{Endpoint.url()}#{path}"
+      url = Emoji.local_url(path)
       add_emoji_content(data, emojo.code, url)
     else
       _ -> {:error, "Emoji does not exist"}
