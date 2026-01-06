@@ -68,6 +68,7 @@ defmodule Pleroma.Web.Plugs.RateLimiter do
 
   alias Pleroma.Config
   alias Pleroma.Config.Holder
+  alias Pleroma.EctoType.Config.RateLimit
   alias Pleroma.User
   alias Pleroma.Web.Plugs.RateLimiter.LimiterSupervisor
 
@@ -214,39 +215,12 @@ defmodule Pleroma.Web.Plugs.RateLimiter do
 
   defp normalize_limits(nil), do: :disabled
 
-  defp normalize_limits({scale, limit}) do
-    with {:ok, scale} <- normalize_integer(scale),
-         {:ok, limit} <- normalize_integer(limit),
-         true <- scale >= 1 and limit >= 1 do
-      {:ok, {scale, limit}}
-    else
-      _ -> :error
+  defp normalize_limits(limits) do
+    case RateLimit.cast(limits) do
+      {:ok, normalized_limits} -> {:ok, normalized_limits}
+      :error -> :error
     end
   end
-
-  defp normalize_limits([{_, _} = first, {_, _} = second]) do
-    with {:ok, first} <- normalize_limits(first),
-         {:ok, second} <- normalize_limits(second) do
-      {:ok, [first, second]}
-    else
-      _ -> :error
-    end
-  end
-
-  defp normalize_limits(_), do: :error
-
-  defp normalize_integer(value) when is_integer(value), do: {:ok, value}
-
-  defp normalize_integer(value) when is_binary(value) do
-    value = String.trim(value)
-
-    case Integer.parse(value) do
-      {number, ""} -> {:ok, number}
-      _ -> :error
-    end
-  end
-
-  defp normalize_integer(_), do: :error
 
   defp check_rate(action_settings) do
     bucket_name = make_bucket_name(action_settings)
