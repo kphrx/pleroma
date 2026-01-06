@@ -8,8 +8,8 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   """
   @behaviour Pleroma.Web.ActivityPub.Transmogrifier.API
   alias Pleroma.Activity
-  alias Pleroma.Emoji
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
+  alias Pleroma.Emoji
   alias Pleroma.Maps
   alias Pleroma.Object
   alias Pleroma.Object.Containment
