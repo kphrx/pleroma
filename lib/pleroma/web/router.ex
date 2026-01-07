@@ -5,6 +5,7 @@
 defmodule Pleroma.Web.Router do
   use Pleroma.Web, :router
   import Phoenix.LiveDashboard.Router
+  import Oban.Web.Router
 
   pipeline :accepts_html do
     plug(:accepts, ["html"])
@@ -1044,6 +1045,7 @@ defmodule Pleroma.Web.Router do
   scope "/" do
     pipe_through([:pleroma_html, :authenticate, :require_admin])
     live_dashboard("/phoenix/live_dashboard", additional_pages: [oban: Oban.LiveDashboard])
+    oban_dashboard("/pleroma/oban")
   end
 
   # Test-only routes needed to test action dispatching and plug chain execution
