@@ -199,7 +199,8 @@ defmodule Pleroma.Emoji do
   end
 
   def local_url("/" <> _ = path) do
-    URIEncoding.encode_url(Endpoint.url() <> path, bypass_decode: true)
+    path = URIEncoding.encode_url(path, bypass_parse: true, bypass_decode: true)
+    Endpoint.url() <> path
   end
 
   def local_url(path) when is_binary(path) do

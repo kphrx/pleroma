@@ -37,4 +37,10 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.EmojiTagBuildingTest do
 
     assert tag["id"] == url
   end
+
+  test "local_url encodes question marks in filenames" do
+    url = Pleroma.Emoji.local_url("/emoji/file?name.png")
+
+    assert url == Pleroma.Web.Endpoint.url() <> "/emoji/file%3Fname.png"
+  end
 end
