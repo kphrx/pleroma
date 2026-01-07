@@ -11,8 +11,8 @@ defmodule Pleroma.Web.TwitterAPI.UtilController do
   alias Pleroma.Config
   alias Pleroma.Emoji
   alias Pleroma.Healthcheck
-  alias Pleroma.Utils.URIEncoding
   alias Pleroma.User
+  alias Pleroma.Utils.URIEncoding
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.Auth.WrapperAuthenticator, as: Authenticator
   alias Pleroma.Web.CommonAPI
