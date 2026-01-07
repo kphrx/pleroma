@@ -1091,9 +1091,15 @@ defmodule Pleroma.Web.Router do
     options("/*path", RedirectController, :empty)
   end
 
+  # /pleroma/oban/* needs to get filtered out from api routes for frontend configuration
+  # to not drop admin overrides for /pleroma/admin.
+  # Also removing /phoenix since it is not an API route
+  @non_api_routes ["/phoenix/live_dashboard", "/pleroma/oban"]
+
   def get_api_routes do
     Phoenix.Router.routes(__MODULE__)
     |> Enum.reject(fn r -> r.plug == Pleroma.Web.Fallback.RedirectController end)
+    |> Enum.reject(fn r -> String.starts_with?(r.path, @non_api_routes) end)
     |> Enum.map(fn r ->
       r.path
       |> String.split("/", trim: true)
