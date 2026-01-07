@@ -17,7 +17,7 @@ defmodule Pleroma.Web.ApiSpec.PleromaFollowRequestOperation do
       tags: ["Follow requests"],
       summary: "Retrieve outgoing follow requests",
       security: [%{"oAuth" => ["read:follows", "follow"]}],
-      operationId: "PleromaFollowRequestController.outgoing",,
+      operationId: "PleromaFollowRequestController.outgoing",
       parameters: pagination_params(),
       responses: %{
         200 =>

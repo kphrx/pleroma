@@ -21,11 +21,11 @@ defmodule Pleroma.Web.PleromaAPI.FollowRequestController do
   defdelegate open_api_operation(action), to: Pleroma.Web.ApiSpec.PleromaFollowRequestOperation
 
   @doc "GET /api/v1/pleroma/outgoing_follow_requests"
-  def outgoing(%{assigns: %{user: follower}} = conn, _params) do
+  def outgoing(%{assigns: %{user: follower}} = conn, params) do
     follow_requests =
       follower
       |> User.get_outgoing_follow_requests_query()
-      |> Pagination.fetch_paginated(params, :keyset, :follower)
+      |> Pagination.fetch_paginated(params, :keyset, :following)
 
     conn
     |> put_view(Pleroma.Web.MastodonAPI.FollowRequestView)
