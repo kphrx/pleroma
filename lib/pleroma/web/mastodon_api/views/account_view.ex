@@ -360,8 +360,9 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
          %User{id: user_id}
        ) do
     count =
-      User.get_follow_requests(user)
-      |> length()
+      user
+      |> User.get_follow_requests_query()
+      |> Pleroma.Repo.aggregate(:count)
 
     data
     |> Kernel.put_in([:follow_requests_count], count)
