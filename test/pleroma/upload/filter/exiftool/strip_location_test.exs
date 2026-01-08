@@ -25,8 +25,8 @@ defmodule Pleroma.Upload.Filter.Exiftool.StripLocationTest do
 
       assert Filter.Exiftool.StripLocation.filter(upload) == {:ok, :filtered}
 
-      {exif_original, 0} = System.cmd("exiftool", ["test/fixtures/DSCN0010.#{type}"])
-      {exif_filtered, 0} = System.cmd("exiftool", ["test/fixtures/DSCN0010_tmp.#{type}"])
+      {exif_original, 0} = System.cmd("exiftool", ["-m", "test/fixtures/DSCN0010.#{type}"])
+      {exif_filtered, 0} = System.cmd("exiftool", ["-m", "test/fixtures/DSCN0010_tmp.#{type}"])
 
       assert String.match?(exif_original, ~r/GPS/)
       refute String.match?(exif_filtered, ~r/GPS/)
