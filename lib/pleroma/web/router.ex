@@ -1044,7 +1044,7 @@ defmodule Pleroma.Web.Router do
 
   scope "/" do
     pipe_through([:pleroma_html, :authenticate, :require_admin])
-    live_dashboard("/phoenix/live_dashboard", additional_pages: [oban: Oban.LiveDashboard])
+    live_dashboard("/pleroma/live_dashboard", additional_pages: [oban: Oban.LiveDashboard])
     oban_dashboard("/pleroma/oban")
   end
 
@@ -1086,15 +1086,15 @@ defmodule Pleroma.Web.Router do
     get("/:maybe_nickname_or_id", RedirectController, :redirector_with_meta)
     match(:*, "/api/pleroma/*path", LegacyPleromaApiRerouterPlug, [])
     get("/api/*path", RedirectController, :api_not_implemented)
+    get("/phoenix/live_dashboard", RedirectController, :live_dashboard)
     get("/*path", RedirectController, :redirector_with_preload)
 
     options("/*path", RedirectController, :empty)
   end
 
-  # /pleroma/oban/* needs to get filtered out from api routes for frontend configuration
+  # /pleroma/{phoenix,oban}/* need to get filtered out from api routes for frontend configuration
   # to not drop admin overrides for /pleroma/admin.
-  # Also removing /phoenix since it is not an API route
-  @non_api_routes ["/phoenix/live_dashboard", "/pleroma/oban"]
+  @non_api_routes ["/pleroma/live_dashboard", "/pleroma/oban"]
 
   def get_api_routes do
     Phoenix.Router.routes(__MODULE__)

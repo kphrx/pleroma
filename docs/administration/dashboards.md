@@ -11,7 +11,7 @@ Pleroma comes with two types of backend dashboards viewable to instance administ
 
 ## Phoenix LiveDashboard
 
-Instance administrators can access this dashboard at `/phoenix/live_dashboard`, giving a simple overview of software versions including Erlang and Elixir versions, instance uptime and resource consumption.
+Instance administrators can access this dashboard at `/pleroma/live_dashboard`, giving a simple overview of software versions including Erlang and Elixir versions, instance uptime and resource consumption.
 
 This dashboard gives insights into the current state of the BEAM VM running Pleroma code and database statistics including basic diagnostics.
 It can be useful for troubleshooting of some issues namely regarding database performance. 
