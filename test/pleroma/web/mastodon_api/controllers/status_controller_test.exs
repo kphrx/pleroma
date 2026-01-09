@@ -3068,7 +3068,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              |> json_response_and_validate_schema(:ok)
 
     {:ok, a_expires_at, 0} = DateTime.from_iso8601(a_expires_at)
-    assert DateTime.diff(expires_at, a_expires_at) == 0
+    assert DateTime.diff(DateTime.truncate(expires_at, :second), DateTime.truncate(a_expires_at, :second)) == 0
 
     %{conn: conn} = oauth_access(["read:statuses"])
 
