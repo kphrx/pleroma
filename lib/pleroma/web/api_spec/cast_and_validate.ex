@@ -106,7 +106,14 @@ defmodule Pleroma.Web.ApiSpec.CastAndValidate do
     OpenApiSpex.cast_and_validate(spec, operation, conn, content_type, cast_opts)
   end
 
-  defp cast_and_validate(spec, operation, %Conn{} = conn, content_type, false = _strict, cast_opts) do
+  defp cast_and_validate(
+         spec,
+         operation,
+         %Conn{} = conn,
+         content_type,
+         false = _strict,
+         cast_opts
+       ) do
     case OpenApiSpex.cast_and_validate(spec, operation, conn, content_type) do
       {:ok, conn} ->
         {:ok, conn}

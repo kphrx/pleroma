@@ -1786,7 +1786,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
     {:ok, list} = Pleroma.List.follow(list, member)
 
-    {:ok, %Activity{} = activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
+    {:ok, %Activity{} = activity} =
+      CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
 
     activity = Repo.preload(activity, :bookmark)
     activity = %{activity | thread_muted?: !!activity.thread_muted?}
