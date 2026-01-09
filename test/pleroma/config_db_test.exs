@@ -273,11 +273,13 @@ defmodule Pleroma.ConfigDBTest do
     end
 
     test "sigil" do
-      assert ConfigDB.to_elixir_types("~r[comp[lL][aA][iI][nN]er]").source == ~r/comp[lL][aA][iI][nN]er/.source
+      assert ConfigDB.to_elixir_types("~r[comp[lL][aA][iI][nN]er]").source ==
+               ~r/comp[lL][aA][iI][nN]er/.source
     end
 
     test "link sigil" do
-      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/").source == ~r/https:\/\/example.com/.source
+      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/").source ==
+               ~r/https:\/\/example.com/.source
     end
 
     test "link sigil with um modifiers" do
@@ -286,11 +288,13 @@ defmodule Pleroma.ConfigDBTest do
     end
 
     test "link sigil with i modifier" do
-      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/i").source == ~r/https:\/\/example.com/i.source
+      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/i").source ==
+               ~r/https:\/\/example.com/i.source
     end
 
     test "link sigil with s modifier" do
-      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/s").source == ~r/https:\/\/example.com/s.source
+      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/s").source ==
+               ~r/https:\/\/example.com/s.source
     end
 
     test "raise if valid delimiter not found" do

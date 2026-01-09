@@ -136,7 +136,8 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
 
   defp in_reply_to(%__MODULE__{params: %{in_reply_to_status_id: ""}} = draft), do: draft
 
-  defp in_reply_to(%__MODULE__{params: %{in_reply_to_status_id: id}} = draft) when is_binary(id) do
+  defp in_reply_to(%__MODULE__{params: %{in_reply_to_status_id: id}} = draft)
+       when is_binary(id) do
     # If a post was deleted all its activities (except the newly added Delete) are purged too,
     # thus lookup by Create db ID will yield nil just as if it never existed in the first place.
     #
@@ -166,13 +167,16 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
     end
   end
 
-  defp in_reply_to(%__MODULE__{params: %{in_reply_to_status_id: %Activity{} = in_reply_to}} = draft) do
+  defp in_reply_to(
+         %__MODULE__{params: %{in_reply_to_status_id: %Activity{} = in_reply_to}} = draft
+       ) do
     %__MODULE__{draft | in_reply_to: in_reply_to}
   end
 
   defp in_reply_to(draft), do: draft
 
-  defp quote_post(%__MODULE__{params: %{quoted_status_id: id}} = draft) when not_empty_string(id) do
+  defp quote_post(%__MODULE__{params: %{quoted_status_id: id}} = draft)
+       when not_empty_string(id) do
     case Activity.get_by_id_with_object(id) do
       %Activity{} = activity ->
         %__MODULE__{draft | quote_post: activity}
