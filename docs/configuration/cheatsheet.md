@@ -858,12 +858,14 @@ Web Push Notifications configuration. You can use the mix task `mix web_push.gen
 * ``private_key``: VAPID private key
 
 ## :logger
-* `backends`: `:console` is used to send logs to stdout, `{ExSyslogger, :ex_syslogger}` to log to syslog
+* Logging to console/stdout is done by default, use `{ExSyslogger, :ex_syslogger}` to log to syslog
 
 An example to enable ONLY ExSyslogger (f/ex in ``prod.secret.exs``) with info and debug suppressed:
 ```elixir
-config :logger,
-  backends: [{ExSyslogger, :ex_syslogger}]
+config :pleroma,
+  logger_backends: [{ExSyslogger, :ex_syslogger}]
+
+config :logger, default_handler: false
 
 config :logger, :ex_syslogger,
   level: :warning
@@ -871,8 +873,8 @@ config :logger, :ex_syslogger,
 
 Another example, keeping console output and adding the pid to syslog output:
 ```elixir
-config :logger,
-  backends: [:console, {ExSyslogger, :ex_syslogger}]
+config :pleroma,
+  logger_backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :warning,
@@ -883,22 +885,21 @@ See: [logger’s documentation](https://hexdocs.pm/logger/Logger.html) and [ex_s
 
 An example of logging info to local syslog, but debug to console:
 ```elixir
-config :logger,
-  backends: [ {ExSyslogger, :ex_syslogger}, :console ],
-  level: :info
+config :pleroma,
+  logger_backends: [ {ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :info,
   ident: "pleroma",
   format: "$metadata[$level] $message"
 
-config :logger, :console,
-  level: :debug,
+config :logger, :default_handler,
+  level: :debug
+
+config :logger, :default_formatter,
   format: "\n$time $metadata[$level] $message\n",
   metadata: [:request_id]
 ```
-
-
 
 ## Database options
 
