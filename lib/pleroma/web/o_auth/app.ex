@@ -14,7 +14,7 @@ defmodule Pleroma.Web.OAuth.App do
 
   schema "apps" do
     field(:client_name, :string)
-    field(:redirect_uris, :string)
+    field(:redirect_uris, {:array, :string})
     field(:scopes, {:array, :string}, default: [])
     field(:website, :string)
     field(:client_id, :string)
