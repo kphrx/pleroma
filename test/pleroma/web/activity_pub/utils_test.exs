@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.UtilsTest do
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
   alias Pleroma.Activity
   alias Pleroma.Object
   alias Pleroma.Repo

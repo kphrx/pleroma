@@ -102,7 +102,6 @@ config :pleroma, :http, send_user_agent: false
 
 rum_enabled = System.get_env("RUM_ENABLED") == "true"
 config :pleroma, :database, rum_enabled: rum_enabled
-IO.puts("RUM enabled: #{rum_enabled}")
 
 config :joken, default_signer: "yU8uHKq+yyAkZ11Hx//jcdacWc8yQ1bxAAGrplzB0Zwwjkp35v0RK9SO8WTPr6QZ"
 
@@ -192,7 +191,7 @@ config :pleroma, Pleroma.Application,
   streamer_registry: false,
   test_http_pools: true
 
-config :pleroma, Pleroma.Web.Streaming, sync_streaming: true
+config :pleroma, Pleroma.Web.Streamer, sync_streaming: true
 
 config :pleroma, Pleroma.Uploaders.Uploader, timeout: 1_000
 
@@ -207,8 +206,9 @@ config :pleroma, Pleroma.User.Backup, tempdir: "test/tmp"
 
 if File.exists?("./config/test.secret.exs") do
   import_config "test.secret.exs"
-else
-  IO.puts(
-    "You may want to create test.secret.exs to declare custom database connection parameters."
-  )
 end
+
+# Avoid noisy shutdown logs from os_mon during tests.
+config :os_mon,
+  start_cpu_sup: false,
+  start_memsup: false
