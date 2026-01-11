@@ -406,7 +406,7 @@ defmodule Pleroma.Web.OAuth.OAuthControllerTest do
   describe "GET /oauth/authorize" do
     setup do
       [
-        app: insert(:oauth_app, redirect_uris: "https://redirect.url"),
+        app: insert(:oauth_app, redirect_uris: ["https://redirect.url"]),
         conn:
           build_conn()
           |> Plug.Session.call(Plug.Session.init(@session_opts))
