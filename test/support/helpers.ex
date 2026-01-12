@@ -73,7 +73,8 @@ defmodule Pleroma.Tests.Helpers do
   defmacro clear_config(config_path, temp_setting) do
     # NOTE: `clear_config([section, key], value)` != `clear_config([section], key: value)` (!)
     # Displaying a warning to prevent unintentional clearing of all but one keys in section
-    if Keyword.keyword?(temp_setting) and length(temp_setting) == 1 do
+    if is_list(config_path) and length(config_path) == 1 and Keyword.keyword?(temp_setting) and
+         Keyword.keys(temp_setting) == [:key] do
       Logger.warning(
         "Please change `clear_config([section], key: value)` to `clear_config([section, key], value)`"
       )
