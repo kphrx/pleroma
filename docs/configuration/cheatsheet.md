@@ -862,8 +862,8 @@ Web Push Notifications configuration. You can use the mix task `mix web_push.gen
 
 An example to enable ONLY ExSyslogger (f/ex in ``prod.secret.exs``) with info and debug suppressed:
 ```elixir
-config :pleroma,
-  logger_backends: [{ExSyslogger, :ex_syslogger}]
+config :pleroma, :logger,
+  backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, default_handler: false
 
@@ -873,8 +873,8 @@ config :logger, :ex_syslogger,
 
 Another example, keeping console output and adding the pid to syslog output:
 ```elixir
-config :pleroma,
-  logger_backends: [{ExSyslogger, :ex_syslogger}]
+config :pleroma, :logger,
+  backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :warning,
@@ -885,8 +885,8 @@ See: [logger’s documentation](https://hexdocs.pm/logger/Logger.html) and [ex_s
 
 An example of logging info to local syslog, but debug to console:
 ```elixir
-config :pleroma,
-  logger_backends: [ {ExSyslogger, :ex_syslogger}]
+config :pleroma, :logger,
+  backends: [ {ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :info,

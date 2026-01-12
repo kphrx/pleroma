@@ -117,11 +117,11 @@ defmodule Pleroma.Application do
   def configure_logger do
     if Application.get_env(:logger, :backends) do
       Logger.warning(
-        "'config :logger, backends: [...]' is deprecated syntax due to changes in Elixir. Use 'config :pleroma, :logger_backends: [...]' instead."
+        "'config :logger, backends: [...]' is deprecated syntax due to changes in Elixir. Use 'config :pleroma, :logger, backends: [...]' instead."
       )
     end
 
-    Config.get([:logger_backends], [])
+    Config.get([:logger, :backends], [])
     |> Enum.each(fn backend ->
       backend = backend_to_logger(backend)
 
