@@ -117,27 +117,37 @@ defmodule Pleroma.Application do
   def configure_logger do
     Config.get([:logger, :backends], [])
     |> Enum.each(fn backend ->
-      backend = backend_to_logger(backend)
+      case backend_to_logger(backend) do
+        {:ok, logger} ->
+          add_logger(logger)
 
-      case LoggerBackends.add(backend) do
-        {:ok, _} ->
-          Logger.debug("Successfully added logger backend: #{inspect(backend)}")
-
-        {:error, reason} ->
-          Logger.error("Failed to add logger backend #{inspect(backend)}: #{inspect(reason)}")
+        {:error, :console_backend} ->
+          Logger.warning(":console is no longer considered a backend and is enabled by default")
       end
     end)
   end
+
+  defp add_logger(backend) do
+    case LoggerBackends.add(backend) do
+      {:ok, _} ->
+        Logger.debug("Successfully added logger backend: #{inspect(backend)}")
+
+      {:error, reason} ->
+        Logger.error("Failed to add logger backend #{inspect(backend)}: #{inspect(reason)}")
+    end
+  end
+
+  defp backend_to_logger(:console), do: {:error, :console_backend}
 
   defp backend_to_logger({:ex_syslogger = backend, name}) do
     Logger.warning(
       "Configuration {:#{backend}, :#{name}} is incorrect. Use {ExSyslogger, :#{name}} instead!"
     )
 
-    {ExSyslogger, name}
+    {:ok, {ExSyslogger, name}}
   end
 
-  defp backend_to_logger(backend), do: backend
+  defp backend_to_logger(backend), do: {:ok, backend}
 
   def load_custom_modules do
     dir = Config.get([:modules, :runtime_dir])

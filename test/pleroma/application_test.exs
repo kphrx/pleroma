@@ -19,4 +19,15 @@ defmodule Pleroma.ApplicationTest do
       assert log =~ "Successfully added logger backend: {ExSyslogger, :ex_syslogger}"
     end
   end
+
+  describe "config :pleroma, :logger, :backends: [:console]" do
+    setup do
+      clear_config([:logger, :backends], [:console])
+    end
+
+    test "emits a warning" do
+      assert capture_log(fn -> Pleroma.Application.configure_logger() end) =~
+        ":console is no longer considered a backend and is enabled by default"
+    end
+  end
 end
