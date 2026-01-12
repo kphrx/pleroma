@@ -218,7 +218,8 @@ defmodule Pleroma.Config.DeprecationWarnings do
       check_quarantined_instances_tuples(),
       check_transparency_exclusions_tuples(),
       check_simple_policy_tuples(),
-      check_exiftool_filter()
+      check_exiftool_filter(),
+      check_deprecated_logger_config()
     ]
     |> Enum.reduce(:ok, fn
       :ok, :ok -> :ok
@@ -409,6 +410,20 @@ defmodule Pleroma.Config.DeprecationWarnings do
       \n* `config :pleroma, :chat, enabled` and `config :pleroma, :instance, chat_limit` are now equal to:
       \n* `config :pleroma, :shout, enabled` and `config :pleroma, :shout, limit`
       """)
+
+      :error
+    else
+      :ok
+    end
+  end
+
+  @spec check_deprecated_logger_config() :: :ok | :error
+  def check_deprecated_logger_config() do
+    if Application.get_env(:logger, :backends) do
+      Logger.warning(
+        "'config :logger, backends: [...]' is deprecated syntax due to changes in Elixir. " <>
+        "Use 'config :pleroma, :logger, backends: [...]' instead."
+      )
 
       :error
     else

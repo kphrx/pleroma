@@ -388,4 +388,19 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
            end) =~
              "Your config is using the old namespace for the Shoutbox configuration."
   end
+
+  describe "check_deprecated_logger_config" do
+    setup do
+      Application.put_env(:logger, :backends, [:console, {ExSyslogger, :ex_syslogger}])
+
+      on_exit(fn ->
+        Application.delete_env(:logger, :backends) end)
+    end
+
+    test "warns on deprecated syntax" do
+      assert capture_log(fn -> Pleroma.Config.DeprecationWarnings.check_deprecated_logger_config() end) =~
+        "'config :logger, backends: [...]' is deprecated syntax due to changes in Elixir. Use 'config :pleroma, :logger, backends: [...]' instead."
+    end
+  end
+
 end

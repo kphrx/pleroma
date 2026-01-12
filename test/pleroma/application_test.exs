@@ -7,21 +7,6 @@ defmodule Pleroma.ApplicationTest do
 
   import ExUnit.CaptureLog
 
-  # clear_config/2 can only manipulate env under :pleroma.
-  describe "config :logger, backends: []" do
-    setup do
-      Application.put_env(:logger, :backends, [:console, {ExSyslogger, :ex_syslogger}])
-
-      on_exit(fn ->
-        Application.delete_env(:logger, :backends) end)
-    end
-
-    test "warns on deprecated syntax" do
-      assert capture_log(fn -> Pleroma.Application.configure_logger() end) =~
-        "'config :logger, backends: [...]' is deprecated syntax due to changes in Elixir. Use 'config :pleroma, :logger, backends: [...]' instead."
-    end
-  end
-
   describe "config :pleroma, :logger, backends: [{:ex_syslogger, :ex_syslogger}]" do
     setup do
       clear_config([:logger, :backends], [{:ex_syslogger, :ex_syslogger}])
