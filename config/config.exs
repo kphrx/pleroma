@@ -132,12 +132,11 @@ config :pleroma, Pleroma.Web.Endpoint,
     "SameSite=Lax"
   ]
 
-# config :logger, :console has been changed in 1.15+ and split into
-# :default_handler and :default_formatter. It started emitting warnings in 1.19.
-# See https://hexdocs.pm/logger/1.19.0/Logger.html#module-backends-and-backwards-compatibility
-config :logger, :default_handler, level: :debug
+# Configures Elixir's Logger
+config :logger, backends: [:console]
 
-config :logger, :default_formatter,
+config :logger, :console,
+  level: :debug,
   format: "\n$time $metadata[$level] $message\n",
   metadata: [:actor, :path, :type, :user]
 

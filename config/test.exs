@@ -15,13 +15,9 @@ config :pleroma, Pleroma.Captcha,
   method: Pleroma.Captcha.Mock
 
 # Print only warnings and errors during test
-config :logger, :default_handler, level: :warning
-
-config :logger, :default_formatter,
-  format: "\n[$level] $message\n",
-  colors: [
-    enabled: false
-  ]
+config :logger, :console,
+  level: :warning,
+  format: "\n[$level] $message\n"
 
 config :pleroma, :auth, oauth_consumer_strategies: []
 

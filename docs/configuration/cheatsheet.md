@@ -886,7 +886,7 @@ See: [logger’s documentation](https://hexdocs.pm/logger/Logger.html) and [ex_s
 An example of logging info to local syslog, but debug to console:
 ```elixir
 config :pleroma, :logger,
-  backends: [ {ExSyslogger, :ex_syslogger}]
+  backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :info,
