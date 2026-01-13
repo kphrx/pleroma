@@ -402,7 +402,17 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
       assert capture_log(fn ->
                Pleroma.Config.DeprecationWarnings.check_deprecated_logger_config()
              end) =~
-               "'config :logger, backends: [...]' is deprecated syntax due to changes in Elixir. Use 'config :pleroma, :logger, backends: [...]' instead."
+               """
+               !!!DEPRECATION WARNING!!!
+               Your configuration is using deprecated syntax for configuring backends of Elixir's logger.
+               `config :logger, backends: [...]` is deprecated syntax due to changes in Elixir.
+               Please update your configuration at your earliest convenience to use:
+                 `config :pleroma, :logger, backends: [...]`
+               Pleroma's default configuration will be updated in the next release which WILL override your settings.
+
+               Note: :console is no longer considered a backend and is used by default, you can disable it using:
+                 `config :logger, :default_handler: false`
+               """
     end
   end
 end
