@@ -418,11 +418,11 @@ defmodule Pleroma.Config.DeprecationWarnings do
   end
 
   @spec check_deprecated_logger_config() :: :ok | :error
-  def check_deprecated_logger_config() do
+  def check_deprecated_logger_config do
     if Application.get_env(:logger, :backends) do
       Logger.warning(
         "'config :logger, backends: [...]' is deprecated syntax due to changes in Elixir. " <>
-        "Use 'config :pleroma, :logger, backends: [...]' instead."
+          "Use 'config :pleroma, :logger, backends: [...]' instead."
       )
 
       :error

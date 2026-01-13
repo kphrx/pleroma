@@ -10,7 +10,6 @@ defmodule Pleroma.Web.ActivityPub.MRF.KeywordPolicy do
 
   alias Pleroma.Web.ActivityPub.MRF.Utils
 
-
   use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp string_matches?(string, pattern) when is_binary(pattern) do

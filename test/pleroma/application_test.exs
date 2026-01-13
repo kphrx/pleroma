@@ -15,7 +15,9 @@ defmodule Pleroma.ApplicationTest do
     test "is handled" do
       log = capture_log(fn -> Pleroma.Application.configure_logger() end)
 
-      assert log =~ "Configuration {:ex_syslogger, :ex_syslogger} is incorrect. Use {ExSyslogger, :ex_syslogger} instead!"
+      assert log =~
+               "Configuration {:ex_syslogger, :ex_syslogger} is incorrect. Use {ExSyslogger, :ex_syslogger} instead!"
+
       assert log =~ "Successfully added logger backend: {ExSyslogger, :ex_syslogger}"
     end
   end
@@ -27,7 +29,7 @@ defmodule Pleroma.ApplicationTest do
 
     test "emits a warning" do
       assert capture_log(fn -> Pleroma.Application.configure_logger() end) =~
-        ":console is no longer considered a backend and is enabled by default"
+               ":console is no longer considered a backend and is enabled by default"
     end
   end
 end
