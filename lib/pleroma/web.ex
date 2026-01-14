@@ -39,12 +39,6 @@ defmodule Pleroma.Web do
 
       alias Pleroma.Web.Router.Helpers, as: Routes
 
-      plug(:set_put_layout)
-
-      defp set_put_layout(conn, _) do
-        put_layout(conn, Pleroma.Config.get(:app_layout, "app.html"))
-      end
-
       # Marks plugs intentionally skipped and blocks their execution if present in plugs chain
       defp skip_plug(conn, plug_modules) do
         plug_modules
