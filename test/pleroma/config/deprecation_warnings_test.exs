@@ -11,6 +11,8 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
   alias Pleroma.Config
   alias Pleroma.Config.DeprecationWarnings
 
+  require Logger
+
   describe "filter exiftool" do
     test "gives warning when still used" do
       clear_config(
@@ -392,11 +394,12 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
   describe "check_deprecated_logger_config" do
     setup do
       Application.put_env(:logger, :backends, [:console, {ExSyslogger, :ex_syslogger}])
-      Application.put_env(:logger, :console, level: :debug)
+      Application.put_env(:logger, :console, level: :info)
 
       on_exit(fn ->
         Application.delete_env(:logger, :backends)
         Application.delete_env(:logger, :console)
+        Logger.configure(level: :debug)
         :logger.update_handler_config(:default, :formatter, Logger.default_formatter())
       end)
     end
@@ -435,20 +438,18 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
     end
 
     test "reconfigures logger" do
-      log =
+      empty_log =
         capture_log(fn ->
-          Pleroma.Config.DeprecationWarnings.check_deprecated_logger_config()
+          Logger.debug("This should not be logged")
         end)
 
-      # Formatter has inconsitent color formatting order
-      assert log =~
-               """
-               Reconfiguring console Logger with deprecated configuration syntax.
-                 Handler configuration:
-                   [level: :debug]
+      logged =
+        capture_log(fn ->
+          Logger.info("This should be logged")
+        end)
 
-                 Formatter:
-               """
+      assert empty_log =~ ""
+      assert logged =~ "This should be logged"
     end
   end
 end
