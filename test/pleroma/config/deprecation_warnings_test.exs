@@ -392,11 +392,12 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
   describe "check_deprecated_logger_config" do
     setup do
       Application.put_env(:logger, :backends, [:console, {ExSyslogger, :ex_syslogger}])
-      Application.put_env(:logger, :console, level: :warning)
+      Application.put_env(:logger, :console, level: :debug)
 
       on_exit(fn ->
         Application.delete_env(:logger, :backends)
         Application.delete_env(:logger, :console)
+        :logger.update_handler_config(:default, :formatter, Logger.default_formatter())
       end)
     end
 
@@ -430,6 +431,23 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
 
                Note: `:default_handler` is used only for the `level` setting. All other configurations go under
                `:default_formatter`. For more info visit: https://hexdocs.pm/logger/Logger.html#module-backends-and-backwards-compatibility
+               """
+    end
+
+    test "reconfigures logger" do
+      log =
+        capture_log(fn ->
+          Pleroma.Config.DeprecationWarnings.check_deprecated_logger_config()
+        end)
+
+      # Formatter has inconsitent color formatting order
+      assert log =~
+               """
+               Reconfiguring console Logger with deprecated configuration syntax.
+                 Handler configuration:
+                   [level: :debug]
+
+                 Formatter:
                """
     end
   end

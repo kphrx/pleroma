@@ -20,6 +20,9 @@ defmodule Pleroma.Config.DeprecationWarnings do
      "\n* `config :pleroma, :instance, mrf_transparency_exclusions` is now `config :pleroma, :mrf, transparency_exclusions`"}
   ]
 
+  @logger_config_knobs [:level, :translator_inspect_opts]
+  @logger_formatter_config_knows [:colors, :format, :metadata, :truncate, :utc_log]
+
   def check_exiftool_filter do
     filters = Config.get([Pleroma.Upload]) |> Keyword.get(:filters, [])
 
@@ -417,54 +420,33 @@ defmodule Pleroma.Config.DeprecationWarnings do
     end
   end
 
+  defp merge_deprecated_logger_config(config) do
+    handler_config = Enum.filter(config, fn {k, _} -> k in @logger_config_knobs end)
+    formatter_config = Enum.filter(config, fn {k, _} -> k in @logger_formatter_config_knows end)
+    formatter = Logger.default_formatter(formatter_config)
+
+    Logger.debug("""
+    Reconfiguring console Logger with deprecated configuration syntax.
+      Handler configuration:
+        #{inspect(handler_config)}
+
+      Formatter:
+        #{inspect(formatter)}
+    """)
+
+    Logger.configure(handler_config)
+    :logger.update_handler_config(:default, :formatter, formatter)
+  end
+
   @spec check_deprecated_logger_config() :: :ok | :error
   def check_deprecated_logger_config do
-    mix_env = Pleroma.Config.get(:env)
-    config_file_name = "config/#{mix_env}.secret.exs"
-    config_file = File.read(config_file_name)
+    backends_config = Application.get_env(:logger, :backends)
+    console_config = Application.get_env(:logger, :console)
 
-    config_file =
-      case config_file do
-        {:ok, contents} ->
-          String.split(contents, "\n", trim: true)
-          |> Enum.reject(fn string -> String.starts_with?(string, "#") end)
-          |> Enum.join("\n")
-
-        _ ->
-          false
-      end
-
-    declared_deprecated_backend =
-      if is_binary(config_file) do
-        String.contains?(config_file, "config :logger, backends") or
-          String.contains?(config_file, "config :logger,\n  backends")
-      else
-        nil
-      end
-
-    declared_deprecated_console =
-      if is_binary(config_file) do
-        String.contains?(config_file, "config :logger, :console") or
-          String.contains?(config_file, "config :logger,\n  console")
-      else
-        nil
-      end
-
-    # We can't use Application.get_env/3, because by default default_formatter is populated
-    declared_new_console =
-      if is_binary(config_file) do
-        String.contains?(config_file, "config :logger, :default_handler") or
-          String.contains?(config_file, "config :logger,\n  :default_handler") or
-          String.contains?(config_file, "config :logger, :default_formatter") or
-          String.contains?(config_file, "config :logger,\n  :default_formatter")
-      else
-        nil
-      end
-
-    use_new_backend_config = Pleroma.Config.get([:logger, :backends])
-
+    # Note: No need to merge the old backends config since it still works.
+    # And new configuration will just add new Logger backends.
     backend =
-      if declared_deprecated_backend do
+      if backends_config do
         Logger.warning("""
         !!!DEPRECATION WARNING!!!
         Your configuration is using deprecated syntax for configuring backends of Elixir's logger.
@@ -483,7 +465,7 @@ defmodule Pleroma.Config.DeprecationWarnings do
       end
 
     console =
-      if declared_deprecated_console do
+      if console_config do
         Logger.warning("""
         !!!DEPRECATION WARNING!!!
         Your configuration is using deprecated syntax for configuring logging to console.
@@ -496,25 +478,13 @@ defmodule Pleroma.Config.DeprecationWarnings do
         `:default_formatter`. For more info visit: https://hexdocs.pm/logger/Logger.html#module-backends-and-backwards-compatibility
         """)
 
-        true
-      else
-        false
-      end
-
-    conflict =
-      if (!is_nil(use_new_backend_config) and declared_deprecated_backend) or
-           (declared_new_console and declared_deprecated_console) do
-        Logger.warning("""
-        !!!CONFIGURATION CONFLICT!!!
-        Pleroma has detected that both the deprecated way of configuring Logger and the new way are defined in your configuration.
-        Delete the deprecated configuration syntax.
-        """)
+        merge_deprecated_logger_config(console_config)
 
         true
       else
         false
       end
 
-    if backend or console or conflict, do: :error, else: :ok
+    if backend or console, do: :error, else: :ok
   end
 end

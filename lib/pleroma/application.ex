@@ -132,6 +132,9 @@ defmodule Pleroma.Application do
       {:ok, _} ->
         Logger.debug("Successfully added logger backend: #{inspect(backend)}")
 
+      {:error, :already_present} ->
+        :ok
+
       {:error, reason} ->
         Logger.error("Failed to add logger backend #{inspect(backend)}: #{inspect(reason)}")
     end
