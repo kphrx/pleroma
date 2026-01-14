@@ -30,7 +30,7 @@ defmodule Pleroma.Web do
 
   def controller do
     quote do
-      use Phoenix.Controller, namespace: Pleroma.Web
+      use Phoenix.Controller, formats: [json: "View", html: "View"]
 
       import Plug.Conn
 

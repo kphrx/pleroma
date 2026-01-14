@@ -245,12 +245,14 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
     Plug.Conn.send_resp(conn, 404, "Not Found")
   end
 
-  defp find_access_token(%{
-         connect_info: %{sec_websocket_protocol: [token]}
-       }),
-       do: token
-
   defp find_access_token(%{params: %{"access_token" => token}}), do: token
+
+  defp find_access_token(%{connect_info: %{sec_websocket_headers: sec_headers}}),
+    do:
+      Enum.find_value(sec_headers, fn
+        {"sec-websocket-protocol", v} -> v
+        _ -> nil
+      end)
 
   defp find_access_token(_), do: nil
 end
