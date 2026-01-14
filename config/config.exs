@@ -133,10 +133,9 @@ config :pleroma, Pleroma.Web.Endpoint,
   ]
 
 # Configures Elixir's Logger
-config :logger, backends: [:console]
+config :logger, :default_handler, level: :debug
 
-config :logger, :console,
-  level: :debug,
+config :logger, :default_formatter,
   format: "\n$time $metadata[$level] $message\n",
   metadata: [:actor, :path, :type, :user]
 
