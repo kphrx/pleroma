@@ -9,6 +9,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
   alias Pleroma.User
   alias Pleroma.UserNote
   alias Pleroma.UserRelationship
+  alias Pleroma.Utils.URIEncoding
   alias Pleroma.Web.CommonAPI.Utils
   alias Pleroma.Web.MastodonAPI.AccountView
   alias Pleroma.Web.MediaProxy
@@ -238,7 +239,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
 
     emojis =
       Enum.map(user.emoji, fn {shortcode, raw_url} ->
-        url = MediaProxy.url(raw_url)
+        url =
+          raw_url
+          |> encode_emoji_url()
+          |> MediaProxy.url()
 
         %{
           shortcode: shortcode,
@@ -356,8 +360,9 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
          %User{id: user_id}
        ) do
     count =
-      User.get_follow_requests(user)
-      |> length()
+      user
+      |> User.get_follow_requests_query()
+      |> Pleroma.Repo.aggregate(:count)
 
     data
     |> Kernel.put_in([:follow_requests_count], count)
@@ -511,4 +516,13 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
     # See https://git.pleroma.social/pleroma/pleroma-meta/-/issues/14
     user.actor_type == "Service" || user.actor_type == "Group"
   end
+
+  defp encode_emoji_url(nil), do: nil
+  defp encode_emoji_url("http" <> _ = url), do: URIEncoding.encode_url(url)
+
+  defp encode_emoji_url("/" <> _ = path),
+    do: URIEncoding.encode_url(path, bypass_parse: true, bypass_decode: true)
+
+  defp encode_emoji_url(path) when is_binary(path),
+    do: URIEncoding.encode_url(path, bypass_parse: true, bypass_decode: true)
 end

@@ -29,22 +29,26 @@ defmodule Pleroma.Upload.Filter.Exiftool.ReadDescription do
     do: current_description
 
   defp read_when_empty(_, file, tag) do
-    try do
-      {tag_content, 0} =
-        System.cmd("exiftool", ["-b", "-s3", tag, file],
-          stderr_to_stdout: false,
-          parallelism: true
-        )
+    if File.exists?(file) do
+      try do
+        {tag_content, 0} =
+          System.cmd("exiftool", ["-m", "-b", "-s3", tag, file],
+            stderr_to_stdout: false,
+            parallelism: true
+          )
 
-      tag_content = String.trim(tag_content)
+        tag_content = String.trim(tag_content)
 
-      if tag_content != "" and
-           String.length(tag_content) <=
-             Pleroma.Config.get([:instance, :description_limit]),
-         do: tag_content,
-         else: nil
-    rescue
-      _ in ErlangError -> nil
+        if tag_content != "" and
+             String.length(tag_content) <=
+               Pleroma.Config.get([:instance, :description_limit]),
+           do: tag_content,
+           else: nil
+      rescue
+        _ in ErlangError -> nil
+      end
+    else
+      nil
     end
   end
 end

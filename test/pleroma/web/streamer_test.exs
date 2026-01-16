@@ -19,7 +19,12 @@ defmodule Pleroma.Web.StreamerTest do
 
   @moduletag needs_streamer: true, capture_log: true
 
-  setup do: clear_config([:instance, :skip_thread_containment])
+  setup do
+    clear_config([:instance, :skip_thread_containment])
+    Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
+
+    :ok
+  end
 
   describe "get_topic/_ (unauthenticated)" do
     test "allows no stream" do

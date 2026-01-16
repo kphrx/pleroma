@@ -3,12 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.WebFingerTest do
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
   alias Pleroma.Web.WebFinger
   import Pleroma.Factory
   import Tesla.Mock
 
   setup do
+    Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
     mock(fn env -> apply(HttpRequestMock, :request, [env]) end)
     :ok
   end
