@@ -201,9 +201,29 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   def fix_in_reply_to(%{"inReplyTo" => in_reply_to} = object, options)
       when not is_nil(in_reply_to) do
     in_reply_to_id = prepare_in_reply_to(in_reply_to)
+
+    object =
+      cond do
+        is_list(in_reply_to) ->
+          if not_empty_string(in_reply_to_id) do
+            Map.put(object, "inReplyTo", in_reply_to_id)
+          else
+            Map.delete(object, "inReplyTo")
+          end
+
+        is_map(in_reply_to) and is_nil(in_reply_to["id"]) and is_binary(in_reply_to["href"]) ->
+          Map.put(object, "inReplyTo", in_reply_to["href"])
+
+        is_map(in_reply_to) and is_nil(in_reply_to["id"]) and is_nil(in_reply_to["href"]) ->
+          Map.delete(object, "inReplyTo")
+
+        true ->
+          object
+      end
+
     depth = (options[:depth] || 0) + 1
 
-    if Federator.allowed_thread_distance?(depth) do
+    if not_empty_string(in_reply_to_id) and Federator.allowed_thread_distance?(depth) do
       with {:ok, replied_object} <- get_obj_helper(in_reply_to_id, options),
            %Activity{} <- Activity.get_create_by_object_ap_id(replied_object.data["id"]) do
         object
@@ -249,8 +269,16 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
       is_map(in_reply_to) && is_bitstring(in_reply_to["id"]) ->
         in_reply_to["id"]
 
+      is_map(in_reply_to) && is_bitstring(in_reply_to["href"]) ->
+        in_reply_to["href"]
+
       is_list(in_reply_to) && is_bitstring(Enum.at(in_reply_to, 0)) ->
         Enum.at(in_reply_to, 0)
+
+      is_list(in_reply_to) && is_map(Enum.at(in_reply_to, 0)) ->
+        in_reply_to
+        |> Enum.at(0)
+        |> prepare_in_reply_to()
 
       true ->
         ""

@@ -572,11 +572,11 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
         Map.put(data["object"], "inReplyTo", ["https://shitposter.club/notice/2827873"])
 
       modified_object = Transmogrifier.fix_in_reply_to(object_with_reply)
-      assert modified_object["inReplyTo"] == ["https://shitposter.club/notice/2827873"]
+      assert modified_object["inReplyTo"] == "https://shitposter.club/notice/2827873"
 
       object_with_reply = Map.put(data["object"], "inReplyTo", [])
       modified_object = Transmogrifier.fix_in_reply_to(object_with_reply)
-      assert modified_object["inReplyTo"] == []
+      assert modified_object["inReplyTo"] == nil
     end
 
     test "returns modified object when allowed incoming reply", %{data: data} do

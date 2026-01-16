@@ -41,21 +41,33 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   def fix_object_defaults(data) do
     data = Maps.filter_empty_values(data)
 
+    in_reply_to_id = in_reply_to_id(data["inReplyTo"])
+
     context =
       Utils.maybe_create_context(
-        data["context"] || data["conversation"] || data["inReplyTo"] || data["id"]
+        data["context"] || data["conversation"] || in_reply_to_id || data["id"]
       )
 
-    %User{follower_address: follower_collection} = User.get_cached_by_ap_id(data["attributedTo"])
+    data = Map.put(data, "context", context)
 
-    data
-    |> Map.put("context", context)
-    |> cast_and_filter_recipients("to", follower_collection)
-    |> cast_and_filter_recipients("cc", follower_collection)
-    |> cast_and_filter_recipients("bto", follower_collection)
-    |> cast_and_filter_recipients("bcc", follower_collection)
-    |> Transmogrifier.fix_implicit_addressing(follower_collection)
+    with attributed_to when is_binary(attributed_to) <- data["attributedTo"],
+         %User{follower_address: follower_collection} <- User.get_cached_by_ap_id(attributed_to) do
+      data
+      |> cast_and_filter_recipients("to", follower_collection)
+      |> cast_and_filter_recipients("cc", follower_collection)
+      |> cast_and_filter_recipients("bto", follower_collection)
+      |> cast_and_filter_recipients("bcc", follower_collection)
+      |> Transmogrifier.fix_implicit_addressing(follower_collection)
+    else
+      _ -> data
+    end
   end
+
+  defp in_reply_to_id(in_reply_to) when is_binary(in_reply_to), do: in_reply_to
+  defp in_reply_to_id(%{"id" => in_reply_to}) when is_binary(in_reply_to), do: in_reply_to
+  defp in_reply_to_id(%{"href" => in_reply_to}) when is_binary(in_reply_to), do: in_reply_to
+  defp in_reply_to_id([in_reply_to | _]), do: in_reply_to_id(in_reply_to)
+  defp in_reply_to_id(_), do: nil
 
   def fix_activity_addressing(activity) do
     %User{follower_address: follower_collection} = User.get_cached_by_ap_id(activity["actor"])
