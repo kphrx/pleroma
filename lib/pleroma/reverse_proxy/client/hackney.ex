@@ -5,9 +5,12 @@
 defmodule Pleroma.ReverseProxy.Client.Hackney do
   @behaviour Pleroma.ReverseProxy.Client
 
-  # redirect handler from Pleb, slightly modified to work with Hackney
+  # In-app redirect handler to avoid Hackney redirect bugs:
+  # - https://github.com/benoitc/hackney/issues/527 (relative/protocol-less redirects can crash Hackney)
+  # - https://github.com/benoitc/hackney/issues/273 (redirects not followed when using HTTP proxy)
+  #
+  # Based on a redirect handler from Pleb, slightly modified to work with Hackney:
   # https://declin.eu/objects/d4f38e62-5429-4614-86d1-e8fc16e6bf33
-  # https://github.com/benoitc/hackney/issues/273
   @redirect_statuses [301, 302, 303, 307, 308]
   defp absolute_redirect_url(original_url, resp_headers) do
     location =
