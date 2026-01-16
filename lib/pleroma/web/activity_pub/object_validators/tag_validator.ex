@@ -59,12 +59,29 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
   end
 
   def changeset(struct, %{"type" => "Emoji"} = data) do
-    data = Map.put(data, "name", String.trim(data["name"], ":"))
+    data =
+      data
+      |> Map.put("name", String.trim(data["name"], ":"))
+      |> normalize_emoji_icon()
 
-    struct
-    |> cast(data, [:type, :name, :updated, :id])
-    |> cast_embed(:icon, with: &icon_changeset/2)
-    |> validate_required([:type, :name, :icon])
+    case data["icon"] do
+      %{"url" => url} when is_binary(url) ->
+        if valid_http_url?(url) do
+          struct
+          |> cast(data, [:type, :name, :updated, :id])
+          |> cast_embed(:icon, with: &icon_changeset/2)
+          |> validate_required([:type, :name, :icon])
+        else
+          struct
+          |> cast(data, [])
+          |> Map.put(:action, :ignore)
+        end
+
+      _ ->
+        struct
+        |> cast(data, [])
+        |> Map.put(:action, :ignore)
+    end
   end
 
   def changeset(struct, %{"type" => "Link"} = data) do
@@ -100,6 +117,41 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
     do: Map.put(data, "type", "Link")
 
   defp infer_type(data), do: data
+
+  defp normalize_emoji_icon(%{"icon" => icon} = data) when is_binary(icon) do
+    Map.put(data, "icon", %{"type" => "Image", "url" => icon})
+  end
+
+  defp normalize_emoji_icon(%{"icon" => icon} = data) when is_map(icon) do
+    case extract_icon_url(icon) do
+      url when is_binary(url) -> Map.put(data, "icon", %{"type" => "Image", "url" => url})
+      _ -> Map.delete(data, "icon")
+    end
+  end
+
+  defp normalize_emoji_icon(data), do: data
+
+  defp extract_icon_url(%{"url" => url}) when is_binary(url), do: url
+
+  defp extract_icon_url(%{"url" => %{"href" => href}}) when is_binary(href), do: href
+
+  defp extract_icon_url(%{"url" => [first | _]}) do
+    cond do
+      is_binary(first) -> first
+      is_map(first) -> first["href"]
+      true -> nil
+    end
+  end
+
+  defp extract_icon_url(%{"href" => href}) when is_binary(href), do: href
+
+  defp extract_icon_url(_), do: nil
+
+  defp valid_http_url?(url) when is_binary(url) do
+    match?({:ok, _}, ObjectValidators.Uri.cast(url))
+  end
+
+  defp valid_http_url?(_), do: false
 
   def icon_changeset(struct, data) do
     struct

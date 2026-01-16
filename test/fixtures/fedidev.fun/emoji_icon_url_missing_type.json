@@ -1,0 +1,34 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/emoji-icon-url-missing-type",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:40:01Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-emoji-icon-url-missing-type",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:40:01Z",
+    "content": "emoji icon url missing type :cow2:",
+    "tag": [
+      {
+        "type": "Emoji",
+        "name": ":cow2:",
+        "icon": {
+          "url": "https://fedidev.fun/static/cow.png"
+        }
+      }
+    ]
+  }
+}
+

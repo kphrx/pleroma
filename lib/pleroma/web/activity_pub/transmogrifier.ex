@@ -386,6 +386,24 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   def fix_url(object), do: object
 
+  defp emoji_icon_url(icon) when is_binary(icon), do: icon
+
+  defp emoji_icon_url(%{"url" => url}) when is_binary(url), do: url
+
+  defp emoji_icon_url(%{"url" => %{"href" => href}}) when is_binary(href), do: href
+
+  defp emoji_icon_url(%{"url" => [first | _]}) do
+    cond do
+      is_binary(first) -> first
+      is_map(first) -> first["href"] || first["url"] || first["id"]
+      true -> nil
+    end
+  end
+
+  defp emoji_icon_url(%{"href" => href}) when is_binary(href), do: href
+
+  defp emoji_icon_url(_), do: nil
+
   def fix_emoji(%{"tag" => tags} = object) when is_list(tags) do
     emoji =
       tags
@@ -393,7 +411,10 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
       |> Enum.reduce(%{}, fn data, mapping ->
         name = String.trim(data["name"], ":")
 
-        Map.put(mapping, name, data["icon"]["url"])
+        case emoji_icon_url(data["icon"]) do
+          url when is_binary(url) -> Map.put(mapping, name, url)
+          _ -> mapping
+        end
       end)
 
     Map.put(object, "emoji", emoji)
@@ -401,9 +422,12 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   def fix_emoji(%{"tag" => %{"type" => "Emoji"} = tag} = object) do
     name = String.trim(tag["name"], ":")
-    emoji = %{name => tag["icon"]["url"]}
 
-    Map.put(object, "emoji", emoji)
+    with url when is_binary(url) <- emoji_icon_url(tag["icon"]) do
+      Map.put(object, "emoji", %{name => url})
+    else
+      _ -> object
+    end
   end
 
   def fix_emoji(object), do: object
