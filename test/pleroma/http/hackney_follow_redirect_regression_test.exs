@@ -66,6 +66,36 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
              Tesla.request(client, method: :get, url: url, opts: [adapter: adapter_opts])
   end
 
+  test "reverse proxy hackney client follows redirects via proxy without crashing", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/redirect"
+
+    opts = [
+      pool: :media,
+      proxy: proxy.proxy_url,
+      insecure: true,
+      connect_timeout: 1_000,
+      recv_timeout: 1_000,
+      follow_redirect: true
+    ]
+
+    assert {:ok, 200, _headers, ref} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    assert collect_body(ref) == "ok"
+    Pleroma.ReverseProxy.Client.Hackney.close(ref)
+  end
+
+  defp collect_body(ref, acc \\ "") do
+    case Pleroma.ReverseProxy.Client.Hackney.stream_body(ref) do
+      :done -> acc
+      {:ok, data, _ref} -> collect_body(ref, acc <> data)
+      {:error, error} -> flunk("stream_body failed: #{inspect(error)}")
+    end
+  end
+
   defp start_tls_redirect_server do
     certfile = Path.expand("../../fixtures/server.pem", __DIR__)
     keyfile = Path.expand("../../fixtures/private_key.pem", __DIR__)
