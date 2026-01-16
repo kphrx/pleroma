@@ -433,8 +433,14 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   def handle_incoming(data, options \\ []) do
     data
     |> fix_recursive(&strip_internal_fields/1)
+    |> fix_recursive(&fix_type_as_string/1)
     |> handle_incoming_normalized(options)
   end
+
+  defp fix_type_as_string(%{"type" => [type | _]} = data) when is_binary(type),
+    do: Map.put(data, "type", type)
+
+  defp fix_type_as_string(data), do: data
 
   # Flag objects are placed ahead of the ID check because Mastodon 2.8 and earlier send them
   # with nil ID.
