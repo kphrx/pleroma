@@ -14,7 +14,7 @@ defmodule Pleroma.Web.OAuth.App do
 
   schema "apps" do
     field(:client_name, :string)
-    field(:redirect_uris, {:array, :string})
+    field(:redirect_uris, :string)
     field(:scopes, {:array, :string}, default: [])
     field(:website, :string)
     field(:client_id, :string)
@@ -31,7 +31,30 @@ defmodule Pleroma.Web.OAuth.App do
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(struct, params) do
+    params = normalize_redirect_uris_param(params)
+
     cast(struct, params, [:client_name, :redirect_uris, :scopes, :website, :trusted, :user_id])
+  end
+
+  defp normalize_redirect_uris_param(%{} = params) do
+    case params do
+      %{redirect_uris: redirect_uris} when is_list(redirect_uris) ->
+        Map.put(params, :redirect_uris, normalize_redirect_uris(redirect_uris))
+
+      %{"redirect_uris" => redirect_uris} when is_list(redirect_uris) ->
+        Map.put(params, "redirect_uris", normalize_redirect_uris(redirect_uris))
+
+      _ ->
+        params
+    end
+  end
+
+  defp normalize_redirect_uris(redirect_uris) when is_list(redirect_uris) do
+    redirect_uris
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n")
   end
 
   @spec register_changeset(t(), map()) :: Ecto.Changeset.t()

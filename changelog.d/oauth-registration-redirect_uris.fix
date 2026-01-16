@@ -1,0 +1,1 @@
+Fix OAuth app registration to accept `redirect_uris` as an array of strings (RFC 7591), while keeping backwards compatibility with string input.
