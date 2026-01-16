@@ -123,12 +123,17 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
             host in exclusions or not Map.has_key?(@block_severities, rule)
           end)
           |> Enum.map(fn {host, reason} ->
-            %{
+            domain_block = %{
               domain: host,
               digest: :crypto.hash(:sha256, host) |> Base.encode16(case: :lower),
-              severity: Map.get(@block_severities, rule),
-              comment: reason
+              severity: Map.get(@block_severities, rule)
             }
+
+            if not_empty_string(reason) do
+              Map.put(domain_block, :comment, reason)
+            else
+              domain_block
+            end
           end)
         end)
         |> List.flatten()
