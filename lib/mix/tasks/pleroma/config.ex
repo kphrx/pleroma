@@ -234,6 +234,57 @@ defmodule Mix.Tasks.Pleroma.Config do
     end)
   end
 
+  # Removes non-whitelisted configuration sections
+  def run(["filter_whitelisted" | rest]) do
+    {options, [], []} =
+      OptionParser.parse(
+        rest,
+        strict: [force: :boolean],
+        aliases: [f: :force]
+      )
+
+    force = Keyword.get(options, :force, false)
+
+    start_pleroma()
+
+    whitelisted_configs = Pleroma.Config.get(:database_config_whitelist)
+
+    whitelisted_groups =
+      whitelisted_configs
+      |> Enum.filter(fn
+        {_group} -> true
+        _ -> false
+      end)
+      |> Enum.map(fn {group} -> group end)
+
+    whitelisted_keys =
+      whitelisted_configs
+      |> Enum.filter(fn
+        {_group, _key} -> true
+        _ -> false
+      end)
+
+    filtered =
+      from(c in ConfigDB)
+      |> Repo.all()
+      |> Enum.filter(&not_whitelisted?(&1, whitelisted_groups, whitelisted_keys))
+
+    if not Enum.empty?(filtered) do
+      shell_info("The following settings will be removed from ConfigDB:\n")
+      Enum.each(filtered, &dump(&1))
+
+      if force or shell_prompt("Are you sure you want to continue?", "n") in ~w(Yn Y y) do
+        filtered_ids = Enum.map(filtered, fn %{id: id} -> id end)
+
+        Repo.delete_all(from(c in ConfigDB, where: c.id in ^filtered_ids))
+      else
+        shell_error("No changes made.")
+      end
+    else
+      shell_error("No unwanted settings in ConfigDB. No changes made.")
+    end
+  end
+
   @spec migrate_to_db(Path.t() | nil) :: any()
   def migrate_to_db(file_path \\ nil) do
     with :ok <- Pleroma.Config.DeprecationWarnings.warn() do
@@ -433,5 +484,10 @@ defmodule Mix.Tasks.Pleroma.Config do
   defp truncatedb do
     Ecto.Adapters.SQL.query!(Repo, "TRUNCATE config;")
     Ecto.Adapters.SQL.query!(Repo, "ALTER SEQUENCE config_id_seq RESTART;")
+  end
+
+  defp not_whitelisted?(%{group: group, key: key}, whitelisted_groups, whitelisted_keys) do
+    not Enum.member?(whitelisted_groups, group) and
+      not Enum.member?(whitelisted_keys, {group, key})
   end
 end

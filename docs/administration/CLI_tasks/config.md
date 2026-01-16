@@ -170,3 +170,17 @@ This forcibly removes any enabled MRF that does not exist and will fix the abili
     ```sh
     mix pleroma.config fix_mrf_policies
     ```
+
+## Remove non-whitelisted configs from the database
+
+This removes any configuration value that is not explicitly whitelisted by `:pleroma, :database_config_whitelist`. Might be useful after updating the whitelist.
+
+=== "OTP"
+    ```sh
+    ./bin/pleroma_ctl config filter_whitelisted
+    ```
+
+=== "From Source"
+    ```sh
+    mix pleroma.config filter_whitelisted
+    ```
