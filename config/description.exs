@@ -2131,6 +2131,11 @@ config :pleroma, :config_description, [
         description:
           "Amount of milliseconds after which the HTTP request is forcibly terminated.",
         suggestions: [5_000]
+      },
+      %{
+        key: :user_agent,
+        type: :string,
+        description: "Custom User-Agent header to be used when fetching rich media content."
       }
     ]
   },
@@ -3328,6 +3333,12 @@ config :pleroma, :config_description, [
         description:
           "A map containing available frontends and parameters for their installation.",
         children: frontend_options
+      },
+      %{
+        key: :pickable,
+        type: {:list, :string},
+        description:
+          "A list containing all frontends users can pick as their preference, format is :name/:ref, e.g pleroma-fe/stable."
       }
     ]
   },
@@ -3534,9 +3545,7 @@ config :pleroma, :config_description, [
       %{
         key: :provider,
         type: :module,
-        suggestions: [
-          Pleroma.Language.LanguageDetector.Fasttext
-        ]
+        suggestions: {:list_behaviour_implementations, Pleroma.Language.LanguageDetector.Provider}
       },
       %{
         group: {:subgroup, Pleroma.Language.LanguageDetector.Fasttext},
@@ -3556,12 +3565,7 @@ config :pleroma, :config_description, [
       %{
         key: :provider,
         type: :module,
-        suggestions: [
-          Pleroma.Language.Translation.Deepl,
-          Pleroma.Language.Translation.Libretranslate,
-          Pleroma.Language.Translation.Mozhi,
-          Pleroma.Language.Translation.TranslateLocally
-        ]
+        suggestions: {:list_behaviour_implementations, Pleroma.Language.Translation.Provider}
       },
       %{
         group: {:subgroup, Pleroma.Language.Translation.Deepl},

@@ -4,7 +4,7 @@
 
 defmodule Pleroma.Web.RichMedia.CardTest do
   use Oban.Testing, repo: Pleroma.Repo
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
 
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.UnstubbedConfigMock, as: ConfigMock
@@ -18,6 +18,8 @@ defmodule Pleroma.Web.RichMedia.CardTest do
 
   setup do
     mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
+
+    Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
 
     ConfigMock
     |> stub_with(Pleroma.Test.StaticConfig)

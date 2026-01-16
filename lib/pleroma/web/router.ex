@@ -5,6 +5,7 @@
 defmodule Pleroma.Web.Router do
   use Pleroma.Web, :router
   import Phoenix.LiveDashboard.Router
+  import Oban.Web.Router
 
   pipeline :accepts_html do
     plug(:accepts, ["html"])
@@ -561,6 +562,18 @@ defmodule Pleroma.Web.Router do
     get("/apps", AppController, :index)
     get("/statuses/:id/reactions/:emoji", EmojiReactionController, :index)
     get("/statuses/:id/reactions", EmojiReactionController, :index)
+
+    get(
+      "/preferred_frontend/available",
+      FrontendSettingsController,
+      :available_frontends
+    )
+
+    put(
+      "/preferred_frontend",
+      FrontendSettingsController,
+      :update_preferred_frontend
+    )
   end
 
   scope "/api/v0/pleroma", Pleroma.Web.PleromaAPI do
@@ -581,6 +594,8 @@ defmodule Pleroma.Web.Router do
       delete("/chats/:id/messages/:message_id", ChatController, :delete_message)
       post("/chats/:id/read", ChatController, :mark_as_read)
       post("/chats/:id/messages/:message_id/read", ChatController, :mark_message_as_read)
+      post("/chats/:id/pin", ChatController, :pin)
+      post("/chats/:id/unpin", ChatController, :unpin)
 
       get("/conversations/:id/statuses", ConversationController, :statuses)
       get("/conversations/:id", ConversationController, :show)
@@ -750,6 +765,7 @@ defmodule Pleroma.Web.Router do
     post("/statuses/:id/mute", StatusController, :mute_conversation)
     post("/statuses/:id/unmute", StatusController, :unmute_conversation)
     post("/statuses/:id/translate", StatusController, :translate)
+    get("/statuses/:id/quotes", StatusController, :quotes)
 
     post("/push/subscription", SubscriptionController, :create)
     get("/push/subscription", SubscriptionController, :show)
@@ -904,7 +920,11 @@ defmodule Pleroma.Web.Router do
 
   scope "/", Pleroma.Web do
     pipe_through(:browser)
+
     get("/mailer/unsubscribe/:token", Mailer.SubscriptionController, :unsubscribe)
+
+    get("/frontend_switcher", FrontendSwitcher.FrontendSwitcherController, :switch)
+    post("/frontend_switcher", FrontendSwitcher.FrontendSwitcherController, :do_switch)
   end
 
   pipeline :ap_service_actor do
@@ -954,6 +974,7 @@ defmodule Pleroma.Web.Router do
     get("/users/:nickname/followers", ActivityPubController, :followers)
     get("/users/:nickname/following", ActivityPubController, :following)
     get("/users/:nickname/collections/featured", ActivityPubController, :pinned)
+    get("/objects/:uuid/replies", ActivityPubController, :object_replies)
   end
 
   scope "/", Pleroma.Web.ActivityPub do
@@ -1024,7 +1045,8 @@ defmodule Pleroma.Web.Router do
 
   scope "/" do
     pipe_through([:pleroma_html, :authenticate, :require_admin])
-    live_dashboard("/phoenix/live_dashboard", additional_pages: [oban: Oban.LiveDashboard])
+    live_dashboard("/pleroma/live_dashboard", additional_pages: [oban: Oban.LiveDashboard])
+    oban_dashboard("/pleroma/oban")
   end
 
   # Test-only routes needed to test action dispatching and plug chain execution
@@ -1065,14 +1087,20 @@ defmodule Pleroma.Web.Router do
     get("/:maybe_nickname_or_id", RedirectController, :redirector_with_meta)
     match(:*, "/api/pleroma/*path", LegacyPleromaApiRerouterPlug, [])
     get("/api/*path", RedirectController, :api_not_implemented)
+    get("/phoenix/live_dashboard", RedirectController, :live_dashboard)
     get("/*path", RedirectController, :redirector_with_preload)
 
     options("/*path", RedirectController, :empty)
   end
 
+  # /pleroma/{phoenix,oban}/* need to get filtered out from api routes for frontend configuration
+  # to not drop admin overrides for /pleroma/admin.
+  @non_api_routes ["/pleroma/live_dashboard", "/pleroma/oban"]
+
   def get_api_routes do
     Phoenix.Router.routes(__MODULE__)
     |> Enum.reject(fn r -> r.plug == Pleroma.Web.Fallback.RedirectController end)
+    |> Enum.reject(fn r -> String.starts_with?(r.path, @non_api_routes) end)
     |> Enum.map(fn r ->
       r.path
       |> String.split("/", trim: true)

@@ -7,7 +7,6 @@ defmodule Pleroma.Web.PleromaAPI.BookmarkFolderView do
 
   alias Pleroma.BookmarkFolder
   alias Pleroma.Emoji
-  alias Pleroma.Web.Endpoint
 
   def render("show.json", %{folder: %BookmarkFolder{} = folder}) do
     %{
@@ -33,7 +32,7 @@ defmodule Pleroma.Web.PleromaAPI.BookmarkFolderView do
       emoji = Emoji.get(emoji)
 
       if emoji != nil do
-        Endpoint.url() |> URI.merge(emoji.file) |> to_string()
+        Emoji.local_url(emoji.file)
       else
         nil
       end

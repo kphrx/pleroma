@@ -57,6 +57,28 @@ defmodule Pleroma.Web.AdminAPI.OAuthAppControllerTest do
              } = response
     end
 
+    test "success with redirect_uris array", %{conn: conn} do
+      base_url = Endpoint.url()
+      app_name = "Trusted app"
+
+      response =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/pleroma/admin/oauth_app", %{
+          name: app_name,
+          redirect_uris: [base_url]
+        })
+        |> json_response_and_validate_schema(200)
+
+      assert %{
+               "client_id" => _,
+               "client_secret" => _,
+               "name" => ^app_name,
+               "redirect_uri" => ^base_url,
+               "trusted" => false
+             } = response
+    end
+
     test "with trusted", %{conn: conn} do
       base_url = Endpoint.url()
       app_name = "Trusted app"

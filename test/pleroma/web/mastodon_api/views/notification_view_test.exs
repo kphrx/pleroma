@@ -219,7 +219,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
         data: %{
           "reactions" => [
             ["👍", [user.ap_id], nil],
-            ["dinosaur", [user.ap_id], "http://localhost:4001/emoji/dino walking.gif"]
+            ["dinosaur", [user.ap_id], "http://localhost:4001/emoji/dino%20walking.gif"]
           ]
         }
       )
@@ -243,7 +243,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
       account: AccountView.render("show.json", %{user: other_user, for: user}),
       status: StatusView.render("show.json", %{activity: activity, for: user}),
       created_at: Utils.to_masto_date(notification.inserted_at),
-      emoji_url: "http://localhost:4001/emoji/dino walking.gif"
+      emoji_url: "http://localhost:4001/emoji/dino%20walking.gif"
     }
 
     test_notifications_rendering([notification], user, [expected])

@@ -17,7 +17,7 @@ defmodule Pleroma.Tesla.Middleware.EncodeUrl do
 
   @impl Tesla.Middleware
   def call(%Tesla.Env{url: url} = env, next, _) do
-    url = Pleroma.HTTP.encode_url(url)
+    url = Pleroma.Utils.URIEncoding.encode_url(url)
 
     env = %{env | url: url}
 

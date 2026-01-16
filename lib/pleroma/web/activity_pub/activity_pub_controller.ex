@@ -31,6 +31,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
 
   @federating_only_actions [:internal_fetch, :relay, :relay_following, :relay_followers]
 
+  @object_replies_known_param_keys ["page", "min_id", "max_id", "since_id", "limit"]
+
   plug(FederatingPlug when action in @federating_only_actions)
 
   plug(
@@ -89,6 +91,36 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
       |> put_resp_content_type("application/activity+json")
       |> put_view(ObjectView)
       |> render("object.json", object: object)
+    else
+      {:visible?, false} -> {:error, :not_found}
+      nil -> {:error, :not_found}
+    end
+  end
+
+  def object_replies(%{assigns: assigns, query_params: params} = conn, _all_params) do
+    object_ap_id = conn.path_info |> Enum.reverse() |> tl() |> Enum.reverse()
+    object_ap_id = Endpoint.url() <> "/" <> Enum.join(object_ap_id, "/")
+
+    # Most other API params are converted to atoms by OpenAPISpex 3.x
+    # and therefore helper functions assume atoms. For consistency,
+    # also convert our params to atoms here.
+    params =
+      params
+      |> Map.take(@object_replies_known_param_keys)
+      |> Enum.into(%{}, fn {k, v} -> {String.to_existing_atom(k), v} end)
+      |> Map.put(:object_ap_id, object_ap_id)
+      |> Map.put(:order_asc, true)
+      |> Map.put(:conn, conn)
+
+    with %Object{} = object <- Object.get_cached_by_ap_id(object_ap_id),
+         user <- Map.get(assigns, :user, nil),
+         {_, true} <- {:visible?, Visibility.visible_for_user?(object, user)} do
+      conn
+      |> maybe_skip_cache(user)
+      |> set_cache_ttl_for(object)
+      |> put_resp_content_type("application/activity+json")
+      |> put_view(ObjectView)
+      |> render("object_replies.json", render_params: params)
     else
       {:visible?, false} -> {:error, :not_found}
       nil -> {:error, :not_found}
@@ -257,8 +289,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
       |> put_view(UserView)
       |> render("activity_collection_page.json", %{
         activities: activities,
-        pagination: ControllerHelper.get_pagination_fields(conn, activities),
-        iri: "#{user.ap_id}/outbox"
+        pagination: ControllerHelper.get_pagination_fields(conn, activities)
       })
     end
   end
@@ -404,8 +435,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     |> put_view(UserView)
     |> render("activity_collection_page.json", %{
       activities: activities,
-      pagination: ControllerHelper.get_pagination_fields(conn, activities),
-      iri: "#{user.ap_id}/inbox"
+      pagination: ControllerHelper.get_pagination_fields(conn, activities)
     })
   end
 
@@ -482,6 +512,42 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     {:ok, activity}
   end
 
+  # We currently lack a Flag ObjectValidator since both CommonAPI and Transmogrifier
+  # both send it straight to ActivityPub.flag and C2S currently has to go through
+  # the normal pipeline which requires an ObjectValidator.
+  # TODO: Add a Flag Activity ObjectValidator
+  defp check_allowed_action(_, %{"type" => "Flag"}) do
+    {:error, "Flag activities aren't currently supported in C2S"}
+  end
+
+  # It would respond with 201 and silently fail with:
+  # Could not decode featured collection at fetch #{user.ap_id} \
+  # {:error, "Trying to fetch local resource"}
+  defp check_allowed_action(%{ap_id: ap_id}, %{"type" => "Update", "object" => %{"id" => ap_id}}),
+    do: {:error, "Updating profile is not currently supported in C2S"}
+
+  defp check_allowed_action(_, activity), do: {:ok, activity}
+
+  defp validate_visibility(%User{} = user, %{"type" => type, "object" => object} = activity) do
+    with {_, %Object{} = normalized_object} <-
+           {:normalize, Object.normalize(object, fetch: false)},
+         {_, true} <- {:visibility, Visibility.visible_for_user?(normalized_object, user)} do
+      {:ok, activity}
+    else
+      {:normalize, _} ->
+        if type in ["Create", "Listen"] do
+          # Creating new object via C2S; user is local and authenticated
+          # via the :authenticate Plug pipeline.
+          {:ok, activity}
+        else
+          {:error, "No such object found"}
+        end
+
+      {:visibility, _} ->
+        {:forbidden, "You can't interact with this object"}
+    end
+  end
+
   def update_outbox(
         %{assigns: %{user: %User{nickname: nickname, ap_id: actor} = user}} = conn,
         %{"nickname" => nickname} = params
@@ -493,6 +559,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
       |> Map.put("actor", actor)
 
     with {:ok, params} <- fix_user_message(user, params),
+         {:ok, params} <- check_allowed_action(user, params),
+         {:ok, params} <- validate_visibility(user, params),
          {:ok, activity, _} <- Pipeline.common_pipeline(params, local: true),
          %Activity{data: activity_data} <- Activity.normalize(activity) do
       conn

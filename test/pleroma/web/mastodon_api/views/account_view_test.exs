@@ -105,6 +105,25 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
     assert expected == AccountView.render("show.json", %{user: user, skip_visibility_check: true})
   end
 
+  test "encodes emoji urls in the emojis field" do
+    user =
+      insert(:user,
+        name: ":brackets: :percent:",
+        emoji: %{
+          "brackets" => "/emoji/hana[pog].png",
+          "percent" => "/emoji/hana%20pog.png"
+        }
+      )
+
+    %{emojis: emojis} =
+      AccountView.render("show.json", %{user: user, skip_visibility_check: true})
+
+    emoji_urls = Map.new(emojis, &{&1.shortcode, &1.url})
+
+    assert emoji_urls["brackets"] == "/emoji/hana%5Bpog%5D.png"
+    assert emoji_urls["percent"] == "/emoji/hana%2520pog.png"
+  end
+
   describe "roles and privileges" do
     setup do
       clear_config([:instance, :moderator_privileges], [:cofe, :only_moderator])
