@@ -46,7 +46,32 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator do
   end
 
   defp fix_url(%{"url" => url} = data) when is_bitstring(url), do: data
-  defp fix_url(%{"url" => url} = data) when is_map(url), do: Map.put(data, "url", url["href"])
+
+  defp fix_url(%{"url" => url} = data) when is_map(url) do
+    if is_binary(url["href"]) do
+      Map.put(data, "url", url["href"])
+    else
+      Map.delete(data, "url")
+    end
+  end
+
+  defp fix_url(%{"url" => url} = data) when is_list(url) do
+    first_element = Enum.at(url, 0)
+
+    url_string =
+      cond do
+        is_bitstring(first_element) -> first_element
+        is_map(first_element) -> first_element["href"]
+        true -> nil
+      end
+
+    if is_binary(url_string) do
+      Map.put(data, "url", url_string)
+    else
+      Map.delete(data, "url")
+    end
+  end
+
   defp fix_url(data), do: data
 
   defp fix_tag(%{"tag" => tag} = data) when is_list(tag) do
