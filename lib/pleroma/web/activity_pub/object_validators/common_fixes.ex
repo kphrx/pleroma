@@ -91,6 +91,17 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
     |> Map.put("attributedTo", actor)
   end
 
+  def maybe_set_attributed_to_from_activity(object, activity) when is_map(object) do
+    if is_nil(object["attributedTo"]) and is_nil(object["actor"]) do
+      case Containment.get_actor(activity) do
+        actor when is_binary(actor) -> Map.put(object, "attributedTo", actor)
+        _ -> object
+      end
+    else
+      object
+    end
+  end
+
   def fix_activity_context(data, %Object{data: %{"context" => object_context}}) do
     data
     |> Map.put("context", object_context)
