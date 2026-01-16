@@ -293,6 +293,12 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> Map.drop(["conversation"])
   end
 
+  defp valid_http_url?(href) when is_binary(href) do
+    match?({:ok, _}, ObjectValidators.Uri.cast(href))
+  end
+
+  defp valid_http_url?(_), do: false
+
   def fix_attachments(%{"attachment" => attachment} = object) when is_list(attachment) do
     attachments =
       Enum.map(attachment, fn data ->
@@ -305,7 +311,8 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
         media_type =
           cond do
-            is_map(url) && url =~ Pleroma.Constants.mime_regex() ->
+            is_map(url) && is_bitstring(url["mediaType"]) &&
+                url["mediaType"] =~ Pleroma.Constants.mime_regex() ->
               url["mediaType"]
 
             is_bitstring(data["mediaType"]) && data["mediaType"] =~ Pleroma.Constants.mime_regex() ->
@@ -326,7 +333,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
             true -> nil
           end
 
-        if href do
+        if href && valid_http_url?(href) do
           attachment_url =
             %{
               "href" => href,

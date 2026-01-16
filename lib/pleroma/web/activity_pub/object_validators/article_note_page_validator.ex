@@ -100,10 +100,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator do
 
   defp fix_replies(data), do: Map.delete(data, "replies")
 
-  def fix_attachments(%{"attachment" => attachment} = data) when is_map(attachment),
-    do: Map.put(data, "attachment", [attachment])
-
-  def fix_attachments(data), do: data
+  def fix_attachments(data), do: Transmogrifier.fix_attachments(data)
 
   defp fix(data) do
     data
