@@ -80,6 +80,27 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
     |> Map.put(:action, :ignore)
   end
 
+  def changeset(struct, data) when is_map(data) do
+    data = infer_type(data)
+
+    if Map.has_key?(data, "type") do
+      changeset(struct, data)
+    else
+      struct
+      |> cast(data, [])
+      |> Map.put(:action, :ignore)
+    end
+  end
+
+  defp infer_type(%{"type" => _} = data), do: data
+  defp infer_type(%{"name" => "#" <> _} = data), do: Map.put(data, "type", "Hashtag")
+  defp infer_type(%{"name" => "@" <> _} = data), do: Map.put(data, "type", "Mention")
+
+  defp infer_type(%{"mediaType" => _media_type, "href" => _href} = data),
+    do: Map.put(data, "type", "Link")
+
+  defp infer_type(data), do: data
+
   def icon_changeset(struct, data) do
     struct
     |> cast(data, [:type, :url])
