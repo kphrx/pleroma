@@ -1472,5 +1472,13 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       web_endpoint = Enum.find(children, fn c -> c["key"] == "Pleroma.Upload" end)
       assert web_endpoint["children"]
     end
+
+    test "all keys from description are whitelisted", %{conn: conn} do
+      conn = get(conn, "/api/pleroma/admin/config/descriptions")
+
+      assert response = json_response_and_validate_schema(conn, 200)
+
+      assert length(response) == length(Pleroma.Docs.JSON.compiled_descriptions())
+    end
   end
 end
