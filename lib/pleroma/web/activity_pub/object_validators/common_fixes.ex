@@ -96,23 +96,37 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
     Map.put(data, "to", to)
   end
 
-  def fix_quote_url(%{"quoteUrl" => _quote_url} = data), do: data
+  def fix_quote_url(%{"quoteUrl" => quote_url} = data) do
+    case normalize_object_id(quote_url) do
+      quote_url when is_binary(quote_url) -> Map.put(data, "quoteUrl", quote_url)
+      _ -> Map.delete(data, "quoteUrl")
+    end
+  end
 
   # Fedibird
   # https://github.com/fedibird/mastodon/commit/dbd7ae6cf58a92ec67c512296b4daaea0d01e6ac
   def fix_quote_url(%{"quoteUri" => quote_url} = data) do
-    Map.put(data, "quoteUrl", quote_url)
+    case normalize_object_id(quote_url) do
+      quote_url when is_binary(quote_url) -> Map.put(data, "quoteUrl", quote_url)
+      _ -> data
+    end
   end
 
   # Old Fedibird (bug)
   # https://github.com/fedibird/mastodon/issues/9
   def fix_quote_url(%{"quoteURL" => quote_url} = data) do
-    Map.put(data, "quoteUrl", quote_url)
+    case normalize_object_id(quote_url) do
+      quote_url when is_binary(quote_url) -> Map.put(data, "quoteUrl", quote_url)
+      _ -> data
+    end
   end
 
   # Misskey fallback
   def fix_quote_url(%{"_misskey_quote" => quote_url} = data) do
-    Map.put(data, "quoteUrl", quote_url)
+    case normalize_object_id(quote_url) do
+      quote_url when is_binary(quote_url) -> Map.put(data, "quoteUrl", quote_url)
+      _ -> data
+    end
   end
 
   def fix_quote_url(%{"tag" => [_ | _] = tags} = data) do
@@ -127,6 +141,11 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   end
 
   def fix_quote_url(data), do: data
+
+  defp normalize_object_id(object_id) when is_binary(object_id), do: object_id
+  defp normalize_object_id(%{"id" => object_id}) when is_binary(object_id), do: object_id
+  defp normalize_object_id([object_id | _]) when is_binary(object_id), do: object_id
+  defp normalize_object_id(_), do: nil
 
   # On Mastodon, `"likes"` attribute includes an inlined `Collection` with `totalItems`,
   # not a list of users.
