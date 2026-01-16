@@ -194,6 +194,16 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
 
     setup do: clear_config(:configurable_from_database, true)
 
+    setup do:
+            clear_config(:database_config_whitelist, [
+              {:pleroma},
+              {:http},
+              {:idna},
+              {:oban},
+              {:tesla},
+              {:ueberauth}
+            ])
+
     test "create new config setting in db", %{conn: conn} do
       ueberauth = Application.get_env(:ueberauth, Ueberauth)
       on_exit(fn -> Application.put_env(:ueberauth, Ueberauth, ueberauth) end)
@@ -807,7 +817,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
                                   %{
                                     "tuple" => [
                                       "/websocket",
-                                      "Phoenix.Endpoint.CowboyWebSocket",
+                                      ":sth",
                                       %{
                                         "tuple" => [
                                           "Phoenix.Transports.WebSocket",
@@ -871,7 +881,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
                                        %{
                                          "tuple" => [
                                            "/websocket",
-                                           "Phoenix.Endpoint.CowboyWebSocket",
+                                           ":sth",
                                            %{
                                              "tuple" => [
                                                "Phoenix.Transports.WebSocket",
