@@ -153,6 +153,49 @@ defmodule Pleroma.Web.MastodonAPI.InstanceControllerTest do
            ] = result["rules"]
   end
 
+  describe "instance domain blocks" do
+    setup do
+      clear_config([:mrf_simple, :reject], [{"fediverse.pl", "uses pl-fe"}])
+    end
+
+    test "get instance domain blocks", %{conn: conn} do
+      conn = get(conn, "/api/v1/instance/domain_blocks")
+
+      assert [
+               %{
+                 "comment" => "uses pl-fe",
+                 "digest" => "55e3f44aefe7eb022d3b1daaf7396cabf7f181bf6093c8ea841e30c9fc7d8226",
+                 "domain" => "fediverse.pl",
+                 "severity" => "suspend"
+               }
+             ] == json_response_and_validate_schema(conn, 200)
+    end
+
+    test "omits comment field if comment is empty", %{conn: conn} do
+      clear_config([:mrf_simple, :reject], ["fediverse.pl"])
+
+      conn = get(conn, "/api/v1/instance/domain_blocks")
+
+      assert [
+               %{
+                 "digest" => "55e3f44aefe7eb022d3b1daaf7396cabf7f181bf6093c8ea841e30c9fc7d8226",
+                 "domain" => "fediverse.pl",
+                 "severity" => "suspend"
+               } = domain_block
+             ] = json_response_and_validate_schema(conn, 200)
+
+      refute Map.has_key?(domain_block, "comment")
+    end
+
+    test "returns empty array if mrf transparency is disabled", %{conn: conn} do
+      clear_config([:mrf, :transparency], false)
+
+      conn = get(conn, "/api/v1/instance/domain_blocks")
+
+      assert [] == json_response_and_validate_schema(conn, 200)
+    end
+  end
+
   test "translation languages matrix", %{conn: conn} do
     clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
 
