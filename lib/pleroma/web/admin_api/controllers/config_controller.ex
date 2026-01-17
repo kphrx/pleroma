@@ -174,7 +174,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
     end
   end
 
-  defp whitelisted_config?(:pleroma, :database_config_whitelist), do: false
+  defp whitelisted_config?(":pleroma", ":database_config_whitelist"), do: false
 
   defp whitelisted_config?(group, key) do
     if whitelisted_configs = Config.get(:database_config_whitelist) do
