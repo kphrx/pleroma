@@ -1,0 +1,1 @@
+Use a custom redirect handler to ensure MediaProxy redirects are followed with Hackney
