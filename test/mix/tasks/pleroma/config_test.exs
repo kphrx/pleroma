@@ -347,5 +347,21 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
                %ConfigDB{group: :web_push_encryption, key: :vapid_details}
              ] = config_records()
     end
+
+    test "filter_whitelisted doesn't crash when whitelist is unset" do
+      clear_config(:database_config_whitelist, nil)
+
+      existing = config_records()
+      MixTask.run(["filter_whitelisted", "--force"])
+      assert config_records() == existing
+    end
+
+    test "filter_whitelisted doesn't crash when whitelist is disabled" do
+      clear_config(:database_config_whitelist, false)
+
+      existing = config_records()
+      MixTask.run(["filter_whitelisted", "--force"])
+      assert config_records() == existing
+    end
   end
 end
