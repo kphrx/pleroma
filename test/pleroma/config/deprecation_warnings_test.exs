@@ -416,8 +416,7 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
                Your configuration is using deprecated syntax for configuring backends of Elixir's logger.
                `config :logger, backends: [...]` is deprecated syntax due to changes in Elixir.
                Please update your configuration at your earliest convenience to use:
-                 `config :logger, backends: [...]`
-               Pleroma's default configuration will be updated in the next release which WILL override your settings.
+                 `config :pleroma, :logger, backends: [...]`
 
                Note: `:console` is no longer considered a backend and is used by default, you can disable it using:
                  `config :logger, :default_handler: false`
@@ -430,7 +429,6 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
                `config :logger, :console` is deprecated syntax due to changes in Elixir.
                Please update your configuration at your earliest convenience to use
                  `config :logger, default_handler` and `config :logger, :default_formatter`.
-               Pleroma's default configuration will be updated in the next release which WILL override your settings.
 
                Note: `:default_handler` is used only for the `level` setting. All other configurations go under
                `:default_formatter`. For more info visit: https://hexdocs.pm/logger/Logger.html#module-backends-and-backwards-compatibility
