@@ -69,7 +69,7 @@ cd /opt/pleroma
 sudo -Hu pleroma mix deps.get
 ```
 
-* Generate the configuration:
+* Generate the configuration: 
 
 ```shell
 sudo -Hu pleroma MIX_ENV=prod mix pleroma.instance gen

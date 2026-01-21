@@ -2,7 +2,7 @@
 
 {! backend/installation/otp_vs_from_source.include !}
 
-This guide covers a installation using OTP releases as built by the Pleroma project, it is meant as a fallback to distribution packages/recipes which are the preferred installation method.
+This guide covers a installation using OTP releases as built by the Pleroma project, it is meant as a fallback to distribution packages/recipes which are the preferred installation method.  
 To install Pleroma from source, please check out the corresponding guide for your distro.
 
 ## Pre-requisites
