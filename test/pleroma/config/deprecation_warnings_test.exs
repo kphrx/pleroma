@@ -400,8 +400,17 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
       Application.put_env(:logger, :backends, [:console])
 
       on_exit(fn ->
-        if initial_console, do: Application.put_env(:logger, :console, initial_console), else: Application.delete_env(:logger, :console)
-        if initial_backends, do: Application.put_env(:logger, :backends, initial_backends), else: Application.delete_env(:logger, :backends)
+        if initial_console do
+          Application.put_env(:logger, :console, initial_console)
+        else
+          Application.delete_env(:logger, :console)
+        end
+
+        if initial_backends do
+          Application.put_env(:logger, :backends, initial_backends)
+        else
+          Application.delete_env(:logger, :backends)
+        end
       end)
     end
 

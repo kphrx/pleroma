@@ -10,7 +10,7 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
 
   alias Pleroma.Web.ActivityPub.MRF
 
-  defp regexes_match!([],[]), do: true
+  defp regexes_match!([], []), do: true
 
   defp regexes_match!([authority | authority_rest], [checked | checked_rest]) do
     authority.source == checked.source and regexes_match!(authority_rest, checked_rest)
