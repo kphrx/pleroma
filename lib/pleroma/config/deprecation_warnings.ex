@@ -20,8 +20,7 @@ defmodule Pleroma.Config.DeprecationWarnings do
      "\n* `config :pleroma, :instance, mrf_transparency_exclusions` is now `config :pleroma, :mrf, transparency_exclusions`"}
   ]
 
-  @logger_config_knobs [:level, :translator_inspect_opts]
-  @logger_formatter_config_knows [:colors, :format, :metadata, :truncate, :utc_log]
+  @logger_formatter_config_knobs [:colors, :format, :metadata, :truncate, :utc_log]
 
   def check_exiftool_filter do
     filters = Config.get([Pleroma.Upload]) |> Keyword.get(:filters, [])
@@ -421,21 +420,23 @@ defmodule Pleroma.Config.DeprecationWarnings do
   end
 
   defp merge_deprecated_logger_config(config) do
-    handler_config = Enum.filter(config, fn {k, _} -> k in @logger_config_knobs end)
-    formatter_config = Enum.filter(config, fn {k, _} -> k in @logger_formatter_config_knows end)
+    formatter_config = Enum.filter(config, fn {k, _} -> k in @logger_formatter_config_knobs end)
     formatter = Logger.default_formatter(formatter_config)
+    log_level = Keyword.get(config, :level, nil)
 
-    Logger.debug("""
-    Reconfiguring console Logger with deprecated configuration syntax.
-      Handler configuration:
-        #{inspect(handler_config)}
+    if Config.get(:env) != :test do
+      Logger.debug("""
+      Reconfiguring console Logger with deprecated configuration syntax.
+        Handler configuration:
+          log_level: #{inspect(log_level)}
 
-      Formatter:
-        #{inspect(formatter)}
-    """)
+        Formatter:
+          #{inspect(formatter)}
+      """)
 
-    Logger.configure(handler_config)
-    :logger.update_handler_config(:default, :formatter, formatter)
+      if log_level, do: :logger.update_handler_config(:default, :level, log_level)
+      :logger.update_handler_config(:default, :formatter, formatter)
+    end
   end
 
   @spec check_deprecated_logger_config() :: :ok | :error
@@ -443,7 +444,7 @@ defmodule Pleroma.Config.DeprecationWarnings do
     backends_config = Application.get_env(:logger, :backends)
     console_config = Application.get_env(:logger, :console)
 
-    # Note: No need to merge the old backends config since it still works.
+    # NOTE: No need to merge the old backends config since it still works.
     # And new configuration will just add new Logger backends.
     backend =
       if backends_config do

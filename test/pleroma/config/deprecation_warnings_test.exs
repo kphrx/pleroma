@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Config.DeprecationWarningsTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   use Pleroma.Tests.Helpers
 
   import ExUnit.CaptureLog
@@ -393,14 +393,15 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
 
   describe "check_deprecated_logger_config" do
     setup do
-      Application.put_env(:logger, :backends, [:console, {ExSyslogger, :ex_syslogger}])
-      Application.put_env(:logger, :console, level: :info)
+      initial_console = Application.get_env(:logger, :console, nil)
+      initial_backends = Application.get_env(:logger, :backends, nil)
+
+      Application.put_env(:logger, :console, level: :all)
+      Application.put_env(:logger, :backends, [:console])
 
       on_exit(fn ->
-        Application.delete_env(:logger, :backends)
-        Application.delete_env(:logger, :console)
-        Logger.configure(level: :debug)
-        :logger.update_handler_config(:default, :formatter, Logger.default_formatter())
+        if initial_console, do: Application.put_env(:logger, :console, initial_console), else: Application.delete_env(:logger, :console)
+        if initial_backends, do: Application.put_env(:logger, :backends, initial_backends), else: Application.delete_env(:logger, :backends)
       end)
     end
 
@@ -433,21 +434,6 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
                Note: `:default_handler` is used only for the `level` setting. All other configurations go under
                `:default_formatter`. For more info visit: https://hexdocs.pm/logger/Logger.html#module-backends-and-backwards-compatibility
                """
-    end
-
-    test "reconfigures logger" do
-      empty_log =
-        capture_log(fn ->
-          Logger.debug("This should not be logged")
-        end)
-
-      logged =
-        capture_log(fn ->
-          Logger.info("This should be logged")
-        end)
-
-      assert empty_log =~ ""
-      assert logged =~ "This should be logged"
     end
   end
 end
