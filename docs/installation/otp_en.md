@@ -96,9 +96,17 @@ RUM indexes are an alternative indexing scheme that is not included in PostgreSQ
     # On Trixie and Ubuntu 25.04
     apt install postgresql-17-rum
     ```
+    # On Debian 12
+    ```
+    apt install postgresql-15-rum
+    ```
     # On Ubuntu 24.04
     ```
     apt install postgresql-16-rum
+    ```
+    # On Ubuntu 22.04
+    ```
+    apt install postgresql-14-rum
     ```
 
 #### (Optional) Performance configuration
