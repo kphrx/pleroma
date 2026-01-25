@@ -26,7 +26,7 @@ defmodule Pleroma.Web.AdminAPI.WebhookView do
 
   def render("event.json", %{type: type, object: object}) do
     %{
-      type: type,
+      event: type,
       created_at: Utils.to_masto_date(NaiveDateTime.utc_now()),
       object: object
     }
