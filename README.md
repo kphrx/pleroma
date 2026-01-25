@@ -19,8 +19,6 @@ If you are running Linux (glibc or musl) on x86/arm, the recommended way to inst
 If your platform is not supported, or you just want to be able to edit the source code easily, you may install Pleroma from source.
 
 - [Alpine Linux](https://docs-develop.pleroma.social/backend/installation/alpine_linux_en/)
-- [Arch Linux](https://docs-develop.pleroma.social/backend/installation/arch_linux_en/)
-- [CentOS 7](https://docs-develop.pleroma.social/backend/installation/centos7_en/)
 - [Debian-based](https://docs-develop.pleroma.social/backend/installation/debian_based_en/)
 - [Debian-based (jp)](https://docs-develop.pleroma.social/backend/installation/debian_based_jp/)
 - [FreeBSD](https://docs-develop.pleroma.social/backend/installation/freebsd_en/)
