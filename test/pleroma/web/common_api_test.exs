@@ -1458,6 +1458,29 @@ defmodule Pleroma.Web.CommonAPITest do
                }
              } = flag_activity
     end
+
+    test "assigns report to an account" do
+      [reporter, target_user] = insert_pair(:user)
+      %{id: assigned} = insert(:user)
+
+      {:ok, %Activity{id: report_id}} = CommonAPI.report(reporter, %{account_id: target_user.id})
+
+      {:ok, activity} = CommonAPI.assign_report_to_account(report_id, assigned)
+
+      assert %{data: %{"assigned_account" => ^assigned}} = activity
+    end
+
+    test "unassigns report from account" do
+      [reporter, target_user] = insert_pair(:user)
+      %{id: assigned} = insert(:user)
+
+      {:ok, %Activity{id: report_id}} = CommonAPI.report(reporter, %{account_id: target_user.id})
+
+      CommonAPI.assign_report_to_account(report_id, assigned)
+      {:ok, activity} = CommonAPI.assign_report_to_account(report_id, nil)
+
+      refute Map.has_key?(activity.data, "assigned_account")
+    end
   end
 
   describe "reblog muting" do
