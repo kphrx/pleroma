@@ -45,7 +45,7 @@ defmodule Pleroma.UserRelationship do
       do: exists?(unquote(relationship_type), source, target)
 
     # `def get_block_expire_date/2`, `def get_mute_expire_date/2`,
-    #   `def get_reblog_mute_expire_date/2`, `def get_notification_mute_exists?/2`,
+    #   `def get_reblog_mute_expire_date/2`, `def get_notification_mute_expire_date/2`,
     #   `def get_inverse_subscription_expire_date/2`, `def get_inverse_endorsement_expire_date/2`
     def unquote(:"get_#{relationship_type}_expire_date")(source, target),
       do: get_expire_date(unquote(relationship_type), source, target)
