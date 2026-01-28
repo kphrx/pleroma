@@ -143,6 +143,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
           reading_user,
           &User.blocks_user?(&1, &2)
         ),
+      block_expires_at: nil,
       muting: muting,
       muting_notifications:
         UserRelationship.exists?(
@@ -152,6 +153,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
           target,
           &User.muted_notifications?(&1, &2)
         ),
+      mute_expires_at: nil,
       subscribing: subscribing,
       notifying: subscribing,
       requested: requested,

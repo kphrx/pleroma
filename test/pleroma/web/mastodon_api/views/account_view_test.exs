@@ -909,8 +909,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
         relationship: %{
           mute_expires_at: mute_expires_at
         }
-      },
-      mute_expires_at: mute_expires_at
+      }
     } = AccountView.render("show.json", %{user: other_user, for: user, embed_relationships: true})
 
     assert DateTime.diff(
@@ -931,8 +930,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
         relationship: %{
           block_expires_at: block_expires_at
         }
-      },
-      block_expires_at: block_expires_at
+      }
     } = AccountView.render("show.json", %{user: other_user, for: user, embed_relationships: true})
 
     assert DateTime.diff(
