@@ -110,7 +110,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     Pleroma.ReverseProxy.Client.Hackney.close(ref)
   end
 
-  test "hackney reverse proxy stop following redirects after limit", %{
+  test "hackney reverse proxy stops following redirects after limit is reached", %{
     tls_server: tls_server,
     proxy: proxy
   } do
