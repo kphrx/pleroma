@@ -303,6 +303,15 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
   defp configuration2 do
     configuration()
     |> put_in([:accounts, :max_pinned_statuses], Config.get([:instance, :max_pinned_statuses], 0))
+    |> put_in([:accounts, :max_profile_fields], Config.get([:instance, :max_account_fields]))
+    |> put_in(
+      [:accounts, :profile_field_name_limit],
+      Config.get([:instance, :account_field_name_length])
+    )
+    |> put_in(
+      [:accounts, :profile_field_value_limit],
+      Config.get([:instance, :account_field_value_length])
+    )
     |> put_in([:statuses, :characters_reserved_per_url], 0)
     |> Map.merge(%{
       urls: %{
