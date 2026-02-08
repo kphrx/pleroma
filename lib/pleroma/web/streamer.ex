@@ -309,7 +309,7 @@ defmodule Pleroma.Web.Streamer do
     end)
   end
 
-  defp do_stream("user", item) do
+  defp do_stream("user", %Activity{} = item) do
     Logger.debug("Trying to push to users")
 
     recipient_topics =

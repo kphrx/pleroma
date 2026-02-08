@@ -29,6 +29,11 @@ defmodule Pleroma.Web.Fallback.RedirectController do
     )
   end
 
+  def live_dashboard(conn, _params) do
+    conn
+    |> redirect(to: "/pleroma/live_dashboard")
+  end
+
   def redirector(conn, _params, code \\ 200) do
     {:ok, index_content} = File.read(index_file_path(conn))
 

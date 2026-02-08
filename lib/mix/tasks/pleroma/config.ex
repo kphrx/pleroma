@@ -330,7 +330,13 @@ defmodule Mix.Tasks.Pleroma.Config do
     |> Enum.each(&write_and_delete(&1, file, opts[:delete]))
 
     :ok = File.close(file)
-    System.cmd("mix", ["format", path])
+
+    # Ensure `mix format` runs in the same env as the current task and doesn't
+    # emit config-time stderr noise (e.g. dev secret warnings) into `mix test`.
+    System.cmd("mix", ["format", path],
+      env: [{"MIX_ENV", to_string(Mix.env())}],
+      stderr_to_stdout: true
+    )
   end
 
   defp config_header, do: "import Config\r\n\r\n"

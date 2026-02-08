@@ -759,6 +759,22 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
              )
     end
 
+    test "EmojiReact custom emoji urls are URI encoded" do
+      user = insert(:user, local: true)
+      note_activity = insert(:note_activity)
+
+      {:ok, react_activity} = CommonAPI.react_with_emoji(note_activity.id, user, ":dinosaur:")
+      {:ok, data} = Transmogrifier.prepare_outgoing(react_activity.data)
+
+      assert length(data["tag"]) == 1
+
+      tag = List.first(data["tag"])
+      url = tag["icon"]["url"]
+
+      assert url == "http://localhost:4001/emoji/dino%20walking.gif"
+      assert tag["id"] == "http://localhost:4001/emoji/dino%20walking.gif"
+    end
+
     test "it prepares a quote post" do
       user = insert(:user)
 

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Mix.PleromaTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   import Mix.Pleroma
 
   setup_all do

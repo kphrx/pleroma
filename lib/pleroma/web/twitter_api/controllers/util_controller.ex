@@ -12,6 +12,7 @@ defmodule Pleroma.Web.TwitterAPI.UtilController do
   alias Pleroma.Emoji
   alias Pleroma.Healthcheck
   alias Pleroma.User
+  alias Pleroma.Utils.URIEncoding
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.Auth.WrapperAuthenticator, as: Authenticator
   alias Pleroma.Web.CommonAPI
@@ -180,11 +181,21 @@ defmodule Pleroma.Web.TwitterAPI.UtilController do
   def emoji(conn, _params) do
     emoji =
       Enum.reduce(Emoji.get_all(), %{}, fn {code, %Emoji{file: file, tags: tags}}, acc ->
+        file = encode_emoji_url(file)
         Map.put(acc, code, %{image_url: file, tags: tags})
       end)
 
     json(conn, emoji)
   end
+
+  defp encode_emoji_url(nil), do: nil
+  defp encode_emoji_url("http" <> _ = url), do: URIEncoding.encode_url(url)
+
+  defp encode_emoji_url("/" <> _ = path),
+    do: URIEncoding.encode_url(path, bypass_parse: true, bypass_decode: true)
+
+  defp encode_emoji_url(path) when is_binary(path),
+    do: URIEncoding.encode_url(path, bypass_parse: true, bypass_decode: true)
 
   def update_notification_settings(%{assigns: %{user: user}} = conn, params) do
     with {:ok, _} <- User.update_notification_settings(user, params) do
