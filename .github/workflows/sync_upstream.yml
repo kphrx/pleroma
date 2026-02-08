@@ -30,6 +30,7 @@ jobs:
         git push origin develop:develop
         git push origin --tags
     - name: push to fork
+      if: ${{ env.UPDATE_UPSTREAM_FORK == 'true' }}
       run: |
         git push fork stable:stable
         git push fork develop:develop
