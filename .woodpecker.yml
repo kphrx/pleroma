@@ -1,0 +1,29 @@
+when:
+  - event:
+      - push
+      - pull_request
+
+steps:
+  test:
+    image: elixir:1.15-alpine
+    environment:
+      MIX_ENV: test
+      DB_HOST: postgres
+      DB_PORT: 5432
+    commands:
+      - apk add --no-cache build-base cmake exiftool ffmpeg file-dev git openssl
+      - adduser -D -h /home/testuser testuser
+      - mkdir -p /home/testuser/.mix /home/testuser/.hex
+      - chown -R testuser:testuser . /home/testuser
+      - su testuser -c "HOME=/home/testuser mix local.hex --force"
+      - su testuser -c "HOME=/home/testuser mix local.rebar --force"
+      - su testuser -c "HOME=/home/testuser mix deps.get"
+      - su testuser -c "HOME=/home/testuser mix test"
+
+services:
+  postgres:
+    image: postgres:13-alpine
+    environment:
+      POSTGRES_DB: pleroma_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
