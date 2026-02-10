@@ -67,7 +67,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
       {:ok, edit} = Pleroma.Web.CommonAPI.update(activity, user, %{status: "edited :blank:"})
 
       {:ok, %{"object" => external_rep}} =
-        Pleroma.Web.ActivityPub.Transmogrifier.prepare_outgoing(edit.data)
+        Pleroma.Web.ActivityPub.Transmogrifier.prepare_activity(edit.data)
 
       %{external_rep: external_rep}
     end

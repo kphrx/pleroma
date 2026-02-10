@@ -508,7 +508,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
 
       {:ok, activity} = Transmogrifier.handle_incoming(message)
 
-      {:ok, _} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, _} = Transmogrifier.prepare_activity(activity.data)
     end
 
     test "successfully reserializes a message with AS2 objects in IR" do
@@ -537,7 +537,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
 
       {:ok, activity} = Transmogrifier.handle_incoming(message)
 
-      {:ok, _} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, _} = Transmogrifier.prepare_activity(activity.data)
     end
   end
 
