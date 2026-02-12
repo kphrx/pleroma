@@ -4,7 +4,7 @@ when:
 
 steps:
   test:
-    image: elixir:1.15-alpine
+    image: elixir:1.19-alpine
     environment:
       MIX_ENV: test
       DB_HOST: postgres
