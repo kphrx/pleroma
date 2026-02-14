@@ -1,10 +1,14 @@
 when:
-  - event:
-      - pull_request
+  - event: pull_request
+  - event: push
+    branch: develop
+
+depends_on:
+  - changelog
 
 steps:
-  test:
-    image: elixir:1.15-alpine
+  unit-testing-elixir-1.18:
+    image: elixir:1.18-alpine
     environment:
       MIX_ENV: test
       DB_HOST: postgres
