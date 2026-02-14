@@ -8,7 +8,7 @@ depends_on:
 
 steps:
   unit-testing-elixir-1.18:
-    image: elixir:1.18-alpine
+    image: elixir:1.18-otp-27-alpine
     environment:
       MIX_ENV: test
       DB_HOST: postgres
