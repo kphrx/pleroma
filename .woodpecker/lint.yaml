@@ -21,6 +21,7 @@ steps:
     environment:
       MIX_ENV: test
     commands:
+      - apk add --no-cache build-base cmake exiftool ffmpeg file-dev git openssl
       - adduser -D -h /home/testuser testuser
       - mkdir -p /home/testuser/.mix /home/testuser/.hex
       - chown -R testuser:testuser . /home/testuser
