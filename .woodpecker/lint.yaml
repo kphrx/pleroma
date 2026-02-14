@@ -13,6 +13,7 @@ steps:
       - |
         if ! mix format --check-formatted; then
           touch fail.stamp
+          exit 1
         fi
 
   credo:
@@ -31,6 +32,7 @@ steps:
       - |
         if ! su testuser -c "HOME=/home/testuser mix analyze" && ! test -f fail.stamp; then
           touch fail.stamp
+          exit 1
         fi
 
   cycles:
@@ -40,6 +42,7 @@ steps:
       - |
         if ! mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != "No cycles found")}' && test -f fail.stamp; then
         touch fail.stamp
+        exit 1
         fi
 
   ensure-status:
