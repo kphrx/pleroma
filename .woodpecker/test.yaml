@@ -17,7 +17,7 @@ steps:
       - su testuser -c "HOME=/home/testuser mix local.hex --force"
       - su testuser -c "HOME=/home/testuser mix local.rebar --force"
       - su testuser -c "HOME=/home/testuser mix deps.get"
-      - su testuser -c "HOME=/home/testuser mix test"
+      - su testuser -c "HOME=/home/testuser mix pleroma.test_runner --preload-modules"
 
 services:
   postgres:
