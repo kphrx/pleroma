@@ -30,7 +30,7 @@ steps:
       - su testuser -c "HOME=/home/testuser mix local.rebar --force"
       - su testuser -c "HOME=/home/testuser mix deps.get"
       - |
-        if ! su testuser -c "HOME=/home/testuser mix analyze" && ! test -f fail.stamp; then
+        if ! su testuser -c "HOME=/home/testuser mix analyze"; then
           touch fail.stamp
           exit 1
         fi
@@ -39,8 +39,15 @@ steps:
     image: *elixir-image
     failure: ignore
     commands:
+      - apk add --no-cache build-base cmake exiftool ffmpeg file-dev git openssl
+      - adduser -D -h /home/testuser testuser
+      - mkdir -p /home/testuser/.mix /home/testuser/.hex
+      - chown -R testuser:testuser . /home/testuser
+      - su testuser -c "HOME=/home/testuser mix local.hex --force"
+      - su testuser -c "HOME=/home/testuser mix local.rebar --force"
+      - su testuser -c "HOME=/home/testuser mix compile"
       - |
-        if ! mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != "No cycles found")}' && test -f fail.stamp; then
+        if ! su testuser -c "HOME=/home/testuser mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != \"No cycles found\")}'"; then
         touch fail.stamp
         exit 1
         fi
