@@ -26,7 +26,7 @@ steps:
       - su testuser -c "HOME=/home/testuser mix local.rebar --force"
       - su testuser -c "HOME=/home/testuser mix deps.get"
       - |
-        if ! su testuser -c "HOME=/home/testuser mix analyze" && ! -f fail.stamp; then
+        if [ ! su testuser -c "HOME=/home/testuser mix analyze" && ! -f fail.stamp ]; then
           touch fail.stamp
         fi
 
@@ -34,3 +34,14 @@ steps:
     image: *elixir-image
     commands:
       - mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != "No cycles found")}'
+
+  ensure-status:
+    image: *elixir-image
+    commands: |
+      if [ -f fail.stamp ]; then
+        echo "One or more previous steps fails. Failing workflow...
+        exit 1
+      else
+        echo "All steps passed"
+        exit 0
+      fi
