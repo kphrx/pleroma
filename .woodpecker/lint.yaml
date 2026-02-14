@@ -1,0 +1,36 @@
+when:
+  - event: pull_request
+
+depends_on:
+  - changelog
+
+steps:
+  mix-format:
+    image: &elixir-image
+      docker.io/elixir:1.15-alpine
+    commands:
+      - |
+        if ! mix format --check-formatted; then
+          touch fail.stamp
+        fi
+
+  credo:
+    image: *elixir-image
+    environment:
+      MIX_ENV: test
+    commands:
+      - adduser -D -h /home/testuser testuser
+      - mkdir -p /home/testuser/.mix /home/testuser/.hex
+      - chown -R testuser:testuser . /home/testuser
+      - su testuser -c "HOME=/home/testuser mix local.hex --force"
+      - su testuser -c "HOME=/home/testuser mix local.rebar --force"
+      - su testuser -c "HOME=/home/testuser mix deps.get"
+      - |
+        if ! su testuser -c "HOME=/home/testuser mix analyze" && ! -f fail.stamp; then
+          touch fail.stamp
+        fi
+
+  cycles:
+    image: *elixir-image
+    commands:
+      - mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != "No cycles found")}'
