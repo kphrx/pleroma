@@ -37,7 +37,10 @@ steps:
     image: *elixir-image
     failure: ignore
     commands:
-      - mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != "No cycles found")}'
+      - |
+        if [ ! mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != "No cycles found")}' && -f fail.stamp ]; then
+          touch fail.stamp
+        fi
 
   ensure-status:
     image: *elixir-image
