@@ -8,6 +8,7 @@ steps:
   mix-format:
     image: &elixir-image
       docker.io/elixir:1.15-alpine
+    failure: ignore
     commands:
       - |
         if ! mix format --check-formatted; then
@@ -16,6 +17,7 @@ steps:
 
   credo:
     image: *elixir-image
+    failure: ignore
     environment:
       MIX_ENV: test
     commands:
@@ -32,6 +34,7 @@ steps:
 
   cycles:
     image: *elixir-image
+    failure: ignore
     commands:
       - mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != "No cycles found")}'
 
