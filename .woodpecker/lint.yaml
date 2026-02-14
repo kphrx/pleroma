@@ -42,7 +42,7 @@ steps:
     image: *elixir-image
     commands: |
       if [ -f fail.stamp ]; then
-        echo "One or more previous steps fails. Failing workflow...
+        echo "One or more previous steps fails. Failing workflow..."
         exit 1
       else
         echo "All steps passed"
