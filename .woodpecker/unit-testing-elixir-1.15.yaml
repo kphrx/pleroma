@@ -1,10 +1,10 @@
 when:
   - event: pull_request
   - event: push
-    branch: develop
+    branch: ${CI_REPO_DEFAULT_BRANCH}
 
 depends_on:
-  - changelog
+  - lint
 
 steps:
   unit-testing-elixir-1.15:
