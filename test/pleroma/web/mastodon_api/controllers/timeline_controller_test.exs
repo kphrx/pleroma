@@ -149,6 +149,31 @@ defmodule Pleroma.Web.MastodonAPI.TimelineControllerTest do
              |> get("/api/v1/timelines/home?remote=true&local=true")
              |> json_response_and_validate_schema(200) == []
     end
+
+    test "the home timeline excludes posts from users in exclusive lists", %{
+      user: user,
+      conn: conn
+    } do
+      other_user1 = insert(:user)
+      other_user2 = insert(:user)
+
+      {:ok, user, other_user1} = User.follow(user, other_user1)
+      {:ok, user, other_user2} = User.follow(user, other_user2)
+
+      {:ok, list} = Pleroma.List.create(%{title: "foo", exclusive: true}, user)
+      {:ok, _list} = Pleroma.List.follow(list, other_user1)
+
+      {:ok, _activity} = CommonAPI.post(other_user1, %{status: "hi"})
+      {:ok, %{id: activity2_id}} = CommonAPI.post(other_user2, %{status: "hi too"})
+
+      response =
+        conn
+        |> assign(:user, user)
+        |> get("/api/v1/timelines/home")
+        |> json_response_and_validate_schema(200)
+
+      assert [%{"id" => ^activity2_id}] = response
+    end
   end
 
   describe "public" do
