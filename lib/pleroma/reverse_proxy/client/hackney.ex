@@ -6,6 +6,8 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
   @behaviour Pleroma.ReverseProxy.Client
   @redirect_limit 5
 
+  require Logger
+
   # In-app redirect handler to avoid Hackney redirect bugs:
   # - https://github.com/benoitc/hackney/issues/527 (relative/protocol-less redirects can crash Hackney)
   # - https://github.com/benoitc/hackney/issues/273 (redirects not followed when using HTTP proxy)
@@ -65,11 +67,17 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
   defp redirect(url, resp_headers, env, limit) when limit == 0 do
     new_url = absolute_redirect_url(url, resp_headers)
 
+    Logger.debug(
+      "#{__MODULE__}: Handling redirect #{url} -> #{new_url}; redirect limit was reached - returning response after final redirect"
+    )
+
     :hackney.request(env.method, new_url, env.headers, env.body, env.req_opts)
   end
 
   defp redirect(url, resp_headers, env, limit) do
     new_url = absolute_redirect_url(url, resp_headers)
+    Logger.debug("#{__MODULE__}: handling redirect #{url} -> #{new_url}; limit = #{limit}")
+
     res = :hackney.request(env.method, new_url, env.headers, env.body, env.req_opts)
 
     case res do
