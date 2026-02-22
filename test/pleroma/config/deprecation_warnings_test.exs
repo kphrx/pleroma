@@ -396,6 +396,9 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
       initial_console = Application.get_env(:logger, :console, nil)
       initial_backends = Application.get_env(:logger, :backends, nil)
 
+      # NOTE: The Logger does not get reconfigured when running in the test env,
+      # the added and on_exit removed settings below should have no effect besides
+      # triggering the deprecation warnings
       Application.put_env(:logger, :console, level: :all)
       Application.put_env(:logger, :backends, [:console])
 
