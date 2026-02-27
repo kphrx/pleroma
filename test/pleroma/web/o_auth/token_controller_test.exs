@@ -2,7 +2,7 @@
 # Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
-defmodule Pleroma.Web.TwitterAPI.ControllerTest do
+defmodule Pleroma.Web.OAuth.TokenControllerTest do
   use Pleroma.Web.ConnCase, async: true
 
   alias Pleroma.Repo

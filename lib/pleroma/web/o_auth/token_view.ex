@@ -2,12 +2,12 @@
 # Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
-defmodule Pleroma.Web.TwitterAPI.TokenView do
+defmodule Pleroma.Web.OAuth.TokenView do
   use Pleroma.Web, :view
 
   def render("index.json", %{tokens: tokens}) do
     tokens
-    |> render_many(Pleroma.Web.TwitterAPI.TokenView, "show.json")
+    |> render_many(Pleroma.Web.OAuth.TokenView, "show.json")
     |> Enum.filter(&Enum.any?/1)
   end
 

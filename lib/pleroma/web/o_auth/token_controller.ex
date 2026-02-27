@@ -2,13 +2,13 @@
 # Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
-defmodule Pleroma.Web.TwitterAPI.Controller do
+defmodule Pleroma.Web.OAuth.TokenController do
   use Pleroma.Web, :controller
 
   alias Pleroma.User
   alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.Plugs.OAuthScopesPlug
-  alias Pleroma.Web.TwitterAPI.TokenView
+  alias Pleroma.Web.OAuth.TokenView
 
   require Logger
 
