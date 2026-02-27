@@ -66,7 +66,7 @@ defmodule Pleroma.Webhook.NotifyTest do
       {"X-Hub-Signature", "sha256=" <> signature} =
         Enum.find(headers, fn {key, _} -> key == "X-Hub-Signature" end)
 
-      assert signature == :crypto.mac(:hmac, :sha256, secret, body) |> Base.encode16()
+      assert signature == :crypto.mac(:hmac, :sha256, secret, body) |> Base.encode16(case: :lower)
       %Tesla.Env{status: 200, body: ""}
     end)
 
