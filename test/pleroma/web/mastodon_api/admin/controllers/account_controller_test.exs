@@ -236,7 +236,7 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountControllerTest do
     end
   end
 
-  describe "POST /api/v1/admin/accounts/:id/rejct" do
+  describe "POST /api/v1/admin/accounts/:id/reject" do
     test "reject account", %{conn: conn} do
       %{id: id} = user = insert(:user, is_approved: false)
 

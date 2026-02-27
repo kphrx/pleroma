@@ -119,11 +119,11 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.ReportOperation do
         account: AccountOperation.account(),
         target_account: AccountOperation.account(),
         assigned_account: %Schema{
-          type: AccountOperation.account(),
+          oneOf: [AccountOperation.account()],
           nullable: true
         },
         action_taken_by_account: %Schema{
-          type: AccountOperation.account(),
+          oneOf: [AccountOperation.account()],
           nullable: true
         },
         statuses: %Schema{

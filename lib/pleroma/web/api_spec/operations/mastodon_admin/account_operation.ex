@@ -31,7 +31,7 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.AccountOperation do
             :active,
             :query,
             :boolean,
-            "Filter for currently active accounts??"
+            "Filter for currently active accounts?"
           ),
           Operation.parameter(
             :pending,
@@ -327,8 +327,8 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.AccountOperation do
             }
           }
         },
-        locale: %Schema{type: :string, format: "date-time", nullable: true},
-        invite_request: %Schema{type: :string, format: "date-time", nullable: true},
+        locale: %Schema{type: :string, nullable: true},
+        invite_request: %Schema{type: :string, nullable: true},
         role: %Schema{type: :string, nullable: true},
         confirmed: %Schema{type: :boolean},
         approved: %Schema{type: :boolean},

@@ -65,7 +65,7 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
         subject_actor: report.user_actor
       })
 
-      render(conn, "show.json", Report.extract_report_info(activity))
+      render(conn, "show.json", Report.extract_report_info(report))
     else
       {:error, error} ->
         json_response(conn, :bad_request, %{error: error})
