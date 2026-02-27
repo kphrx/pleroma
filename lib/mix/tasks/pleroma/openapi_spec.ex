@@ -22,7 +22,7 @@ defmodule Mix.Tasks.Pleroma.OpenapiSpec do
     else
       {_, errors} ->
         IO.puts(IO.ANSI.format([:red, :bright, "Spec check failed, errors:"]))
-        Enum.map(errors, &IO.puts/1)
+        Enum.each(errors, &IO.puts/1)
 
         raise "Spec check failed"
     end
