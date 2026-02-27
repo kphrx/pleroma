@@ -28,6 +28,7 @@ defmodule Pleroma.Webhook do
   def get_by_type(type) do
     __MODULE__
     |> where([w], ^type in w.events)
+    |> where([w], w.enabled == true)
     |> Repo.all()
   end
 
@@ -48,21 +49,15 @@ defmodule Pleroma.Webhook do
   end
 
   def create(params) do
-    {:ok, webhook} =
-      %__MODULE__{}
-      |> changeset(params)
-      |> Repo.insert()
-
-    webhook
+    %__MODULE__{}
+    |> changeset(params)
+    |> Repo.insert()
   end
 
   def update(%__MODULE__{} = webhook, params) do
-    {:ok, webhook} =
-      webhook
-      |> update_changeset(params)
-      |> Repo.update()
-
     webhook
+    |> update_changeset(params)
+    |> Repo.update()
   end
 
   def delete(webhook), do: webhook |> Repo.delete()
@@ -80,12 +75,13 @@ defmodule Pleroma.Webhook do
     |> Repo.update()
   end
 
-  defp strip_events(params) do
-    if Map.has_key?(params, :events) do
-      params
-      |> Map.put(:events, Enum.filter(params[:events], &Enum.member?(@event_types, &1)))
-    else
-      params
+  defp strip_events(changeset) do
+    case get_change(changeset, :events) do
+      nil ->
+        changeset
+
+      events ->
+        put_change(changeset, :events, Enum.filter(events, &(&1 in @event_types)))
     end
   end
 

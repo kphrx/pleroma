@@ -27,7 +27,7 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountView do
       role: role(user),
       confirmed: user.is_confirmed,
       sensitized: nil,
-      suspened: nil,
+      suspended: nil,
       silenced: nil,
       disabled: !user.is_active,
       approved: user.is_approved,
