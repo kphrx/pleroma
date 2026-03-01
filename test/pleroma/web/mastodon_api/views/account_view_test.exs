@@ -54,8 +54,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       note: "<span>valid html</span>. a<br/>b<br/>c<br/>d<br/>f &#39;&amp;&lt;&gt;&quot;",
       url: user.ap_id,
       avatar: "http://localhost:4001/images/avi.png",
+      avatar_description: "",
       avatar_static: "http://localhost:4001/images/avi.png",
       header: "http://localhost:4001/images/banner.png",
+      header_description: "",
       header_static: "http://localhost:4001/images/banner.png",
       emojis: [
         %{
@@ -326,8 +328,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       note: user.bio,
       url: user.ap_id,
       avatar: "http://localhost:4001/images/avi.png",
+      avatar_description: "",
       avatar_static: "http://localhost:4001/images/avi.png",
       header: "http://localhost:4001/images/banner.png",
+      header_description: "",
       header_static: "http://localhost:4001/images/banner.png",
       emojis: [],
       fields: [],
