@@ -709,6 +709,22 @@ defmodule Pleroma.Web.CommonAPI do
     end
   end
 
+  def assign_report_to_account(activity_ids, user) when is_list(activity_ids) do
+    case Utils.assign_report_to_account(activity_ids, user) do
+      :ok -> {:ok, activity_ids}
+      _ -> {:error, dgettext("errors", "Could not assign account")}
+    end
+  end
+
+  def assign_report_to_account(activity_id, user) do
+    with %Activity{} = activity <- Activity.get_by_id(activity_id) do
+      Utils.assign_report_to_account(activity, user)
+    else
+      nil -> {:error, :not_found}
+      _ -> {:error, dgettext("errors", "Could not assign account")}
+    end
+  end
+
   @spec update_activity_scope(String.t(), map()) :: {:ok, any()} | {:error, any()}
   def update_activity_scope(activity_id, opts \\ %{}) do
     with %Activity{} = activity <- Activity.get_by_id_with_object(activity_id),

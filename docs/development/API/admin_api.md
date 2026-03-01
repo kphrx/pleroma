@@ -665,6 +665,7 @@ Status: 404
   - *optional* `limit`: **integer** the number of records to retrieve
   - *optional* `page`: **integer** page number
   - *optional* `page_size`: **integer** number of log entries per page (default is `50`)
+  - *optional* `assigned_account`: **string** assigned account ID
 - Response:
   - On failure: 403 Forbidden error `{"error": "error_msg"}` when requested by anonymous or non-admin
   - On success: JSON, returns a list of reports, where:
@@ -749,6 +750,7 @@ Status: 404
         "url": "https://pleroma.example.org/users/lain",
         "username": "lain"
       },
+      "assigned_account": null,
       "content": "Please delete it",
       "created_at": "2019-04-29T19:48:15.000Z",
       "id": "9iJGOv1j8hxuw19bcm",
@@ -863,6 +865,37 @@ Status: 404
     {
       `id`, // required, report id
       `state` // required, the new state. Valid values are `open`, `closed` and `resolved`
+    },
+    ...
+  ]
+```
+
+- Response:
+  - On failure:
+    - 400 Bad Request, JSON:
+
+    ```json
+      [
+        {
+          `id`, // report id
+          `error` // error message
+        }
+      ]
+    ```
+
+  - On success: `204`, empty response
+
+## `POST /api/v1/pleroma/admin/reports/assign_account`
+
+### Assign account to one or multiple reports
+
+- Params:
+
+```json
+  `reports`: [
+    {
+      `id`, // required, report id
+      `nickname` // account nickname, use null to unassign account
     },
     ...
   ]

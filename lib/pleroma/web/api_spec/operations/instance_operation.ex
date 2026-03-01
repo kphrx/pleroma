@@ -342,6 +342,18 @@ defmodule Pleroma.Web.ApiSpec.InstanceOperation do
                 max_pinned_statuses: %Schema{
                   type: :integer,
                   description: "The maximum number of pinned statuses for each account."
+                },
+                max_profile_fields: %Schema{
+                  type: :integer,
+                  description: "The maximum number of custom profile fields allowed to be set."
+                },
+                profile_field_name_limit: %Schema{
+                  type: :integer,
+                  description: "The maximum size of a profile field name, in characters."
+                },
+                profile_field_value_limit: %Schema{
+                  type: :integer,
+                  description: "The maximum size of a profile field value, in characters."
                 }
               }
             },
