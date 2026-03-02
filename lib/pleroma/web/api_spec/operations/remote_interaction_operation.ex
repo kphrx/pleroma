@@ -96,14 +96,4 @@ defmodule Pleroma.Web.ApiSpec.RemoteInteractionOperation do
       responses: %{200 => Operation.response("Web Page", "text/html", %Schema{type: :string})}
     }
   end
-
-  def show_subscribe_form_operation do
-    %Operation{
-      tags: ["Remote interaction"],
-      summary: "Show remote subscribe form",
-      operationId: "RemoteInteractionController.show_subscribe_form",
-      parameters: [],
-      responses: %{200 => Operation.response("Web Page", "text/html", %Schema{type: :string})}
-    }
-  end
 end

@@ -428,7 +428,7 @@ defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionControllerTest do
           avatar: %{"url" => [%{"href" => "https://remote.org/avatar.png"}]}
         })
 
-      avatar_url = Pleroma.Web.PleromaAPI.RemoteFollowView.avatar_url(user)
+      avatar_url = Pleroma.Web.RemoteInteraction.RemoteInteractionView.avatar_url(user)
 
       assert avatar_url == "https://remote.org/avatar.png"
     end
@@ -445,7 +445,7 @@ defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionControllerTest do
           avatar: %{"url" => [%{"href" => "https://remote.org/avatar.png"}]}
         })
 
-      avatar_url = Pleroma.Web.PleromaAPI.RemoteFollowView.avatar_url(user)
+      avatar_url = Pleroma.Web.RemoteInteraction.RemoteInteractionView.avatar_url(user)
       url = Pleroma.Web.Endpoint.url()
 
       assert String.starts_with?(avatar_url, url)
@@ -460,7 +460,7 @@ defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionControllerTest do
           avatar: %{"url" => [%{"href" => "#{Pleroma.Web.Endpoint.url()}/localuser/avatar.png"}]}
         })
 
-      avatar_url = Pleroma.Web.PleromaAPI.RemoteFollowView.avatar_url(user)
+      avatar_url = Pleroma.Web.RemoteInteraction.RemoteInteractionView.avatar_url(user)
 
       assert avatar_url == "#{Pleroma.Web.Endpoint.url()}/localuser/avatar.png"
     end

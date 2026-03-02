@@ -234,10 +234,11 @@ defmodule Pleroma.Web.Router do
   end
 
   scope "/api/v1/pleroma", Pleroma.Web.PleromaAPI do
+    pipe_through(:pleroma_api)
+
     get("/emoji", UtilController, :emoji)
     get("/captcha", UtilController, :captcha)
     get("/healthcheck", UtilController, :healthcheck)
-
     get("/federation_status", InstancesController, :show)
   end
 
