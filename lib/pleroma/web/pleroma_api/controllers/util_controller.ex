@@ -18,7 +18,7 @@ defmodule Pleroma.Web.PleromaAPI.UtilController do
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.Plugs.OAuthScopesPlug
 
-  plug(Pleroma.Web.ApiSpec.CastAndValidate, [replace_params: false])
+  plug(Pleroma.Web.ApiSpec.CastAndValidate, replace_params: false)
 
   plug(
     OAuthScopesPlug,

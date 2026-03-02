@@ -30,7 +30,7 @@ defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionController do
   plug(
     Pleroma.Web.Plugs.OAuthScopesPlug,
     %{fallback: :proceed_unauthenticated, scopes: ["follow", "write:follows"]}
-    when action in [:do_follow]
+    when action == :do_follow
   )
 
   defdelegate open_api_operation(action), to: Pleroma.Web.ApiSpec.RemoteInteractionOperation
