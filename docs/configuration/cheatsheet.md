@@ -1132,8 +1132,9 @@ Boolean, enables/disables in-database configuration. Read [Transferring the conf
 
 List of valid configuration sections which are allowed to be configured from the
 database. Settings stored in the database before the whitelist is configured are
-still applied, so it is suggested to only use the whitelist on instances that
-have not migrated the config to the database.
+still applied. Consider running the `mix pleroma.config filter_whitelisted` task
+after updating the whitelist. Read [Remove non-whitelisted configs from the database](../administration/CLI_tasks/config.md#remove-non-whitelisted-configs-from-the-database)
+for more information.
 
 Example:
 ```elixir
