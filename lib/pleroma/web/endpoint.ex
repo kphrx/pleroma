@@ -48,6 +48,7 @@ defmodule Pleroma.Web.Endpoint do
 
   @static_cache_control "public, max-age=1209600, immutable"
   @static_cache_disabled "public, no-cache"
+  @favicon_cache_control "public, max=age=86400, immutable" # cache for a day
 
   # InstanceStatic needs to be before Plug.Static to be able to override shipped-static files
   # If you're adding new paths to `only:` you'll need to configure them in InstanceStatic as well
@@ -56,7 +57,7 @@ defmodule Pleroma.Web.Endpoint do
     Pleroma.Web.Plugs.InstanceStatic,
     at: "/",
     from: :pleroma,
-    only: ["emoji", "images", "favicon.png"],
+    only: ["emoji", "images"],
     gzip: true,
     cache_control_for_etags: @static_cache_control,
     headers: %{
@@ -70,6 +71,15 @@ defmodule Pleroma.Web.Endpoint do
     cache_control_for_etags: @static_cache_disabled,
     headers: %{
       "cache-control" => @static_cache_disabled
+    }
+  )
+
+  plug(Pleroma.Web.Plugs.Favicon,
+    at: "/",
+    only: ["favicon.png"],
+    cache_control_for_etags: @favicon_cache_control,
+    headers: %{
+      "cache-control" => @favicon_cache_control
     }
   )
 
