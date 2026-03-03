@@ -65,21 +65,21 @@ defmodule Pleroma.Web.Endpoint do
     }
   )
 
-  plug(Pleroma.Web.Plugs.InstanceStatic,
-    at: "/",
-    gzip: true,
-    cache_control_for_etags: @static_cache_disabled,
-    headers: %{
-      "cache-control" => @static_cache_disabled
-    }
-  )
-
   plug(Pleroma.Web.Plugs.Favicon,
     at: "/",
     only: ["favicon.png"],
     cache_control_for_etags: @favicon_cache_control,
     headers: %{
       "cache-control" => @favicon_cache_control
+    }
+  )
+
+  plug(Pleroma.Web.Plugs.InstanceStatic,
+    at: "/",
+    gzip: true,
+    cache_control_for_etags: @static_cache_disabled,
+    headers: %{
+      "cache-control" => @static_cache_disabled
     }
   )
 
