@@ -938,6 +938,14 @@ config :pleroma, Pleroma.Search.Meilisearch,
   private_key: nil,
   initial_indexing_chunk_size: 100_000
 
+config :pleroma, Pleroma.Search.ParadeDB,
+  url: nil,
+  table: "pleroma_search_documents"
+
+config :pleroma, Pleroma.Search.ParadeDB.Repo,
+  pool_size: 10,
+  prepare: :unnamed
+
 config :pleroma, Pleroma.Application,
   background_migrators: true,
   internal_fetch: true,

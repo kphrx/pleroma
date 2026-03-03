@@ -145,3 +145,37 @@ This will clear **all** the posts from the search index. Note, that deleted post
 there is no need to actually clear the whole index, unless you want **all** of it gone. That said, the index does not hold any information
 that cannot be re-created from the database, it should also generally be a lot smaller than the size of your database. Still, the size
 depends on the amount of text in posts.
+
+## ParadeDB
+
+[ParadeDB](https://www.paradedb.com/) is a Postgres extension that provides BM25 full-text search. In Pleroma, it can be used as an
+external search backend by pointing Pleroma at a separate Postgres instance with the `pg_search` extension installed.
+
+Pleroma will maintain a small `pleroma_search_documents` table in that database (via the existing search indexing queue) and run search
+queries against it.
+
+To use it, set the search module to `Pleroma.Search.ParadeDB` and configure the ParadeDB database URL:
+
+> config :pleroma, Pleroma.Search, module: Pleroma.Search.ParadeDB
+>
+> config :pleroma, Pleroma.Search.ParadeDB,
+>   url: System.get_env("PARADEDB_DATABASE_URL") || "postgres://postgres:postgres@127.0.0.1:5432/paradedb",
+>   table: "pleroma_search_documents"
+
+Then, create the table and BM25 index once:
+
+=== "From Source"
+    ```sh
+    mix pleroma.search.indexer create_index
+    ```
+
+After that, run an initial indexing pass to backfill existing posts:
+
+=== "From Source"
+    ```sh
+    mix pleroma.search.indexer index
+    ```
+
+Note: Like the other external search backends, only public/unlisted Notes are indexed.
+
+Indexing runs via the Oban `search_indexing` queue, so ensure that queue is enabled (not paused) in your Oban configuration.
