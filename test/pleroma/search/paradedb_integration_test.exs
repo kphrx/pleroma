@@ -8,7 +8,6 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
   @moduletag :integration
   @moduletag timeout: 180_000
 
-  import Mox
   import Pleroma.Factory
 
   alias Pleroma.Activity
@@ -59,6 +58,7 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
         |> wait_for_port!(@docker_startup_timeout_ms)
 
       wait_for_pg_ready!(container, @docker_startup_timeout_ms)
+      wait_for_tcp_ready!(host_port, @docker_startup_timeout_ms)
 
       url = "postgres://#{@db_user}:#{@db_password}@127.0.0.1:#{host_port}/#{@db_name}"
 
@@ -73,7 +73,7 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
         end
       end)
 
-      {:ok, _pid} = start_supervised(Pleroma.Search.ParadeDB.Repo)
+      {:ok, _pid} = start_supervised({Pleroma.Search.ParadeDB.Repo, pool_size: 1})
 
       table = "pleroma_search_documents_it_#{System.unique_integer([:positive])}"
       Pleroma.Config.put([Pleroma.Search.ParadeDB, :table], table)
@@ -193,6 +193,28 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
         _ ->
           if System.monotonic_time(:millisecond) > deadline do
             raise "Timed out waiting for ParadeDB Postgres to become ready"
+          else
+            :timer.sleep(250)
+            wait.(wait)
+          end
+      end
+    end
+
+    wait.(wait)
+  end
+
+  defp wait_for_tcp_ready!(port, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+
+    wait = fn wait ->
+      case :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false], 500) do
+        {:ok, socket} ->
+          :gen_tcp.close(socket)
+          :ok
+
+        {:error, _} ->
+          if System.monotonic_time(:millisecond) > deadline do
+            raise "Timed out waiting for TCP port #{port} to accept connections"
           else
             :timer.sleep(250)
             wait.(wait)
