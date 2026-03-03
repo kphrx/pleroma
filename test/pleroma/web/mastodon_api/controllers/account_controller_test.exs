@@ -2096,7 +2096,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
     result =
       conn
       |> assign(:user, user)
-      |> get("api/v1/blocks")
+      |> get("/api/v1/blocks")
       |> json_response_and_validate_schema(200)
 
     assert [
