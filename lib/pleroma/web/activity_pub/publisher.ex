@@ -79,7 +79,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   Determine if an activity can be represented by running it through Transmogrifier.
   """
   def representable?(%Activity{} = activity) do
-    with {:ok, _data} <- @transmogrifier_impl.prepare_outgoing(activity.data) do
+    with {:ok, _data} <- @transmogrifier_impl.prepare_activity(activity.data) do
       true
     else
       _e ->
@@ -102,14 +102,14 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     Logger.debug("Federating #{ap_id} to #{inbox}")
     uri = %{path: path} = URI.parse(inbox)
 
-    {:ok, data} = @transmogrifier_impl.prepare_outgoing(activity.data)
+    {:ok, data} = @transmogrifier_impl.prepare_activity(activity.data)
 
     {actor, data} =
       with {_, false} <- {:actor_changed?, data["actor"] != activity.data["actor"]} do
         {actor, data}
       else
         {:actor_changed?, true} ->
-          # If prepare_outgoing changes the actor, re-get it from the db
+          # If prepare_activity changes the actor, re-get it from the db
           new_actor = User.get_cached_by_ap_id(data["actor"])
           {new_actor, data}
       end

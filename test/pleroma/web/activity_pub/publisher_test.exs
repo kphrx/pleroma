@@ -259,7 +259,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       )
     end
 
-    test "Publishes with the new actor if prepare_outgoing changes the actor." do
+    test "Publishes with the new actor if prepare_activity changes the actor." do
       mock(fn
         %{method: :post, url: "https://domain.com/users/nick1/inbox", body: body} ->
           {:ok, %Tesla.Env{status: 200, body: body}}
@@ -281,7 +281,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
         )
 
       Pleroma.Web.ActivityPub.TransmogrifierMock
-      |> Mox.expect(:prepare_outgoing, fn data ->
+      |> Mox.expect(:prepare_activity, fn data ->
         {:ok, Map.put(data, "actor", replaced_actor.ap_id)}
       end)
 
