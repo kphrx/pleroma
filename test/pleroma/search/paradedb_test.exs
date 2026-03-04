@@ -35,7 +35,9 @@ defmodule Pleroma.Search.ParadeDBTest do
 
         [activity_id, object_id, object_ap_id, actor_ap_id, content, published_at] = params
 
-        assert activity_id == activity.id
+        {:ok, dumped_activity_id} = FlakeId.Ecto.CompatType.dump(activity.id)
+
+        assert activity_id == dumped_activity_id
         assert is_integer(object_id)
         assert is_binary(object_ap_id)
         assert actor_ap_id == activity.data["actor"]
@@ -144,12 +146,18 @@ defmodule Pleroma.Search.ParadeDBTest do
       {:ok, activity1} = CommonAPI.post(user, %{status: "first swamp", visibility: "public"})
       {:ok, activity2} = CommonAPI.post(user, %{status: "second swamp", visibility: "public"})
 
+      activity1_id = activity1.id
+      activity2_id = activity2.id
+
+      {:ok, dumped_activity1_id} = FlakeId.Ecto.CompatType.dump(activity1_id)
+      {:ok, dumped_activity2_id} = FlakeId.Ecto.CompatType.dump(activity2_id)
+
       ClientMock
       |> expect(:query, fn sql, params ->
         assert sql =~ "SELECT id FROM pleroma_search_documents"
         assert ["swamp", _limit, _offset] = params
 
-        {:ok, %{rows: [[activity2.id], [activity1.id]]}}
+        {:ok, %{rows: [[dumped_activity2_id], [dumped_activity1_id]]}}
       end)
 
       Config
@@ -161,7 +169,7 @@ defmodule Pleroma.Search.ParadeDBTest do
           "pleroma_search_documents"
       end)
 
-      assert [%{id: ^activity2.id}, %{id: ^activity1.id}] =
+      assert [%{id: ^activity2_id}, %{id: ^activity1_id}] =
                ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
     end
   end

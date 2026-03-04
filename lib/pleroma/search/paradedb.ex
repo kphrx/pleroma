@@ -67,37 +67,43 @@ defmodule Pleroma.Search.ParadeDB do
     maybe_search_data = object_to_search_data(activity.object)
 
     if activity.data["type"] == "Create" and maybe_search_data do
+      dumped_activity_id = dump_activity_id(activity.id)
       actor_ap_id = activity.data["actor"]
       published_at = DateTime.from_unix!(maybe_search_data.published)
 
-      sql =
-        """
-        INSERT INTO #{table()} (id, object_id, object_ap_id, actor_ap_id, content, published_at)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (id) DO UPDATE SET
-          object_id = EXCLUDED.object_id,
-          object_ap_id = EXCLUDED.object_ap_id,
-          actor_ap_id = EXCLUDED.actor_ap_id,
-          content = EXCLUDED.content,
-          published_at = EXCLUDED.published_at
-        """
+      if is_nil(dumped_activity_id) do
+        Logger.error("ParadeDB add_to_index failed: invalid activity id #{inspect(activity.id)}")
+        :ok
+      else
+        sql =
+          """
+          INSERT INTO #{table()} (id, object_id, object_ap_id, actor_ap_id, content, published_at)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT (id) DO UPDATE SET
+            object_id = EXCLUDED.object_id,
+            object_ap_id = EXCLUDED.object_ap_id,
+            actor_ap_id = EXCLUDED.actor_ap_id,
+            content = EXCLUDED.content,
+            published_at = EXCLUDED.published_at
+          """
 
-      params = [
-        activity.id,
-        maybe_search_data.id,
-        maybe_search_data.ap,
-        actor_ap_id,
-        maybe_search_data.content,
-        published_at
-      ]
+        params = [
+          dumped_activity_id,
+          maybe_search_data.id,
+          maybe_search_data.ap,
+          actor_ap_id,
+          maybe_search_data.content,
+          published_at
+        ]
 
-      case client_impl().query(sql, params) do
-        {:ok, _} ->
-          :ok
+        case client_impl().query(sql, params) do
+          {:ok, _} ->
+            :ok
 
-        {:error, error} ->
-          Logger.error("ParadeDB add_to_index failed: #{inspect(error)}")
-          {:error, error}
+          {:error, error} ->
+            Logger.error("ParadeDB add_to_index failed: #{inspect(error)}")
+            {:error, error}
+        end
       end
     else
       :ok
@@ -139,7 +145,10 @@ defmodule Pleroma.Search.ParadeDB do
   end
 
   defp fetch_activities(ids, user, query, author) do
-    dumped_ids = Enum.map(ids, &FlakeId.from_string/1)
+    dumped_ids =
+      ids
+      |> Enum.map(&dump_activity_id/1)
+      |> Enum.reject(&is_nil/1)
 
     from(a in Activity, where: a.id in ^dumped_ids)
     |> Activity.with_preloaded_object()
@@ -189,7 +198,7 @@ defmodule Pleroma.Search.ParadeDB do
   defp create_table_sql(table) do
     """
     CREATE TABLE IF NOT EXISTS #{table} (
-      id text PRIMARY KEY,
+      id uuid PRIMARY KEY,
       object_id bigint NOT NULL,
       object_ap_id text NOT NULL,
       actor_ap_id text,
@@ -210,4 +219,15 @@ defmodule Pleroma.Search.ParadeDB do
     WITH (key_field = 'id')
     """
   end
+
+  defp dump_activity_id(<<_::binary-size(16)>> = uuid), do: uuid
+
+  defp dump_activity_id(id) when is_binary(id) do
+    case FlakeId.Ecto.CompatType.dump(id) do
+      {:ok, <<_::binary-size(16)>> = uuid} -> uuid
+      _ -> nil
+    end
+  end
+
+  defp dump_activity_id(_), do: nil
 end
