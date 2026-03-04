@@ -20,17 +20,12 @@ defmodule Pleroma.Web.Plugs.Favicon do
   end
 
   def call(conn, opts) do
-    if favicon_route?(conn.path_info) do
-      case find_favicon_dir(conn) do
-        {:ok, dir} ->
-          call_static(conn, opts, dir)
-          |> Plug.Conn.halt()
+    case find_favicon_dir(conn) do
+      {:ok, dir} ->
+        call_static(conn, opts, dir)
 
-        :error ->
-          conn # Let the request keep going to a 404
-      end
-    else
-      conn
+      :error ->
+        conn # Let the request keep going to a 404
     end
   end
 
@@ -52,9 +47,6 @@ defmodule Pleroma.Web.Plugs.Favicon do
       true -> :error
     end
   end
-
-  defp favicon_route?(["favicon.png"]), do: true
-  defp favicon_route?(_), do: false
 
   defp call_static(conn, opts, from) do
     opts =
