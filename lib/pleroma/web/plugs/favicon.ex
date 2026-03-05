@@ -10,7 +10,6 @@ defmodule Pleroma.Web.Plugs.Favicon do
   bypassing the frontend-specific logic.
   """
 
-  alias Pleroma.Web.Plugs.FrontendStatic
   import Plug.Conn, only: [put_resp_header: 3]
 
   def init(opts) do
@@ -19,8 +18,8 @@ defmodule Pleroma.Web.Plugs.Favicon do
     |> Plug.Static.init()
   end
 
-  def call(conn, opts) do
-    case find_favicon_dir(conn) do
+  def call(%{request_path: "/favicon.png"} = conn, opts) do
+    case find_favicon_dir() do
       {:ok, dir} ->
         call_static(conn, opts, dir)
 
@@ -29,20 +28,19 @@ defmodule Pleroma.Web.Plugs.Favicon do
     end
   end
 
-  defp find_favicon_dir(conn) do
+  def call(conn, _) do
+    conn
+  end
+
+  defp find_favicon_dir() do
     instance_dir = Pleroma.Config.get([:instance, :static_dir], "instance/static")
     instance_path = Path.join(instance_dir, "favicon.png")
-
-    frontend_type = FrontendStatic.preferred_or_fallback(conn, :primary)
-    frontend_dir = FrontendStatic.file_path("", frontend_type)
-    frontend_path = if frontend_dir, do: Path.join(frontend_dir, "favicon.png"), else: nil
 
     priv_dir = Application.app_dir(:pleroma, "priv/static")
     priv_path = Path.join(priv_dir, "favicon.png")
 
     cond do
       File.exists?(instance_path) -> {:ok, instance_dir}
-      frontend_path && File.exists?(frontend_path) -> {:ok, frontend_dir}
       File.exists?(priv_path) -> {:ok, priv_dir}
       true -> :error
     end
