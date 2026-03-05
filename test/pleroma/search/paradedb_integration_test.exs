@@ -130,6 +130,20 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
     refute private.id in ids
     assert List.first(ids) == a2.id
 
+    previous_fuzzy_distance = Pleroma.Config.get([Pleroma.Search.ParadeDB, :fuzzy_distance], 0)
+    Pleroma.Config.put([Pleroma.Search.ParadeDB, :fuzzy_distance], 1)
+
+    on_exit(fn ->
+      Pleroma.Config.put([Pleroma.Search.ParadeDB, :fuzzy_distance], previous_fuzzy_distance)
+    end)
+
+    fuzzy_results = ParadeDB.search(nil, "paradedb integraion", limit: 40, offset: 0)
+    fuzzy_ids = Enum.map(fuzzy_results, & &1.id)
+
+    assert a1.id in fuzzy_ids
+    assert a2.id in fuzzy_ids
+    refute private.id in fuzzy_ids
+
     # Removing an object should remove it from the ParadeDB index.
     assert :ok = ParadeDB.remove_from_index(a2.object)
 
