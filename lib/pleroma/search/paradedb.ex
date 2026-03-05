@@ -6,6 +6,7 @@ defmodule Pleroma.Search.ParadeDB do
   @behaviour Pleroma.Search.SearchBackend
 
   require Logger
+  require Pleroma.Constants
 
   import Ecto.Query
 
@@ -153,6 +154,7 @@ defmodule Pleroma.Search.ParadeDB do
     from(a in Activity, where: a.id in ^dumped_ids)
     |> Activity.with_preloaded_object()
     |> Activity.restrict_deactivated_users()
+    |> maybe_restrict_public(user)
     |> maybe_restrict_local(user)
     |> maybe_restrict_author(author)
     |> maybe_restrict_blocked(user)
@@ -166,6 +168,25 @@ defmodule Pleroma.Search.ParadeDB do
     )
     |> Pleroma.Repo.all()
     |> maybe_fetch(user, query)
+  end
+
+  defp maybe_restrict_public(query, %Pleroma.User{}) do
+    intended_recipients = [
+      Pleroma.Constants.as_public(),
+      Pleroma.Web.ActivityPub.Utils.as_local_public()
+    ]
+
+    from(a in query,
+      where: fragment("?->>'type' = 'Create'", a.data),
+      where: fragment("? && ?", ^intended_recipients, a.recipients)
+    )
+  end
+
+  defp maybe_restrict_public(query, _user) do
+    from(a in query,
+      where: fragment("?->>'type' = 'Create'", a.data),
+      where: ^Pleroma.Constants.as_public() in a.recipients
+    )
   end
 
   defp search_ids(query, limit, offset, author) do
@@ -186,7 +207,7 @@ defmodule Pleroma.Search.ParadeDB do
 
     sql =
       base_sql <>
-        " ORDER BY published_at DESC LIMIT $#{limit_arg} OFFSET $#{offset_arg}"
+        " ORDER BY published_at DESC, id DESC LIMIT $#{limit_arg} OFFSET $#{offset_arg}"
 
     params = params ++ [limit, offset]
 
@@ -223,11 +244,23 @@ defmodule Pleroma.Search.ParadeDB do
   defp dump_activity_id(<<_::binary-size(16)>> = uuid), do: uuid
 
   defp dump_activity_id(id) when is_binary(id) do
-    case FlakeId.Ecto.CompatType.dump(id) do
-      {:ok, <<_::binary-size(16)>> = uuid} -> uuid
-      _ -> nil
+    case Ecto.UUID.dump(id) do
+      {:ok, <<_::binary-size(16)>> = uuid} ->
+        uuid
+
+      :error ->
+        dump_flake_activity_id(id)
     end
   end
 
   defp dump_activity_id(_), do: nil
+
+  defp dump_flake_activity_id(id) do
+    case FlakeId.Ecto.CompatType.dump(id) do
+      {:ok, <<_::binary-size(16)>> = uuid} -> uuid
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
 end

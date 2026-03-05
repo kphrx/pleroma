@@ -172,5 +172,68 @@ defmodule Pleroma.Search.ParadeDBTest do
       assert [%{id: ^activity2_id}, %{id: ^activity1_id}] =
                ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
     end
+
+    test "search excludes non-public activities from backend hits" do
+      user = insert(:user)
+
+      {:ok, public_activity} =
+        CommonAPI.post(user, %{status: "public swamp", visibility: "public"})
+
+      {:ok, private_activity} =
+        CommonAPI.post(user, %{status: "private swamp", visibility: "private"})
+
+      public_activity_id = public_activity.id
+
+      {:ok, dumped_public_id} = FlakeId.Ecto.CompatType.dump(public_activity.id)
+      {:ok, dumped_private_id} = FlakeId.Ecto.CompatType.dump(private_activity.id)
+
+      ClientMock
+      |> expect(:query, fn sql, params ->
+        assert sql =~ "SELECT id FROM pleroma_search_documents"
+        assert ["swamp", _limit, _offset] = params
+
+        {:ok, %{rows: [[dumped_private_id], [dumped_public_id]]}}
+      end)
+
+      Config
+      |> expect(:get, 2, fn
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+      end)
+
+      assert [%{id: ^public_activity_id}] = ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
+    end
+
+    test "search supports backend ids returned as uuid strings" do
+      user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "uuid swamp", visibility: "public"})
+
+      activity_id = activity.id
+      {:ok, dumped_id} = FlakeId.Ecto.CompatType.dump(activity_id)
+      {:ok, uuid_string} = Ecto.UUID.load(dumped_id)
+
+      ClientMock
+      |> expect(:query, fn sql, params ->
+        assert sql =~ "SELECT id FROM pleroma_search_documents"
+        assert ["swamp", _limit, _offset] = params
+
+        {:ok, %{rows: [[uuid_string]]}}
+      end)
+
+      Config
+      |> expect(:get, 2, fn
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+      end)
+
+      assert [%{id: ^activity_id}] = ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
+    end
   end
 end

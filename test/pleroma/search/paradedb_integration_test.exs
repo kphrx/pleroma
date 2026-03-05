@@ -14,7 +14,7 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
   alias Pleroma.Search.ParadeDB
   alias Pleroma.Web.CommonAPI
 
-  @image "paradedb/paradedb:latest"
+  @image System.get_env("PARADEDB_TEST_IMAGE", "paradedb/paradedb:latest")
   @db_user "postgres"
   @db_password "postgres"
   @db_name "paradedb"
@@ -46,7 +46,7 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
           "-e",
           "POSTGRES_DB=#{@db_name}",
           "-p",
-          "5432",
+          "127.0.0.1::5432",
           "-d",
           @image
         ])
@@ -75,8 +75,17 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
 
       {:ok, _pid} = start_supervised({Pleroma.Search.ParadeDB.Repo, pool_size: 1})
 
+      previous_table = Pleroma.Config.get([Pleroma.Search.ParadeDB, :table], nil)
       table = "pleroma_search_documents_it_#{System.unique_integer([:positive])}"
       Pleroma.Config.put([Pleroma.Search.ParadeDB, :table], table)
+
+      on_exit(fn ->
+        if is_nil(previous_table) do
+          Pleroma.Config.delete([Pleroma.Search.ParadeDB, :table])
+        else
+          Pleroma.Config.put([Pleroma.Search.ParadeDB, :table], previous_table)
+        end
+      end)
 
       {:ok,
        %{
