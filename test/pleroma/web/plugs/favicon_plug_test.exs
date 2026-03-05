@@ -17,16 +17,16 @@ defmodule Pleroma.Web.Plugs.FaviconPlugTest do
       etag = get_resp_header(conn, "etag")
 
       # etag changes when serving a different file
+      assert conn.status == 200
       assert etag == ["\"72487CE\""]
       assert response_content_type(conn, :png)
     end
 
     test "returns correct cache-control", %{conn: conn} do
-      cache = 
-        conn
-        |> get("/favicon.png")
-        |> get_resp_header("cache-control")
+      conn = get(conn, "/favicon.png")
+      cache = get_resp_header(conn, "cache-control")
 
+      assert conn.status == 200
       assert cache == ["public, max=age=86400, immutable"]
     end
   end
@@ -53,16 +53,16 @@ defmodule Pleroma.Web.Plugs.FaviconPlugTest do
       conn = get(conn, "/favicon.png")
       etag = get_resp_header(conn, "etag")
 
+      assert conn.status == 200
       assert etag == ["\"215A3A4\""]
       assert response_content_type(conn, :png)
     end
 
     test "returns correct cache-control", %{conn: conn} do
-      cache =
-       conn
-       |> get("/favicon.png")
-       |> get_resp_header("cache-control")
+      conn = get(conn ,"/favicon.png")
+      cache = get_resp_header(conn, "cache-control")
 
+      assert conn.status == 200
       assert cache == ["public, max=age=86400, immutable"]
     end
   end
