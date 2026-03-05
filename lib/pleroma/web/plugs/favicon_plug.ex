@@ -30,6 +30,7 @@ defmodule Pleroma.Web.Plugs.FaviconPlug do
         # Favicon should always be available and this should never occur.
         # If it does, halt the pipeline before having unintended side-effects.
         Logger.error("No favicon.png found! Is the default favicon deleted?")
+
         conn
         |> send_resp(404, "Not found")
         |> halt()
@@ -40,7 +41,7 @@ defmodule Pleroma.Web.Plugs.FaviconPlug do
     conn
   end
 
-  defp find_favicon_dir() do
+  defp find_favicon_dir do
     instance_dir = Pleroma.Config.get([:instance, :static_dir], "instance/static")
     instance_path = Path.join(instance_dir, "favicon.png")
 

@@ -8,9 +8,9 @@ defmodule Pleroma.Web.Plugs.FaviconPlugTest do
   @dir "test/tmp/favicon_static"
 
   setup do
-      Pleroma.Backports.mkdir_p!(@dir)
+    Pleroma.Backports.mkdir_p!(@dir)
 
-      on_exit(fn -> File.rm_rf!(@dir) end)
+    on_exit(fn -> File.rm_rf!(@dir) end)
   end
 
   describe "default favicon" do
@@ -48,12 +48,12 @@ defmodule Pleroma.Web.Plugs.FaviconPlugTest do
       body_size = byte_size(conn.resp_body)
 
       assert conn.status == 200
-      assert body_size == 104426
+      assert body_size == 104_426
       assert response_content_type(conn, :png)
     end
 
     test "returns correct cache-control", %{conn: conn} do
-      conn = get(conn ,"/favicon.png")
+      conn = get(conn, "/favicon.png")
       cache = get_resp_header(conn, "cache-control")
 
       assert conn.status == 200
