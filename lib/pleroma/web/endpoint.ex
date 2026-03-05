@@ -65,7 +65,7 @@ defmodule Pleroma.Web.Endpoint do
     }
   )
 
-  plug(Pleroma.Web.Plugs.Favicon,
+  plug(Pleroma.Web.Plugs.FaviconPlug,
     at: "/",
     only: ["favicon.png"],
     cache_control_for_etags: @favicon_cache_control,

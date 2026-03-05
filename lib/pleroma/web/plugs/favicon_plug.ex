@@ -2,12 +2,13 @@
 # Copyright © 2017-2026 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
-defmodule Pleroma.Web.Plugs.Favicon do
+defmodule Pleroma.Web.Plugs.FaviconPlug do
   @behaviour Plug
 
   @moduledoc """
-  Serves favicon.png directly from the instance static directory,
-  bypassing the frontend-specific logic.
+  This is a shim to call `Plug.Static` but with runtime `from` configuration for instance favicon.
+
+  Serves default or custom favicon.png with cacheable cache-control.
   """
 
   import Plug.Conn, only: [put_resp_header: 3]
