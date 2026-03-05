@@ -3560,6 +3560,12 @@ config :pleroma, :config_description, [
         type: :string,
         description: "Table name used for search documents.",
         suggestion: ["pleroma_search_documents"]
+      },
+      %{
+        key: :fuzzy_distance,
+        type: :integer,
+        description: "Edit-distance used for fuzzy token matching (0 disables fuzziness, max 2).",
+        suggestion: [0, 1, 2]
       }
     ]
   },

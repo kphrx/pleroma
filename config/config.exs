@@ -940,7 +940,8 @@ config :pleroma, Pleroma.Search.Meilisearch,
 
 config :pleroma, Pleroma.Search.ParadeDB,
   url: nil,
-  table: "pleroma_search_documents"
+  table: "pleroma_search_documents",
+  fuzzy_distance: 0
 
 config :pleroma, Pleroma.Search.ParadeDB.Repo,
   pool_size: 10,

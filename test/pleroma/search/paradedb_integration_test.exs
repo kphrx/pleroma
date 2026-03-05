@@ -73,7 +73,7 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
         end
       end)
 
-      {:ok, _pid} = start_supervised({Pleroma.Search.ParadeDB.Repo, pool_size: 1})
+      {:ok, _pid} = start_supervised({Pleroma.Search.ParadeDB.Repo, pool_size: 5})
 
       previous_table = Pleroma.Config.get([Pleroma.Search.ParadeDB, :table], nil)
       table = "pleroma_search_documents_it_#{System.unique_integer([:positive])}"

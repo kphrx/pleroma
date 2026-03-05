@@ -35,6 +35,22 @@ defmodule Pleroma.Search.ParadeDB do
     Config.get([Pleroma.Search.ParadeDB, :table], @default_table)
   end
 
+  defp fuzzy_distance do
+    case Config.get([Pleroma.Search.ParadeDB, :fuzzy_distance], 0) do
+      value when is_integer(value) and value in 0..2 ->
+        value
+
+      value when is_binary(value) ->
+        case Integer.parse(value) do
+          {parsed, ""} when parsed in 0..2 -> parsed
+          _ -> 0
+        end
+
+      _ ->
+        0
+    end
+  end
+
   @impl true
   def create_index do
     with {:ok, _} <- client_impl().query("CREATE EXTENSION IF NOT EXISTS pg_search", []),
@@ -190,7 +206,9 @@ defmodule Pleroma.Search.ParadeDB do
   end
 
   defp search_ids(query, limit, offset, author) do
-    base_sql = "SELECT id FROM #{table()} WHERE content &&& $1"
+    base_sql =
+      "SELECT id FROM #{table()} WHERE content &&& #{search_query_param_sql(fuzzy_distance())}"
+
     params = [query]
 
     {base_sql, params} =
@@ -215,6 +233,9 @@ defmodule Pleroma.Search.ParadeDB do
       {:ok, Enum.map(rows, fn [id] -> id end)}
     end
   end
+
+  defp search_query_param_sql(0), do: "$1"
+  defp search_query_param_sql(distance), do: "$1::pdb.fuzzy(#{distance})"
 
   defp create_table_sql(table) do
     """

@@ -161,12 +161,15 @@ defmodule Pleroma.Search.ParadeDBTest do
       end)
 
       Config
-      |> expect(:get, 2, fn
+      |> expect(:get, 3, fn
         [Pleroma.Search.ParadeDB, :client_impl], nil ->
           ClientMock
 
         [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
           "pleroma_search_documents"
+
+        [Pleroma.Search.ParadeDB, :fuzzy_distance], 0 ->
+          0
       end)
 
       assert [%{id: ^activity2_id}, %{id: ^activity1_id}] =
@@ -196,12 +199,15 @@ defmodule Pleroma.Search.ParadeDBTest do
       end)
 
       Config
-      |> expect(:get, 2, fn
+      |> expect(:get, 3, fn
         [Pleroma.Search.ParadeDB, :client_impl], nil ->
           ClientMock
 
         [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
           "pleroma_search_documents"
+
+        [Pleroma.Search.ParadeDB, :fuzzy_distance], 0 ->
+          0
       end)
 
       assert [%{id: ^public_activity_id}] = ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
@@ -225,15 +231,50 @@ defmodule Pleroma.Search.ParadeDBTest do
       end)
 
       Config
-      |> expect(:get, 2, fn
+      |> expect(:get, 3, fn
         [Pleroma.Search.ParadeDB, :client_impl], nil ->
           ClientMock
 
         [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
           "pleroma_search_documents"
+
+        [Pleroma.Search.ParadeDB, :fuzzy_distance], 0 ->
+          0
       end)
 
       assert [%{id: ^activity_id}] = ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
+    end
+
+    test "search uses configured fuzzy distance" do
+      user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "runing shoes", visibility: "public"})
+
+      activity_id = activity.id
+      {:ok, dumped_id} = FlakeId.Ecto.CompatType.dump(activity_id)
+
+      ClientMock
+      |> expect(:query, fn sql, params ->
+        assert sql =~ "SELECT id FROM pleroma_search_documents"
+        assert sql =~ "$1::pdb.fuzzy(1)"
+        assert ["running shoes", _limit, _offset] = params
+
+        {:ok, %{rows: [[dumped_id]]}}
+      end)
+
+      Config
+      |> expect(:get, 3, fn
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+
+        [Pleroma.Search.ParadeDB, :fuzzy_distance], 0 ->
+          1
+      end)
+
+      assert [%{id: ^activity_id}] = ParadeDB.search(nil, "running shoes", limit: 40, offset: 0)
     end
   end
 end
