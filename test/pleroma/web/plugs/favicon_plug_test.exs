@@ -5,20 +5,21 @@
 defmodule Pleroma.Web.Plugs.FaviconPlugTest do
   use Pleroma.Web.ConnCase
 
-  # import Mox
-
-  # alias Pleroma.UnstubbedConfigMock, as: ConfigMock
-
   @dir "test/tmp/favicon_static"
+
+  setup do
+      Pleroma.Backports.mkdir_p!(@dir)
+
+      on_exit(fn -> File.rm_rf!(@dir) end)
+  end
 
   describe "default favicon" do
     test "returns favicon", %{conn: conn} do
       conn = get(conn, "/favicon.png")
-      etag = get_resp_header(conn, "etag")
+      body_size = byte_size(conn.resp_body)
 
-      # etag changes when serving a different file
       assert conn.status == 200
-      assert etag == ["\"72487CE\""]
+      assert body_size == 1583
       assert response_content_type(conn, :png)
     end
 
@@ -33,28 +34,21 @@ defmodule Pleroma.Web.Plugs.FaviconPlugTest do
 
   describe "custom favicon" do
     setup do
-      Pleroma.Backports.mkdir_p!(@dir)
       favicon_path = Path.join(@dir, "favicon.png")
+      donor_image = "test/fixtures/image.png"
 
-      # Favicon plug should always return image/png
-      donor_image = "test/fixtures/image.gif"
-      image_stat = File.stat!(donor_image)
-
-      # Preserve stat since that's what etag is based on
       File.cp!(donor_image, favicon_path)
-      File.write_stat!(favicon_path, image_stat)
-
       clear_config([:instance, :static_dir], @dir)
 
-      on_exit( fn -> File.rm_rf!(@dir) end)
+      on_exit(fn -> File.rm!(favicon_path) end)
     end
 
     test "returns favicon", %{conn: conn} do
       conn = get(conn, "/favicon.png")
-      etag = get_resp_header(conn, "etag")
+      body_size = byte_size(conn.resp_body)
 
       assert conn.status == 200
-      assert etag == ["\"215A3A4\""]
+      assert body_size == 104426
       assert response_content_type(conn, :png)
     end
 

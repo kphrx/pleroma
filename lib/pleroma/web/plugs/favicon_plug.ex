@@ -11,7 +11,9 @@ defmodule Pleroma.Web.Plugs.FaviconPlug do
   Serves default or custom favicon.png with cacheable cache-control.
   """
 
-  import Plug.Conn, only: [put_resp_header: 3]
+  import Plug.Conn, only: [put_resp_header: 3, send_resp: 3, halt: 1]
+
+  require Logger
 
   def init(opts) do
     opts
@@ -25,7 +27,12 @@ defmodule Pleroma.Web.Plugs.FaviconPlug do
         call_static(conn, opts, dir)
 
       :error ->
-        conn # Let the request keep going to a 404
+        # Favicon should always be available and this should never occur.
+        # If it does, halt the pipeline before having unintended side-effects.
+        Logger.error("No favicon.png found! Is the default favicon deleted?")
+        conn
+        |> send_resp(404, "Not found")
+        |> halt()
     end
   end
 
@@ -54,7 +61,6 @@ defmodule Pleroma.Web.Plugs.FaviconPlug do
       |> Map.put(:content_types, false)
 
     conn = set_content_type(conn)
-
     Plug.Static.call(conn, opts)
   end
 
