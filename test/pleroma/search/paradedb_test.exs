@@ -256,7 +256,7 @@ defmodule Pleroma.Search.ParadeDBTest do
       ClientMock
       |> expect(:query, fn sql, params ->
         assert sql =~ "SELECT id FROM pleroma_search_documents"
-        assert sql =~ "$1::pdb.fuzzy(1)"
+        assert sql =~ "($1::text)::pdb.fuzzy(1)"
         assert ["running shoes", _limit, _offset] = params
 
         {:ok, %{rows: [[dumped_id]]}}

@@ -235,7 +235,7 @@ defmodule Pleroma.Search.ParadeDB do
   end
 
   defp search_query_param_sql(0), do: "$1"
-  defp search_query_param_sql(distance), do: "$1::pdb.fuzzy(#{distance})"
+  defp search_query_param_sql(distance), do: "($1::text)::pdb.fuzzy(#{distance})"
 
   defp create_table_sql(table) do
     """
