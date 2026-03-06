@@ -362,7 +362,7 @@ defmodule Mix.Tasks.Pleroma.User do
 
     Pleroma.User.Query.build(%{
       local: true,
-      is_active: true,
+      deactivated: false,
       is_moderator: false,
       is_admin: false,
       invisible: false
@@ -380,7 +380,7 @@ defmodule Mix.Tasks.Pleroma.User do
 
     Pleroma.User.Query.build(%{
       local: true,
-      is_active: true,
+      deactivated: false,
       is_moderator: false,
       is_admin: false,
       invisible: false
