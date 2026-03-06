@@ -2,7 +2,7 @@
 # Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
-defmodule Pleroma.Web.TwitterAPI.RemoteFollowController do
+defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionController do
   use Pleroma.Web, :controller
 
   require Logger
@@ -14,8 +14,15 @@ defmodule Pleroma.Web.TwitterAPI.RemoteFollowController do
   alias Pleroma.Web.Auth.TOTPAuthenticator
   alias Pleroma.Web.Auth.WrapperAuthenticator
   alias Pleroma.Web.CommonAPI
+  alias Pleroma.Web.WebFinger
 
   @status_types ["Article", "Event", "Note", "Video", "Page", "Question"]
+
+  plug(
+    Pleroma.Web.ApiSpec.CastAndValidate,
+    [replace_params: false]
+    when action == :remote_interaction
+  )
 
   plug(Pleroma.Web.Plugs.FederatingPlug)
 
@@ -23,8 +30,10 @@ defmodule Pleroma.Web.TwitterAPI.RemoteFollowController do
   plug(
     Pleroma.Web.Plugs.OAuthScopesPlug,
     %{fallback: :proceed_unauthenticated, scopes: ["follow", "write:follows"]}
-    when action in [:do_follow]
+    when action == :do_follow
   )
+
+  defdelegate open_api_operation(action), to: Pleroma.Web.ApiSpec.RemoteInteractionOperation
 
   # GET /ostatus_subscribe
   #
@@ -125,7 +134,7 @@ defmodule Pleroma.Web.TwitterAPI.RemoteFollowController do
   #
   def authorize_interaction(conn, %{"uri" => uri}) do
     conn
-    |> redirect(to: Routes.remote_follow_path(conn, :follow, %{acct: uri}))
+    |> redirect(to: Routes.remote_interaction_path(conn, :follow, %{acct: uri}))
   end
 
   defp handle_follow_error(conn, {:mfa_token, followee, _} = _) do
@@ -161,5 +170,123 @@ defmodule Pleroma.Web.TwitterAPI.RemoteFollowController do
   defp handle_follow_error(conn, error) do
     Logger.debug("Remote follow failed with error #{inspect(error)}")
     render(conn, "followed.html", %{error: "Something went wrong."})
+  end
+
+  def show_subscribe_form(conn, %{"nickname" => nick}) do
+    with %User{} = user <- User.get_cached_by_nickname(nick),
+         avatar = User.avatar_url(user) do
+      conn
+      |> render("subscribe.html", %{nickname: nick, avatar: avatar, error: false})
+    else
+      _e ->
+        render(conn, "subscribe.html", %{
+          nickname: nick,
+          avatar: nil,
+          error:
+            Pleroma.Web.Gettext.dpgettext(
+              "static_pages",
+              "remote follow error message - user not found",
+              "Could not find user"
+            )
+        })
+    end
+  end
+
+  def show_subscribe_form(conn, %{"status_id" => id}) do
+    with %Activity{} = activity <- Activity.get_by_id(id),
+         {:ok, ap_id} <- get_ap_id(activity),
+         %User{} = user <- User.get_cached_by_ap_id(activity.actor),
+         avatar = User.avatar_url(user) do
+      conn
+      |> render("status_interact.html", %{
+        status_link: ap_id,
+        status_id: id,
+        nickname: user.nickname,
+        avatar: avatar,
+        error: false
+      })
+    else
+      _e ->
+        render(conn, "status_interact.html", %{
+          status_id: id,
+          avatar: nil,
+          error:
+            Pleroma.Web.Gettext.dpgettext(
+              "static_pages",
+              "status interact error message - status not found",
+              "Could not find status"
+            )
+        })
+    end
+  end
+
+  def remote_subscribe(conn, %{"nickname" => nick, "profile" => _}) do
+    show_subscribe_form(conn, %{"nickname" => nick})
+  end
+
+  def remote_subscribe(conn, %{"status_id" => id, "profile" => _}) do
+    show_subscribe_form(conn, %{"status_id" => id})
+  end
+
+  def remote_subscribe(conn, %{"user" => %{"nickname" => nick, "profile" => profile}}) do
+    with {:ok, %{"subscribe_address" => template}} <- WebFinger.finger(profile),
+         %User{ap_id: ap_id} <- User.get_cached_by_nickname(nick) do
+      conn
+      |> Phoenix.Controller.redirect(external: String.replace(template, "{uri}", ap_id))
+    else
+      _e ->
+        render(conn, "subscribe.html", %{
+          nickname: nick,
+          avatar: nil,
+          error:
+            Pleroma.Web.Gettext.dpgettext(
+              "static_pages",
+              "remote follow error message - unknown error",
+              "Something went wrong."
+            )
+        })
+    end
+  end
+
+  def remote_subscribe(conn, %{"status" => %{"status_id" => id, "profile" => profile}}) do
+    with {:ok, %{"subscribe_address" => template}} <- WebFinger.finger(profile),
+         %Activity{} = activity <- Activity.get_by_id(id),
+         {:ok, ap_id} <- get_ap_id(activity) do
+      conn
+      |> Phoenix.Controller.redirect(external: String.replace(template, "{uri}", ap_id))
+    else
+      _e ->
+        render(conn, "status_interact.html", %{
+          status_id: id,
+          avatar: nil,
+          error:
+            Pleroma.Web.Gettext.dpgettext(
+              "static_pages",
+              "status interact error message - unknown error",
+              "Something went wrong."
+            )
+        })
+    end
+  end
+
+  def remote_interaction(
+        %{private: %{open_api_spex: %{body_params: %{ap_id: ap_id, profile: profile}}}} = conn,
+        _params
+      ) do
+    with {:ok, %{"subscribe_address" => template}} <- WebFinger.finger(profile) do
+      conn
+      |> json(%{url: String.replace(template, "{uri}", ap_id)})
+    else
+      _e -> json(conn, %{error: "Couldn't find user"})
+    end
+  end
+
+  defp get_ap_id(activity) do
+    object = Pleroma.Object.normalize(activity, fetch: false)
+
+    case object do
+      %{data: %{"id" => ap_id}} -> {:ok, ap_id}
+      _ -> {:no_ap_id, nil}
+    end
   end
 end
