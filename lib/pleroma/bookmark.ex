@@ -19,7 +19,7 @@ defmodule Pleroma.Bookmark do
   schema "bookmarks" do
     belongs_to(:user, User, type: FlakeId.Ecto.CompatType)
     belongs_to(:activity, Activity, type: FlakeId.Ecto.CompatType)
-    belongs_to(:folder, BookmarkFolder, type: FlakeId.Ecto.CompatType)
+    belongs_to(:folder, BookmarkFolder, type: FlakeId.Ecto.Type)
 
     timestamps()
   end
@@ -38,7 +38,7 @@ defmodule Pleroma.Bookmark do
     |> validate_required([:user_id, :activity_id])
     |> unique_constraint(:activity_id, name: :bookmarks_user_id_activity_id_index)
     |> Repo.insert(
-      on_conflict: [set: [folder_id: folder_id]],
+      on_conflict: [set: [folder_id: folder_id, updated_at: NaiveDateTime.utc_now()]],
       conflict_target: [:user_id, :activity_id]
     )
   end
@@ -75,12 +75,5 @@ defmodule Pleroma.Bookmark do
     )
     |> Repo.one()
     |> Repo.delete()
-  end
-
-  def set_folder(bookmark, folder_id) do
-    bookmark
-    |> cast(%{folder_id: folder_id}, [:folder_id])
-    |> validate_required([:folder_id])
-    |> Repo.update()
   end
 end
