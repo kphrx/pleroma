@@ -7,7 +7,6 @@ defmodule Pleroma.Web.PleromaAPI.UtilController do
 
   require Logger
 
-  alias Pleroma.Activity
   alias Pleroma.Config
   alias Pleroma.Emoji
   alias Pleroma.Healthcheck
