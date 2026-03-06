@@ -1815,7 +1815,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
     test "returns lists to which the account belongs" do
       %{user: user, conn: conn} = oauth_access(["read:lists"])
       other_user = insert(:user)
-      assert {:ok, %Pleroma.List{id: _list_id} = list} = Pleroma.List.create("Test List", user)
+      assert {:ok, %Pleroma.List{id: _list_id} = list} = Pleroma.List.create(%{title: "Test List"}, user)
       {:ok, %{following: _following}} = Pleroma.List.follow(list, other_user)
 
       assert [%{"id" => _list_id, "title" => "Test List"}] =

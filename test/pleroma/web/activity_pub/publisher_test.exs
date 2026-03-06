@@ -334,7 +334,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
     test "activity with BCC is published to a list member." do
       actor = insert(:user)
-      {:ok, list} = Pleroma.List.create("list", actor)
+      {:ok, list} = Pleroma.List.create(%{title: "list"}, actor)
       list_member = insert(:user, %{local: false})
 
       Pleroma.List.follow(list, list_member)
