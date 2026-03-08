@@ -1,0 +1,1 @@
+Gopher: Fix Ranch listener not being stopped properly on Pleroma restart when database configuration is enabled
