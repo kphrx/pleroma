@@ -283,7 +283,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
       }) do
     collection =
       Enum.map(activities, fn activity ->
-        {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+        {:ok, data} = Transmogrifier.prepare_activity(activity.data)
         data
       end)
 

@@ -2,7 +2,7 @@
 # Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
-defmodule Pleroma.Web.TwitterAPI.PasswordController do
+defmodule Pleroma.Web.PleromaAPI.PasswordController do
   @moduledoc """
   The module contains functions for password reset.
   """
@@ -16,7 +16,7 @@ defmodule Pleroma.Web.TwitterAPI.PasswordController do
   alias Pleroma.PasswordResetToken
   alias Pleroma.Repo
   alias Pleroma.User
-  alias Pleroma.Web.TwitterAPI.TwitterAPI
+  alias Pleroma.Web.Registration
 
   plug(Pleroma.Web.Plugs.RateLimiter, [name: :request] when action == :request)
 
@@ -24,7 +24,7 @@ defmodule Pleroma.Web.TwitterAPI.PasswordController do
   def request(conn, params) do
     nickname_or_email = params["email"] || params["nickname"]
 
-    TwitterAPI.password_reset(nickname_or_email)
+    Registration.password_reset(nickname_or_email)
 
     json_response(conn, :no_content, "")
   end
