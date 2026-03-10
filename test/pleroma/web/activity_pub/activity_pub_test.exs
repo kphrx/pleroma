@@ -1754,7 +1754,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
   test "fetch_activities/2 returns activities addressed to a list " do
     user = insert(:user)
     member = insert(:user)
-    {:ok, list} = Pleroma.List.create("foo", user)
+    {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
     {:ok, list} = Pleroma.List.follow(list, member)
 
     {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
