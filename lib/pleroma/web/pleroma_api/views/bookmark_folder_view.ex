@@ -9,11 +9,13 @@ defmodule Pleroma.Web.PleromaAPI.BookmarkFolderView do
   alias Pleroma.Emoji
 
   def render("show.json", %{folder: %BookmarkFolder{} = folder}) do
+    {emoji, emoji_url} = get_emoji(folder.emoji)
+
     %{
       id: folder.id |> to_string(),
       name: folder.name,
-      emoji: folder.emoji,
-      emoji_url: get_emoji_url(folder.emoji)
+      emoji: emoji,
+      emoji_url: emoji_url
     }
   end
 
@@ -21,20 +23,15 @@ defmodule Pleroma.Web.PleromaAPI.BookmarkFolderView do
     render_many(folders, __MODULE__, "show.json", Map.delete(opts, :folders))
   end
 
-  defp get_emoji_url(nil) do
-    nil
-  end
+  defp get_emoji(nil), do: {nil, nil}
 
-  defp get_emoji_url(emoji) do
+  defp get_emoji(emoji) do
     if Emoji.unicode?(emoji) do
-      nil
+      {emoji, nil}
     else
-      emoji = Emoji.get(emoji)
-
-      if emoji != nil do
-        Emoji.local_url(emoji.file)
-      else
-        nil
+      case Emoji.get(emoji) do
+        nil -> {nil, nil}
+        emoji_data -> {emoji, Emoji.local_url(emoji_data.file)}
       end
     end
   end

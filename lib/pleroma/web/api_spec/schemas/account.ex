@@ -21,6 +21,7 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
       acct: %Schema{type: :string},
       avatar_static: %Schema{type: :string, format: :uri},
       avatar: %Schema{type: :string, format: :uri},
+      avatar_description: %Schema{type: :string},
       bot: %Schema{type: :boolean},
       created_at: %Schema{type: :string, format: "date-time"},
       display_name: %Schema{type: :string},
@@ -31,6 +32,7 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
       following_count: %Schema{type: :integer},
       header_static: %Schema{type: :string, format: :uri},
       header: %Schema{type: :string, format: :uri},
+      header_description: %Schema{type: :string},
       id: FlakeID,
       locked: %Schema{type: :boolean},
       note: %Schema{type: :string, format: :html},
@@ -111,8 +113,8 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
             nullable: true,
             description: "Favicon image of the user's instance"
           },
-          avatar_description: %Schema{type: :string},
-          header_description: %Schema{type: :string}
+          avatar_description: %Schema{type: :string, deprecated: true},
+          header_description: %Schema{type: :string, deprecated: true}
         }
       },
       source: %Schema{

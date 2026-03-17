@@ -499,6 +499,35 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
              "https://queef.in/storage/banner.gif"
   end
 
+  test "works with alsoKnownAs as string" do
+    user_id = "https://hub.netzgemeinde.eu/channel/jupiter_rowland"
+
+    user_data =
+      "test/fixtures/users_mock/hubzilla-actor-alsoknownas-string.json"
+      |> File.read!()
+
+    user_data_decoded =
+      user_data
+      |> Jason.decode!()
+
+    Tesla.Mock.mock(fn
+      %{
+        method: :get,
+        url: ^user_id
+      } ->
+        %Tesla.Env{
+          status: 200,
+          body: user_data,
+          headers: [{"content-type", "application/activity+json"}]
+        }
+    end)
+
+    {:ok, user} = ActivityPub.make_user_from_ap_id(user_id)
+
+    assert is_list(user.also_known_as)
+    assert user.also_known_as == [user_data_decoded["alsoKnownAs"]]
+  end
+
   test "it fetches the appropriate tag-restricted posts" do
     user = insert(:user)
 
@@ -1783,7 +1812,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
   test "fetch_activities/2 returns activities addressed to a list " do
     user = insert(:user)
     member = insert(:user)
-    {:ok, list} = Pleroma.List.create("foo", user)
+    {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
     {:ok, list} = Pleroma.List.follow(list, member)
 
     {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})

@@ -647,7 +647,7 @@ defmodule Pleroma.Web.CommonAPI.UtilsTest do
   describe "maybe_add_list_data/3" do
     test "adds list params when found user list" do
       user = insert(:user)
-      {:ok, %Pleroma.List{} = list} = Pleroma.List.create("title", user)
+      {:ok, %Pleroma.List{} = list} = Pleroma.List.create(%{title: "title"}, user)
 
       assert Utils.maybe_add_list_data(%{additional: %{}, object: %{}}, user, {:list, list.id}) ==
                %{
@@ -658,7 +658,7 @@ defmodule Pleroma.Web.CommonAPI.UtilsTest do
 
     test "returns original params when list not found" do
       user = insert(:user)
-      {:ok, %Pleroma.List{} = list} = Pleroma.List.create("title", insert(:user))
+      {:ok, %Pleroma.List{} = list} = Pleroma.List.create(%{title: "title"}, insert(:user))
 
       assert Utils.maybe_add_list_data(%{additional: %{}, object: %{}}, user, {:list, list.id}) ==
                %{additional: %{}, object: %{}}

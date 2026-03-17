@@ -2,7 +2,7 @@
   <h1><%= link instance_name(), to: "/" %></h1>
 
   <h3>
-    <form class="pull-right collapse" method="POST" action="<%= Helpers.util_path(@conn, :remote_subscribe) %>">
+    <form class="pull-right collapse" method="POST" action="<%= Helpers.remote_interaction_path(@conn, :remote_subscribe) %>">
       <input type="hidden" name="nickname" value="<%= @user.nickname %>">
       <input type="hidden" name="profile" value="">
       <button type="submit" class="collapse"><%= Gettext.dpgettext("static_pages", "static fe profile page remote follow button", "Remote follow") %></button>

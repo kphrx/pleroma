@@ -960,6 +960,15 @@ config :pleroma, Pleroma.Search.QdrantSearch,
     vectors: %{size: 384, distance: "Cosine"}
   }
 
+config :pleroma, :database_config_whitelist, [
+  {:pleroma},
+  {:cors_plug},
+  {:ex_aws, :s3},
+  {:mime},
+  {:prometheus, Pleroma.Web.Endpoint.MetricsExporter},
+  {:web_push_encryption, :vapid_details}
+]
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{Mix.env()}.exs"
