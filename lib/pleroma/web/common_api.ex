@@ -222,8 +222,8 @@ defmodule Pleroma.Web.CommonAPI do
     with %Activity{data: %{"type" => "Create"}} = activity <- Activity.get_by_id(id),
          object = %Object{} <- Object.normalize(activity, fetch: false),
          {_, nil} <- {:existing_announce, Utils.get_existing_announce(user.ap_id, object)},
-         public = public_announce?(object, params),
-         {:ok, announce, _} <- Builder.announce(user, object, public: public),
+         visibility = announce_visibility(object, params),
+         {:ok, announce, _} <- Builder.announce(user, object, visibility: visibility),
          {:ok, activity, _} <- Pipeline.common_pipeline(announce, local: true) do
       {:ok, activity}
     else
@@ -407,13 +407,11 @@ defmodule Pleroma.Web.CommonAPI do
     end
   end
 
-  defp public_announce?(_, %{visibility: visibility})
-       when visibility in ~w{public unlisted private direct},
-       do: visibility in ~w(public unlisted)
+  def announce_visibility(_, %{visibility: visibility})
+      when visibility in ~w{public unlisted private direct local},
+      do: visibility
 
-  defp public_announce?(object, _) do
-    Visibility.public?(object)
-  end
+  def announce_visibility(object, _), do: Visibility.get_visibility(object)
 
   @spec get_visibility(map(), map() | nil, Participation.t() | nil) ::
           {String.t() | nil, String.t() | nil}
