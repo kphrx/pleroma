@@ -783,6 +783,12 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   def set_replies(obj_data), do: obj_data
 
+  defp set_voters_count(%{"voters" => [_ | _] = voters} = obj) do
+    Map.merge(obj, %{"votersCount" => length(voters)})
+  end
+
+  defp set_voters_count(obj), do: obj
+
   # Prepares and sanitizes the object for federation.
   def prepare_object(object) do
     object
@@ -795,6 +801,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> set_reply_to_uri
     |> set_quote_url
     |> set_replies
+    |> set_voters_count
     |> CommonFixes.maybe_add_content_map()
     |> strip_internal_fields
     |> strip_internal_tags
