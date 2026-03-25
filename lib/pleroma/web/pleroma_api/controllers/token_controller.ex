@@ -7,8 +7,8 @@ defmodule Pleroma.Web.PleromaAPI.TokenController do
 
   alias Pleroma.User
   alias Pleroma.Web.OAuth.Token
-  alias Pleroma.Web.Plugs.OAuthScopesPlug
   alias Pleroma.Web.PleromaAPI.TokenView
+  alias Pleroma.Web.Plugs.OAuthScopesPlug
 
   require Logger
 
