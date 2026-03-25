@@ -18,7 +18,7 @@ defmodule Pleroma.Search do
   def add_to_index(%Activity{id: activity_id}) do
     case Activity.get_by_id_with_object(activity_id) do
       %Activity{} = preloaded -> add_to_index(preloaded)
-      _ -> :ok
+      _ -> {:ok, :noop}
     end
   end
 
