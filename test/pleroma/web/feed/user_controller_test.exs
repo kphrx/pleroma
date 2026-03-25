@@ -147,6 +147,15 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
       assert response(conn, 404)
     end
 
+    test "returns noindex meta for missing user", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_header("accept", "text/html")
+        |> get("/users/nonexisting")
+
+      assert html_response(conn, 200) =~ "<meta content=\"noindex, noarchive\" name=\"robots\">"
+    end
+
     test "returns feed with public and unlisted activities", %{conn: conn} do
       user = insert(:user)
 
@@ -271,6 +280,21 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
 
       assert redirected_to(conn) ==
                "#{Pleroma.Web.Endpoint.url()}/users/#{user.nickname}/feed.atom"
+    end
+
+    test "redirects to rss feed when explicitly requested", %{conn: conn} do
+      note_activity = insert(:note_activity)
+      user = User.get_cached_by_ap_id(note_activity.data["actor"])
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/xml")
+        |> get("/users/#{user.nickname}.rss")
+
+      assert conn.status == 302
+
+      assert redirected_to(conn) ==
+               "#{Pleroma.Web.Endpoint.url()}/users/#{user.nickname}/feed.rss"
     end
 
     test "with non-html / non-json format, it returns error when user is not found", %{conn: conn} do

@@ -5,10 +5,17 @@
 defmodule Pleroma.Web.MastodonAPI.InstanceView do
   use Pleroma.Web, :view
 
+  import Pleroma.Web.Utils.Guards, only: [not_empty_string: 1]
+
   alias Pleroma.Config
   alias Pleroma.Web.ActivityPub.MRF
 
   @mastodon_api_level "2.7.2"
+
+  @block_severities %{
+    federated_timeline_removal: "silence",
+    reject: "suspend"
+  }
 
   def render("show.json", _) do
     instance = Config.get(:instance)
@@ -90,6 +97,62 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     }
   end
 
+  def render("domain_blocks.json", _) do
+    if Config.get([:mrf, :transparency]) do
+      exclusions = Config.get([:mrf, :transparency_exclusions]) |> MRF.instance_list_from_tuples()
+
+      domain_blocks =
+        Config.get(:mrf_simple)
+        |> Enum.map(fn {rule, instances} ->
+          instances
+          |> Enum.map(fn
+            {host, reason} when not_empty_string(host) and not_empty_string(reason) ->
+              {host, reason}
+
+            {host, _reason} when not_empty_string(host) ->
+              {host, ""}
+
+            host when not_empty_string(host) ->
+              {host, ""}
+
+            _ ->
+              nil
+          end)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.reject(fn {host, _} ->
+            host in exclusions or not Map.has_key?(@block_severities, rule)
+          end)
+          |> Enum.map(fn {host, reason} ->
+            domain_block = %{
+              domain: host,
+              digest: :crypto.hash(:sha256, host) |> Base.encode16(case: :lower),
+              severity: Map.get(@block_severities, rule)
+            }
+
+            if not_empty_string(reason) do
+              Map.put(domain_block, :comment, reason)
+            else
+              domain_block
+            end
+          end)
+        end)
+        |> List.flatten()
+
+      domain_blocks
+    else
+      []
+    end
+  end
+
+  def render("translation_languages.json", _) do
+    with true <- Pleroma.Language.Translation.configured?(),
+         {:ok, languages} <- Pleroma.Language.Translation.languages_matrix() do
+      languages
+    else
+      _ -> %{}
+    end
+  end
+
   defp common_information(instance) do
     %{
       languages: Keyword.get(instance, :languages, ["en"]),
@@ -137,6 +200,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       "pleroma_emoji_reactions",
       "pleroma_custom_emoji_reactions",
       "pleroma_chat_messages",
+      "pleroma:pin_chats",
       if Config.get([:instance, :show_reactions]) do
         "exposable_reactions"
       end,
@@ -145,7 +209,11 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       end,
       "pleroma:get:main/ostatus",
       "pleroma:group_actors",
-      "pleroma:bookmark_folders"
+      "pleroma:bookmark_folders",
+      if Pleroma.Language.LanguageDetector.configured?() do
+        "pleroma:language_detection"
+      end,
+      "pleroma:block_expiration"
     ]
     |> Enum.filter(& &1)
   end
@@ -235,6 +303,15 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
   defp configuration2 do
     configuration()
     |> put_in([:accounts, :max_pinned_statuses], Config.get([:instance, :max_pinned_statuses], 0))
+    |> put_in([:accounts, :max_profile_fields], Config.get([:instance, :max_account_fields]))
+    |> put_in(
+      [:accounts, :profile_field_name_limit],
+      Config.get([:instance, :account_field_name_length])
+    )
+    |> put_in(
+      [:accounts, :profile_field_value_limit],
+      Config.get([:instance, :account_field_value_length])
+    )
     |> put_in([:statuses, :characters_reserved_per_url], 0)
     |> Map.merge(%{
       urls: %{
@@ -243,11 +320,51 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       },
       vapid: %{
         public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
+      },
+      translation: %{enabled: Pleroma.Language.Translation.configured?()},
+      timelines_access: %{
+        live_feeds: timelines_access(),
+        hashtag_feeds: timelines_access(),
+        # not implemented in Pleroma
+        trending_link_feeds: %{
+          local: "disabled",
+          remote: "disabled"
+        }
       }
     })
   end
 
+  defp timelines_access do
+    %{
+      local: timeline_access(:local),
+      remote: timeline_access(:federated)
+    }
+  end
+
+  defp timeline_access(kind) do
+    if Config.restrict_unauthenticated_access?(:timelines, kind) do
+      "authenticated"
+    else
+      "public"
+    end
+  end
+
   defp pleroma_configuration(instance) do
+    base_urls = %{}
+
+    base_urls =
+      if Config.get([:media_proxy, :enabled]) do
+        Map.put(base_urls, :media_proxy, Config.get([:media_proxy, :base_url]))
+      else
+        base_urls
+      end
+
+    base_urls =
+      case Config.get([Pleroma.Upload, :base_url]) do
+        nil -> base_urls
+        url -> Map.put(base_urls, :upload, url)
+      end
+
     %{
       metadata: %{
         account_activation_required: Keyword.get(instance, :account_activation_required),
@@ -256,7 +373,10 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
         fields_limits: fields_limits(),
         post_formats: Config.get([:instance, :allowed_post_formats]),
         birthday_required: Config.get([:instance, :birthday_required]),
-        birthday_min_age: Config.get([:instance, :birthday_min_age])
+        birthday_min_age: Config.get([:instance, :birthday_min_age]),
+        translation: supported_languages(),
+        base_urls: base_urls,
+        markup: markup()
       },
       stats: %{mau: Pleroma.User.active_user_count()},
       vapid_public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
@@ -281,5 +401,38 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
           shout_limit: Config.get([:shout, :limit])
         })
     })
+  end
+
+  defp supported_languages do
+    enabled = Pleroma.Language.Translation.configured?()
+
+    source_languages =
+      with true <- enabled,
+           {:ok, languages} <- Pleroma.Language.Translation.supported_languages(:source) do
+        languages
+      else
+        _ -> nil
+      end
+
+    target_languages =
+      with true <- enabled,
+           {:ok, languages} <- Pleroma.Language.Translation.supported_languages(:target) do
+        languages
+      else
+        _ -> nil
+      end
+
+    %{
+      source_languages: source_languages,
+      target_languages: target_languages
+    }
+  end
+
+  defp markup do
+    %{
+      allow_inline_images: Config.get([:markup, :allow_inline_images]),
+      allow_headings: Config.get([:markup, :allow_headings]),
+      allow_tables: Config.get([:markup, :allow_tables])
+    }
   end
 end

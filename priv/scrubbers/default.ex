@@ -22,7 +22,8 @@ defmodule Pleroma.HTML.Scrubber.Default do
     "u-url",
     "mention",
     "u-url mention",
-    "mention u-url"
+    "mention u-url",
+    "mention hashtag"
   ])
 
   Meta.allow_tag_with_this_attribute_values(:a, "rel", [
@@ -79,8 +80,12 @@ defmodule Pleroma.HTML.Scrubber.Default do
   Meta.allow_tag_with_this_attribute_values(:span, "class", [
     "h-card",
     "recipients-inline",
-    "quote-inline"
+    "quote-inline",
+    "invisible",
+    "ellipsis"
   ])
+
+  Meta.allow_tag_with_this_attribute_values(:p, "class", ["quote-inline"])
 
   Meta.allow_tag_with_these_attributes(:span, ["lang"])
 

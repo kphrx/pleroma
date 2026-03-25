@@ -219,6 +219,36 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
                "<p><span class=\"h-card\"><a href=\"http://localtesting.pleroma.lol/users/lain\" class=\"u-url mention\">@<span>lain</span></a></span></p>"
     end
 
+    test "it only uses contentMap if content is not present" do
+      user = insert(:user)
+
+      message = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "type" => "Create",
+        "object" => %{
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => [],
+          "id" => Utils.generate_object_id(),
+          "type" => "Note",
+          "content" => "Hi",
+          "contentMap" => %{
+            "de" => "Hallo",
+            "uk" => "Привіт"
+          },
+          "inReplyTo" => nil,
+          "attributedTo" => user.ap_id
+        },
+        "actor" => user.ap_id
+      }
+
+      {:ok, %Activity{data: data, local: false}} = Transmogrifier.handle_incoming(message)
+      object = Object.normalize(data["object"], fetch: false)
+
+      assert object.data["content"] == "Hi"
+    end
+
     test "it works for incoming notices with a nil contentMap (firefish)" do
       data =
         File.read!("test/fixtures/mastodon-post-activity-contentmap.json")
@@ -478,7 +508,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
 
       {:ok, activity} = Transmogrifier.handle_incoming(message)
 
-      {:ok, _} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, _} = Transmogrifier.prepare_activity(activity.data)
     end
 
     test "successfully reserializes a message with AS2 objects in IR" do
@@ -507,7 +537,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
 
       {:ok, activity} = Transmogrifier.handle_incoming(message)
 
-      {:ok, _} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, _} = Transmogrifier.prepare_activity(activity.data)
     end
   end
 
@@ -666,12 +696,19 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
   describe "set_replies/1" do
     setup do: clear_config([:activitypub, :note_replies_output_limit], 2)
 
-    test "returns unmodified object if activity doesn't have self-replies" do
+    test "still provides reply collection id even if activity doesn't have replies yet" do
       data = Jason.decode!(File.read!("test/fixtures/mastodon-post-activity.json"))
-      assert Transmogrifier.set_replies(data) == data
+      object = data["object"] |> Map.delete("replies")
+      modified = Transmogrifier.set_replies(object)
+
+      refute object["replies"]
+      assert modified["replies"]
+      assert match?(%{"id" => "http" <> _, "totalItems" => 0}, modified["replies"])
+      # first page should be omitted if there are no entries anyway
+      refute modified["replies"]["first"]
     end
 
-    test "sets `replies` collection with a limited number of self-replies" do
+    test "sets `replies` collection with a limited number of replies, preferring oldest" do
       [user, another_user] = insert_list(2, :user)
 
       {:ok, %{id: id1} = activity} = CommonAPI.post(user, %{status: "1"})
@@ -700,7 +737,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
       object = Object.normalize(activity, fetch: false)
       replies_uris = Enum.map([self_reply1, self_reply2], fn a -> a.object.data["id"] end)
 
-      assert %{"type" => "Collection", "items" => ^replies_uris} =
+      assert %{"type" => "OrderedCollection", "first" => %{"orderedItems" => ^replies_uris}} =
                Transmogrifier.set_replies(object.data)["replies"]
     end
   end

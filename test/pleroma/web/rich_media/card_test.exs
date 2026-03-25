@@ -4,7 +4,7 @@
 
 defmodule Pleroma.Web.RichMedia.CardTest do
   use Oban.Testing, repo: Pleroma.Repo
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
 
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.UnstubbedConfigMock, as: ConfigMock
@@ -18,6 +18,8 @@ defmodule Pleroma.Web.RichMedia.CardTest do
 
   setup do
     mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
+
+    Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
 
     ConfigMock
     |> stub_with(Pleroma.Test.StaticConfig)
@@ -70,7 +72,7 @@ defmodule Pleroma.Web.RichMedia.CardTest do
              Card.get_by_activity(activity)
            )
 
-    {:ok, _} = CommonAPI.update(user, activity, %{status: "I like this site #{updated_url}"})
+    {:ok, _} = CommonAPI.update(activity, user, %{status: "I like this site #{updated_url}"})
 
     activity = Pleroma.Activity.get_by_id(activity.id)
 
@@ -82,5 +84,24 @@ defmodule Pleroma.Web.RichMedia.CardTest do
              %Card{url_hash: ^updated_url_hash, fields: _},
              Card.get_by_activity(activity)
            )
+  end
+
+  test "refuses to crawl URL in activity from ignored host/domain" do
+    clear_config([:rich_media, :ignore_hosts], ["example.com"])
+
+    user = insert(:user)
+
+    url = "https://example.com/ogp"
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "[test](#{url})",
+        content_type: "text/markdown"
+      })
+
+    refute_enqueued(
+      worker: RichMediaWorker,
+      args: %{"url" => url, "activity_id" => activity.id}
+    )
   end
 end

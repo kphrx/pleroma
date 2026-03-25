@@ -10,6 +10,7 @@ defmodule Pleroma.Web.Streamer do
   alias Pleroma.Chat.MessageReference
   alias Pleroma.Config
   alias Pleroma.Conversation.Participation
+  alias Pleroma.Marker
   alias Pleroma.Notification
   alias Pleroma.Object
   alias Pleroma.User
@@ -19,6 +20,7 @@ defmodule Pleroma.Web.Streamer do
   alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.Plugs.OAuthScopesPlug
   alias Pleroma.Web.StreamerView
+  require Pleroma.Constants
 
   @registry Pleroma.Web.StreamerRegistry
 
@@ -206,7 +208,7 @@ defmodule Pleroma.Web.Streamer do
          false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
          false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, parent_host),
          true <- thread_containment(item, user),
-         false <- CommonAPI.thread_muted?(user, parent) do
+         false <- CommonAPI.thread_muted?(parent, user) do
       false
     else
       _ -> true
@@ -298,15 +300,35 @@ defmodule Pleroma.Web.Streamer do
     end)
   end
 
-  defp do_stream("user", item) do
+  defp do_stream("user", %Activity{} = item) do
     Logger.debug("Trying to push to users")
 
     recipient_topics =
       User.get_recipients_from_activity(item)
       |> Enum.map(fn %{id: id} -> "user:#{id}" end)
 
-    Enum.each(recipient_topics, fn topic ->
+    hashtag_recipients =
+      if Pleroma.Constants.as_public() in item.recipients do
+        Pleroma.Hashtag.get_recipients_for_activity(item)
+        |> Enum.map(fn id -> "user:#{id}" end)
+      else
+        []
+      end
+
+    all_recipients = Enum.uniq(recipient_topics ++ hashtag_recipients)
+
+    Enum.each(all_recipients, fn topic ->
       push_to_socket(topic, item)
+    end)
+  end
+
+  defp do_stream(topic, %Marker{} = marker) do
+    Registry.dispatch(@registry, "#{topic}:#{marker.user_id}", fn list ->
+      Enum.each(list, fn {pid, _auth} ->
+        text = StreamerView.render("marker.json", marker)
+
+        send(pid, {:text, text})
+      end)
     end)
   end
 

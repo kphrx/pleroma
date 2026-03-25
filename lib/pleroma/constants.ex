@@ -20,7 +20,10 @@ defmodule Pleroma.Constants do
       "deleted_activity_id",
       "pleroma_internal",
       "generator",
-      "rules"
+      "rules",
+      "language",
+      "voters",
+      "assigned_account"
     ]
   )
 
@@ -36,10 +39,12 @@ defmodule Pleroma.Constants do
       "updated",
       "emoji",
       "content",
+      "contentMap",
       "summary",
       "sensitive",
       "attachment",
-      "generator"
+      "generator",
+      "language"
     ]
   )
 
@@ -85,10 +90,55 @@ defmodule Pleroma.Constants do
     ]
   )
 
+  const(activity_types,
+    do: [
+      "Block",
+      "Create",
+      "Update",
+      "Delete",
+      "Follow",
+      "Accept",
+      "Reject",
+      "Add",
+      "Remove",
+      "Like",
+      "Dislike",
+      "Announce",
+      "Undo",
+      "Flag",
+      "EmojiReact",
+      "Listen"
+    ]
+  )
+
+  const(allowed_activity_types_from_strangers,
+    do: [
+      "Block",
+      "Create",
+      "Flag",
+      "Follow",
+      "Like",
+      "Dislike",
+      "EmojiReact",
+      "Announce"
+    ]
+  )
+
+  const(object_types,
+    do: ~w[Event Question Answer Audio Video Image Article Note Page ChatMessage]
+  )
+
   # basic regex, just there to weed out potential mistakes
   # https://datatracker.ietf.org/doc/html/rfc2045#section-5.1
   const(mime_regex,
     do: ~r/^[^[:cntrl:] ()<>@,;:\\"\/\[\]?=]+\/[^[:cntrl:] ()<>@,;:\\"\/\[\]?=]+(; .*)?$/
+  )
+
+  # List of allowed chars in the path segment of a URI
+  # unreserved, sub-delims, ":", "@" and "/" allowed as the separator in path
+  # https://datatracker.ietf.org/doc/html/rfc3986
+  const(uri_path_allowed_reserved_chars,
+    do: ~c"!$&'()*+,;=/:@"
   )
 
   const(upload_object_types, do: ["Document", "Image"])

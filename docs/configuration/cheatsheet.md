@@ -98,7 +98,7 @@ To add configuration to your config file, you can copy it from the base config. 
 * `moderator_privileges`: A list of privileges a moderator has (e.g. delete messages, manage reports...)
     * Possible values are the same as for `admin_privileges`
 
-## :database
+## :features
 * `improved_hashtag_timeline`: Setting to force toggle / force disable improved hashtags timeline. `:enabled` forces hashtags to be fetched from `hashtags` table for hashtags timeline. `:disabled` forces object-embedded hashtags to be used (slower). Keep it `:auto` for automatic behaviour (it is auto-set to `:enabled` [unless overridden] when HashtagsTableMigrator completes).
 
 ## Background migrations
@@ -436,7 +436,7 @@ config :pleroma, Pleroma.Web.MediaProxy.Invalidation.Http,
 * `ignore_hosts`: list of hosts which will be ignored by the metadata parser. For example `["accounts.google.com", "xss.website"]`, defaults to `[]`.
 * `ignore_tld`: list TLDs (top-level domains) which will ignore for parse metadata. default is ["local", "localdomain", "lan"].
 * `parsers`: list of Rich Media parsers.
-* `failure_backoff`: Amount of milliseconds after request failure, during which the request will not be retried.
+* `timeout`: Amount of milliseconds after which the HTTP request is forcibly terminated.
 
 ## HTTP server
 
@@ -733,13 +733,26 @@ An example for SMTP adapter:
 ```elixir
 config :pleroma, Pleroma.Emails.Mailer,
   enabled: true,
-  adapter: Swoosh.Adapters.SMTP,
+  adapter: Swoosh.Adapters.Mua,
   relay: "smtp.gmail.com",
-  username: "YOUR_USERNAME@gmail.com",
-  password: "YOUR_SMTP_PASSWORD",
+  auth: [username: "YOUR_USERNAME@gmail.com", password: "YOUR_SMTP_PASSWORD"],
   port: 465,
-  ssl: true,
-  auth: :always
+  protocol: :ssl
+```
+
+An example for Mua adapter:
+
+```elixir
+config :pleroma, Pleroma.Emails.Mailer,
+  enabled: true,
+  adapter: Swoosh.Adapters.Mua,
+  relay: "mail.example.com",
+  port: 465,
+  auth: [
+    username: "YOUR_USERNAME@domain.tld",
+    password: "YOUR_SMTP_PASSWORD"
+  ],
+  protocol: :ssl
 ```
 
 ### :email_notifications
@@ -891,20 +904,30 @@ config :logger, :console,
 
 ### RUM indexing for full text search
 
-!!! warning
-    It is recommended to use PostgreSQL v11 or newer. We have seen some minor issues with lower PostgreSQL versions.
-
 * `rum_enabled`: If RUM indexes should be used. Defaults to `false`.
 
-RUM indexes are an alternative indexing scheme that is not included in PostgreSQL by default. While they may eventually be mainlined, for now they have to be installed as a PostgreSQL extension from https://github.com/postgrespro/rum.
+RUM indexes are an alternative indexing scheme that is not included in PostgreSQL by default. While they may eventually be mainlined, for now they have to be installed as a PostgreSQL extension from [https://github.com/postgrespro/rum](https://github.com/postgrespro/rum).
 
-Their advantage over the standard GIN indexes is that they allow efficient ordering of search results by timestamp, which makes search queries a lot faster on larger servers, by one or two orders of magnitude. They take up around 3 times as much space as GIN indexes.
+Their advantage over the standard GIN indexes is that they allow efficient ordering of search results by timestamp, which makes search queries a lot faster on larger servers, by one or two orders of magnitude. They take up around 3-4 times as much space as GIN indexes.
 
 To enable them, both the `rum_enabled` flag has to be set and the following special migration has to be run:
 
-`mix ecto.migrate --migrations-path priv/repo/optional_migrations/rum_indexing/`
+  * Source install:
+    - Stop Pleroma
+    - `mix ecto.migrate --migrations-path priv/repo/optional_migrations/rum_indexing/`
+  * OTP install:
+    - Stop Pleroma
+    - `pleroma_ctl migrate --migrations-path priv/repo/optional_migrations/rum_indexing/`
 
 This will probably take a long time.
+
+!!! note
+    It is recommended to `VACUUM FULL` the objects table after the migration has completed, to do that run:
+    ```
+    # sudo -Hu postgres vacuumdb --full --analyze -t objects <pleroma DB name>
+    ```
+
+Now you can start Pleroma back up.
 
 ## Alternative client protocols
 
@@ -968,12 +991,13 @@ Pleroma account will be created with the same name as the LDAP user name.
 * `enabled`: enables LDAP authentication
 * `host`: LDAP server hostname
 * `port`: LDAP port, e.g. 389 or 636
-* `ssl`: true to use SSL, usually implies the port 636
+* `ssl`: true to use implicit SSL/TLS, usually port 636
 * `sslopts`: additional SSL options
-* `tls`: true to start TLS, usually implies the port 389
+* `tls`: true to use explicit TLS (STARTTLS), usually port 389
 * `tlsopts`: additional TLS options
 * `base`: LDAP base, e.g. "dc=example,dc=com"
 * `uid`: LDAP attribute name to authenticate the user, e.g. when "cn", the filter will be "cn=username,base"
+* `cacertfile`: Path to alternate CA root certificates file
 
 Note, if your LDAP server is an Active Directory server the correct value is commonly `uid: "cn"`, but if you use an
 OpenLDAP server the value may be `uid: "uid"`.
@@ -1108,8 +1132,9 @@ Boolean, enables/disables in-database configuration. Read [Transferring the conf
 
 List of valid configuration sections which are allowed to be configured from the
 database. Settings stored in the database before the whitelist is configured are
-still applied, so it is suggested to only use the whitelist on instances that
-have not migrated the config to the database.
+still applied. Consider running the `mix pleroma.config filter_whitelisted` task
+after updating the whitelist. Read [Remove non-whitelisted configs from the database](../administration/CLI_tasks/config.md#remove-non-whitelisted-configs-from-the-database)
+for more information.
 
 Example:
 ```elixir
@@ -1171,6 +1196,7 @@ Control favicons for instances.
     3. the directory named by the TMP environment variable
     4. C:\TMP on Windows or /tmp on Unix-like operating systems
     5. as a last resort, the current working directory
+* `:timeout` an integer representing seconds
 
 ## Frontend management
 

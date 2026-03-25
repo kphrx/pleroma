@@ -36,7 +36,7 @@ defmodule Pleroma.Web.ApiSpec.ListOperation do
       summary: "Create a list",
       description: "Fetch the list with the given ID. Used for verifying the title of a list.",
       operationId: "ListController.create",
-      requestBody: create_update_request(),
+      requestBody: create_request(),
       security: [%{"oAuth" => ["write:lists"]}],
       responses: %{
         200 => Operation.response("List", "application/json", List),
@@ -68,7 +68,7 @@ defmodule Pleroma.Web.ApiSpec.ListOperation do
       description: "Change the title of a list",
       operationId: "ListController.update",
       parameters: [id_param()],
-      requestBody: create_update_request(),
+      requestBody: update_request(),
       security: [%{"oAuth" => ["write:lists"]}],
       responses: %{
         200 => Operation.response("List", "application/json", List),
@@ -164,16 +164,32 @@ defmodule Pleroma.Web.ApiSpec.ListOperation do
     )
   end
 
-  defp create_update_request do
+  defp create_request do
     request_body(
       "Parameters",
       %Schema{
-        description: "POST body for creating or updating a List",
+        description: "POST body for creating a List",
         type: :object,
         properties: %{
-          title: %Schema{type: :string, description: "List title"}
+          title: %Schema{type: :string, description: "List title"},
+          exclusive: %Schema{type: :boolean, description: "Whether members of the list should be removed from the “Home” feed"}
         },
         required: [:title]
+      },
+      required: true
+    )
+  end
+
+  defp update_request do
+    request_body(
+      "Parameters",
+      %Schema{
+        description: "PUT body for updating a List",
+        type: :object,
+        properties: %{
+          title: %Schema{type: :string, description: "List title"},
+          exclusive: %Schema{type: :boolean, description: "Whether members of the list should be removed from the “Home” feed"}
+        }
       },
       required: true
     )

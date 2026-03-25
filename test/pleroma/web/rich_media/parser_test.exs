@@ -20,7 +20,7 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
   end
 
   test "doesn't just add a title" do
-    assert {:error, {:invalid_metadata, _}} = Parser.parse("https://example.com/non-ogp")
+    assert {:error, :invalid_metadata} = Parser.parse("https://example.com/non-ogp")
   end
 
   test "parses ogp" do
@@ -54,12 +54,18 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
              {:ok,
               %{
                 "card" => "summary",
-                "site" => "@flickr",
                 "image" => "https://farm6.staticflickr.com/5510/14338202952_93595258ff_z.jpg",
                 "title" => "Small Island Developing States Photo Submission",
                 "description" => "View the album on Flickr.",
                 "url" => "https://example.com/twitter-card"
               }}
+  end
+
+  test "truncates title and description fields" do
+    {:ok, parsed} = Parser.parse("https://instagram.com/longtext")
+
+    assert String.length(parsed["title"]) == 120
+    assert String.length(parsed["description"]) == 200
   end
 
   test "parses OEmbed and filters HTML tags" do
@@ -96,7 +102,7 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
   end
 
   test "returns error if getting page was not successful" do
-    assert {:error, :overload} = Parser.parse("https://example.com/error")
+    assert {:error, :get} = Parser.parse("https://example.com/error")
   end
 
   test "does a HEAD request to check if the body is too large" do
@@ -104,17 +110,17 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
   end
 
   test "does a HEAD request to check if the body is html" do
-    assert {:error, {:content_type, _}} = Parser.parse("https://example.com/pdf-file")
+    assert {:error, :content_type} = Parser.parse("https://example.com/pdf-file")
   end
 
   test "refuses to crawl incomplete URLs" do
     url = "example.com/ogp"
-    assert :error == Parser.parse(url)
+    assert {:error, :validate} == Parser.parse(url)
   end
 
   test "refuses to crawl malformed URLs" do
     url = "example.com[]/ogp"
-    assert :error == Parser.parse(url)
+    assert {:error, :validate} == Parser.parse(url)
   end
 
   test "refuses to crawl URLs of private network from posts" do
@@ -126,7 +132,7 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
       "https://pleroma.local/notice/9kCP7V"
     ]
     |> Enum.each(fn url ->
-      assert :error == Parser.parse(url)
+      assert {:error, :validate} == Parser.parse(url)
     end)
   end
 

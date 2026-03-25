@@ -132,8 +132,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateHandlingTest do
     setup do
       user = insert(:user)
       {:ok, activity} = Pleroma.Web.CommonAPI.post(user, %{status: "mew mew :dinosaur:"})
-      {:ok, edit} = Pleroma.Web.CommonAPI.update(user, activity, %{status: "edited :blank:"})
-      {:ok, external_rep} = Pleroma.Web.ActivityPub.Transmogrifier.prepare_outgoing(edit.data)
+      {:ok, edit} = Pleroma.Web.CommonAPI.update(activity, user, %{status: "edited :blank:"})
+      {:ok, external_rep} = Pleroma.Web.ActivityPub.Transmogrifier.prepare_activity(edit.data)
       %{external_rep: external_rep}
     end
 

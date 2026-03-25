@@ -5,11 +5,32 @@
 defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest do
   use Pleroma.DataCase, async: true
 
+  alias Pleroma.Language.LanguageDetectorMock
+  alias Pleroma.StaticStubbedConfigMock
   alias Pleroma.Web.ActivityPub.ObjectValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator
   alias Pleroma.Web.ActivityPub.Utils
 
+  import Mox
   import Pleroma.Factory
+
+  # Setup for all tests
+  setup do
+    # Stub the StaticStubbedConfigMock to return our mock for the provider
+    StaticStubbedConfigMock
+    |> stub(:get, fn
+      [Pleroma.Language.LanguageDetector, :provider] -> LanguageDetectorMock
+      _other -> nil
+    end)
+
+    # Stub the LanguageDetectorMock with default implementations
+    LanguageDetectorMock
+    |> stub(:missing_dependencies, fn -> [] end)
+    |> stub(:configured?, fn -> true end)
+    |> stub(:detect, fn _text -> nil end)
+
+    :ok
+  end
 
   describe "Notes" do
     setup do
@@ -43,10 +64,10 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
     setup do
       user = insert(:user)
       {:ok, activity} = Pleroma.Web.CommonAPI.post(user, %{status: "mew mew :dinosaur:"})
-      {:ok, edit} = Pleroma.Web.CommonAPI.update(user, activity, %{status: "edited :blank:"})
+      {:ok, edit} = Pleroma.Web.CommonAPI.update(activity, user, %{status: "edited :blank:"})
 
       {:ok, %{"object" => external_rep}} =
-        Pleroma.Web.ActivityPub.Transmogrifier.prepare_outgoing(edit.data)
+        Pleroma.Web.ActivityPub.Transmogrifier.prepare_activity(edit.data)
 
       %{external_rep: external_rep}
     end
@@ -128,6 +149,17 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
     %{valid?: true} = ArticleNotePageValidator.cast_and_validate(note)
   end
 
+  test "a Note with validated likes collection validates" do
+    insert(:user, ap_id: "https://pol.social/users/mkljczk")
+
+    %{"object" => note} =
+      "test/fixtures/mastodon-update-with-likes.json"
+      |> File.read!()
+      |> Jason.decode!()
+
+    %{valid?: true} = ArticleNotePageValidator.cast_and_validate(note)
+  end
+
   test "Fedibird quote post" do
     insert(:user, ap_id: "https://fedibird.com/users/noellabo")
 
@@ -175,5 +207,103 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
              href: "https://server.example/objects/123",
              name: "RE: https://server.example/objects/123"
            }
+  end
+
+  describe "Note language" do
+    test "it detects language from JSON-LD context" do
+      user = insert(:user)
+
+      note_activity = %{
+        "@context" => ["https://www.w3.org/ns/activitystreams", %{"@language" => "pl"}],
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "type" => "Create",
+        "object" => %{
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => [],
+          "id" => Utils.generate_object_id(),
+          "type" => "Note",
+          "content" => "Szczęść Boże",
+          "attributedTo" => user.ap_id
+        },
+        "actor" => user.ap_id
+      }
+
+      {:ok, _create_activity, meta} = ObjectValidator.validate(note_activity, [])
+
+      assert meta[:object_data]["language"] == "pl"
+    end
+
+    test "it detects language from contentMap" do
+      user = insert(:user)
+
+      note = %{
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "id" => Utils.generate_object_id(),
+        "type" => "Note",
+        "content" => "Szczęść Boże",
+        "contentMap" => %{
+          "de" => "Gott segne",
+          "pl" => "Szczęść Boże"
+        },
+        "attributedTo" => user.ap_id
+      }
+
+      {:ok, object} = ArticleNotePageValidator.cast_and_apply(note)
+
+      assert object.language == "pl"
+    end
+
+    test "it doesn't call LanguageDetector when language is specified" do
+      # Set up expectation that detect should not be called
+      LanguageDetectorMock
+      |> expect(:detect, 0, fn _ -> flunk("LanguageDetector.detect should not be called") end)
+      |> stub(:missing_dependencies, fn -> [] end)
+      |> stub(:configured?, fn -> true end)
+
+      # Stub the StaticStubbedConfigMock to return our mock for the provider
+      StaticStubbedConfigMock
+      |> stub(:get, fn
+        [Pleroma.Language.LanguageDetector, :provider] -> LanguageDetectorMock
+        _other -> nil
+      end)
+
+      user = insert(:user)
+
+      note = %{
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "id" => Utils.generate_object_id(),
+        "type" => "Note",
+        "content" => "a post in English",
+        "contentMap" => %{
+          "en" => "a post in English"
+        },
+        "attributedTo" => user.ap_id
+      }
+
+      ArticleNotePageValidator.cast_and_apply(note)
+    end
+
+    test "it adds contentMap if language is specified" do
+      user = insert(:user)
+
+      note = %{
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "id" => Utils.generate_object_id(),
+        "type" => "Note",
+        "content" => "тест",
+        "language" => "uk",
+        "attributedTo" => user.ap_id
+      }
+
+      {:ok, object} = ArticleNotePageValidator.cast_and_apply(note)
+
+      assert object.contentMap == %{
+               "uk" => "тест"
+             }
+    end
   end
 end

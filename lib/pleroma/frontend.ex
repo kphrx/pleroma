@@ -43,10 +43,6 @@ defmodule Pleroma.Frontend do
       {:download_or_unzip, _} ->
         Logger.info("Could not download or unzip the frontend")
         {:error, "Could not download or unzip the frontend"}
-
-      _e ->
-        Logger.info("Could not install the frontend")
-        {:error, "Could not install the frontend"}
     end
   end
 
@@ -69,21 +65,12 @@ defmodule Pleroma.Frontend do
   end
 
   def unzip(zip, dest) do
-    with {:ok, unzipped} <- :zip.unzip(zip, [:memory]) do
-      File.rm_rf!(dest)
-      File.mkdir_p!(dest)
+    File.rm_rf!(dest)
+    Pleroma.Backports.mkdir_p!(dest)
 
-      Enum.each(unzipped, fn {filename, data} ->
-        path = filename
-
-        new_file_path = Path.join(dest, path)
-
-        new_file_path
-        |> Path.dirname()
-        |> File.mkdir_p!()
-
-        File.write!(new_file_path, data)
-      end)
+    case Pleroma.SafeZip.unzip_data(zip, dest) do
+      {:ok, _} -> :ok
+      error -> error
     end
   end
 
@@ -103,7 +90,7 @@ defmodule Pleroma.Frontend do
   defp install_frontend(frontend_info, source, dest) do
     from = frontend_info["build_dir"] || "dist"
     File.rm_rf!(dest)
-    File.mkdir_p!(dest)
+    Pleroma.Backports.mkdir_p!(dest)
     File.cp_r!(Path.join([source, from]), dest)
     :ok
   end

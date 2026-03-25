@@ -2,8 +2,6 @@
 # Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
-Code.put_compiler_option(:warnings_as_errors, true)
-
 ExUnit.configure(capture_log: true, max_cases: System.schedulers_online())
 
 ExUnit.start(exclude: [:federated])
@@ -34,7 +32,13 @@ defmodule Pleroma.Test.StaticConfig do
   @behaviour Pleroma.Config.Getting
   @config Application.get_all_env(:pleroma)
 
+  @impl true
   def get(path, default \\ nil) do
     get_in(@config, path) || default
+  end
+
+  @impl true
+  def get!(path) do
+    get_in(@config, path)
   end
 end

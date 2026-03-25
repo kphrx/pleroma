@@ -205,6 +205,90 @@ defmodule Mix.Tasks.Pleroma.Config do
     end
   end
 
+  # Removes any policies that are not a real module
+  # as they will prevent the server from starting
+  def run(["fix_mrf_policies"]) do
+    check_configdb(fn ->
+      start_pleroma()
+
+      group = :pleroma
+      key = :mrf
+
+      %{value: value} =
+        group
+        |> ConfigDB.get_by_group_and_key(key)
+
+      policies =
+        Keyword.get(value, :policies, [])
+        |> Enum.filter(&is_atom(&1))
+        |> Enum.filter(fn mrf ->
+          case Code.ensure_compiled(mrf) do
+            {:module, _} -> true
+            {:error, _} -> false
+          end
+        end)
+
+      value = Keyword.put(value, :policies, policies)
+
+      ConfigDB.update_or_create(%{group: group, key: key, value: value})
+    end)
+  end
+
+  # Removes non-whitelisted configuration sections
+  def run(["filter_whitelisted" | rest]) do
+    {options, [], []} =
+      OptionParser.parse(
+        rest,
+        strict: [force: :boolean],
+        aliases: [f: :force]
+      )
+
+    force = Keyword.get(options, :force, false)
+
+    start_pleroma()
+
+    whitelisted_configs = Pleroma.Config.get(:database_config_whitelist)
+
+    if whitelisted_configs in [nil, false] do
+      shell_error("No unwanted settings in ConfigDB. No changes made.")
+    else
+      whitelisted_groups =
+        whitelisted_configs
+        |> Enum.filter(fn
+          {_group} -> true
+          _ -> false
+        end)
+        |> Enum.map(fn {group} -> group end)
+
+      whitelisted_keys =
+        whitelisted_configs
+        |> Enum.filter(fn
+          {_group, _key} -> true
+          _ -> false
+        end)
+
+      filtered =
+        from(c in ConfigDB)
+        |> Repo.all()
+        |> Enum.filter(&not_whitelisted?(&1, whitelisted_groups, whitelisted_keys))
+
+      if not Enum.empty?(filtered) do
+        shell_info("The following settings will be removed from ConfigDB:\n")
+        Enum.each(filtered, &dump(&1))
+
+        if force or shell_prompt("Are you sure you want to continue?", "n") in ~w(Yn Y y) do
+          filtered_ids = Enum.map(filtered, fn %{id: id} -> id end)
+
+          Repo.delete_all(from(c in ConfigDB, where: c.id in ^filtered_ids))
+        else
+          shell_error("No changes made.")
+        end
+      else
+        shell_error("No unwanted settings in ConfigDB. No changes made.")
+      end
+    end
+  end
+
   @spec migrate_to_db(Path.t() | nil) :: any()
   def migrate_to_db(file_path \\ nil) do
     with :ok <- Pleroma.Config.DeprecationWarnings.warn() do
@@ -301,7 +385,13 @@ defmodule Mix.Tasks.Pleroma.Config do
     |> Enum.each(&write_and_delete(&1, file, opts[:delete]))
 
     :ok = File.close(file)
-    System.cmd("mix", ["format", path])
+
+    # Ensure `mix format` runs in the same env as the current task and doesn't
+    # emit config-time stderr noise (e.g. dev secret warnings) into `mix test`.
+    System.cmd("mix", ["format", path],
+      env: [{"MIX_ENV", to_string(Mix.env())}],
+      stderr_to_stdout: true
+    )
   end
 
   defp config_header, do: "import Config\r\n\r\n"
@@ -398,5 +488,10 @@ defmodule Mix.Tasks.Pleroma.Config do
   defp truncatedb do
     Ecto.Adapters.SQL.query!(Repo, "TRUNCATE config;")
     Ecto.Adapters.SQL.query!(Repo, "ALTER SEQUENCE config_id_seq RESTART;")
+  end
+
+  defp not_whitelisted?(%{group: group, key: key}, whitelisted_groups, whitelisted_keys) do
+    not Enum.member?(whitelisted_groups, group) and
+      not Enum.member?(whitelisted_keys, {group, key})
   end
 end

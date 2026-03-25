@@ -39,9 +39,12 @@ Has these additional fields under the `pleroma` object:
 - `emoji_reactions`: A list with emoji / reaction maps. The format is `{name: "☕", count: 1, me: true}`. Contains no information about the reacting users, for that use the `/statuses/:id/reactions` endpoint.
 - `parent_visible`: If the parent of this post is visible to the user or not.
 - `pinned_at`: a datetime (iso8601) when status was pinned, `null` otherwise.
-- `quotes_count`: the count of status quotes.
-- `non_anonymous`: true if the source post specifies the poll results are not anonymous. Currently only implemented by Smithereen.
 - `bookmark_folder`: the ID of the folder bookmark is stored within (if any).
+- `list_id`: the ID of the list the post is addressed to (if any, only returned to author).
+
+Has these additional fields under the `poll.pleroma` object:
+
+- `non_anonymous`: true if the source post specifies the poll results are not anonymous. Currently only implemented by Smithereen.
 
 The `GET /api/v1/statuses/:id/source` endpoint additionally has the following attributes:
 
@@ -71,7 +74,7 @@ Pleroma does not process remote images and therefore cannot include fields such 
 
 The `GET /api/v1/bookmarks` endpoint accepts optional parameter `folder_id` for bookmark folder ID.
 
-The `POST /api/v1/statuses/:id/bookmark` endpoint accepts optional parameter `folder_id` for bookmark folder ID.
+The `POST /api/v1/statuses/:id/bookmark` endpoint accepts optional parameter `folder_id` for bookmark folder ID. Bookmarking an already bookmarked post will update the folder association, or remove it if `folder_id` is omitted or `null`.
 
 ## Accounts
 
@@ -87,6 +90,7 @@ The `id` parameter can also be the `nickname` of the user. This only works in th
 - `only_media`: include only statuses with media attached
 - `with_muted`: include statuses/reactions from muted accounts
 - `exclude_reblogs`: exclude reblogs
+- `only_reblogs`: include only reblogs
 - `exclude_replies`: exclude replies
 - `exclude_visibilities`: exclude visibilities
 
@@ -96,6 +100,9 @@ Endpoints which accept `with_relationships` parameter:
 - `/api/v1/accounts/:id/followers`
 - `/api/v1/accounts/:id/following`
 - `/api/v1/mutes`
+- `/api/v1/blocks`
+- `/api/v1/search`
+- `/api/v2/search`
 
 Has these additional fields under the `pleroma` object:
 
@@ -103,7 +110,7 @@ Has these additional fields under the `pleroma` object:
 - `background_image`: nullable URL string, background image of the user
 - `tags`: Lists an array of tags for the user
 - `relationship` (object): Includes fields as documented for Mastodon API https://docs.joinmastodon.org/entities/relationship/
-- `is_moderator`: boolean, nullable,  true if user is a moderator
+- `is_moderator`: boolean, nullable, true if user is a moderator
 - `is_admin`: boolean, nullable, true if user is an admin
 - `confirmation_pending`: boolean, true if a new user account is waiting on email confirmation to be activated
 - `hide_favorites`: boolean, true when the user has hiding favorites enabled
@@ -255,6 +262,8 @@ Additional parameters can be added to the JSON body/Form data:
 - `actor_type` - the type of this account.
 - `accepts_chat_messages` - if false, this account will reject all chat messages.
 - `language` - user's preferred language for receiving emails (digest, confirmation, etc.)
+- `avatar_description` - image description for user avatar
+- `header_description` - image description for user banner
 
 All images (avatar, banner and background) can be reset to the default by sending an empty string ("") instead of a file.
 
@@ -509,12 +518,6 @@ Pleroma is generally compatible with the Mastodon 2.7.2 API, but some newer feat
 *Added in Mastodon 3.0.0*
 
 - `GET /api/v1/trends`: Returns an empty array, `[]`
-
-### Identity proofs
-
-*Added in Mastodon 2.8.0*
-
-- `GET /api/v1/identity_proofs`: Returns an empty array, `[]`
 
 ### Featured tags
 

@@ -222,10 +222,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
          %{data: %{"expires_at" => %DateTime{} = expires_at}} = activity
        ) do
     with {:ok, _job} <-
-           Pleroma.Workers.PurgeExpiredActivity.enqueue(%{
-             activity_id: activity.id,
-             expires_at: expires_at
-           }) do
+           Pleroma.Workers.PurgeExpiredActivity.enqueue(
+             %{
+               activity_id: activity.id
+             },
+             scheduled_at: expires_at
+           ) do
       {:ok, activity}
     end
   end
@@ -412,10 +414,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
     with flag_data <- make_flag_data(params, additional),
          {:ok, activity} <- insert(flag_data, local),
-         {:ok, stripped_activity} <- strip_report_status_data(activity),
          _ <- notify_and_stream(activity),
-         :ok <-
-           maybe_federate(stripped_activity) do
+         :ok <- maybe_federate(activity) do
       User.all_users_with_privilege(:reports_manage_reports)
       |> Enum.filter(fn user -> user.ap_id != actor end)
       |> Enum.filter(fn user -> not is_nil(user.email) end)
@@ -446,10 +446,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
          _ <- notify_and_stream(activity) do
       maybe_federate(activity)
 
-      BackgroundWorker.enqueue("move_following", %{
+      BackgroundWorker.new(%{
+        "op" => "move_following",
         "origin_id" => origin.id,
         "target_id" => target.id
       })
+      |> Oban.insert()
 
       {:ok, activity}
     else
@@ -495,6 +497,28 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     context
     |> fetch_activities_for_context_query(opts)
     |> Repo.all()
+  end
+
+  def fetch_objects_for_replies_collection(parent_ap_id, opts \\ %{}) do
+    opts =
+      opts
+      |> Map.put(:order_asc, true)
+      |> Map.put(:id_type, :integer)
+
+    from(o in Object,
+      where:
+        fragment("?->>'inReplyTo' = ?", o.data, ^parent_ap_id) and
+          fragment(
+            "(?->'to' \\? ?::text OR ?->'cc' \\? ?::text)",
+            o.data,
+            ^Pleroma.Constants.as_public(),
+            o.data,
+            ^Pleroma.Constants.as_public()
+          ) and
+          fragment("?->>'type' <> 'Answer'", o.data),
+      select: %{id: o.id, ap_id: fragment("?->>'id'", o.data)}
+    )
+    |> Pagination.fetch_paginated(opts, :keyset)
   end
 
   @spec fetch_latest_direct_activity_id_for_context(String.t(), keyword() | map()) ::
@@ -920,6 +944,31 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     )
   end
 
+  # Essentially, either look for activities addressed to `recipients`, _OR_ ones
+  # that reference a hashtag that the user follows
+  # Firstly, two fallbacks in case there's no hashtag constraint, or the user doesn't
+  # follow any
+  defp restrict_recipients_or_hashtags(query, recipients, user, nil) do
+    restrict_recipients(query, recipients, user)
+  end
+
+  defp restrict_recipients_or_hashtags(query, recipients, user, []) do
+    restrict_recipients(query, recipients, user)
+  end
+
+  defp restrict_recipients_or_hashtags(query, recipients, _user, hashtag_ids) do
+    from([activity, object] in query)
+    |> join(:left, [activity, object], hto in "hashtags_objects",
+      on: hto.object_id == object.id,
+      as: :hto
+    )
+    |> where(
+      [activity, object, hto: hto],
+      (hto.hashtag_id in ^hashtag_ids and ^Constants.as_public() in activity.recipients) or
+        fragment("? && ?", ^recipients, activity.recipients)
+    )
+  end
+
   defp restrict_local(query, %{local_only: true}) do
     from(activity in query, where: activity.local == true)
   end
@@ -953,6 +1002,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   defp restrict_state(query, _), do: query
+
+  defp restrict_assigned_account(query, %{assigned_account: assigned_account}) do
+    from(activity in query,
+      where: fragment("?->>'assigned_account' = ?", activity.data, ^assigned_account)
+    )
+  end
+
+  defp restrict_assigned_account(query, _), do: query
 
   defp restrict_favorited_by(query, %{favorited_by: ap_id}) do
     from(
@@ -1034,6 +1091,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_reblogs(query, %{exclude_reblogs: true}) do
     from(activity in query, where: fragment("?->>'type' != 'Announce'", activity.data))
+  end
+
+  defp restrict_reblogs(query, %{only_reblogs: true}) do
+    from(activity in query, where: fragment("?->>'type' = 'Announce'", activity.data))
   end
 
   defp restrict_reblogs(query, _), do: query
@@ -1410,7 +1471,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> maybe_preload_report_notes(opts)
       |> maybe_set_thread_muted_field(opts)
       |> maybe_order(opts)
-      |> restrict_recipients(recipients, opts[:user])
+      |> restrict_recipients_or_hashtags(recipients, opts[:user], opts[:followed_hashtags])
       |> restrict_replies(opts)
       |> restrict_since(opts)
       |> restrict_local(opts)
@@ -1418,6 +1479,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> restrict_actor(opts)
       |> restrict_type(opts)
       |> restrict_state(opts)
+      |> restrict_assigned_account(opts)
       |> restrict_favorited_by(opts)
       |> restrict_blocked(restrict_blocked_opts)
       |> restrict_blockers_visibility(opts)
@@ -1538,15 +1600,33 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp get_actor_url(_url), do: nil
 
-  defp normalize_image(%{"url" => url}) do
+  defp normalize_image(%{"url" => url} = data) when is_binary(url) do
     %{
       "type" => "Image",
       "url" => [%{"href" => url}]
     }
+    |> maybe_put_description(data)
+  end
+
+  defp normalize_image(%{"url" => urls}) when is_list(urls) do
+    url = urls |> List.first()
+
+    %{"url" => url}
+    |> normalize_image()
   end
 
   defp normalize_image(urls) when is_list(urls), do: urls |> List.first() |> normalize_image()
   defp normalize_image(_), do: nil
+
+  defp normalize_also_known_as(urls) when is_list(urls), do: urls
+  defp normalize_also_known_as(url) when is_binary(url), do: [url]
+  defp normalize_also_known_as(nil), do: []
+
+  defp maybe_put_description(map, %{"name" => description}) when is_binary(description) do
+    Map.put(map, "name", description)
+  end
+
+  defp maybe_put_description(map, _), do: map
 
   defp object_to_user_data(data, additional) do
     fields =
@@ -1617,7 +1697,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       featured_address: featured_address,
       bio: data["summary"] || "",
       actor_type: actor_type,
-      also_known_as: Map.get(data, "alsoKnownAs", []),
+      also_known_as: normalize_also_known_as(data["alsoKnownAs"]),
       public_key: public_key,
       inbox: data["inbox"],
       shared_inbox: shared_inbox,
@@ -1661,7 +1741,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
        }}
     else
       {:error, _} = e -> e
-      e -> {:error, e}
     end
   end
 
@@ -1798,10 +1877,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     # enqueue a task to fetch all pinned objects
     Enum.each(pins, fn {ap_id, _} ->
       if is_nil(Object.get_cached_by_ap_id(ap_id)) do
-        Pleroma.Workers.RemoteFetcherWorker.enqueue("fetch_remote", %{
+        Pleroma.Workers.RemoteFetcherWorker.new(%{
+          "op" => "fetch_remote",
           "id" => ap_id,
           "depth" => 1
         })
+        |> Oban.insert()
       end
     end)
   end

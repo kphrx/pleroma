@@ -68,7 +68,9 @@ defmodule Pleroma.HTTP do
 
     adapter = Application.get_env(:tesla, :adapter)
 
-    client = Tesla.client(adapter_middlewares(adapter), adapter)
+    extra_middleware = options[:tesla_middleware] || []
+
+    client = Tesla.client(adapter_middlewares(adapter, extra_middleware), adapter)
 
     maybe_limit(
       fn ->
@@ -102,20 +104,31 @@ defmodule Pleroma.HTTP do
     fun.()
   end
 
-  defp adapter_middlewares(Tesla.Adapter.Gun) do
-    [Tesla.Middleware.FollowRedirects, Pleroma.Tesla.Middleware.ConnectionPool]
+  defp adapter_middlewares(Tesla.Adapter.Gun, extra_middleware) do
+    default_middleware() ++
+      [Pleroma.Tesla.Middleware.ConnectionPool] ++
+      extra_middleware
   end
 
-  defp adapter_middlewares({Tesla.Adapter.Finch, _}) do
-    [Tesla.Middleware.FollowRedirects]
-  end
+  defp adapter_middlewares(_, extra_middleware) do
+    # A lot of tests are written expecting unencoded URLs
+    # and the burden of fixing that is high. Also it makes
+    # them hard to read. Tests will opt-in when we want to validate
+    # the encoding is being done correctly.
+    cond do
+      Pleroma.Config.get(:env) == :test and Pleroma.Config.get(:test_url_encoding) ->
+        default_middleware()
 
-  defp adapter_middlewares(_) do
-    if Pleroma.Config.get(:env) == :test do
-      # Emulate redirects in test env, which are handled by adapters in other environments
-      [Tesla.Middleware.FollowRedirects]
-    else
-      []
+      Pleroma.Config.get(:env) == :test ->
+        # Emulate redirects in test env, which are handled by adapters in other environments
+        [Tesla.Middleware.FollowRedirects]
+
+      # Hackney and Finch
+      true ->
+        default_middleware() ++ extra_middleware
     end
   end
+
+  defp default_middleware,
+    do: [Tesla.Middleware.FollowRedirects, Pleroma.Tesla.Middleware.EncodeUrl]
 end

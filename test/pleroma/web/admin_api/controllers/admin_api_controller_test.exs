@@ -321,6 +321,36 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
       assert ModerationLog.get_log_entry_message(log_entry) ==
                "@#{admin.nickname} revoked admin role from @#{user_one.nickname}, @#{user_two.nickname}"
     end
+
+    test "/:right DELETE, admin cannot revoke their own admin status (single)", %{
+      admin: admin,
+      conn: conn
+    } do
+      conn =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete("/api/pleroma/admin/users/#{admin.nickname}/permission_group/admin")
+
+      assert json_response(conn, 403) == %{"error" => "You can't revoke your own admin status."}
+    end
+
+    test "/:right DELETE, admin cannot revoke their own admin status (multiple)", %{
+      admin: admin,
+      conn: conn
+    } do
+      user = insert(:user, is_admin: true)
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> delete("/api/pleroma/admin/users/permission_group/admin", %{
+          nicknames: [admin.nickname, user.nickname]
+        })
+
+      assert json_response(conn, 403) == %{
+               "error" => "You can't revoke your own admin/moderator status."
+             }
+    end
   end
 
   describe "/api/pleroma/admin/users/:nickname/password_reset" do
@@ -1096,9 +1126,13 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
 
       ObanHelpers.perform_all()
 
-      email = Pleroma.Emails.UserEmail.backup_is_ready_email(backup, admin.id)
+      email = Pleroma.Emails.UserEmail.backup_is_ready_email(backup)
 
-      assert String.contains?(email.html_body, "Admin @#{admin.nickname} requested a full backup")
+      assert String.contains?(
+               email.html_body,
+               "A full backup of your Pleroma account was requested"
+             )
+
       assert_email_sent(to: {user.name, user.email}, html_body: email.html_body)
 
       log_message = "@#{admin_nickname} requested account backup for @#{user_nickname}"

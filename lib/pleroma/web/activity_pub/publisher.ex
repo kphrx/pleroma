@@ -11,8 +11,8 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   alias Pleroma.Object
   alias Pleroma.Repo
   alias Pleroma.User
+  alias Pleroma.Web.ActivityPub.Publisher.Prepared
   alias Pleroma.Web.ActivityPub.Relay
-  alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Workers.PublisherWorker
 
   require Pleroma.Constants
@@ -25,16 +25,28 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   ActivityPub outgoing federation module.
   """
 
+  @signature_impl Application.compile_env(
+                    :pleroma,
+                    [__MODULE__, :signature_impl],
+                    Pleroma.Signature
+                  )
+
+  @transmogrifier_impl Application.compile_env(
+                         :pleroma,
+                         [__MODULE__, :transmogrifier_impl],
+                         Pleroma.Web.ActivityPub.Transmogrifier
+                       )
+
   @doc """
   Enqueue publishing a single activity.
   """
   @spec enqueue_one(map(), Keyword.t()) :: {:ok, %Oban.Job{}}
   def enqueue_one(%{} = params, worker_args \\ []) do
-    PublisherWorker.enqueue(
-      "publish_one",
-      %{"params" => params},
+    PublisherWorker.new(
+      %{"op" => "publish_one", "params" => params},
       worker_args
     )
+    |> Oban.insert()
   end
 
   @doc """
@@ -67,7 +79,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   Determine if an activity can be represented by running it through Transmogrifier.
   """
   def representable?(%Activity{} = activity) do
-    with {:ok, _data} <- Transmogrifier.prepare_outgoing(activity.data) do
+    with {:ok, _data} <- @transmogrifier_impl.prepare_activity(activity.data) do
       true
     else
       _e ->
@@ -76,23 +88,58 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   end
 
   @doc """
-  Publish a single message to a peer.  Takes a struct with the following
-  parameters set:
-
+  Prepare an activity for publishing from an Oban job
   * `inbox`: the inbox to publish to
-  * `json`: the JSON message body representing the ActivityPub message
-  * `actor`: the actor which is signing the message
-  * `id`: the ActivityStreams URI of the message
+  * `activity_id`: the internal activity id
+  * `cc`: the cc recipients relevant to this inbox (optional)
   """
-  def publish_one(%{inbox: inbox, json: json, actor: %User{} = actor, id: id} = params) do
-    Logger.debug("Federating #{id} to #{inbox}")
+  @spec prepare_one(map()) :: Prepared.t()
+  def prepare_one(%{inbox: inbox, activity_id: activity_id} = params) do
+    activity = Activity.get_by_id_with_user_actor(activity_id)
+    actor = activity.user_actor
+
+    ap_id = activity.data["id"]
+    Logger.debug("Federating #{ap_id} to #{inbox}")
     uri = %{path: path} = URI.parse(inbox)
+
+    {:ok, data} = @transmogrifier_impl.prepare_activity(activity.data)
+
+    {actor, data} =
+      with {_, false} <- {:actor_changed?, data["actor"] != activity.data["actor"]} do
+        {actor, data}
+      else
+        {:actor_changed?, true} ->
+          # If prepare_activity changes the actor, re-get it from the db
+          new_actor = User.get_cached_by_ap_id(data["actor"])
+          {new_actor, data}
+      end
+
+    param_cc = Map.get(params, :cc, [])
+
+    original_cc = Map.get(data, "cc", [])
+
+    public_address = Pleroma.Constants.as_public()
+
+    # Ensure unlisted posts don't lose the public address in the cc
+    # if the param_cc was set
+    cc =
+      if public_address in original_cc and public_address not in param_cc do
+        [public_address | param_cc]
+      else
+        param_cc
+      end
+
+    json =
+      data
+      |> Map.put("cc", cc)
+      |> Jason.encode!()
+
     digest = "SHA-256=" <> (:crypto.hash(:sha256, json) |> Base.encode64())
 
-    date = Pleroma.Signature.signed_date()
+    date = @signature_impl.signed_date()
 
     signature =
-      Pleroma.Signature.sign(actor, %{
+      @signature_impl.sign(actor, %{
         "(request-target)": "post #{path}",
         host: signature_host(uri),
         "content-length": byte_size(json),
@@ -100,55 +147,71 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
         date: date
       })
 
+    %Prepared{
+      activity_id: activity_id,
+      json: json,
+      date: date,
+      signature: signature,
+      digest: digest,
+      inbox: inbox,
+      unreachable_since: params[:unreachable_since]
+    }
+  end
+
+  @doc """
+  Publish a single message to a peer.  Takes a struct with the following
+  parameters set:
+  * `activity_id`: the activity id
+  * `json`: the json payload
+  * `date`: the signed date from Pleroma.Signature.signed_date()
+  * `signature`: the signature from Pleroma.Signature.sign/2
+  * `digest`: base64 encoded the hash of the json payload prefixed with "SHA-256="
+  * `inbox`: the inbox URI of this delivery
+  * `unreachable_since`: timestamp the instance was marked unreachable
+
+  """
+  def publish_one(%Prepared{} = p) do
     with {:ok, %{status: code}} = result when code in 200..299 <-
            HTTP.post(
-             inbox,
-             json,
+             p.inbox,
+             p.json,
              [
                {"Content-Type", "application/activity+json"},
-               {"Date", date},
-               {"signature", signature},
-               {"digest", digest}
+               {"Date", p.date},
+               {"signature", p.signature},
+               {"digest", p.digest}
              ]
            ) do
-      if not Map.has_key?(params, :unreachable_since) || params[:unreachable_since] do
-        Instances.set_reachable(inbox)
-      end
-
       result
     else
       {_post_result, %{status: code} = response} = e ->
-        unless params[:unreachable_since], do: Instances.set_unreachable(inbox)
-        Logger.metadata(activity: id, inbox: inbox, status: code)
-        Logger.error("Publisher failed to inbox #{inbox} with status #{code}")
+        Logger.metadata(activity: p.activity_id, inbox: p.inbox, status: code)
+        Logger.error("Publisher failed to inbox #{p.inbox} with status #{code}")
 
         case response do
-          %{status: 403} -> {:discard, :forbidden}
-          %{status: 404} -> {:discard, :not_found}
-          %{status: 410} -> {:discard, :not_found}
+          %{status: 400} -> {:cancel, :bad_request}
+          %{status: 403} -> {:cancel, :forbidden}
+          %{status: 404} -> {:cancel, :not_found}
+          %{status: 410} -> {:cancel, :not_found}
           _ -> {:error, e}
         end
 
+      {:error, {:already_started, _}} ->
+        Logger.debug("Publisher snoozing worker job due worker :already_started race condition")
+        connection_pool_snooze()
+
       {:error, :pool_full} ->
         Logger.debug("Publisher snoozing worker job due to full connection pool")
-        {:snooze, 30}
+        connection_pool_snooze()
 
       e ->
-        unless params[:unreachable_since], do: Instances.set_unreachable(inbox)
-        Logger.metadata(activity: id, inbox: inbox)
-        Logger.error("Publisher failed to inbox #{inbox} #{inspect(e)}")
+        Logger.metadata(activity: p.activity_id, inbox: p.inbox)
+        Logger.error("Publisher failed to inbox #{p.inbox} #{inspect(e)}")
         {:error, e}
     end
   end
 
-  def publish_one(%{actor_id: actor_id} = params) do
-    actor = User.get_cached_by_id(actor_id)
-
-    params
-    |> Map.delete(:actor_id)
-    |> Map.put(:actor, actor)
-    |> publish_one()
-  end
+  defp connection_pool_snooze, do: {:snooze, 3}
 
   defp signature_host(%URI{port: port, scheme: scheme, host: host}) do
     if port == URI.default_port(scheme) do
@@ -250,11 +313,10 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   def publish(%User{} = actor, %{data: %{"bcc" => bcc}} = activity)
       when is_list(bcc) and bcc != [] do
     public = public?(activity)
-    {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
 
     [priority_recipients, recipients] = recipients(actor, activity)
 
-    inboxes =
+    [priority_inboxes, other_inboxes] =
       [priority_recipients, recipients]
       |> Enum.map(fn recipients ->
         recipients
@@ -267,26 +329,23 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
       end)
 
     Repo.checkout(fn ->
-      Enum.each(inboxes, fn inboxes ->
-        Enum.each(inboxes, fn {inbox, unreachable_since} ->
-          %User{ap_id: ap_id} = Enum.find(recipients, fn actor -> actor.inbox == inbox end)
+      Enum.each([priority_inboxes, other_inboxes], fn inboxes ->
+        Enum.each(inboxes, fn inbox ->
+          {%User{ap_id: ap_id}, priority} =
+            get_user_with_priority(inbox, priority_recipients, recipients)
 
           # Get all the recipients on the same host and add them to cc. Otherwise, a remote
           # instance would only accept a first message for the first recipient and ignore the rest.
           cc = get_cc_ap_ids(ap_id, recipients)
 
-          json =
-            data
-            |> Map.put("cc", cc)
-            |> Jason.encode!()
-
-          __MODULE__.enqueue_one(%{
-            inbox: inbox,
-            json: json,
-            actor_id: actor.id,
-            id: activity.data["id"],
-            unreachable_since: unreachable_since
-          })
+          __MODULE__.enqueue_one(
+            %{
+              inbox: inbox,
+              cc: cc,
+              activity_id: activity.id
+            },
+            priority: priority
+          )
         end)
       end)
     end)
@@ -300,9 +359,6 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
       Logger.debug(fn -> "Relaying #{activity.data["id"]} out" end)
       Relay.publish(activity)
     end
-
-    {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
-    json = Jason.encode!(data)
 
     [priority_inboxes, inboxes] =
       recipients(actor, activity)
@@ -321,14 +377,11 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     |> Enum.each(fn {inboxes, priority} ->
       inboxes
       |> Instances.filter_reachable()
-      |> Enum.each(fn {inbox, unreachable_since} ->
+      |> Enum.each(fn inbox ->
         __MODULE__.enqueue_one(
           %{
             inbox: inbox,
-            json: json,
-            actor_id: actor.id,
-            id: activity.data["id"],
-            unreachable_since: unreachable_since
+            activity_id: activity.id
           },
           priority: priority
         )
@@ -354,4 +407,15 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   end
 
   def gather_nodeinfo_protocol_names, do: ["activitypub"]
+
+  defp get_user_with_priority(inbox, priority_recipients, recipients) do
+    [{priority_recipients, 0}, {recipients, 1}]
+    |> Enum.find_value(fn {recipients, priority} ->
+      with %User{} = user <- Enum.find(recipients, fn actor -> actor.inbox == inbox end) do
+        {user, priority}
+      else
+        _ -> nil
+      end
+    end)
+  end
 end

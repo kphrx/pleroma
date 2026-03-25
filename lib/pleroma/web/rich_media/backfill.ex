@@ -4,6 +4,7 @@
 
 defmodule Pleroma.Web.RichMedia.Backfill do
   alias Pleroma.Web.RichMedia.Card
+  alias Pleroma.Web.RichMedia.Helpers
   alias Pleroma.Web.RichMedia.Parser
   alias Pleroma.Web.RichMedia.Parser.TTL
   alias Pleroma.Workers.RichMediaWorker
@@ -16,8 +17,7 @@ defmodule Pleroma.Web.RichMedia.Backfill do
                      Pleroma.Web.ActivityPub.ActivityPub
                    )
 
-  @spec run(map()) ::
-          :ok | {:error, {:invalid_metadata, any()} | :body_too_large | {:content, any()} | any()}
+  @spec run(map()) :: :ok | Parser.parse_errors() | Helpers.get_errors()
   def run(%{"url" => url} = args) do
     url_hash = Card.url_to_hash(url)
 
@@ -33,22 +33,12 @@ defmodule Pleroma.Web.RichMedia.Backfill do
         end
 
         warm_cache(url_hash, card)
+        :ok
 
-      {:error, {:invalid_metadata, fields}} ->
-        Logger.debug("Rich media incomplete or invalid metadata for #{url}: #{inspect(fields)}")
+      {:error, type} = error
+      when type in [:invalid_metadata, :body_too_large, :content_type, :validate, :get, :head] ->
         negative_cache(url_hash)
-
-      {:error, :body_too_large} ->
-        Logger.error("Rich media error for #{url}: :body_too_large")
-        negative_cache(url_hash)
-
-      {:error, {:content_type, type}} ->
-        Logger.debug("Rich media error for #{url}: :content_type is #{type}")
-        negative_cache(url_hash)
-
-      e ->
-        Logger.debug("Rich media error for #{url}: #{inspect(e)}")
-        {:error, e}
+        error
     end
   end
 
@@ -74,5 +64,5 @@ defmodule Pleroma.Web.RichMedia.Backfill do
   defp warm_cache(key, val), do: @cachex.put(:rich_media_cache, key, val)
 
   defp negative_cache(key, ttl \\ :timer.minutes(15)),
-    do: @cachex.put(:rich_media_cache, key, nil, ttl: ttl)
+    do: @cachex.put(:rich_media_cache, key, :error, ttl: ttl)
 end

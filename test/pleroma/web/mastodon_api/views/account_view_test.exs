@@ -54,8 +54,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       note: "<span>valid html</span>. a<br/>b<br/>c<br/>d<br/>f &#39;&amp;&lt;&gt;&quot;",
       url: user.ap_id,
       avatar: "http://localhost:4001/images/avi.png",
+      avatar_description: "",
       avatar_static: "http://localhost:4001/images/avi.png",
       header: "http://localhost:4001/images/banner.png",
+      header_description: "",
       header_static: "http://localhost:4001/images/banner.png",
       emojis: [
         %{
@@ -96,11 +98,32 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
         hide_follows_count: false,
         relationship: %{},
         skip_thread_containment: false,
-        accepts_chat_messages: nil
+        accepts_chat_messages: nil,
+        avatar_description: "",
+        header_description: ""
       }
     }
 
     assert expected == AccountView.render("show.json", %{user: user, skip_visibility_check: true})
+  end
+
+  test "encodes emoji urls in the emojis field" do
+    user =
+      insert(:user,
+        name: ":brackets: :percent:",
+        emoji: %{
+          "brackets" => "/emoji/hana[pog].png",
+          "percent" => "/emoji/hana%20pog.png"
+        }
+      )
+
+    %{emojis: emojis} =
+      AccountView.render("show.json", %{user: user, skip_visibility_check: true})
+
+    emoji_urls = Map.new(emojis, &{&1.shortcode, &1.url})
+
+    assert emoji_urls["brackets"] == "/emoji/hana%5Bpog%5D.png"
+    assert emoji_urls["percent"] == "/emoji/hana%2520pog.png"
   end
 
   describe "roles and privileges" do
@@ -305,8 +328,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       note: user.bio,
       url: user.ap_id,
       avatar: "http://localhost:4001/images/avi.png",
+      avatar_description: "",
       avatar_static: "http://localhost:4001/images/avi.png",
       header: "http://localhost:4001/images/banner.png",
+      header_description: "",
       header_static: "http://localhost:4001/images/banner.png",
       emojis: [],
       fields: [],
@@ -340,7 +365,9 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
         hide_follows_count: false,
         relationship: %{},
         skip_thread_containment: false,
-        accepts_chat_messages: nil
+        accepts_chat_messages: nil,
+        avatar_description: "",
+        header_description: ""
       }
     }
 
@@ -416,8 +443,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       following: false,
       followed_by: false,
       blocking: false,
+      block_expires_at: nil,
       blocked_by: false,
       muting: false,
+      mute_expires_at: nil,
       muting_notifications: false,
       subscribing: false,
       notifying: false,
@@ -436,7 +465,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       {:ok, other_user, user} = User.follow(other_user, user)
       {:ok, _subscription} = User.subscribe(user, other_user)
       {:ok, _user_relationships} = User.mute(user, other_user, %{notifications: true})
-      {:ok, _reblog_mute} = CommonAPI.hide_reblogs(user, other_user)
+      {:ok, _reblog_mute} = CommonAPI.hide_reblogs(other_user, user)
 
       expected =
         Map.merge(
@@ -449,6 +478,45 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
             subscribing: true,
             notifying: true,
             showing_reblogs: false,
+            id: to_string(other_user.id)
+          }
+        )
+
+      test_relationship_rendering(user, other_user, expected)
+    end
+
+    test "relationship does not indicate following if a FollowingRelationship is missing" do
+      user = insert(:user)
+      other_user = insert(:user, local: false)
+
+      # Create a follow relationship with the real Follow Activity and Accept it
+      assert {:ok, _, _, _} = CommonAPI.follow(other_user, user)
+      assert {:ok, _} = CommonAPI.accept_follow_request(user, other_user)
+
+      assert %{data: %{"state" => "accept"}} =
+               Pleroma.Web.ActivityPub.Utils.fetch_latest_follow(user, other_user)
+
+      # Fetch the relationship and forcibly delete it to simulate
+      # a Follow Accept that did not complete processing
+      %{following_relationships: [relationship]} =
+        Pleroma.UserRelationship.view_relationships_option(user, [other_user])
+
+      assert {:ok, _} = Pleroma.Repo.delete(relationship)
+
+      assert %{following_relationships: [], user_relationships: []} ==
+               Pleroma.UserRelationship.view_relationships_option(user, [other_user])
+
+      expected =
+        Map.merge(
+          @blank_response,
+          %{
+            following: false,
+            followed_by: false,
+            muting: false,
+            muting_notifications: false,
+            subscribing: false,
+            notifying: false,
+            showing_reblogs: true,
             id: to_string(other_user.id)
           }
         )
@@ -474,6 +542,53 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       test_relationship_rendering(user, other_user, expected)
     end
 
+    test "represent a relationship for the blocking and blocked user with expiry" do
+      user = insert(:user)
+      other_user = insert(:user)
+      date = DateTime.utc_now() |> DateTime.add(24 * 60 * 60) |> DateTime.truncate(:second)
+
+      {:ok, user, other_user} = User.follow(user, other_user)
+      {:ok, _subscription} = User.subscribe(user, other_user)
+      {:ok, _user_relationship} = User.block(user, other_user, %{duration: 24 * 60 * 60})
+      {:ok, _user_relationship} = User.block(other_user, user)
+
+      expected =
+        Map.merge(
+          @blank_response,
+          %{
+            following: false,
+            blocking: true,
+            block_expires_at: date,
+            blocked_by: true,
+            id: to_string(other_user.id)
+          }
+        )
+
+      test_relationship_rendering(user, other_user, expected)
+    end
+
+    test "represent a relationship for the muting user with expiry" do
+      user = insert(:user)
+      other_user = insert(:user)
+      date = DateTime.utc_now() |> DateTime.add(24 * 60 * 60) |> DateTime.truncate(:second)
+
+      {:ok, _user_relationship} =
+        User.mute(user, other_user, %{notifications: true, duration: 24 * 60 * 60})
+
+      expected =
+        Map.merge(
+          @blank_response,
+          %{
+            muting: true,
+            mute_expires_at: date,
+            muting_notifications: true,
+            id: to_string(other_user.id)
+          }
+        )
+
+      test_relationship_rendering(user, other_user, expected)
+    end
+
     test "represent a relationship for the user blocking a domain" do
       user = insert(:user)
       other_user = insert(:user, ap_id: "https://bad.site/users/other_user")
@@ -493,7 +608,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       user = insert(:user)
       other_user = insert(:user, is_locked: true)
 
-      {:ok, user, other_user, _} = CommonAPI.follow(user, other_user)
+      {:ok, other_user, user, _} = CommonAPI.follow(other_user, user)
       user = User.get_cached_by_id(user.id)
       other_user = User.get_cached_by_id(other_user.id)
 
@@ -547,8 +662,8 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
         })
 
       other_user = insert(:user)
-      {:ok, user, other_user, _activity} = CommonAPI.follow(user, other_user)
-      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, other_user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, _other_user, user, _activity} = CommonAPI.follow(user, other_user)
 
       assert %{
                followers_count: 0,
@@ -560,8 +675,8 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
     test "shows when follows/followers are hidden" do
       user = insert(:user, hide_followers: true, hide_follows: true)
       other_user = insert(:user)
-      {:ok, user, other_user, _activity} = CommonAPI.follow(user, other_user)
-      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, _other_user, _activity} = CommonAPI.follow(user, other_user)
 
       assert %{
                followers_count: 1,
@@ -573,11 +688,11 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
     test "shows actual follower/following count to the account owner" do
       user = insert(:user, hide_followers: true, hide_follows: true)
       other_user = insert(:user)
-      {:ok, user, other_user, _activity} = CommonAPI.follow(user, other_user)
+      {:ok, other_user, user, _activity} = CommonAPI.follow(other_user, user)
 
       assert User.following?(user, other_user)
       assert Pleroma.FollowingRelationship.follower_count(other_user) == 1
-      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, _other_user, _activity} = CommonAPI.follow(user, other_user)
 
       assert %{
                followers_count: 1,
@@ -684,7 +799,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
                AccountView.render("show.json", %{user: user, for: user})
 
       other_user = insert(:user)
-      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, _other_user, user, _activity} = CommonAPI.follow(user, other_user)
 
       assert %{follow_requests_count: 0} =
                AccountView.render("show.json", %{user: user, for: user})
@@ -696,7 +811,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       assert %{locked: true} = AccountView.render("show.json", %{user: user, for: user})
 
       other_user = insert(:user)
-      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, _other_user, _activity} = CommonAPI.follow(user, other_user)
 
       assert %{locked: true, follow_requests_count: 1} =
                AccountView.render("show.json", %{user: user, for: user})
@@ -708,7 +823,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       assert %{locked: true} = AccountView.render("show.json", %{user: user, for: user})
 
       other_user = insert(:user)
-      {:ok, other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, other_user, _activity} = CommonAPI.follow(user, other_user)
 
       assert %{locked: true, follow_requests_count: 1} =
                AccountView.render("show.json", %{user: user, for: user})
@@ -725,7 +840,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       assert %{locked: true} = AccountView.render("show.json", %{user: user, for: user})
 
       other_user = insert(:user)
-      {:ok, other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, other_user, _activity} = CommonAPI.follow(user, other_user)
 
       assert %{locked: true, follow_requests_count: 1} =
                AccountView.render("show.json", %{user: user, for: user})
@@ -742,7 +857,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       assert %{locked: true} = AccountView.render("show.json", %{user: user, for: user})
 
       other_user = insert(:user)
-      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, _other_user, _activity} = CommonAPI.follow(user, other_user)
 
       {:ok, user} = User.update_and_set_cache(user, %{is_locked: false})
 
@@ -794,11 +909,36 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       User.mute(user, other_user, %{notifications: true, duration: 24 * 60 * 60})
 
     %{
-      mute_expires_at: mute_expires_at
-    } = AccountView.render("show.json", %{user: other_user, for: user, mutes: true})
+      pleroma: %{
+        relationship: %{
+          mute_expires_at: mute_expires_at
+        }
+      }
+    } = AccountView.render("show.json", %{user: other_user, for: user, embed_relationships: true})
 
     assert DateTime.diff(
              mute_expires_at,
+             DateTime.utc_now() |> DateTime.add(24 * 60 * 60)
+           ) in -3..3
+  end
+
+  test "renders block expiration date" do
+    user = insert(:user)
+    other_user = insert(:user)
+
+    {:ok, _user_relationships} =
+      User.block(user, other_user, %{duration: 24 * 60 * 60})
+
+    %{
+      pleroma: %{
+        relationship: %{
+          block_expires_at: block_expires_at
+        }
+      }
+    } = AccountView.render("show.json", %{user: other_user, for: user, embed_relationships: true})
+
+    assert DateTime.diff(
+             block_expires_at,
              DateTime.utc_now() |> DateTime.add(24 * 60 * 60)
            ) in -3..3
   end

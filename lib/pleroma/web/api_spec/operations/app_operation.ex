@@ -97,7 +97,10 @@ defmodule Pleroma.Web.ApiSpec.AppOperation do
       properties: %{
         client_name: %Schema{type: :string, description: "A name for your application."},
         redirect_uris: %Schema{
-          type: :string,
+          oneOf: [
+            %Schema{type: :string},
+            %Schema{type: :array, items: %Schema{type: :string}}
+          ],
           description:
             "Where the user should be redirected after authorization. To display the authorization code to the user instead of redirecting to a web page, use `urn:ietf:wg:oauth:2.0:oob` in this parameter."
         },

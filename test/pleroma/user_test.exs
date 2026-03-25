@@ -20,7 +20,7 @@ defmodule Pleroma.UserTest do
   import Swoosh.TestAssertions
 
   setup do
-    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Config)
+    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Test.StaticConfig)
     :ok
   end
 
@@ -182,8 +182,8 @@ defmodule Pleroma.UserTest do
     locked = insert(:user, is_locked: true)
     follower = insert(:user)
 
-    CommonAPI.follow(follower, unlocked)
-    CommonAPI.follow(follower, locked)
+    CommonAPI.follow(unlocked, follower)
+    CommonAPI.follow(locked, follower)
 
     assert [] = User.get_follow_requests(unlocked)
     assert [activity] = User.get_follow_requests(locked)
@@ -196,9 +196,9 @@ defmodule Pleroma.UserTest do
     pending_follower = insert(:user)
     accepted_follower = insert(:user)
 
-    CommonAPI.follow(pending_follower, locked)
-    CommonAPI.follow(pending_follower, locked)
-    CommonAPI.follow(accepted_follower, locked)
+    CommonAPI.follow(locked, pending_follower)
+    CommonAPI.follow(locked, pending_follower)
+    CommonAPI.follow(locked, accepted_follower)
 
     Pleroma.FollowingRelationship.update(accepted_follower, locked, :follow_accept)
 
@@ -209,7 +209,7 @@ defmodule Pleroma.UserTest do
     locked = insert(:user, is_locked: true)
     pending_follower = insert(:user, %{is_active: false})
 
-    CommonAPI.follow(pending_follower, locked)
+    CommonAPI.follow(locked, pending_follower)
 
     refute pending_follower.is_active
     assert [] = User.get_follow_requests(locked)
@@ -219,7 +219,7 @@ defmodule Pleroma.UserTest do
     followed = insert(:user, is_locked: true)
     follower = insert(:user)
 
-    CommonAPI.follow(follower, followed)
+    CommonAPI.follow(followed, follower)
     assert [_activity] = User.get_follow_requests(followed)
 
     {:ok, _user_relationship} = User.block(followed, follower)
@@ -1075,6 +1075,21 @@ defmodule Pleroma.UserTest do
 
       refute cs.valid?
     end
+
+    test "it truncates fields" do
+      clear_config([:instance, :max_remote_account_fields], 2)
+
+      fields = [
+        %{"name" => "One", "value" => "Uno"},
+        %{"name" => "Two", "value" => "Dos"},
+        %{"name" => "Three", "value" => "Tres"}
+      ]
+
+      cs = User.remote_user_changeset(@valid_remote |> Map.put(:fields, fields))
+
+      assert [%{"name" => "One", "value" => "Uno"}, %{"name" => "Two", "value" => "Dos"}] ==
+               Ecto.Changeset.get_field(cs, :fields)
+    end
   end
 
   describe "followers and friends" do
@@ -1526,7 +1541,7 @@ defmodule Pleroma.UserTest do
 
       assert [activity] == ActivityPub.fetch_public_activities(%{}) |> Repo.preload(:bookmark)
 
-      assert [%{activity | thread_muted?: CommonAPI.thread_muted?(user2, activity)}] ==
+      assert [%{activity | thread_muted?: CommonAPI.thread_muted?(activity, user2)}] ==
                ActivityPub.fetch_activities([user2.ap_id | User.following(user2)], %{
                  user: user2
                })
@@ -1691,8 +1706,8 @@ defmodule Pleroma.UserTest do
       object_two = insert(:note, user: follower)
       activity_two = insert(:note_activity, user: follower, note: object_two)
 
-      {:ok, like} = CommonAPI.favorite(user, activity_two.id)
-      {:ok, like_two} = CommonAPI.favorite(follower, activity.id)
+      {:ok, like} = CommonAPI.favorite(activity_two.id, user)
+      {:ok, like_two} = CommonAPI.favorite(activity.id, follower)
       {:ok, repeat} = CommonAPI.repeat(activity_two.id, user)
 
       {:ok, job} = User.delete(user)
@@ -1864,6 +1879,11 @@ defmodule Pleroma.UserTest do
       {:ok, user} = User.set_suggestion(user, false)
       refute user.is_suggested
     end
+  end
+
+  test "get_or_fetch_public_key_for_ap_id fetches a user that's not in the db" do
+    assert {:ok, _key} =
+             User.get_or_fetch_public_key_for_ap_id("http://mastodon.example.org/users/admin")
   end
 
   test "get_public_key_for_ap_id returns correctly for user that's not in the db" do
@@ -2390,8 +2410,8 @@ defmodule Pleroma.UserTest do
       other_user =
         insert(:user,
           local: false,
-          follower_address: "http://localhost:4001/users/masto_closed/followers",
-          following_address: "http://localhost:4001/users/masto_closed/following"
+          follower_address: "https://remote.org/users/masto_closed/followers",
+          following_address: "https://remote.org/users/masto_closed/following"
         )
 
       assert other_user.following_count == 0
@@ -2411,8 +2431,8 @@ defmodule Pleroma.UserTest do
       other_user =
         insert(:user,
           local: false,
-          follower_address: "http://localhost:4001/users/masto_closed/followers",
-          following_address: "http://localhost:4001/users/masto_closed/following"
+          follower_address: "https://remote.org/users/masto_closed/followers",
+          following_address: "https://remote.org/users/masto_closed/following"
         )
 
       assert other_user.following_count == 0
@@ -2432,8 +2452,8 @@ defmodule Pleroma.UserTest do
       other_user =
         insert(:user,
           local: false,
-          follower_address: "http://localhost:4001/users/masto_closed/followers",
-          following_address: "http://localhost:4001/users/masto_closed/following"
+          follower_address: "https://remote.org/users/masto_closed/followers",
+          following_address: "https://remote.org/users/masto_closed/following"
         )
 
       assert other_user.following_count == 0
@@ -2654,8 +2674,12 @@ defmodule Pleroma.UserTest do
 
     assert {:ok, user} = User.update_last_active_at(user)
 
-    assert user.last_active_at >= test_started_at
-    assert user.last_active_at <= NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    assert NaiveDateTime.compare(user.last_active_at, test_started_at) in [:gt, :eq]
+
+    assert NaiveDateTime.compare(
+             user.last_active_at,
+             NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+           ) in [:lt, :eq]
 
     last_active_at =
       NaiveDateTime.utc_now()
@@ -2667,10 +2691,15 @@ defmodule Pleroma.UserTest do
              |> cast(%{last_active_at: last_active_at}, [:last_active_at])
              |> User.update_and_set_cache()
 
-    assert user.last_active_at == last_active_at
+    assert NaiveDateTime.compare(user.last_active_at, last_active_at) == :eq
+
     assert {:ok, user} = User.update_last_active_at(user)
-    assert user.last_active_at >= test_started_at
-    assert user.last_active_at <= NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    assert NaiveDateTime.compare(user.last_active_at, test_started_at) in [:gt, :eq]
+
+    assert NaiveDateTime.compare(
+             user.last_active_at,
+             NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+           ) in [:lt, :eq]
   end
 
   test "active_user_count/1" do
@@ -2767,6 +2796,15 @@ defmodule Pleroma.UserTest do
 
       assert user_updated.also_known_as |> length() == 1
       assert user2.ap_id in user_updated.also_known_as
+    end
+
+    test "should tolerate non-http(s) aliases" do
+      user =
+        insert(:user, %{
+          also_known_as: ["at://did:plc:xgvzy7ni6ig6ievcbls5jaxe"]
+        })
+
+      assert "at://did:plc:xgvzy7ni6ig6ievcbls5jaxe" in user.also_known_as
     end
   end
 
@@ -2903,5 +2941,75 @@ defmodule Pleroma.UserTest do
     user = User.get_cached_by_id(user.id)
 
     assert [%{"verified_at" => ^verified_at}] = user.fields
+  end
+
+  describe "follow_hashtag/2" do
+    test "should follow a hashtag" do
+      user = insert(:user)
+      hashtag = insert(:hashtag)
+
+      assert {:ok, _} = user |> User.follow_hashtag(hashtag)
+
+      user = User.get_cached_by_ap_id(user.ap_id)
+
+      assert user.followed_hashtags |> Enum.count() == 1
+      assert hashtag.name in Enum.map(user.followed_hashtags, fn %{name: name} -> name end)
+    end
+
+    test "should not follow a hashtag twice" do
+      user = insert(:user)
+      hashtag = insert(:hashtag)
+
+      assert {:ok, _} = user |> User.follow_hashtag(hashtag)
+
+      assert {:ok, _} = user |> User.follow_hashtag(hashtag)
+
+      user = User.get_cached_by_ap_id(user.ap_id)
+
+      assert user.followed_hashtags |> Enum.count() == 1
+      assert hashtag.name in Enum.map(user.followed_hashtags, fn %{name: name} -> name end)
+    end
+
+    test "can follow multiple hashtags" do
+      user = insert(:user)
+      hashtag = insert(:hashtag)
+      other_hashtag = insert(:hashtag)
+
+      assert {:ok, _} = user |> User.follow_hashtag(hashtag)
+      assert {:ok, _} = user |> User.follow_hashtag(other_hashtag)
+
+      user = User.get_cached_by_ap_id(user.ap_id)
+
+      assert user.followed_hashtags |> Enum.count() == 2
+      assert hashtag.name in Enum.map(user.followed_hashtags, fn %{name: name} -> name end)
+      assert other_hashtag.name in Enum.map(user.followed_hashtags, fn %{name: name} -> name end)
+    end
+  end
+
+  describe "unfollow_hashtag/2" do
+    test "should unfollow a hashtag" do
+      user = insert(:user)
+      hashtag = insert(:hashtag)
+
+      assert {:ok, _} = user |> User.follow_hashtag(hashtag)
+      assert {:ok, _} = user |> User.unfollow_hashtag(hashtag)
+
+      user = User.get_cached_by_ap_id(user.ap_id)
+
+      assert user.followed_hashtags |> Enum.count() == 0
+    end
+
+    test "should not error when trying to unfollow a hashtag twice" do
+      user = insert(:user)
+      hashtag = insert(:hashtag)
+
+      assert {:ok, _} = user |> User.follow_hashtag(hashtag)
+      assert {:ok, _} = user |> User.unfollow_hashtag(hashtag)
+      assert {:ok, _} = user |> User.unfollow_hashtag(hashtag)
+
+      user = User.get_cached_by_ap_id(user.ap_id)
+
+      assert user.followed_hashtags |> Enum.count() == 0
+    end
   end
 end

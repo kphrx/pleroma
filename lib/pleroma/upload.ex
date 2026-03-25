@@ -35,6 +35,7 @@ defmodule Pleroma.Upload do
   """
   alias Ecto.UUID
   alias Pleroma.Maps
+  alias Pleroma.Utils.URIEncoding
   alias Pleroma.Web.ActivityPub.Utils
   require Logger
 
@@ -92,7 +93,7 @@ defmodule Pleroma.Upload do
   def store(upload, opts \\ []) do
     opts = get_opts(opts)
 
-    with {:ok, upload} <- prepare_upload(upload, opts),
+    with {:ok, %__MODULE__{} = upload} <- prepare_upload(upload, opts),
          upload = %__MODULE__{upload | path: upload.path || "#{upload.id}/#{upload.name}"},
          {:ok, upload} <- Pleroma.Upload.Filter.filter(opts.filters, upload),
          description = get_description(upload),
@@ -230,11 +231,18 @@ defmodule Pleroma.Upload do
     tmp_path
   end
 
+  # Encoding the whole path here is fine since the path is in a
+  # UUID/<file name> form.
+  # The file at this point isn't %-encoded, so the path shouldn't
+  # be decoded first like Pleroma.Utils.URIEncoding.encode_url/1 does.
   defp url_from_spec(%__MODULE__{name: name}, base_url, {:file, path}) do
+    encode_opts = [bypass_decode: true, bypass_parse: true]
+
     path =
-      URI.encode(path, &char_unescaped?/1) <>
+      URIEncoding.encode_url(path, encode_opts) <>
         if Pleroma.Config.get([__MODULE__, :link_name], false) do
-          "?name=#{URI.encode(name, &char_unescaped?/1)}"
+          enum = %{name: name}
+          "?#{URI.encode_query(enum)}"
         else
           ""
         end

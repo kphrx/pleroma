@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.UtilsTest do
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
   alias Pleroma.Activity
   alias Pleroma.Object
   alias Pleroma.Repo
@@ -173,16 +173,30 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
     end
   end
 
-  test "make_json_ld_header/0" do
-    assert Utils.make_json_ld_header() == %{
-             "@context" => [
-               "https://www.w3.org/ns/activitystreams",
-               "http://localhost:4001/schemas/litepub-0.1.jsonld",
-               %{
-                 "@language" => "und"
-               }
-             ]
-           }
+  describe "make_json_ld_header/1" do
+    test "makes jsonld header" do
+      assert Utils.make_json_ld_header() == %{
+               "@context" => [
+                 "https://www.w3.org/ns/activitystreams",
+                 "http://localhost:4001/schemas/litepub-0.1.jsonld",
+                 %{
+                   "@language" => "und"
+                 }
+               ]
+             }
+    end
+
+    test "includes language if specified" do
+      assert Utils.make_json_ld_header(%{"language" => "pl"}) == %{
+               "@context" => [
+                 "https://www.w3.org/ns/activitystreams",
+                 "http://localhost:4001/schemas/litepub-0.1.jsonld",
+                 %{
+                   "@language" => "pl"
+                 }
+               ]
+             }
+    end
   end
 
   describe "get_existing_votes" do
@@ -201,7 +215,7 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
         })
 
       object = Object.normalize(activity, fetch: false)
-      {:ok, votes, object} = CommonAPI.vote(other_user, object, [0, 1])
+      {:ok, votes, object} = CommonAPI.vote(object, other_user, [0, 1])
       assert Enum.sort(Utils.get_existing_votes(other_user.ap_id, object)) == Enum.sort(votes)
     end
 
@@ -219,8 +233,8 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
         })
 
       object = Object.normalize(activity, fetch: false)
-      {:ok, [vote], object} = CommonAPI.vote(other_user, object, [0])
-      {:ok, _activity} = CommonAPI.favorite(user, activity.id)
+      {:ok, [vote], object} = CommonAPI.vote(object, other_user, [0])
+      {:ok, _activity} = CommonAPI.favorite(activity.id, user)
       [fetched_vote] = Utils.get_existing_votes(other_user.ap_id, object)
       assert fetched_vote.id == vote.id
     end
@@ -231,8 +245,8 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
       user = insert(:user, is_locked: true)
       follower = insert(:user)
 
-      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, user)
-      {:ok, _, _, follow_activity_two} = CommonAPI.follow(follower, user)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(user, follower)
+      {:ok, _, _, follow_activity_two} = CommonAPI.follow(user, follower)
 
       data =
         follow_activity_two.data
@@ -253,8 +267,8 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
       user = insert(:user)
       follower = insert(:user)
 
-      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, user)
-      {:ok, _, _, follow_activity_two} = CommonAPI.follow(follower, user)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(user, follower)
+      {:ok, _, _, follow_activity_two} = CommonAPI.follow(user, follower)
 
       {:ok, follow_activity_two} =
         Utils.update_follow_state_for_all(follow_activity_two, "reject")
@@ -269,8 +283,8 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
       user = insert(:user, is_locked: true)
       follower = insert(:user)
 
-      {:ok, _, _, follow_activity} = CommonAPI.follow(follower, user)
-      {:ok, _, _, follow_activity_two} = CommonAPI.follow(follower, user)
+      {:ok, _, _, follow_activity} = CommonAPI.follow(user, follower)
+      {:ok, _, _, follow_activity_two} = CommonAPI.follow(user, follower)
 
       data =
         follow_activity_two.data
@@ -355,7 +369,7 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
 
       user = insert(:user)
       refute Utils.get_existing_like(user.ap_id, object)
-      {:ok, like_activity} = CommonAPI.favorite(user, note_activity.id)
+      {:ok, like_activity} = CommonAPI.favorite(note_activity.id, user)
 
       assert ^like_activity = Utils.get_existing_like(user.ap_id, object)
     end
@@ -382,9 +396,9 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
       user1 = insert(:user)
       user2 = insert(:user)
 
-      assert {:ok, %Activity{} = _} = CommonAPI.block(user1, user2)
-      assert {:ok, %Activity{} = _} = CommonAPI.block(user1, user2)
-      assert {:ok, %Activity{} = activity} = CommonAPI.block(user1, user2)
+      assert {:ok, %Activity{} = _} = CommonAPI.block(user2, user1)
+      assert {:ok, %Activity{} = _} = CommonAPI.block(user2, user1)
+      assert {:ok, %Activity{} = activity} = CommonAPI.block(user2, user1)
 
       assert Utils.fetch_latest_block(user1, user2) == activity
     end
@@ -546,7 +560,7 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
       target_account = insert(:user)
 
       {:ok, activity} = CommonAPI.post(posting_account, %{status: "foobar"})
-      {:ok, like} = CommonAPI.favorite(target_account, activity.id)
+      {:ok, like} = CommonAPI.favorite(activity.id, target_account)
       context = Utils.generate_context_id()
       content = "foobar"
 
@@ -654,6 +668,93 @@ defmodule Pleroma.Web.ActivityPub.UtilsTest do
         %Activity{data: %{"content" => "😿", "actor" => third_user.ap_id}},
         note
       )
+    end
+  end
+
+  describe "assign_report_to_account/2" do
+    test "assigns report to an account" do
+      reporter = insert(:user)
+      target_account = insert(:user)
+      %{id: assigned_id} = insert(:user)
+
+      {:ok, report} = CommonAPI.report(reporter, %{account_id: target_account.id})
+      {:ok, report} = Utils.assign_report_to_account(report, assigned_id)
+
+      assert %{data: %{"assigned_account" => ^assigned_id}} = report
+    end
+  end
+
+  describe "maybe_anonymize_reporter/1" do
+    setup do
+      reporter = insert(:user)
+      report = %{"actor" => reporter.ap_id}
+
+      %{
+        placeholder: insert(:user),
+        reporter: reporter,
+        report: report
+      }
+    end
+
+    test "anonymize when configured correctly", %{
+      placeholder: placeholder,
+      report: report
+    } do
+      clear_config([:activitypub, :anonymize_reporter], true)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+
+      assert %{"actor" => placeholder.ap_id} == Utils.maybe_anonymize_reporter(report)
+    end
+
+    test "anonymize Activity", %{
+      placeholder: placeholder,
+      reporter: reporter,
+      report: report
+    } do
+      clear_config([:activitypub, :anonymize_reporter], true)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+      report_activity = %Activity{actor: reporter, data: report}
+      anon_id = placeholder.ap_id
+
+      assert %Activity{actor: ^anon_id, data: %{"actor" => ^anon_id}} =
+               Utils.maybe_anonymize_reporter(report_activity)
+    end
+
+    test "do not anonymize when disabled", %{
+      placeholder: placeholder,
+      reporter: reporter,
+      report: report
+    } do
+      clear_config([:activitypub, :anonymize_reporter], false)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+
+      assert %{"actor" => reporter.ap_id} == Utils.maybe_anonymize_reporter(report)
+    end
+
+    test "do not anonymize when user does not exist", %{
+      placeholder: placeholder,
+      reporter: reporter,
+      report: report
+    } do
+      clear_config([:activitypub, :anonymize_reporter], true)
+
+      clear_config(
+        [:activitypub, :anonymize_reporter_local_nickname],
+        placeholder.nickname <> "MewMew"
+      )
+
+      assert %{"actor" => reporter.ap_id} == Utils.maybe_anonymize_reporter(report)
+    end
+
+    test "do not anonymize when user is not local", %{
+      reporter: reporter,
+      report: report
+    } do
+      placeholder = insert(:user, local: false)
+      clear_config([:activitypub, :anonymize_reporter], true)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+
+      assert %{"actor" => reporter.ap_id} == Utils.maybe_anonymize_reporter(report)
     end
   end
 end

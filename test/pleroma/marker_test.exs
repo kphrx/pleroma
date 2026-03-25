@@ -36,11 +36,12 @@ defmodule Pleroma.MarkerTest do
       insert(:notification, user: user, activity: insert(:note_activity))
       insert(:notification, user: user, activity: insert(:note_activity))
       insert(:marker, timeline: "home", user: user)
+      %Marker{} = refreshed_marker = refresh_record(marker)
 
       assert Marker.get_markers(
                user,
                ["notifications"]
-             ) == [%Marker{refresh_record(marker) | unread_count: 2}]
+             ) == [%{refreshed_marker | unread_count: 2}]
     end
   end
 

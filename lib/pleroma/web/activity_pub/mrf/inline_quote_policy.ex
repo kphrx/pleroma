@@ -18,6 +18,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.InlineQuotePolicy do
       content =~ quote_url -> true
       # Does the content already have a .quote-inline span?
       content =~ "<span class=\"quote-inline\">" -> true
+      # Does the content already have a .quote-inline p? (Mastodon)
+      content =~ "<p class=\"quote-inline\">" -> true
       # No inline quote found
       true -> false
     end
@@ -48,12 +50,12 @@ defmodule Pleroma.Web.ActivityPub.MRF.InlineQuotePolicy do
   end
 
   @impl true
-  def filter(object), do: {:ok, object}
+  def filter(activity), do: {:ok, activity}
 
   @impl true
   def describe, do: {:ok, %{}}
 
-  @impl Pleroma.Web.ActivityPub.MRF.Policy
+  @impl true
   def history_awareness, do: :auto
 
   @impl true

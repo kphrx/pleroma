@@ -4,17 +4,14 @@ defmodule Pleroma.Search do
   alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Workers.SearchIndexingWorker
 
-  @spec add_to_index(Activity.t()) :: :ok | :error
+  @spec add_to_index(Activity.t()) :: {:ok, Oban.Job.t() | :noop} | {:error, Oban.Job.changeset()}
   def add_to_index(%Activity{id: activity_id, object: %Object{} = object} = activity) do
     with {_, true} <- {:indexable, indexable?(activity)},
-         {_, "public"} <- {:visibility, Visibility.get_visibility(object)},
-         {:ok, %Oban.Job{}} <-
-           SearchIndexingWorker.enqueue("add_to_index", %{"activity" => activity_id}) do
-      :ok
+         {_, "public"} <- {:visibility, Visibility.get_visibility(object)} do
+      SearchIndexingWorker.new(%{"op" => "add_to_index", "activity" => activity_id})
+      |> Oban.insert()
     else
-      {:indexable, false} -> :ok
-      {:visibility, _} -> :ok
-      _ -> :error
+      _ -> {:ok, :noop}
     end
   end
 
@@ -25,12 +22,10 @@ defmodule Pleroma.Search do
     end
   end
 
-  @spec remove_from_index(Object.t()) :: :ok | :error
+  @spec remove_from_index(Object.t()) :: {:ok, Oban.Job.t()} | {:error, Oban.Job.changeset()}
   def remove_from_index(%Pleroma.Object{id: object_id}) do
-    case SearchIndexingWorker.enqueue("remove_from_index", %{"object" => object_id}) do
-      {:ok, %Oban.Job{}} -> :ok
-      _ -> :error
-    end
+    SearchIndexingWorker.new(%{"op" => "remove_from_index", "object" => object_id})
+    |> Oban.insert()
   end
 
   def search(query, options) do
@@ -40,7 +35,7 @@ defmodule Pleroma.Search do
 
   def healthcheck_endpoints do
     search_module = Pleroma.Config.get([Pleroma.Search, :module])
-    search_module.healthcheck_endpoints
+    search_module.healthcheck_endpoints()
   end
 
   defp indexable?(%Activity{data: %{"type" => "Create"}}), do: true

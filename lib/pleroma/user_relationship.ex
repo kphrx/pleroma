@@ -45,7 +45,7 @@ defmodule Pleroma.UserRelationship do
       do: exists?(unquote(relationship_type), source, target)
 
     # `def get_block_expire_date/2`, `def get_mute_expire_date/2`,
-    #   `def get_reblog_mute_expire_date/2`, `def get_notification_mute_exists?/2`,
+    #   `def get_reblog_mute_expire_date/2`, `def get_notification_mute_expire_date/2`,
     #   `def get_inverse_subscription_expire_date/2`, `def get_inverse_endorsement_expire_date/2`
     def unquote(:"get_#{relationship_type}_expire_date")(source, target),
       do: get_expire_date(unquote(relationship_type), source, target)
@@ -55,9 +55,13 @@ defmodule Pleroma.UserRelationship do
 
   def user_relationship_mappings, do: Pleroma.UserRelationship.Type.__enum_map__()
 
+  def datetime_impl do
+    Application.get_env(:pleroma, :datetime_impl, Pleroma.DateTime.Impl)
+  end
+
   def changeset(%UserRelationship{} = user_relationship, params \\ %{}) do
     user_relationship
-    |> cast(params, [:relationship_type, :source_id, :target_id, :expires_at])
+    |> cast(params, [:relationship_type, :source_id, :target_id, :expires_at, :inserted_at])
     |> validate_required([:relationship_type, :source_id, :target_id])
     |> unique_constraint(:relationship_type,
       name: :user_relationships_source_id_relationship_type_target_id_index
@@ -65,6 +69,7 @@ defmodule Pleroma.UserRelationship do
     |> validate_not_self_relationship()
   end
 
+  @spec exists?(any(), Pleroma.User.t(), Pleroma.User.t()) :: boolean()
   def exists?(relationship_type, %User{} = source, %User{} = target) do
     UserRelationship
     |> where(relationship_type: ^relationship_type, source_id: ^source.id, target_id: ^target.id)
@@ -90,7 +95,8 @@ defmodule Pleroma.UserRelationship do
       relationship_type: relationship_type,
       source_id: source.id,
       target_id: target.id,
-      expires_at: expires_at
+      expires_at: expires_at,
+      inserted_at: datetime_impl().utc_now()
     })
     |> Repo.insert(
       on_conflict: {:replace_all_except, [:id, :inserted_at]},
@@ -187,7 +193,8 @@ defmodule Pleroma.UserRelationship do
           {[:mute], []}
 
         nil ->
-          {[:block, :mute, :notification_mute, :reblog_mute], [:block, :inverse_subscription]}
+          {[:block, :mute, :notification_mute, :reblog_mute, :endorsement],
+           [:block, :inverse_subscription]}
 
         unknown ->
           raise "Unsupported :subset option value: #{inspect(unknown)}"
