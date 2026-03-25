@@ -72,7 +72,7 @@ defmodule Mix.Tasks.Pleroma.Search.Meilisearch do
           query,
           timeout: :infinity
         )
-        |> Stream.map(&Pleroma.Search.Meilisearch.object_to_search_data/1)
+        |> Stream.map(&Pleroma.Search.object_to_search_data/1)
         |> Stream.filter(fn o -> not is_nil(o) end)
         |> Stream.chunk_every(chunk_size)
         |> Stream.transform(0, fn objects, acc ->

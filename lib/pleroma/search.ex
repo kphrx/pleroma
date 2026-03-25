@@ -18,7 +18,7 @@ defmodule Pleroma.Search do
   def add_to_index(%Activity{id: activity_id}) do
     case Activity.get_by_id_with_object(activity_id) do
       %Activity{} = preloaded -> add_to_index(preloaded)
-      _ -> :ok
+      _ -> {:ok, :noop}
     end
   end
 
@@ -38,6 +38,43 @@ defmodule Pleroma.Search do
     search_module.healthcheck_endpoints()
   end
 
-  defp indexable?(%Activity{data: %{"type" => "Create"}}), do: true
+  def object_to_search_data(%Object{} = object) do
+    data = object.data
+
+    content_str =
+      case data["content"] do
+        [nil | rest] -> to_string(rest)
+        str -> str
+      end
+
+    content =
+      with {:ok, scrubbed} <-
+             FastSanitize.Sanitizer.scrub(content_str, Pleroma.HTML.Scrubber.SearchIndexing),
+           trimmed <- String.trim(scrubbed) do
+        trimmed
+      end
+
+    # Make sure we have a non-empty string
+    if content != "" do
+      {:ok, published, _} = DateTime.from_iso8601(data["published"])
+
+      %{
+        id: object.id,
+        content: content,
+        ap: data["id"],
+        published: published |> DateTime.to_unix()
+      }
+    end
+  end
+
+  defp indexable?(%Activity{
+         data: %{"type" => "Create"},
+         object: %Object{
+           data: %{"content" => content, "published" => published, "type" => "Note"}
+         }
+       })
+       when not is_nil(content) and content not in ["", "."] and not is_nil(published),
+       do: true
+
   defp indexable?(_), do: false
 end
