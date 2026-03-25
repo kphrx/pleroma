@@ -1032,6 +1032,8 @@ defmodule Pleroma.Web.Router do
     pipe_through(:pleroma_html)
 
     post("/auth/password", OAuth.PasswordController, :request)
+
+    get("/embed/:id", EmbedController, :show)
   end
 
   scope "/proxy/", Pleroma.Web do
