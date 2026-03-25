@@ -5,6 +5,7 @@ defmodule Pleroma.Search.Meilisearch do
   alias Pleroma.Activity
   alias Pleroma.Config.Getting, as: Config
   alias Pleroma.Object
+  alias Pleroma.Search
 
   import Pleroma.Search.DatabaseSearch
   import Ecto.Query
@@ -119,46 +120,9 @@ defmodule Pleroma.Search.Meilisearch do
     end
   end
 
-  def object_to_search_data(object) do
-    # Only index public or unlisted Notes
-    if not is_nil(object) and object.data["type"] == "Note" and
-         not is_nil(object.data["content"]) and
-         not is_nil(object.data["published"]) and
-         (Pleroma.Constants.as_public() in object.data["to"] or
-            Pleroma.Constants.as_public() in object.data["cc"]) and
-         object.data["content"] not in ["", "."] do
-      data = object.data
-
-      content_str =
-        case data["content"] do
-          [nil | rest] -> to_string(rest)
-          str -> str
-        end
-
-      content =
-        with {:ok, scrubbed} <-
-               FastSanitize.Sanitizer.scrub(content_str, Pleroma.HTML.Scrubber.SearchIndexing),
-             trimmed <- String.trim(scrubbed) do
-          trimmed
-        end
-
-      # Make sure we have a non-empty string
-      if content != "" do
-        {:ok, published, _} = DateTime.from_iso8601(data["published"])
-
-        %{
-          id: object.id,
-          content: content,
-          ap: data["id"],
-          published: published |> DateTime.to_unix()
-        }
-      end
-    end
-  end
-
   @impl true
   def add_to_index(%Activity{object: %Object{} = object} = activity) do
-    search_data = object_to_search_data(object)
+    search_data = Search.object_to_search_data(object)
 
     result =
       meili_put(

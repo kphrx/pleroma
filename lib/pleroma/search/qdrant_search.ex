@@ -5,11 +5,11 @@ defmodule Pleroma.Search.QdrantSearch do
   alias Pleroma.Activity
   alias Pleroma.Config.Getting, as: Config
   alias Pleroma.Object
+  alias Pleroma.Search
 
   alias __MODULE__.OpenAIClient
   alias __MODULE__.QdrantClient
 
-  import Pleroma.Search.Meilisearch, only: [object_to_search_data: 1]
   import Pleroma.Search.DatabaseSearch, only: [maybe_fetch: 3]
 
   @impl true
@@ -84,7 +84,7 @@ defmodule Pleroma.Search.QdrantSearch do
 
   @impl true
   def add_to_index(%Activity{object: %Object{} = object} = activity) do
-    search_data = object_to_search_data(object)
+    search_data = Search.object_to_search_data(object)
 
     with {:ok, embedding} <- get_embedding(search_data.content),
          {:ok, %{status: 200}} <-
