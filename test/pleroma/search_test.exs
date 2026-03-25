@@ -54,7 +54,7 @@ defmodule Pleroma.SearchTest do
 
     assert_enqueued(worker: SearchIndexingWorker, args: args)
 
-    {:ok, fav_activity} = CommonAPI.favorite(user, activity.id)
+    {:ok, fav_activity} = CommonAPI.favorite(activity.id, user)
 
     args = %{"op" => "add_to_index", "activity" => fav_activity.id}
 
