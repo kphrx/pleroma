@@ -174,6 +174,22 @@ defmodule Pleroma.ConfigDBTest do
       assert updated1.value == [groups: [c: 3, d: 4], key: [a: 1, b: 2]]
       assert updated2.value == [mascots: [c: 3, d: 4], key: [a: 1, b: 2]]
     end
+
+    test "rejects invalid :rate_limit values (e.g. empty-string scale from AdminFE)" do
+      assert {:error, _changeset} =
+               ConfigDB.update_or_create(%{
+                 group: ":pleroma",
+                 key: ":rate_limit",
+                 value: [
+                   %{
+                     "tuple" => [
+                       ":statuses_actions",
+                       [%{"tuple" => ["", 0]}, %{"tuple" => ["", ""]}]
+                     ]
+                   }
+                 ]
+               })
+    end
   end
 
   describe "delete/1" do
