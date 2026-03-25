@@ -18,10 +18,9 @@ defmodule Pleroma.Search.ParadeDB do
       maybe_restrict_local: 2
     ]
 
-  import Pleroma.Search.Meilisearch, only: [object_to_search_data: 1]
-
   alias Pleroma.Activity
   alias Pleroma.Config.Getting, as: Config
+  alias Pleroma.Search
 
   @max_limit 40
   @default_table "pleroma_search_documents"
@@ -81,7 +80,7 @@ defmodule Pleroma.Search.ParadeDB do
 
   @impl true
   def add_to_index(activity) do
-    maybe_search_data = object_to_search_data(activity.object)
+    maybe_search_data = Search.object_to_search_data(activity.object)
 
     if activity.data["type"] == "Create" and maybe_search_data do
       dumped_activity_id = dump_activity_id(activity.id)
