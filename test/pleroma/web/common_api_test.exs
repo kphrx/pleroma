@@ -759,7 +759,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
     test "it allows to address a list" do
       user = insert(:user)
-      {:ok, list} = Pleroma.List.create("foo", user)
+      {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
 

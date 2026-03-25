@@ -1618,6 +1618,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp normalize_image(urls) when is_list(urls), do: urls |> List.first() |> normalize_image()
   defp normalize_image(_), do: nil
 
+  defp normalize_also_known_as(urls) when is_list(urls), do: urls
+  defp normalize_also_known_as(url) when is_binary(url), do: [url]
+  defp normalize_also_known_as(nil), do: []
+
   defp maybe_put_description(map, %{"name" => description}) when is_binary(description) do
     Map.put(map, "name", description)
   end
@@ -1693,7 +1697,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       featured_address: featured_address,
       bio: data["summary"] || "",
       actor_type: actor_type,
-      also_known_as: Map.get(data, "alsoKnownAs", []),
+      also_known_as: normalize_also_known_as(data["alsoKnownAs"]),
       public_key: public_key,
       inbox: data["inbox"],
       shared_inbox: shared_inbox,

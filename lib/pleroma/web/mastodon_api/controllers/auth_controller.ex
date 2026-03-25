@@ -7,7 +7,7 @@ defmodule Pleroma.Web.MastodonAPI.AuthController do
 
   import Pleroma.Web.ControllerHelper, only: [json_response: 3]
 
-  alias Pleroma.Web.TwitterAPI.TwitterAPI
+  alias Pleroma.Web.Registration
 
   action_fallback(Pleroma.Web.MastodonAPI.FallbackController)
 
@@ -17,7 +17,7 @@ defmodule Pleroma.Web.MastodonAPI.AuthController do
   def password_reset(conn, params) do
     nickname_or_email = params["email"] || params["nickname"]
 
-    TwitterAPI.password_reset(nickname_or_email)
+    Registration.password_reset(nickname_or_email)
 
     json_response(conn, :no_content, "")
   end

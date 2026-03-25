@@ -4,6 +4,7 @@ defmodule Pleroma.Search.QdrantSearch do
 
   alias Pleroma.Activity
   alias Pleroma.Config.Getting, as: Config
+  alias Pleroma.Object
 
   alias __MODULE__.OpenAIClient
   alias __MODULE__.QdrantClient
@@ -82,23 +83,18 @@ defmodule Pleroma.Search.QdrantSearch do
   end
 
   @impl true
-  def add_to_index(activity) do
-    # This will only index public or unlisted notes
-    maybe_search_data = object_to_search_data(activity.object)
+  def add_to_index(%Activity{object: %Object{} = object} = activity) do
+    search_data = object_to_search_data(object)
 
-    if activity.data["type"] == "Create" and maybe_search_data do
-      with {:ok, embedding} <- get_embedding(maybe_search_data.content),
-           {:ok, %{status: 200}} <-
-             QdrantClient.put(
-               "/collections/posts/points",
-               build_index_payload(activity, embedding)
-             ) do
-        :ok
-      else
-        e -> {:error, e}
-      end
-    else
+    with {:ok, embedding} <- get_embedding(search_data.content),
+         {:ok, %{status: 200}} <-
+           QdrantClient.put(
+             "/collections/posts/points",
+             build_index_payload(activity, embedding)
+           ) do
       :ok
+    else
+      e -> {:error, e}
     end
   end
 
