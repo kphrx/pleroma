@@ -75,6 +75,8 @@ defmodule Pleroma.Web.MastodonAPI.PollView do
     length(voters)
   end
 
+  defp voters_count(%{data: %{"votersCount" => voters}}), do: voters
+
   defp voters_count(_), do: 0
 
   defp voted_and_own_votes(%{object: object} = params, options) do
