@@ -172,7 +172,10 @@ defmodule Pleroma.Web.ApiSpec.ListOperation do
         type: :object,
         properties: %{
           title: %Schema{type: :string, description: "List title"},
-          exclusive: %Schema{type: :boolean, description: "Whether members of the list should be removed from the “Home” feed"}
+          exclusive: %Schema{
+            type: :boolean,
+            description: "Whether members of the list should be removed from the “Home” feed"
+          }
         },
         required: [:title]
       },
@@ -188,7 +191,10 @@ defmodule Pleroma.Web.ApiSpec.ListOperation do
         type: :object,
         properties: %{
           title: %Schema{type: :string, description: "List title"},
-          exclusive: %Schema{type: :boolean, description: "Whether members of the list should be removed from the “Home” feed"}
+          exclusive: %Schema{
+            type: :boolean,
+            description: "Whether members of the list should be removed from the “Home” feed"
+          }
         }
       },
       required: true
