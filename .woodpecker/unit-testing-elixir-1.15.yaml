@@ -1,9 +1,15 @@
 when:
-  - event:
-      - pull_request
+  - event: pull_request
+    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+
+depends_on:
+  - lint
 
 steps:
-  test:
+  unit-testing-elixir-1.15:
     image: elixir:1.15-alpine
     environment:
       MIX_ENV: test
@@ -17,7 +23,7 @@ steps:
       - su testuser -c "HOME=/home/testuser mix local.hex --force"
       - su testuser -c "HOME=/home/testuser mix local.rebar --force"
       - su testuser -c "HOME=/home/testuser mix deps.get"
-      - su testuser -c "HOME=/home/testuser mix test"
+      - su testuser -c "HOME=/home/testuser mix pleroma.test_runner --preload-modules"
 
 services:
   postgres:

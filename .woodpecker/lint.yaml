@@ -1,0 +1,65 @@
+when:
+  - event: pull_request
+    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+
+steps:
+  mix-format:
+    image: &elixir-image
+      docker.io/elixir:1.15-alpine
+    failure: ignore
+    commands:
+      - |
+        if ! mix format --check-formatted; then
+          touch fail.stamp
+          exit 1
+        fi
+
+  credo:
+    image: *elixir-image
+    failure: ignore
+    environment:
+      MIX_ENV: test
+    commands:
+      - apk add --no-cache build-base cmake exiftool ffmpeg file-dev git openssl
+      - adduser -D -h /home/testuser testuser
+      - mkdir -p /home/testuser/.mix /home/testuser/.hex
+      - chown -R testuser:testuser . /home/testuser
+      - su testuser -c "HOME=/home/testuser mix local.hex --force"
+      - su testuser -c "HOME=/home/testuser mix local.rebar --force"
+      - su testuser -c "HOME=/home/testuser mix deps.get"
+      - |
+        if ! su testuser -c "HOME=/home/testuser mix analyze"; then
+          touch fail.stamp
+          exit 1
+        fi
+
+  # cycles:
+  #   image: *elixir-image
+  #   failure: ignore
+  #   commands:
+  #     - apk add --no-cache build-base cmake exiftool ffmpeg file-dev git openssl
+  #     - adduser -D -h /home/testuser testuser
+  #     - mkdir -p /home/testuser/.mix /home/testuser/.hex
+  #     - chown -R testuser:testuser . /home/testuser
+  #     - su testuser -c "HOME=/home/testuser mix local.hex --force"
+  #     - su testuser -c "HOME=/home/testuser mix local.rebar --force"
+  #     - su testuser -c "HOME=/home/testuser mix compile"
+  #     - |
+  #       if ! su testuser -c "HOME=/home/testuser mix xref graph --format cycles --label compile | awk '{print $0} END{exit ($0 != \"No cycles found\")}'"; then
+  #       touch fail.stamp
+  #       exit 1
+  #       fi
+
+  ensure-status:
+    image: *elixir-image
+    commands: |
+      if test -f fail.stamp; then
+        echo "One or more previous steps fails. Failing workflow..."
+        exit 1
+      else
+        echo "All steps passed"
+        exit 0
+      fi
