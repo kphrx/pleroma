@@ -144,7 +144,7 @@ defmodule Mix.Pleroma do
   defp http_children(_), do: []
 
   defp search_children do
-    case Config.get([Pleroma.Search, :module]) do
+    case Pleroma.Config.get([Pleroma.Search, :module]) do
       Pleroma.Search.ParadeDB ->
         [Pleroma.Search.ParadeDB.Repo]
 
