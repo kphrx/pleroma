@@ -1,0 +1,45 @@
+when:
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+
+matrix:
+  platform:
+    - linux/amd64
+    - linux/arm64
+
+# This is needed for the when clauses below.
+# When the platform clause is fixed, this might not be needed anymore
+labels:
+  platform: ${platform}
+
+steps:
+  docker-develop-amd64:
+    image: woodpeckerci/plugin-docker-buildx:6.0.4
+    # when:
+    #   - platform: linux/amd64
+    # does not work even though it should according to docs
+    # https://github.com/woodpecker-ci/woodpecker/discussions/5367#discussioncomment-13901342
+    when:
+      - evaluate: platform == "linux/amd64"
+    settings:
+      repo: git.pleroma.social/pleroma/pleroma
+      tags: [latest-amd64, develop-amd64]
+      registry: git.pleroma.social
+      username:
+        from_secret: pleroma-ci-user
+      password:
+        from_secret: pleroma-ci-password
+
+  docker-develop-arm64:
+    image: woodpeckerci/plugin-docker-buildx:6.0.4
+    when:
+      - evaluate: platform == "linux/arm64"
+    settings:
+      repo: git.pleroma.social/pleroma/pleroma
+      tags: [latest-arm64, develop-arm64]
+      registry: git.pleroma.social
+      username:
+        from_secret: pleroma-ci-user
+      password:
+        from_secret: pleroma-ci-password
