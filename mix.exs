@@ -211,7 +211,7 @@ defmodule Pleroma.Mixfile do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:mock, "~> 0.3.9", only: :test},
       {:covertool, "~> 2.0", only: :test},
-      {:hackney, "~> 1.25.0", override: true},
+      {:hackney, "~> 1.20.1", override: true},
       {:mox, "~> 1.2", only: :test},
       {:websockex, "~> 0.4.3", only: :test},
       {:benchee, "~> 1.4", only: :benchmark},
