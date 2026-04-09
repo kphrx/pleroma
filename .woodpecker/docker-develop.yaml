@@ -15,7 +15,7 @@ labels:
 
 steps:
   docker-develop-amd64:
-    image: woodpeckerci/plugin-docker-buildx:6.0.4
+    image: woodpeckerci/plugin-kaniko:2.3.1
     # when:
     #   - platform: linux/amd64
     # does not work even though it should according to docs
@@ -23,7 +23,7 @@ steps:
     when:
       - evaluate: platform == "linux/amd64"
     settings:
-      repo: git.pleroma.social/pleroma/pleroma
+      repo: pleroma/pleroma
       tags: [latest-amd64, develop-amd64]
       registry: git.pleroma.social
       username:
@@ -32,11 +32,11 @@ steps:
         from_secret: pleroma-ci-password
 
   docker-develop-arm64:
-    image: woodpeckerci/plugin-docker-buildx:6.0.4
+    image: woodpeckerci/plugin-kaniko:2.3.1
     when:
       - evaluate: platform == "linux/arm64"
     settings:
-      repo: git.pleroma.social/pleroma/pleroma
+      repo: pleroma/pleroma
       tags: [latest-arm64, develop-arm64]
       registry: git.pleroma.social
       username:
