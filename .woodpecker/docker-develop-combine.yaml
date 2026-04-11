@@ -10,25 +10,13 @@ skip_clone: true
 
 steps:
   docker-develop-combine:
-    image: docker.io/docker:cli
-    environment:
-      BUILD_ARCHES: "amd64 arm64"
-      REGISTRY: "git.fluffytail.org"
-      IMAGE_PATH: "git.fluffytail.org/pleroma-test/pleroma"
-      REGISTRY_USER:
+    image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
+    settings:
+      registry: "git.fluffytail.org"
+      image: "pleroma-test/pleroma"
+      architectures: [amd64, arm64]
+      tags: [latest, develop]
+      username:
         from_secret: pleroma-ci-user
-      REGISTRY_PASSWORD:
+      password:
         from_secret: pleroma-ci-password
-    commands:
-      - set +x
-      - mkdir -p ~/.docker
-      - echo "{\"auths\":{\"$REGISTRY\":{\"username\":\"$REGISTRY_USER\",\"password\":\"$REGISTRY_PASSWORD\"}}}" > ~/.docker/config.json
-      - set -x
-      - IMAGES_DEVELOP=; for arch in $BUILD_ARCHES; do IMAGES_DEVELOP="$IMAGES_DEVELOP $IMAGE_PATH:develop-$arch"; done
-      - IMAGES_LATEST=; for arch in $BUILD_ARCHES; do IMAGES_LATEST="$IMAGES_LATEST $IMAGE_PATH:latest-$arch"; done
-      - echo $IMAGES_DEVELOP
-      - echo $IMAGES_LATEST
-      - docker manifest create $IMAGE_PATH:develop $IMAGES_DEVELOP
-      - docker manifest push $IMAGE_PATH:develop
-      - docker manifest create $IMAGE_PATH:latest $IMAGES_LATEST
-      - docker manifest push $IMAGE_PATH:latest
