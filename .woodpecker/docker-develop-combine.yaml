@@ -15,7 +15,10 @@ steps:
       registry: "git.fluffytail.org"
       image: "pleroma-test/pleroma"
       architectures: [amd64, arm64]
-      tags: [latest, develop]
+      tags:
+        - latest
+        - develop
+        - ${CI_COMMIT_SHA}
       username:
         from_secret: pleroma-ci-user
       password:

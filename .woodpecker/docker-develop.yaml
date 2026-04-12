@@ -33,7 +33,10 @@ steps:
       - evaluate: platform == "linux/amd64"
     settings:
       <<: *docker_variables
-      tags: [latest-amd64, develop-amd64]
+      tags:
+        - latest-amd64
+        - develop-amd64
+        - ${CI_COMMIT_SHA}-amd64
 
   docker-develop-arm64:
     image: woodpeckerci/plugin-kaniko:2.3.1
@@ -41,4 +44,7 @@ steps:
       - evaluate: platform == "linux/arm64"
     settings:
       <<: *docker_variables
-      tags: [latest-arm64, develop-arm64]
+      tags:
+        - latest-arm64
+        - develop-arm64
+        - ${CI_COMMIT_SHA}-arm64
