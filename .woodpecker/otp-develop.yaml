@@ -13,6 +13,22 @@ matrix:
 labels:
   platform: ${platform}
 
+variables:
+  pleroma_build_cmds: &pleroma_build_cmds
+    - echo "import Config" > config/prod.secret.exs
+    - mix local.hex --force
+    - mix local.rebar --force
+    - mix deps.get --only prod
+    - mkdir release
+    - export PLEROMA_BUILD_BRANCH=${CI_COMMIT_BRANCH}
+    - mix release --path release
+  artifacts_uploader_settings: &artifacts_uploader_settings
+    user:
+      from_secret: pleroma-ci-user
+    password:
+      from_secret: pleroma-ci-password
+    owner: 'pleroma'
+
 steps:
   otp-develop-amd64:
     image: docker.io/hexpm/elixir-amd64:1.17.3-erlang-27.3.4.2-ubuntu-noble-20250716
@@ -28,13 +44,7 @@ steps:
       DEBIAN_FRONTEND: noninteractive
     commands:
       - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev git build-essential zip
-      - echo "import Config" > config/prod.secret.exs
-      - mix local.hex --force
-      - mix local.rebar --force
-      - mix deps.get --only prod
-      - mkdir release
-      - export PLEROMA_BUILD_BRANCH=${CI_COMMIT_BRANCH}
-      - mix release --path release
+      - <<: *pleroma_build_cmds
       - zip -9rq pleroma-${CI_REPO_DEFAULT_BRANCH}-${CI_COMMIT_SHA}-amd64.zip release
 
   upload-artifacts-amd64:
@@ -42,11 +52,7 @@ steps:
     when:
       - evaluate: platform == "linux/amd64"
     settings:
-      user:
-        from_secret: pleroma-ci-user
-      password:
-        from_secret: pleroma-ci-password
-      owner: 'pleroma'
+      <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_REPO_DEFAULT_BRANCH}-amd64
       package_version: ${CI_REPO_DEFAULT_BRANCH}-${CI_COMMIT_SHA}-amd64
       file_source: ./pleroma-${CI_REPO_DEFAULT_BRANCH}-${CI_COMMIT_SHA}-amd64.zip
@@ -62,13 +68,7 @@ steps:
       DEBIAN_FRONTEND: noninteractive
     commands:
       - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev git build-essential zip
-      - echo "import Config" > config/prod.secret.exs
-      - mix local.hex --force
-      - mix local.rebar --force
-      - mix deps.get --only prod
-      - mkdir release
-      - export PLEROMA_BUILD_BRANCH=${CI_COMMIT_BRANCH}
-      - mix release --path release
+      - <<: *pleroma_build_cmds
       - zip -9rq pleroma-${CI_REPO_DEFAULT_BRANCH}-${CI_COMMIT_SHA}-arm64.zip release
 
   upload-artifacts-arm64:
@@ -76,11 +76,7 @@ steps:
     when:
       - evaluate: platform == "linux/arm64"
     settings:
-      user:
-        from_secret: pleroma-ci-user
-      password:
-        from_secret: pleroma-ci-password
-      owner: 'pleroma'
+      <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_REPO_DEFAULT_BRANCH}-arm64
       package_version: ${CI_REPO_DEFAULT_BRANCH}-${CI_COMMIT_SHA}-arm64
       file_source: ./pleroma-${CI_REPO_DEFAULT_BRANCH}-${CI_COMMIT_SHA}-arm64.zip

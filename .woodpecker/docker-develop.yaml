@@ -13,6 +13,15 @@ matrix:
 labels:
   platform: ${platform}
 
+variables:
+  docker_variables: &docker_variables
+    repo: pleroma/pleroma
+    registry: git.pleroma.social
+    username:
+      from_secret: pleroma-ci-user
+    password:
+      from_secret: pleroma-ci-password
+
 steps:
   docker-develop-amd64:
     image: woodpeckerci/plugin-kaniko:2.3.1
@@ -23,23 +32,13 @@ steps:
     when:
       - evaluate: platform == "linux/amd64"
     settings:
-      repo: pleroma/pleroma
+      <<: *docker_variables
       tags: [latest-amd64, develop-amd64]
-      registry: git.pleroma.social
-      username:
-        from_secret: pleroma-ci-user
-      password:
-        from_secret: pleroma-ci-password
 
   docker-develop-arm64:
     image: woodpeckerci/plugin-kaniko:2.3.1
     when:
       - evaluate: platform == "linux/arm64"
     settings:
-      repo: pleroma/pleroma
+      <<: *docker_variables
       tags: [latest-arm64, develop-arm64]
-      registry: git.pleroma.social
-      username:
-        from_secret: pleroma-ci-user
-      password:
-        from_secret: pleroma-ci-password
