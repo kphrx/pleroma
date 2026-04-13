@@ -13,11 +13,13 @@ skip_clone: true
 steps:
   docker-stable-combine:
     image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
-    settings:
+    when:
+      - event: push
+    settings: &docker_settings
       registry: "git.fluffytail.org"
       image: "pleroma-test/pleroma"
       architectures: [amd64, arm64]
-      tags:
+      tags: &docker_tags
         - latest
         - stable
         - ${CI_COMMIT_SHA}
@@ -25,3 +27,13 @@ steps:
         from_secret: pleroma-ci-user
       password:
         from_secret: pleroma-ci-password
+
+  docker-stable-tag-combine:
+    image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
+    when:
+      - event: tag
+    settings:
+      <<: *docker_settings
+      tags:
+        - <<: *docker_tags
+        - ${CI_COMMIT_TAG}
