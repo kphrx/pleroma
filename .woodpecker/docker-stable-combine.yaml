@@ -1,0 +1,27 @@
+when:
+  - event: push
+    branch: stable
+    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+  - event: tag
+    branch: stable
+
+depends_on:
+  - docker-stable
+
+skip_clone: true
+
+steps:
+  docker-stable-combine:
+    image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
+    settings:
+      registry: "git.fluffytail.org"
+      image: "pleroma-test/pleroma"
+      architectures: [amd64, arm64]
+      tags:
+        - latest
+        - stable
+        - ${CI_COMMIT_SHA}
+      username:
+        from_secret: pleroma-ci-user
+      password:
+        from_secret: pleroma-ci-password
