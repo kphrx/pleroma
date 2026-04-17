@@ -1,0 +1,83 @@
+when:
+  - event: push
+    branch: stable
+    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+  - event: tag
+    branch: stable
+
+matrix:
+  platform:
+    - linux/amd64
+    - linux/arm64
+
+# This is needed for the when clauses below.
+# When the platform clause is fixed, this might not be needed anymore
+labels:
+  platform: ${platform}
+
+variables:
+  pleroma_build_cmds: &pleroma_build_cmds
+    - echo "import Config" > config/prod.secret.exs
+    - mix local.hex --force
+    - mix local.rebar --force
+    - mix deps.get --only prod
+    - mkdir release
+    - export PLEROMA_BUILD_BRANCH=${CI_COMMIT_BRANCH}
+    - mix release --path release
+  artifacts_uploader_settings: &artifacts_uploader_settings
+    user:
+      from_secret: pleroma-ci-user
+    password:
+      from_secret: pleroma-ci-password
+    owner: 'pleroma-test'
+
+steps:
+  otp-stable-amd64-musl:
+    image: docker.io/hexpm/elixir-amd64:1.17.3-erlang-27.3.4.2-alpine-3.22.1
+    # when:
+    #   - platform: linux/amd64
+    # does not work even though it should according to docs
+    # https://github.com/woodpecker-ci/woodpecker/discussions/5367#discussioncomment-13901342
+    when:
+      - evaluate: platform == "linux/amd64"
+    environment:
+      MIX_ENV: prod
+      VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
+    commands:
+      - apk add git build-base cmake file-dev openssl vips-dev zip
+      - <<: *pleroma_build_cmds
+      - zip -9rq pleroma-stable-${CI_COMMIT_SHA}-amd64-musl.zip release
+
+  upload-artifacts-amd64-musl:
+    image: docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
+    when:
+      - evaluate: platform == "linux/amd64"
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-stable-amd64-musl
+      package_version: stable-${CI_COMMIT_SHA}-amd64-musl
+      file_source: ./pleroma-stable-${CI_COMMIT_SHA}-amd64-musl.zip
+      file_name: ./pleroma-stable-${CI_COMMIT_SHA}-amd64-musl.zip
+
+  otp-stable-arm64-musl:
+    image: docker.io/hexpm/elixir-arm64:1.17.3-erlang-27.3.4.2-alpine-3.22.1
+    when:
+      - evaluate: platform == "linux/arm64"
+    environment:
+      MIX_ENV: prod
+      VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
+    commands:
+      - apk add git build-base cmake file-dev openssl vips-dev zip
+      - <<: *pleroma_build_cmds
+      - zip -9rq pleroma-stable-${CI_COMMIT_SHA}-arm64-musl.zip release
+
+  upload-artifacts-arm64-musl:
+    image: docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
+    when:
+      - evaluate: platform == "linux/arm64"
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-stable-arm64-musl
+      package_version: stable-${CI_COMMIT_SHA}-arm64-musl
+      file_source: ./pleroma-stable-${CI_COMMIT_SHA}-arm64-musl.zip
+      file_name: ./pleroma-stable-${CI_COMMIT_SHA}-arm64-musl.zip
