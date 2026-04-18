@@ -4,6 +4,8 @@ when:
     path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
   - event: tag
     branch: stable
+  - event: manual
+    branch: stable
 
 depends_on:
   - docker-stable
@@ -15,6 +17,7 @@ steps:
     image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
     when:
       - event: push
+      - evaluate: 'CI_PIPELINE_EVENT == "manual" && CI_COMMIT_TAG == ""'
     settings: &docker_settings
       registry: "git.fluffytail.org"
       image: "pleroma-test/pleroma"
@@ -32,6 +35,7 @@ steps:
     image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
     when:
       - event: tag
+      - evaluate: 'CI_PIPELINE_EVENT == "manual" && CI_COMMIT_TAG != ""'
     settings:
       <<: *docker_settings
       tags:

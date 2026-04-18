@@ -4,6 +4,8 @@ when:
     path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
   - event: tag
     branch: stable
+  - event: manual
+    branch: stable
 
 matrix:
   platform:
