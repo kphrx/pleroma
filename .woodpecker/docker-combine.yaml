@@ -28,7 +28,7 @@ steps:
       tags:
         - latest
         - develop
-        - ${CI_COMMIT_SHA}
+        - ${CI_COMMIT_SHA:0:8}
       username:
         from_secret: pleroma-ci-user
       password:
@@ -47,7 +47,7 @@ steps:
       tags: &docker_tags
         - latest
         - stable
-        - ${CI_COMMIT_SHA}
+        - ${CI_COMMIT_SHA:0:8}
       username:
         from_secret: pleroma-ci-user
       password:

@@ -39,7 +39,7 @@ steps:
       tags:
         - latest-amd64
         - develop-amd64
-        - ${CI_COMMIT_SHA}-amd64
+        - ${CI_COMMIT_SHA:0:8}-amd64
 
   docker-develop-arm64:
     image: woodpeckerci/plugin-kaniko:2.3.1
@@ -50,7 +50,7 @@ steps:
       tags:
         - latest-arm64
         - develop-arm64
-        - ${CI_COMMIT_SHA}-arm64
+        - ${CI_COMMIT_SHA:0:8}-arm64
 
   docker-stable-amd64:
     image: *kaniko_image
@@ -62,7 +62,7 @@ steps:
       tags: &amd64_tags
         - latest-amd64
         - stable-amd64
-        - ${CI_COMMIT_SHA}-amd64
+        - ${CI_COMMIT_SHA:0:8}-amd64
 
   docker-stable-tag-amd64:
     image: *kaniko_image
@@ -85,7 +85,7 @@ steps:
       tags: &arm64_tags
         - latest-arm64
         - stable-arm64
-        - ${CI_COMMIT_SHA}-arm64
+        - ${CI_COMMIT_SHA:0:8}-arm64
 
   docker-stable-tag-arm64:
     image: *kaniko_image

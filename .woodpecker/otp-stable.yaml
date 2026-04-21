@@ -49,7 +49,7 @@ steps:
     commands:
       - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev git build-essential zip
       - <<: *pleroma_build_cmds
-      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-amd64.zip release
+      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip release
 
   upload-artifacts-amd64:
     image: docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
@@ -58,9 +58,9 @@ steps:
     settings:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-amd64
-      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-amd64
-      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-amd64.zip
-      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-amd64.zip
+      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64
+      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
+      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
 
   otp-stable-arm64:
     image: docker.io/hexpm/elixir-arm64:1.17.3-erlang-27.3.4.2-ubuntu-noble-20250716
@@ -73,7 +73,7 @@ steps:
     commands:
       - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev git build-essential zip
       - <<: *pleroma_build_cmds
-      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-arm64.zip release
+      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip release
 
   upload-artifacts-arm64:
     image: docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
@@ -82,6 +82,6 @@ steps:
     settings:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-arm64
-      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-arm64
-      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-arm64.zip
-      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-arm64.zip
+      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64
+      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
+      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip

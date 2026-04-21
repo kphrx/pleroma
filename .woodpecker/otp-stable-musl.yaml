@@ -48,7 +48,7 @@ steps:
     commands:
       - apk add git build-base cmake file-dev openssl vips-dev zip
       - <<: *pleroma_build_cmds
-      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-amd64-musl.zip release
+      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl.zip release
 
   upload-artifacts-amd64-musl:
     image: docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
@@ -57,9 +57,9 @@ steps:
     settings:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-amd64-musl
-      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-amd64-musl
-      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-amd64-musl.zip
-      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-amd64-musl.zip
+      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl
+      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
+      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
 
   otp-stable-arm64-musl:
     image: docker.io/hexpm/elixir-arm64:1.17.3-erlang-27.3.4.2-alpine-3.22.1
@@ -71,7 +71,7 @@ steps:
     commands:
       - apk add git build-base cmake file-dev openssl vips-dev zip
       - <<: *pleroma_build_cmds
-      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-arm64-musl.zip release
+      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl.zip release
 
   upload-artifacts-arm64-musl:
     image: docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
@@ -80,6 +80,6 @@ steps:
     settings:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-arm64-musl
-      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-arm64-musl
-      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-arm64-musl.zip
-      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA}-arm64-musl.zip
+      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl
+      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
+      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
