@@ -1,5 +1,8 @@
 when:
   - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+  - event: push
     branch: stable
     path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
   - event: tag
@@ -18,7 +21,8 @@ labels:
   platform: ${platform}
 
 variables:
-  pleroma_build_cmds: &pleroma_build_cmds
+  build_cmds: &build_cmds
+    - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev git build-essential zip
     - echo "import Config" > config/prod.secret.exs
     - mix local.hex --force
     - mix local.rebar --force
@@ -26,33 +30,55 @@ variables:
     - mkdir release
     - export PLEROMA_BUILD_BRANCH=${CI_COMMIT_BRANCH}
     - mix release --path release
+  build_image_amd64: &build_image_amd64 docker.io/hexpm/elixir-amd64:1.17.3-erlang-27.3.4.2-ubuntu-noble-20250716
+  build_image_arm64: &build_image_arm64 docker.io/hexpm/elixir-arm64:1.17.3-erlang-27.3.4.2-ubuntu-noble-20250716
+  artifacts_uploader_image: &artifacts_uploader_image docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
   artifacts_uploader_settings: &artifacts_uploader_settings
     user:
       from_secret: pleroma-ci-user
     password:
       from_secret: pleroma-ci-password
-    owner: 'pleroma-test'
+    owner: 'pleroma'
+  env: &env
+    MIX_ENV: prod
+    VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
+    DEBIAN_FRONTEND: noninteractive
 
 steps:
-  otp-stable-amd64:
-    image: docker.io/hexpm/elixir-amd64:1.17.3-erlang-27.3.4.2-ubuntu-noble-20250716
-    # when:
-    #   - platform: linux/amd64
-    # does not work even though it should according to docs
-    # https://github.com/woodpecker-ci/woodpecker/discussions/5367#discussioncomment-13901342
+  otp-develop-amd64:
+    image: *build_image_amd64
     when:
-      - evaluate: platform == "linux/amd64"
-    environment:
-      MIX_ENV: prod
-      VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
-      DEBIAN_FRONTEND: noninteractive
-    commands:
-      - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev git build-essential zip
-      - <<: *pleroma_build_cmds
+      - evaluate: 'platform == "linux/amd64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+    environment: *env
+    commands: &amd64_build
+      - <<: *build_cmds
       - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip release
 
+  otp-stable-amd64:
+    image: *build_image_amd64
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_COMMIT_BRANCH == "stable"'
+    environment: *env
+    commands: *amd64_build
+
+  otp-develop-arm64:
+    image: *build_image_arm64
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+    environment: *env
+    commands: &arm64_build
+      - <<: *build_cmds
+      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip release
+
+  otp-stable-arm64:
+    image: *build_image_arm64
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_COMMIT_BRANCH == "stable"'
+    environment: *env
+    commands: *arm64_build
+
   upload-artifacts-amd64:
-    image: docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
+    image: *artifacts_uploader_image
     when:
       - evaluate: platform == "linux/amd64"
     settings:
@@ -62,21 +88,8 @@ steps:
       file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
       file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
 
-  otp-stable-arm64:
-    image: docker.io/hexpm/elixir-arm64:1.17.3-erlang-27.3.4.2-ubuntu-noble-20250716
-    when:
-      - evaluate: platform == "linux/arm64"
-    environment:
-      MIX_ENV: prod
-      VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
-      DEBIAN_FRONTEND: noninteractive
-    commands:
-      - apt-get update && apt-get install -y cmake libmagic-dev libvips-dev erlang-dev git build-essential zip
-      - <<: *pleroma_build_cmds
-      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip release
-
   upload-artifacts-arm64:
-    image: docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
+    image: *artifacts_uploader_image
     when:
       - evaluate: platform == "linux/arm64"
     settings:
