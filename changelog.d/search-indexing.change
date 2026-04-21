@@ -1,0 +1,1 @@
+Filter indexable activities before inserting indexing jobs into the queue.

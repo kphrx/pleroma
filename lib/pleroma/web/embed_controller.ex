@@ -20,6 +20,7 @@ defmodule Pleroma.Web.EmbedController do
       conn
       |> delete_resp_header("x-frame-options")
       |> delete_resp_header("content-security-policy")
+      |> put_layout({Pleroma.Web.LayoutView, :embed})
       |> render("show.html",
         activity: activity,
         author: User.sanitize_html(author),
