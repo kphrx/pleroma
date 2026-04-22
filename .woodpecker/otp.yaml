@@ -51,7 +51,7 @@ steps:
     environment: *env
     commands: &amd64_build
       - <<: *build_cmds
-      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip release
+      - zip -9rq ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip release
 
   otp-stable-amd64:
     image: *build_image_amd64
@@ -69,7 +69,7 @@ steps:
     environment: *env
     commands:
       - <<: *build_cmds
-      - zip -9rq pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64.zip release
+      - zip -9rq stable-${CI_COMMIT_SHA:0:8}-amd64.zip release
 
   otp-develop-arm64:
     image: *build_image_arm64
@@ -78,7 +78,7 @@ steps:
     environment: *env
     commands: &arm64_build
       - <<: *build_cmds
-      - zip -9rq pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip release
+      - zip -9rq ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip release
 
   otp-stable-arm64:
     image: *build_image_arm64
@@ -96,7 +96,7 @@ steps:
     environment: *env
     commands:
       - <<: *build_cmds
-      - zip -9rq pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64.zip release
+      - zip -9rq stable-${CI_COMMIT_SHA:0:8}-arm64.zip release
 
   upload-artifacts-amd64:
     image: *artifacts_uploader_image
@@ -108,7 +108,7 @@ steps:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-amd64
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64
-      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
+      file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
       file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
@@ -120,7 +120,7 @@ steps:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-stable-amd64
       package_version: stable-${CI_COMMIT_SHA:0:8}-amd64
-      file_source: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64.zip
+      file_source: ./stable-${CI_COMMIT_SHA:0:8}-amd64.zip
       file_name: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64.zip
 
   upload-artifacts-arm64:
@@ -133,7 +133,7 @@ steps:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-arm64
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64
-      file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
+      file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
       file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
@@ -145,5 +145,5 @@ steps:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-stable-arm64
       package_version: stable-${CI_COMMIT_SHA:0:8}-arm64
-      file_source: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64.zip
+      file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm64.zip
       file_name: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64.zip
