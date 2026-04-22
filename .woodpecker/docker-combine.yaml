@@ -6,7 +6,6 @@ when:
     branch: stable
     path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
   - event: tag
-    branch: stable
   - event: manual
     branch: stable
 

@@ -6,7 +6,6 @@ when:
     branch: stable
     path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
   - event: tag
-    branch: stable
   - event: manual
     branch: stable
 
@@ -56,9 +55,20 @@ steps:
   otp-stable-amd64-musl:
     image: *build_image_amd64
     when:
-      - evaluate: 'platform == "linux/amd64" && CI_COMMIT_BRANCH == "stable"'
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "stable"'
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual"'
     environment: *env
     commands: *amd64_build
+
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  otp-stable-tag-amd64-musl:
+    image: *build_image_amd64
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "tag"'
+    environment: *env
+    commands:
+      - <<: *build_cmds
+      - zip -9rq pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64-musl.zip release
 
   otp-develop-arm64-musl:
     image: *build_image_arm64
@@ -72,14 +82,27 @@ steps:
   otp-stable-arm64-musl:
     image: *build_image_arm64
     when:
-      - evaluate: 'platform == "linux/arm64" && CI_COMMIT_BRANCH == "stable"'
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "stable"'
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual"'
     environment: *env
     commands: *arm64_build
+
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  otp-stable-tag-arm64-musl:
+    image: *build_image_arm64
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "tag"'
+    environment: *env
+    commands:
+      - <<: *build_cmds
+      - zip -9rq pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64-musl.zip release
 
   upload-artifacts-amd64-musl:
     image: *artifacts_uploader_image
     when:
-      - evaluate: platform == "linux/amd64"
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "stable"'
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual"'
     settings:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-amd64-musl
@@ -87,13 +110,39 @@ steps:
       file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
       file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
 
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  upload-artifacts-tag-amd64-musl:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "tag"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-stable-amd64-musl
+      package_version: stable-${CI_COMMIT_SHA:0:8}-amd64-musl
+      file_source: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
+      file_name: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
+
   upload-artifacts-arm64-musl:
     image: *artifacts_uploader_image
     when:
-      - evaluate: platform == "linux/arm64"
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "stable"'
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual"'
     settings:
       <<: *artifacts_uploader_settings
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-arm64-musl
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl
       file_source: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
       file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
+
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  upload-artifacts-tag-arm64-musl:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "tag"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-stable-arm64-musl
+      package_version: stable-${CI_COMMIT_SHA:0:8}-arm64-musl
+      file_source: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
+      file_name: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
