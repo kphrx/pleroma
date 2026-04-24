@@ -78,12 +78,17 @@ update() {
 
 	RELEASE_ROOT=$(dirname "$SCRIPTPATH")
 	uri="https://git.pleroma.social"
-	project_id="2"
+	project_name="pleroma"
+	api_base="${uri}/api/v1/packages/${project_name}/generic"
+	package_base="${uri}/api/packages/${project_name}/generic"
 	project_branch="${BRANCH:-$(detect_branch)}"
 	flavour="${FLAVOUR:-$(detect_flavour)}"
+	# API responds in JSON, optimistically try to make it one object per line
+	ver=$(curl -s "${api_base}"/pleroma-otp-"${project_branch}"-"${flavour}"/-/latest | tr ',' '\n' | grep '"version":' | cut -d':' -f2 | tr -d '"')
+	file=$(curl -s "${api_base}"/pleroma-otp-"${project_branch}"-"${flavour}"/"${ver}"/files | tr ',' '\n' | grep '"name":' | cut -d':' -f2 | tr -d '"')
+	full_uri=${FULL_URI:-"${package_base}"/pleroma-otp-"${project_branch}"-"${flavour}"/"${ver}"/"${file}"}
 	tmp="${TMP_DIR:-/tmp}"
 	artifact="$tmp/pleroma.zip"
-	full_uri="${FULL_URI:-${uri}/api/v4/projects/${project_id}/jobs/artifacts/${project_branch}/download?job=${flavour}}"
 	echo "Downloading the artifact from ${full_uri} to ${artifact}"
 	curl "$full_uri" -o "${artifact}"
 	echo "Unpacking ${artifact} to ${tmp}"
