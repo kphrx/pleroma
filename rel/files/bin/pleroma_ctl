@@ -137,7 +137,11 @@ else
 	SCRIPT=$(realpath "$0")
 	SCRIPTPATH=$(dirname "$SCRIPT")
 
-	FULL_ARGS="$*"
+	# HACK: Script arguments need to be sent as an array to Mix tasks, otherwise they will break (quoted) arguments with whitespace.
+	# Previously it was sent as string, which would get split on whitespace on the task side.
+	# Escaping does not help including non-POSIX printf %q
+	PREPARED_ARGS=""
+	for arg in "$@"; do PREPARED_ARGS="$PREPARED_ARGS \"$arg\","; done
 
 	ACTION="$1"
 	if [ $# -gt 0 ]; then
@@ -154,8 +158,8 @@ else
 	if [ "$ACTION" = "update" ]; then
 		update "$@"
 	elif [ "$ACTION" = "migrate" ] || [ "$ACTION" = "rollback" ] || [ "$ACTION" = "create" ] || [ "$ACTION $SUBACTION" = "instance gen" ] || [ "$PLEROMA_CTL_RPC_DISABLED" = true ]; then
-		"$SCRIPTPATH"/pleroma eval 'Pleroma.ReleaseTasks.run("'"$FULL_ARGS"'")'
+		"$SCRIPTPATH"/pleroma eval 'Pleroma.ReleaseTasks.run(['"${PREPARED_ARGS%%,}"'])'
 	else
-		"$SCRIPTPATH"/pleroma rpc 'Pleroma.ReleaseTasks.run("'"$FULL_ARGS"'")'
+		"$SCRIPTPATH"/pleroma rpc 'Pleroma.ReleaseTasks.run(['"${PREPARED_ARGS%%,}"'])'
 	fi
 fi
