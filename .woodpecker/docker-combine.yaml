@@ -20,7 +20,7 @@ steps:
     when:
       - event: push
         branch: ${CI_REPO_DEFAULT_BRANCH}
-    settings:
+    settings: &docker_settings
       registry: "git.pleroma.social"
       image: "pleroma/pleroma"
       architectures: [amd64, arm64]
@@ -39,18 +39,12 @@ steps:
       - event: push
         branch: stable
       - evaluate: 'CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG == ""'
-    settings: &docker_settings
-      registry: "git.pleroma.social"
-      image: "pleroma/pleroma"
-      architectures: [amd64, arm64]
-      tags: &docker_tags
+    settings:
+      <<: *docker_settings
+      tags: &stable_docker_tags
         - latest
         - stable
         - ${CI_COMMIT_SHA:0:8}
-      username:
-        from_secret: pleroma-ci-user
-      password:
-        from_secret: pleroma-ci-password
 
   docker-stable-tag-combine:
     image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
@@ -60,5 +54,5 @@ steps:
     settings:
       <<: *docker_settings
       tags:
-        - <<: *docker_tags
+        - <<: *stable_docker_tags
         - ${CI_COMMIT_TAG}
