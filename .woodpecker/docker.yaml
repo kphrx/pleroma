@@ -17,6 +17,7 @@ matrix:
 # This is needed for the when clauses below.
 labels:
   platform: ${platform}
+  memory: 'high'
 
 variables:
   docker_variables: &docker_variables
