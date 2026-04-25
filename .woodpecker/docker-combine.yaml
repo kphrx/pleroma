@@ -2,9 +2,6 @@ when:
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
     path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
-  - event: push
-    branch: stable
-    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
   - event: tag
   - event: manual
     branch: stable
@@ -36,8 +33,6 @@ steps:
   docker-stable-combine:
     image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
     when:
-      - event: push
-        branch: stable
       - evaluate: 'CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG == ""'
     settings:
       <<: *docker_settings

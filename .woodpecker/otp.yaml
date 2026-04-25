@@ -2,9 +2,6 @@ when:
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
     path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
-  - event: push
-    branch: stable
-    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
   - event: tag
   - event: manual
     branch: stable
@@ -56,8 +53,7 @@ steps:
   otp-stable-amd64:
     image: *build_image_amd64
     when:
-      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "stable"'
-      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual"'
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable"'
     environment: *env
     commands: *amd64_build
 
@@ -83,8 +79,7 @@ steps:
   otp-stable-arm64:
     image: *build_image_arm64
     when:
-      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "stable"'
-      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual"'
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable"'
     environment: *env
     commands: *arm64_build
 
@@ -102,7 +97,6 @@ steps:
     image: *artifacts_uploader_image
     when:
       - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
-      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "stable"'
       - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual"'
     settings:
       <<: *artifacts_uploader_settings
@@ -127,7 +121,6 @@ steps:
     image: *artifacts_uploader_image
     when:
       - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
-      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "stable"'
       - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual"'
     settings:
       <<: *artifacts_uploader_settings
