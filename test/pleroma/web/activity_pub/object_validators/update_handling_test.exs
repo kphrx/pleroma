@@ -29,7 +29,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateHandlingTest do
       assert {:ok, _update, []} = ObjectValidator.validate(valid_update, [])
     end
 
-    test "returns an error if the object can't be updated by the actor", %{
+    test "returns an error if the object can't be updated by the actor (different domain)", %{
       valid_update: valid_update
     } do
       other_user = insert(:user, local: false)
@@ -41,24 +41,26 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateHandlingTest do
       assert {:error, _cng} = ObjectValidator.validate(update, [])
     end
 
-    test "validates as long as the object is same-origin with the actor", %{
+    test "returns an error if the object can't be updated by the actor (same domain)", %{
+      user: user,
       valid_update: valid_update
     } do
-      other_user = insert(:user)
+      user_ap_id = user.ap_id
+      user_domain = URI.parse(user_ap_id).host
+      other_user = insert(:user, local: false, domain: user_domain)
 
       update =
         valid_update
         |> Map.put("actor", other_user.ap_id)
 
-      assert {:ok, _update, []} = ObjectValidator.validate(update, [])
+      assert {:error, _cng} = ObjectValidator.validate(update, [])
     end
 
-    test "validates if the object is not of an Actor type" do
-      note = insert(:note)
+    test "validates if the object is not of an Actor type", %{user: user} do
+      note = insert(:note, user: user)
       updated_note = note.data |> Map.put("content", "edited content")
-      other_user = insert(:user)
 
-      {:ok, update, _} = Builder.update(other_user, updated_note)
+      {:ok, update, _} = Builder.update(user, updated_note)
 
       assert {:ok, _update, _} = ObjectValidator.validate(update, [])
     end
