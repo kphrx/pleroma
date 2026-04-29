@@ -304,7 +304,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels when signature actor does not match payload actor" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
 
     note = insert(:note, user: bob, object_local: false)
@@ -343,7 +343,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
     with_mock Pleroma.Signature, [:passthrough],
       refetch_public_key: fn _conn -> {:ok, :fake_public_key} end,
       validate_signature: fn _conn -> true end do
-      assert {:cancel, :invalid_signature} = ReceiverWorker.perform(oban_job)
+      assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
     end
   end
 end

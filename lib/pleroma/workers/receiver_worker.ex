@@ -7,6 +7,7 @@ defmodule Pleroma.Workers.ReceiverWorker do
   alias Pleroma.Signature
   alias Pleroma.User
   alias Pleroma.Web.Federator
+  alias Pleroma.Web.Plugs.MappedSignatureToIdentityPlug
 
   use Oban.Worker, queue: :federator_incoming, max_attempts: 5, unique: [period: :infinity]
 
@@ -27,6 +28,7 @@ defmodule Pleroma.Workers.ReceiverWorker do
     req_headers = Enum.into(req_headers, [], &List.to_tuple(&1))
 
     conn_data = %Plug.Conn{
+      assigns: %{valid_signature: true},
       method: method,
       params: params,
       req_headers: req_headers,
@@ -37,6 +39,7 @@ defmodule Pleroma.Workers.ReceiverWorker do
     with {:ok, %User{}} <- User.get_or_fetch_by_ap_id(conn_data.params["actor"]),
          {:ok, _public_key} <- Signature.refetch_public_key(conn_data),
          {:signature, true} <- {:signature, Signature.validate_signature(conn_data)},
+         {:same_actor, true} <- {:same_actor, validate_same_actor(conn_data)},
          {:ok, res} <- Federator.perform(:incoming_ap_doc, params) do
       unless Instances.reachable?(params["actor"]) do
         domain = URI.parse(params["actor"]).host
@@ -67,6 +70,16 @@ defmodule Pleroma.Workers.ReceiverWorker do
 
   def timeout(_job), do: :timer.seconds(5)
 
+  defp validate_same_actor(conn_data) do
+    case MappedSignatureToIdentityPlug.call(conn_data, []) do
+      %Plug.Conn{assigns: %{valid_signature: true}} ->
+        true
+
+      _ ->
+        false
+    end
+  end
+
   defp process_errors({:error, {:error, _} = error}), do: process_errors(error)
 
   defp process_errors(errors) do
@@ -85,6 +98,7 @@ defmodule Pleroma.Workers.ReceiverWorker do
       {:error, {:reject, _} = reason} -> {:cancel, reason}
       # HTTP Sigs
       {:signature, false} -> {:cancel, :invalid_signature}
+      {:same_actor, false} -> {:cancel, :actor_signature_mismatch}
       # Origin / URL validation failed somewhere possibly due to spoofing
       {:error, :origin_containment_failed} -> {:cancel, :origin_containment_failed}
       # Unclear if this can be reached
