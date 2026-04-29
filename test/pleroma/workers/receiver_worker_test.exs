@@ -302,4 +302,48 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       end
     end
   end
+
+  test "cancels when signature actor does not match payload actor" do
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+
+    note = insert(:note, user: bob, object_local: false)
+
+    update = %{
+      "type" => "Update",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/malicious-update",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => note.data
+    }
+
+    req_headers = [
+      ["host", "example.com"],
+      ["date", "Thu, 25 Jul 2024 13:33:31 GMT"],
+      ["digest", "SHA-256=fake-digest"],
+      ["content-type", "application/activity+json"],
+      [
+        "signature",
+        "keyId=\"https://example.com/users/alice#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+      ]
+    ]
+
+    oban_job = %Oban.Job{
+      args: %{
+        "op" => "incoming_ap_doc",
+        "method" => "POST",
+        "params" => update,
+        "req_headers" => req_headers,
+        "request_path" => "/inbox",
+        "query_string" => ""
+      }
+    }
+
+    with_mock Pleroma.Signature, [:passthrough],
+      refetch_public_key: fn _conn -> {:ok, :fake_public_key} end,
+      validate_signature: fn _conn -> true end do
+      assert {:cancel, :invalid_signature} = ReceiverWorker.perform(oban_job)
+    end
+  end
 end
