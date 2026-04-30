@@ -794,6 +794,92 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       refute Activity.get_by_ap_id(data["id"])
     end
 
+    test "does not create a forged post signed by a different actor", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+      object_id = "https://example.com/objects/inbox-signed-forged-note"
+
+      data = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "actor" => bob.ap_id,
+        "id" => "https://example.com/activities/inbox-signed-forged-create",
+        "context" => "https://example.com/contexts/inbox-signed-forged-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => object_id,
+          "actor" => bob.ap_id,
+          "attributedTo" => bob.ap_id,
+          "context" => "https://example.com/contexts/inbox-signed-forged-create",
+          "content" => "forged post",
+          "published" => "2024-07-25T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> true end)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("digest", "SHA-256=fake-digest")
+        |> put_req_header(
+          "signature",
+          "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        )
+        |> post("/inbox", data)
+
+      assert conn.assigns.valid_signature == false
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      refute Object.get_by_ap_id(object_id)
+    end
+
+    test "does not create a forged like signed by a different actor", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+      note = insert(:note)
+
+      data = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Like",
+        "actor" => bob.ap_id,
+        "id" => "https://example.com/activities/inbox-signed-forged-like",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => note.data["id"]
+      }
+
+      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> true end)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("digest", "SHA-256=fake-digest")
+        |> put_req_header(
+          "signature",
+          "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        )
+        |> post("/inbox", data)
+
+      assert conn.assigns.valid_signature == false
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+    end
+
     test "accept follow activity", %{conn: conn} do
       clear_config([:instance, :federating], true)
       relay = Relay.get_actor()

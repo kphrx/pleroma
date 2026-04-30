@@ -11,6 +11,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
 
   alias Pleroma.User
   alias Pleroma.Web.CommonAPI
+  alias Pleroma.Web.ActivityPub.UserView
   alias Pleroma.Web.Federator
   alias Pleroma.Workers.ReceiverWorker
 
@@ -27,28 +28,34 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
     ]
   end
 
-  defp assert_mismatched_signature_cancelled(params) do
-    with_mocks [
-      {Pleroma.Signature, [:passthrough],
-       [
-         refetch_public_key: fn _conn -> {:ok, :fake_public_key} end,
-         validate_signature: fn _conn -> true end
-       ]},
-      {Pleroma.Web.Federator, [:passthrough],
-       [perform: fn :incoming_ap_doc, _params -> {:ok, :processed} end]}
-    ] do
-      assert {:ok, oban_job} =
-               Federator.incoming_ap_doc(%{
-                 method: "POST",
-                 req_headers: mismatched_signature_headers(),
-                 request_path: "/inbox",
-                 params: params,
-                 query_string: ""
-               })
+  defp expect_signature_from(%User{} = signer) do
+    signer_json = UserView.render("user.json", %{user: signer}) |> Map.delete("featured")
 
-      assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
-      refute called(Pleroma.Web.Federator.perform(:incoming_ap_doc, :_))
-    end
+    Tesla.Mock.mock(fn
+      %{url: url} when url == signer.ap_id ->
+        %Tesla.Env{
+          status: 200,
+          body: Jason.encode!(signer_json),
+          headers: HttpRequestMock.activitypub_object_headers()
+        }
+    end)
+
+    Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> true end)
+  end
+
+  defp assert_mismatched_signature_cancelled(params, signer) do
+    expect_signature_from(signer)
+
+    assert {:ok, oban_job} =
+             Federator.incoming_ap_doc(%{
+               method: "POST",
+               req_headers: mismatched_signature_headers(),
+               request_path: "/inbox",
+               params: params,
+               query_string: ""
+             })
+
+    assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
   end
 
   test "it does not retry MRF reject" do
@@ -341,7 +348,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels when signature actor does not match payload actor" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
 
     note = insert(:note, user: bob, object_local: false)
@@ -377,11 +384,9 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       }
     }
 
-    with_mock Pleroma.Signature, [:passthrough],
-      refetch_public_key: fn _conn -> {:ok, :fake_public_key} end,
-      validate_signature: fn _conn -> true end do
-      assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
-    end
+    expect_signature_from(alice)
+
+    assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
   end
 
   test "Federator preserves request metadata needed for ReceiverWorker signature checks" do
@@ -411,7 +416,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch through Federator-created jobs" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
 
     note = insert(:note, user: bob, object_local: false)
@@ -425,11 +430,11 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       "object" => note.data
     }
 
-    assert_mismatched_signature_cancelled(update)
+    assert_mismatched_signature_cancelled(update, alice)
   end
 
   test "cancels signature actor mismatch before processing a forged Create" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
 
     create = %{
@@ -450,11 +455,11 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       }
     }
 
-    assert_mismatched_signature_cancelled(create)
+    assert_mismatched_signature_cancelled(create, alice)
   end
 
   test "cancels signature actor mismatch before actually creating a forged post" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
 
     object_id = "https://example.com/objects/actually-forged-note"
@@ -479,6 +484,8 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       }
     }
 
+    expect_signature_from(alice)
+
     assert {:ok, oban_job} =
              Federator.incoming_ap_doc(%{
                method: "POST",
@@ -493,7 +500,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before processing a forged Like" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
     note = insert(:note)
 
@@ -506,11 +513,11 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       "object" => note.data["id"]
     }
 
-    assert_mismatched_signature_cancelled(like)
+    assert_mismatched_signature_cancelled(like, alice)
   end
 
   test "cancels signature actor mismatch before actually creating a forged Like" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
     note = insert(:note)
 
@@ -522,6 +529,8 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       "cc" => [],
       "object" => note.data["id"]
     }
+
+    expect_signature_from(alice)
 
     assert {:ok, oban_job} =
              Federator.incoming_ap_doc(%{
@@ -537,7 +546,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before processing a forged Announce" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
     note = insert(:note)
 
@@ -550,11 +559,11 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       "object" => note.data["id"]
     }
 
-    assert_mismatched_signature_cancelled(announce)
+    assert_mismatched_signature_cancelled(announce, alice)
   end
 
   test "cancels signature actor mismatch before processing a forged Follow" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
     followed = insert(:user)
 
@@ -567,11 +576,11 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       "object" => followed.ap_id
     }
 
-    assert_mismatched_signature_cancelled(follow)
+    assert_mismatched_signature_cancelled(follow, alice)
   end
 
   test "cancels signature actor mismatch before processing a forged Undo" do
-    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
 
     undo = %{
@@ -583,6 +592,6 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       "object" => "https://example.com/activities/existing-bob-activity"
     }
 
-    assert_mismatched_signature_cancelled(undo)
+    assert_mismatched_signature_cancelled(undo, alice)
   end
 end
