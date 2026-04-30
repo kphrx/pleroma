@@ -47,13 +47,15 @@ defmodule Pleroma.Web.Plugs.MappedSignatureToIdentityPlugTest do
     assert %{valid_signature: false} == conn.assigns
   end
 
-  @tag skip: "known breakage; the testsuite presently depends on it"
   test "it considers a mapped identity to be invalid when the identity cannot be found" do
+    actor = "http://niu.moe/users/rye"
+
     conn =
-      build_conn(:post, "/doesntmattter", %{"actor" => "http://mastodon.example.org/users/admin"})
-      |> set_signature("http://niu.moe/users/rye")
+      build_conn(:post, "/doesntmattter", %{"actor" => actor})
+      |> set_signature(actor)
       |> MappedSignatureToIdentityPlug.call(%{})
 
-    assert %{valid_signature: false} == conn.assigns
+    assert conn.assigns.valid_signature == false
+    refute Map.has_key?(conn.assigns, :user)
   end
 end

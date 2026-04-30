@@ -14,6 +14,43 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   alias Pleroma.Web.Federator
   alias Pleroma.Workers.ReceiverWorker
 
+  defp mismatched_signature_headers do
+    [
+      {"host", "example.com"},
+      {"date", "Thu, 25 Jul 2024 13:33:31 GMT"},
+      {"digest", "SHA-256=fake-digest"},
+      {"content-type", "application/activity+json"},
+      {
+        "signature",
+        "keyId=\"https://example.com/users/alice#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+      }
+    ]
+  end
+
+  defp assert_mismatched_signature_cancelled(params) do
+    with_mocks [
+      {Pleroma.Signature, [:passthrough],
+       [
+         refetch_public_key: fn _conn -> {:ok, :fake_public_key} end,
+         validate_signature: fn _conn -> true end
+       ]},
+      {Pleroma.Web.Federator, [:passthrough],
+       [perform: fn :incoming_ap_doc, _params -> {:ok, :processed} end]}
+    ] do
+      assert {:ok, oban_job} =
+               Federator.incoming_ap_doc(%{
+                 method: "POST",
+                 req_headers: mismatched_signature_headers(),
+                 request_path: "/inbox",
+                 params: params,
+                 query_string: ""
+               })
+
+      assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
+      refute called(Pleroma.Web.Federator.perform(:incoming_ap_doc, :_))
+    end
+  end
+
   test "it does not retry MRF reject" do
     params = insert(:note).data
 
@@ -345,5 +382,207 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       validate_signature: fn _conn -> true end do
       assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
     end
+  end
+
+  test "Federator preserves request metadata needed for ReceiverWorker signature checks" do
+    params = insert(:note_activity).data
+
+    req_headers = [
+      {"host", "example.com"},
+      {"signature", "keyId=\"https://example.com/users/alice#main-key\""}
+    ]
+
+    assert {:ok, oban_job} =
+             Federator.incoming_ap_doc(%{
+               method: "POST",
+               req_headers: req_headers,
+               request_path: "/inbox",
+               params: params,
+               query_string: "foo=bar"
+             })
+
+    assert %{
+             "method" => "POST",
+             "req_headers" => ^req_headers,
+             "request_path" => "/inbox",
+             "params" => ^params,
+             "query_string" => "foo=bar"
+           } = oban_job.args
+  end
+
+  test "cancels signature actor mismatch through Federator-created jobs" do
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+
+    note = insert(:note, user: bob, object_local: false)
+
+    update = %{
+      "type" => "Update",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/federator-malicious-update",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => note.data
+    }
+
+    assert_mismatched_signature_cancelled(update)
+  end
+
+  test "cancels signature actor mismatch before processing a forged Create" do
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+
+    create = %{
+      "type" => "Create",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/forged-create",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://example.com/objects/forged-note",
+        "actor" => bob.ap_id,
+        "attributedTo" => bob.ap_id,
+        "content" => "forged post",
+        "published" => "2024-07-25T13:33:31Z",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => []
+      }
+    }
+
+    assert_mismatched_signature_cancelled(create)
+  end
+
+  test "cancels signature actor mismatch before actually creating a forged post" do
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+
+    object_id = "https://example.com/objects/actually-forged-note"
+
+    create = %{
+      "type" => "Create",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/actually-forged-create",
+      "context" => "https://example.com/contexts/actually-forged-create",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => %{
+        "type" => "Note",
+        "id" => object_id,
+        "actor" => bob.ap_id,
+        "attributedTo" => bob.ap_id,
+        "context" => "https://example.com/contexts/actually-forged-create",
+        "content" => "forged post",
+        "published" => "2024-07-25T13:33:31Z",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => []
+      }
+    }
+
+    assert {:ok, oban_job} =
+             Federator.incoming_ap_doc(%{
+               method: "POST",
+               req_headers: mismatched_signature_headers(),
+               request_path: "/inbox",
+               params: create,
+               query_string: ""
+             })
+
+    assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
+    refute Pleroma.Object.get_by_ap_id(object_id)
+  end
+
+  test "cancels signature actor mismatch before processing a forged Like" do
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    note = insert(:note)
+
+    like = %{
+      "type" => "Like",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/forged-like",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => note.data["id"]
+    }
+
+    assert_mismatched_signature_cancelled(like)
+  end
+
+  test "cancels signature actor mismatch before actually creating a forged Like" do
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    note = insert(:note)
+
+    like = %{
+      "type" => "Like",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/actually-forged-like",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => note.data["id"]
+    }
+
+    assert {:ok, oban_job} =
+             Federator.incoming_ap_doc(%{
+               method: "POST",
+               req_headers: mismatched_signature_headers(),
+               request_path: "/inbox",
+               params: like,
+               query_string: ""
+             })
+
+    assert {:cancel, :actor_signature_mismatch} = ReceiverWorker.perform(oban_job)
+    refute Pleroma.Activity.get_by_ap_id(like["id"])
+  end
+
+  test "cancels signature actor mismatch before processing a forged Announce" do
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    note = insert(:note)
+
+    announce = %{
+      "type" => "Announce",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/forged-announce",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => note.data["id"]
+    }
+
+    assert_mismatched_signature_cancelled(announce)
+  end
+
+  test "cancels signature actor mismatch before processing a forged Follow" do
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    followed = insert(:user)
+
+    follow = %{
+      "type" => "Follow",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/forged-follow",
+      "to" => [followed.ap_id],
+      "cc" => [],
+      "object" => followed.ap_id
+    }
+
+    assert_mismatched_signature_cancelled(follow)
+  end
+
+  test "cancels signature actor mismatch before processing a forged Undo" do
+    _alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+
+    undo = %{
+      "type" => "Undo",
+      "actor" => bob.ap_id,
+      "id" => "https://example.com/activities/forged-undo",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => "https://example.com/activities/existing-bob-activity"
+    }
+
+    assert_mismatched_signature_cancelled(undo)
   end
 end

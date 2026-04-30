@@ -726,6 +726,74 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert Activity.get_by_ap_id(data["id"])
     end
 
+    test "does not create a forged post after failed signature retry", %{conn: conn} do
+      bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+      object_id = "https://example.com/objects/inbox-forged-note"
+
+      data = %{
+        "type" => "Create",
+        "actor" => bob.ap_id,
+        "id" => "https://example.com/activities/inbox-forged-create",
+        "context" => "https://example.com/contexts/inbox-forged-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => object_id,
+          "actor" => bob.ap_id,
+          "attributedTo" => bob.ap_id,
+          "context" => "https://example.com/contexts/inbox-forged-create",
+          "content" => "forged post",
+          "published" => "2024-07-25T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://example.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      refute Object.get_by_ap_id(object_id)
+    end
+
+    test "does not create a forged like after failed signature retry", %{conn: conn} do
+      bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+      note = insert(:note)
+
+      data = %{
+        "type" => "Like",
+        "actor" => bob.ap_id,
+        "id" => "https://example.com/activities/inbox-forged-like",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => note.data["id"]
+      }
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://example.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+    end
+
     test "accept follow activity", %{conn: conn} do
       clear_config([:instance, :federating], true)
       relay = Relay.get_actor()
