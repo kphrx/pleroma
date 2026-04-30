@@ -727,14 +727,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     end
 
     test "does not create a forged post after failed signature retry", %{conn: conn} do
-      bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
-      object_id = "https://example.com/objects/inbox-forged-note"
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      object_id = "https://two.com/objects/inbox-forged-note"
 
       data = %{
         "type" => "Create",
         "actor" => bob.ap_id,
-        "id" => "https://example.com/activities/inbox-forged-create",
-        "context" => "https://example.com/contexts/inbox-forged-create",
+        "id" => "https://two.com/activities/inbox-forged-create",
+        "context" => "https://two.com/contexts/inbox-forged-create",
         "to" => ["https://www.w3.org/ns/activitystreams#Public"],
         "cc" => [],
         "object" => %{
@@ -742,7 +742,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
           "id" => object_id,
           "actor" => bob.ap_id,
           "attributedTo" => bob.ap_id,
-          "context" => "https://example.com/contexts/inbox-forged-create",
+          "context" => "https://two.com/contexts/inbox-forged-create",
           "content" => "forged post",
           "published" => "2024-07-25T13:33:31Z",
           "to" => ["https://www.w3.org/ns/activitystreams#Public"],
@@ -754,7 +754,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         conn
         |> assign(:valid_signature, false)
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://example.com/users/alice#main-key\"")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
         |> post("/inbox", data)
 
       assert "ok" == json_response(conn, 200)
@@ -767,13 +767,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     end
 
     test "does not create a forged like after failed signature retry", %{conn: conn} do
-      bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
       note = insert(:note)
 
       data = %{
         "type" => "Like",
         "actor" => bob.ap_id,
-        "id" => "https://example.com/activities/inbox-forged-like",
+        "id" => "https://two.com/activities/inbox-forged-like",
         "to" => ["https://www.w3.org/ns/activitystreams#Public"],
         "cc" => [],
         "object" => note.data["id"]
@@ -783,7 +783,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         conn
         |> assign(:valid_signature, false)
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://example.com/users/alice#main-key\"")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
         |> post("/inbox", data)
 
       assert "ok" == json_response(conn, 200)
@@ -795,16 +795,16 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     end
 
     test "does not create a forged post signed by a different actor", %{conn: conn} do
-      alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-      bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
-      object_id = "https://example.com/objects/inbox-signed-forged-note"
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      object_id = "https://two.com/objects/inbox-signed-forged-note"
 
       data = %{
         "@context" => "https://www.w3.org/ns/activitystreams",
         "type" => "Create",
         "actor" => bob.ap_id,
-        "id" => "https://example.com/activities/inbox-signed-forged-create",
-        "context" => "https://example.com/contexts/inbox-signed-forged-create",
+        "id" => "https://two.com/activities/inbox-signed-forged-create",
+        "context" => "https://two.com/contexts/inbox-signed-forged-create",
         "to" => ["https://www.w3.org/ns/activitystreams#Public"],
         "cc" => [],
         "object" => %{
@@ -812,7 +812,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
           "id" => object_id,
           "actor" => bob.ap_id,
           "attributedTo" => bob.ap_id,
-          "context" => "https://example.com/contexts/inbox-signed-forged-create",
+          "context" => "https://two.com/contexts/inbox-signed-forged-create",
           "content" => "forged post",
           "published" => "2024-07-25T13:33:31Z",
           "to" => ["https://www.w3.org/ns/activitystreams#Public"],
@@ -844,15 +844,15 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     end
 
     test "does not create a forged like signed by a different actor", %{conn: conn} do
-      alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-      bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
       note = insert(:note)
 
       data = %{
         "@context" => "https://www.w3.org/ns/activitystreams",
         "type" => "Like",
         "actor" => bob.ap_id,
-        "id" => "https://example.com/activities/inbox-signed-forged-like",
+        "id" => "https://two.com/activities/inbox-signed-forged-like",
         "to" => ["https://www.w3.org/ns/activitystreams#Public"],
         "cc" => [],
         "object" => note.data["id"]

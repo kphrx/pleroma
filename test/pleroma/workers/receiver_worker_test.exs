@@ -17,13 +17,13 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
 
   defp mismatched_signature_headers do
     [
-      {"host", "example.com"},
+      {"host", "local.test"},
       {"date", "Thu, 25 Jul 2024 13:33:31 GMT"},
       {"digest", "SHA-256=fake-digest"},
       {"content-type", "application/activity+json"},
       {
         "signature",
-        "keyId=\"https://example.com/users/alice#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        "keyId=\"https://one.com/users/alice#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
       }
     ]
   end
@@ -348,28 +348,33 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels when signature actor does not match payload actor" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
 
-    note = insert(:note, user: bob, object_local: false)
+    note =
+      insert(:note,
+        user: bob,
+        object_local: false,
+        data: %{"id" => "https://two.com/objects/malicious-update-note"}
+      )
 
     update = %{
       "type" => "Update",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/malicious-update",
+      "id" => "https://two.com/activities/malicious-update",
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [],
       "object" => note.data
     }
 
     req_headers = [
-      ["host", "example.com"],
+      ["host", "local.test"],
       ["date", "Thu, 25 Jul 2024 13:33:31 GMT"],
       ["digest", "SHA-256=fake-digest"],
       ["content-type", "application/activity+json"],
       [
         "signature",
-        "keyId=\"https://example.com/users/alice#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        "keyId=\"https://one.com/users/alice#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
       ]
     ]
 
@@ -393,8 +398,8 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
     params = insert(:note_activity).data
 
     req_headers = [
-      {"host", "example.com"},
-      {"signature", "keyId=\"https://example.com/users/alice#main-key\""}
+      {"host", "local.test"},
+      {"signature", "keyId=\"https://one.com/users/alice#main-key\""}
     ]
 
     assert {:ok, oban_job} =
@@ -416,15 +421,20 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch through Federator-created jobs" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
 
-    note = insert(:note, user: bob, object_local: false)
+    note =
+      insert(:note,
+        user: bob,
+        object_local: false,
+        data: %{"id" => "https://two.com/objects/federator-malicious-note"}
+      )
 
     update = %{
       "type" => "Update",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/federator-malicious-update",
+      "id" => "https://two.com/activities/federator-malicious-update",
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [],
       "object" => note.data
@@ -434,18 +444,18 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before processing a forged Create" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
 
     create = %{
       "type" => "Create",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/forged-create",
+      "id" => "https://two.com/activities/forged-create",
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [],
       "object" => %{
         "type" => "Note",
-        "id" => "https://example.com/objects/forged-note",
+        "id" => "https://two.com/objects/forged-note",
         "actor" => bob.ap_id,
         "attributedTo" => bob.ap_id,
         "content" => "forged post",
@@ -459,16 +469,16 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before actually creating a forged post" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
 
-    object_id = "https://example.com/objects/actually-forged-note"
+    object_id = "https://two.com/objects/actually-forged-note"
 
     create = %{
       "type" => "Create",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/actually-forged-create",
-      "context" => "https://example.com/contexts/actually-forged-create",
+      "id" => "https://two.com/activities/actually-forged-create",
+      "context" => "https://two.com/contexts/actually-forged-create",
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [],
       "object" => %{
@@ -476,7 +486,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
         "id" => object_id,
         "actor" => bob.ap_id,
         "attributedTo" => bob.ap_id,
-        "context" => "https://example.com/contexts/actually-forged-create",
+        "context" => "https://two.com/contexts/actually-forged-create",
         "content" => "forged post",
         "published" => "2024-07-25T13:33:31Z",
         "to" => ["https://www.w3.org/ns/activitystreams#Public"],
@@ -500,14 +510,14 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before processing a forged Like" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
     note = insert(:note)
 
     like = %{
       "type" => "Like",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/forged-like",
+      "id" => "https://two.com/activities/forged-like",
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [],
       "object" => note.data["id"]
@@ -517,14 +527,14 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before actually creating a forged Like" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
     note = insert(:note)
 
     like = %{
       "type" => "Like",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/actually-forged-like",
+      "id" => "https://two.com/activities/actually-forged-like",
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [],
       "object" => note.data["id"]
@@ -546,14 +556,14 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before processing a forged Announce" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
     note = insert(:note)
 
     announce = %{
       "type" => "Announce",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/forged-announce",
+      "id" => "https://two.com/activities/forged-announce",
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [],
       "object" => note.data["id"]
@@ -563,14 +573,14 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before processing a forged Follow" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
     followed = insert(:user)
 
     follow = %{
       "type" => "Follow",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/forged-follow",
+      "id" => "https://two.com/activities/forged-follow",
       "to" => [followed.ap_id],
       "cc" => [],
       "object" => followed.ap_id
@@ -580,16 +590,16 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
   end
 
   test "cancels signature actor mismatch before processing a forged Undo" do
-    alice = insert(:user, local: false, ap_id: "https://example.com/users/alice")
-    bob = insert(:user, local: false, ap_id: "https://example.com/users/bob")
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
 
     undo = %{
       "type" => "Undo",
       "actor" => bob.ap_id,
-      "id" => "https://example.com/activities/forged-undo",
+      "id" => "https://two.com/activities/forged-undo",
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [],
-      "object" => "https://example.com/activities/existing-bob-activity"
+      "object" => "https://two.com/activities/existing-bob-activity"
     }
 
     assert_mismatched_signature_cancelled(undo, alice)
