@@ -19,6 +19,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.Endpoint
   alias Pleroma.Workers.ReceiverWorker
+  alias Pleroma.Workers.SignatureRetryWorker
 
   import Pleroma.Factory
 
@@ -35,6 +36,24 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   end
 
   setup do: clear_config([:instance, :federating], true)
+
+  defp expect_signature_retry_from(%User{} = signer) do
+    signer_json = UserView.render("user.json", %{user: signer}) |> Map.delete("featured")
+
+    Tesla.Mock.mock(fn
+      %{url: url} when url == signer.ap_id ->
+        %Tesla.Env{
+          status: 200,
+          body: Jason.encode!(signer_json),
+          headers: HttpRequestMock.activitypub_object_headers()
+        }
+
+      env ->
+        apply(HttpRequestMock, :request, [env])
+    end)
+
+    Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> true end)
+  end
 
   describe "/relay" do
     setup do: clear_config([:instance, :allow_relay])
@@ -727,6 +746,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     end
 
     test "does not create a forged post after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
       bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
       object_id = "https://two.com/objects/inbox-forged-note"
 
@@ -750,6 +770,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         }
       }
 
+      expect_signature_retry_from(alice)
+
       conn =
         conn
         |> assign(:valid_signature, false)
@@ -760,13 +782,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert "ok" == json_response(conn, 200)
 
       assert [{:cancel, :actor_signature_mismatch}] =
-               ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
 
       refute Activity.get_by_ap_id(data["id"])
       refute Object.get_by_ap_id(object_id)
     end
 
     test "does not create a forged like after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
       bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
       note = insert(:note)
 
@@ -779,6 +802,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         "object" => note.data["id"]
       }
 
+      expect_signature_retry_from(alice)
+
       conn =
         conn
         |> assign(:valid_signature, false)
@@ -789,7 +814,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert "ok" == json_response(conn, 200)
 
       assert [{:cancel, :actor_signature_mismatch}] =
-               ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
 
       refute Activity.get_by_ap_id(data["id"])
     end
@@ -820,7 +845,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         }
       }
 
-      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> true end)
+      expect_signature_retry_from(alice)
 
       conn =
         conn
@@ -837,7 +862,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert "ok" == json_response(conn, 200)
 
       assert [{:cancel, :actor_signature_mismatch}] =
-               ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
 
       refute Activity.get_by_ap_id(data["id"])
       refute Object.get_by_ap_id(object_id)
@@ -858,7 +883,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         "object" => note.data["id"]
       }
 
-      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> true end)
+      expect_signature_retry_from(alice)
 
       conn =
         conn
@@ -875,7 +900,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert "ok" == json_response(conn, 200)
 
       assert [{:cancel, :actor_signature_mismatch}] =
-               ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
 
       refute Activity.get_by_ap_id(data["id"])
     end

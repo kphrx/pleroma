@@ -4,55 +4,36 @@
 
 defmodule Pleroma.Workers.ReceiverWorker do
   alias Pleroma.Instances
-  alias Pleroma.Signature
-  alias Pleroma.User
   alias Pleroma.Web.Federator
-  alias Pleroma.Web.Plugs.MappedSignatureToIdentityPlug
+  alias Pleroma.Workers.SignatureRetryWorker
 
   use Oban.Worker, queue: :federator_incoming, max_attempts: 5, unique: [period: :infinity]
 
   @impl true
-
-  def perform(%Job{
-        args: %{
-          "op" => "incoming_ap_doc",
-          "method" => method,
-          "params" => params,
-          "req_headers" => req_headers,
-          "request_path" => request_path,
-          "query_string" => query_string
-        }
-      }) do
-    # Oban's serialization converts our tuple headers to lists.
-    # Revert it for the signature validation.
-    req_headers = Enum.into(req_headers, [], &List.to_tuple(&1))
-
-    conn_data = %Plug.Conn{
-      assigns: %{valid_signature: true},
-      method: method,
-      params: params,
-      req_headers: req_headers,
-      request_path: request_path,
-      query_string: query_string
-    }
-
-    with {:ok, %User{}} <- User.get_or_fetch_by_ap_id(conn_data.params["actor"]),
-         {:ok, _public_key} <- Signature.refetch_public_key(conn_data),
-         {:signature, true} <- {:signature, Signature.validate_signature(conn_data)},
-         {:same_actor, true} <- {:same_actor, validate_same_actor(conn_data)},
-         {:ok, res} <- Federator.perform(:incoming_ap_doc, params) do
-      unless Instances.reachable?(params["actor"]) do
-        domain = URI.parse(params["actor"]).host
-        Oban.insert(Pleroma.Workers.ReachabilityWorker.new(%{"domain" => domain}))
-      end
-
-      {:ok, res}
+  def perform(%Job{args: %{"op" => "incoming_ap_doc", "params" => params} = args} = job) do
+    if signature_retry_job?(args) do
+      perform_signature_retry(job)
     else
-      e -> process_errors(e)
+      perform_incoming(params)
     end
   end
 
-  def perform(%Job{args: %{"op" => "incoming_ap_doc", "params" => params}}) do
+  def perform(%Job{args: %{"op" => "incoming_ap_doc"} = args} = job) do
+    if signature_retry_job?(args) do
+      perform_signature_retry(job)
+    else
+      process_errors(:missing_incoming_ap_doc_params)
+    end
+  end
+
+  defp perform_signature_retry(%Job{args: args} = job) do
+    SignatureRetryWorker.perform(%Job{
+      job
+      | args: Map.put(args, "op", "incoming_failed_signature_ap_doc")
+    })
+  end
+
+  defp perform_incoming(params) do
     with {:ok, res} <- Federator.perform(:incoming_ap_doc, params) do
       unless Instances.reachable?(params["actor"]) do
         domain = URI.parse(params["actor"]).host
@@ -65,20 +46,14 @@ defmodule Pleroma.Workers.ReceiverWorker do
     end
   end
 
+  defp signature_retry_job?(args) do
+    Enum.any?(~w(method req_headers request_path query_string), &Map.has_key?(args, &1))
+  end
+
   @impl true
   def timeout(%_{args: %{"timeout" => timeout}}), do: timeout
 
   def timeout(_job), do: :timer.seconds(5)
-
-  defp validate_same_actor(conn_data) do
-    case MappedSignatureToIdentityPlug.call(conn_data, []) do
-      %Plug.Conn{assigns: %{valid_signature: true}} ->
-        true
-
-      _ ->
-        false
-    end
-  end
 
   defp process_errors({:error, {:error, _} = error}), do: process_errors(error)
 
@@ -103,6 +78,7 @@ defmodule Pleroma.Workers.ReceiverWorker do
       {:error, :origin_containment_failed} -> {:cancel, :origin_containment_failed}
       # Unclear if this can be reached
       {:error, {:side_effects, {:error, :no_object_actor}} = reason} -> {:cancel, reason}
+      :missing_incoming_ap_doc_params -> {:cancel, :missing_incoming_ap_doc_params}
       # Catchall
       {:error, _} = e -> e
       e -> {:error, e}
