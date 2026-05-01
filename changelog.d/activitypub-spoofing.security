@@ -1,0 +1,1 @@
+ActivityPub: Fixed failed-signature inbox retry handling and signer identity checks to prevent spoofed remote activities from being processed
