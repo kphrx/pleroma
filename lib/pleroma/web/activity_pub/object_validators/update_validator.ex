@@ -101,6 +101,10 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateValidator do
             |> add_error(:object, "Can't be updated by this actor")
           end
 
+        nil ->
+          cng
+          |> add_error(:object, "Can't be updated by this actor")
+
         true ->
           cng
           |> add_error(:object, "Update is neither for Object or Actor")

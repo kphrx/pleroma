@@ -58,4 +58,16 @@ defmodule Pleroma.Web.Plugs.MappedSignatureToIdentityPlugTest do
     assert conn.assigns.valid_signature == false
     refute Map.has_key?(conn.assigns, :user)
   end
+
+  test "it considers a mapped identity to be invalid when embedded actor identity cannot be found" do
+    actor = "http://niu.moe/users/rye"
+
+    conn =
+      build_conn(:post, "/doesntmattter", %{"actor" => %{"id" => actor}})
+      |> set_signature(actor)
+      |> MappedSignatureToIdentityPlug.call(%{})
+
+    assert conn.assigns.valid_signature == false
+    refute Map.has_key?(conn.assigns, :user)
+  end
 end

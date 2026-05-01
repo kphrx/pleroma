@@ -90,6 +90,23 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateHandlingTest do
       refute cng.valid?
       assert Keyword.has_key?(cng.errors, :object)
     end
+
+    test "returns an error if the remote update target IRI is unknown" do
+      remote_user = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+
+      update = %{
+        "type" => "Update",
+        "actor" => remote_user.ap_id,
+        "id" => "https://example.com/activities/update-unknown-object-iri",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => "https://example.com/objects/unknown-iri"
+      }
+
+      assert {:error, %Ecto.Changeset{} = cng} = ObjectValidator.validate(update, local: false)
+      refute cng.valid?
+      assert Keyword.has_key?(cng.errors, :object)
+    end
   end
 
   describe "update note" do
