@@ -8,6 +8,9 @@ when:
 depends_on:
   - lint
 
+labels:
+  platform: linux/amd64
+
 variables:
   script_file_entrypoint: &script_file_entrypoint
     - /bin/sh
