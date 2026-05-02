@@ -6,7 +6,10 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
   use Pleroma.DataCase, async: false
   use Oban.Testing, repo: Pleroma.Repo
 
+  import ExUnit.CaptureLog
   import Pleroma.Factory
+
+  @moduletag capture_log: true
 
   alias Pleroma.Activity
   alias Pleroma.Object
@@ -73,7 +76,9 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
   defp assert_mismatched_signature_cancelled(params, signer) do
     assert {:ok, oban_job} = enqueue_failed_signature(params, signer)
 
-    assert {:cancel, :actor_signature_mismatch} = SignatureRetryWorker.perform(oban_job)
+    capture_log([level: :warning], fn ->
+      assert {:cancel, :actor_signature_mismatch} = SignatureRetryWorker.perform(oban_job)
+    end)
   end
 
   test "Federator preserves request metadata for failed-signature retry jobs" do
@@ -108,25 +113,54 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
   test "cancels retry jobs without request metadata" do
     params = insert(:note_activity).data
 
-    assert {:cancel, :missing_signature_retry_metadata} =
-             SignatureRetryWorker.perform(%Oban.Job{
-               args: %{"op" => "incoming_failed_signature_ap_doc", "params" => params}
-             })
+    log =
+      capture_log([level: :warning], fn ->
+        assert {:cancel, :missing_signature_retry_metadata} =
+                 SignatureRetryWorker.perform(%Oban.Job{
+                   args: %{"op" => "incoming_failed_signature_ap_doc", "params" => params}
+                 })
+      end)
+
+    assert log =~ "Failed-signature inbox retry rejected"
+    assert log =~ "reason=:missing_signature_retry_metadata"
+    assert log =~ "payload_actor=#{inspect(params["actor"])}"
+    assert log =~ "activity_id=#{inspect(params["id"])}"
+    assert log =~ "type=#{inspect(params["type"])}"
+    assert log =~ "request_path=nil"
   end
 
   test "cancels retry jobs with malformed serialized request headers" do
     params = insert(:note_activity).data
 
-    assert {:cancel, :invalid_signature_retry_metadata} =
-             SignatureRetryWorker.perform(failed_signature_job(params, [["signature"]]))
+    log =
+      capture_log([level: :warning], fn ->
+        assert {:cancel, :invalid_signature_retry_metadata} =
+                 SignatureRetryWorker.perform(failed_signature_job(params, [["signature"]]))
+      end)
+
+    assert log =~ "Failed-signature inbox retry rejected"
+    assert log =~ "reason=:invalid_signature_retry_metadata"
+    assert log =~ "signature_actor=nil"
+    assert log =~ "request_path=\"/inbox\""
   end
 
   test "cancels retry jobs without a signature header" do
     alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
     params = insert(:note_activity, user: alice).data
 
-    assert {:cancel, :invalid_signature} =
-             SignatureRetryWorker.perform(failed_signature_job(params, [{"host", "local.test"}]))
+    log =
+      capture_log([level: :warning], fn ->
+        assert {:cancel, :invalid_signature} =
+                 SignatureRetryWorker.perform(
+                   failed_signature_job(params, [{"host", "local.test"}])
+                 )
+      end)
+
+    assert log =~ "Failed-signature inbox retry rejected"
+    assert log =~ "reason=:invalid_signature"
+    assert log =~ "payload_actor=#{inspect(params["actor"])}"
+    assert log =~ "signature_actor=nil"
+    assert log =~ "request_path=\"/inbox\""
   end
 
   test "cancels missing signature before fetching an unavailable payload actor" do
@@ -194,7 +228,20 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
     stub_actor_fetch(alice)
 
     assert {:ok, oban_job} = enqueue_failed_signature(create, alice)
-    assert {:cancel, :invalid_signature} = SignatureRetryWorker.perform(oban_job)
+
+    log =
+      capture_log([level: :warning], fn ->
+        assert {:cancel, :invalid_signature} = SignatureRetryWorker.perform(oban_job)
+      end)
+
+    assert log =~ "Failed-signature inbox retry rejected"
+    assert log =~ "reason=:invalid_signature"
+    assert log =~ "payload_actor=\"https://one.com/users/alice\""
+    assert log =~ "signature_actor=\"https://one.com/users/alice\""
+    assert log =~ "activity_id=\"https://one.com/activities/invalid-signature-create\""
+    assert log =~ "type=\"Create\""
+    assert log =~ "request_path=\"/inbox\""
+
     refute Activity.get_by_ap_id(create["id"])
   end
 
@@ -350,6 +397,39 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
     }
 
     assert_mismatched_signature_cancelled(create, alice)
+  end
+
+  test "logs signature actor mismatch retry rejections" do
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+
+    create = %{
+      "type" => "Create",
+      "actor" => bob.ap_id,
+      "id" => "https://two.com/activities/logged-forged-create",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://two.com/objects/logged-forged-note",
+        "actor" => bob.ap_id,
+        "attributedTo" => bob.ap_id,
+        "content" => "forged post",
+        "published" => "2024-07-25T13:33:31Z",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => []
+      }
+    }
+
+    log = assert_mismatched_signature_cancelled(create, alice)
+
+    assert log =~ "Failed-signature inbox retry rejected"
+    assert log =~ "reason=:actor_signature_mismatch"
+    assert log =~ "payload_actor=\"https://two.com/users/bob\""
+    assert log =~ "signature_actor=\"https://one.com/users/alice\""
+    assert log =~ "activity_id=\"https://two.com/activities/logged-forged-create\""
+    assert log =~ "type=\"Create\""
+    assert log =~ "request_path=\"/inbox\""
   end
 
   test "cancels signature actor mismatch before actually creating a forged post" do
