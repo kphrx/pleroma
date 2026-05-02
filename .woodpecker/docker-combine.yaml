@@ -13,6 +13,9 @@ depends_on:
 
 skip_clone: true
 
+labels:
+  platform: linux/amd64
+
 steps:
   docker-develop-combine:
     image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
