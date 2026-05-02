@@ -5,10 +5,17 @@ when:
     branch: ${CI_REPO_DEFAULT_BRANCH}
     path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**" ]
 
+variables:
+  script_file_entrypoint: &script_file_entrypoint
+    - /bin/sh
+    - -c
+    - 'printf "%s" "$CI_SCRIPT" | base64 -d > /tmp/ci-script.sh && /bin/sh -xe /tmp/ci-script.sh'
+
 steps:
   mix-format:
     image: &elixir-image
       docker.io/elixir:1.15-alpine
+    entrypoint: *script_file_entrypoint
     failure: ignore
     commands:
       - |
@@ -19,6 +26,7 @@ steps:
 
   credo:
     image: *elixir-image
+    entrypoint: *script_file_entrypoint
     failure: ignore
     environment:
       MIX_ENV: test
@@ -55,6 +63,7 @@ steps:
 
   ensure-status:
     image: *elixir-image
+    entrypoint: *script_file_entrypoint
     commands: |
       if test -f fail.stamp; then
         echo "One or more previous steps fails. Failing workflow..."

@@ -1,9 +1,16 @@
 when:
   - event: pull_request
 
+variables:
+  script_file_entrypoint: &script_file_entrypoint
+    - /bin/sh
+    - -c
+    - 'printf "%s" "$CI_SCRIPT" | base64 -d > /tmp/ci-script.sh && /bin/sh -xe /tmp/ci-script.sh'
+
 steps:
   check-changelog:
     image: docker.io/alpine:3.23
+    entrypoint: *script_file_entrypoint
     commands:
       - apk add --no-cache git
       - sh ./tools/check-changelog
