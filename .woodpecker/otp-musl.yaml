@@ -18,6 +18,10 @@ labels:
   platform: ${platform}
 
 variables:
+  script_file_entrypoint: &script_file_entrypoint
+    - /bin/sh
+    - -c
+    - 'printf "%s" "$CI_SCRIPT" | base64 -d > /tmp/ci-script.sh && /bin/sh -xe /tmp/ci-script.sh'
   build_cmds: &build_cmds
     - apk add git build-base cmake file-dev openssl vips-dev zip
     - echo "import Config" > config/prod.secret.exs
@@ -44,6 +48,7 @@ variables:
 steps:
   otp-develop-amd64-musl:
     image: *build_image_amd64
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/amd64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
     environment: *env
@@ -53,6 +58,7 @@ steps:
 
   otp-stable-amd64-musl:
     image: *build_image_amd64
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable"'
     environment: *env
@@ -61,6 +67,7 @@ steps:
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   otp-stable-tag-amd64-musl:
     image: *build_image_amd64
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "tag"'
     environment: *env
@@ -70,6 +77,7 @@ steps:
 
   otp-develop-arm-musl:
     image: *build_image_arm
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/arm" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
     environment: *env
@@ -79,6 +87,7 @@ steps:
 
   otp-stable-arm-musl:
     image: *build_image_arm
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable"'
     environment: *env
@@ -87,6 +96,7 @@ steps:
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   otp-stable-tag-arm-musl:
     image: *build_image_arm
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "tag"'
     environment: *env
@@ -96,6 +106,7 @@ steps:
 
   otp-develop-arm64-musl:
     image: *build_image_arm64
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/arm64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
     environment: *env
@@ -105,6 +116,7 @@ steps:
 
   otp-stable-arm64-musl:
     image: *build_image_arm64
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable"'
     environment: *env
@@ -113,6 +125,7 @@ steps:
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   otp-stable-tag-arm64-musl:
     image: *build_image_arm64
+    entrypoint: *script_file_entrypoint
     when:
       - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "tag"'
     environment: *env
