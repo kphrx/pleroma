@@ -1,7 +1,7 @@
 when:
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
-    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**" ]
   - event: tag
   - event: manual
     branch: stable
@@ -9,6 +9,7 @@ when:
 matrix:
   platform:
     - linux/amd64
+    - linux/arm
     - linux/arm64
 
 # This is needed for the when clauses below.
@@ -27,6 +28,7 @@ variables:
     - export PLEROMA_BUILD_BRANCH=${CI_COMMIT_BRANCH}
     - mix release --path release
   build_image_amd64: &build_image_amd64 docker.io/hexpm/elixir-amd64:1.17.3-erlang-27.3.4.2-ubuntu-noble-20250716
+  build_image_arm: &build_image_arm docker.io/arm32v7/elixir:1.17.3
   build_image_arm64: &build_image_arm64 docker.io/hexpm/elixir-arm64:1.17.3-erlang-27.3.4.2-ubuntu-noble-20250716
   artifacts_uploader_image: &artifacts_uploader_image docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
   artifacts_uploader_settings: &artifacts_uploader_settings
@@ -67,6 +69,32 @@ steps:
       - <<: *build_cmds
       - zip -9rq stable-${CI_COMMIT_SHA:0:8}-amd64.zip release
 
+  otp-develop-arm:
+    image: *build_image_arm
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+    environment: *env
+    commands: &arm_build
+      - <<: *build_cmds
+      - zip -9rq ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm.zip release
+
+  otp-stable-arm:
+    image: *build_image_arm
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable"'
+    environment: *env
+    commands: *arm_build
+
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  otp-stable-tag-arm:
+    image: *build_image_arm
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "tag"'
+    environment: *env
+    commands:
+      - <<: *build_cmds
+      - zip -9rq stable-${CI_COMMIT_SHA:0:8}-arm.zip release
+
   otp-develop-arm64:
     image: *build_image_arm64
     when:
@@ -103,7 +131,20 @@ steps:
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-amd64
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64
       file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
-      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
+      file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
+
+  upload-latest-amd64:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-${CI_COMMIT_BRANCH}-amd64
+      package_version: latest
+      file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
+      file_name: pleroma.zip
+      update: 'true'
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   upload-artifacts-tag-amd64:
@@ -115,7 +156,70 @@ steps:
       package_name: pleroma-otp-stable-amd64
       package_version: stable-${CI_COMMIT_SHA:0:8}-amd64
       file_source: ./stable-${CI_COMMIT_SHA:0:8}-amd64.zip
-      file_name: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64.zip
+      file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64.zip
+
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  upload-latest-tag-amd64:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "tag"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-stable-amd64
+      package_version: latest
+      file_source: ./stable-${CI_COMMIT_SHA:0:8}-amd64.zip
+      file_name: pleroma.zip
+      update: 'true'
+
+  upload-artifacts-arm:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "manual"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-${CI_COMMIT_BRANCH}-arm
+      package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm
+      file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm.zip
+      file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm.zip
+
+  upload-latest-arm:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "manual"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-${CI_COMMIT_BRANCH}-arm
+      package_version: latest
+      file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm.zip
+      file_name: pleroma.zip
+      update: 'true'
+
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  upload-artifacts-tag-arm:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "tag"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-stable-arm
+      package_version: stable-${CI_COMMIT_SHA:0:8}-arm
+      file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm.zip
+      file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-arm.zip
+
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  upload-latest-tag-arm:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "tag"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-stable-arm
+      package_version: latest
+      file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm.zip
+      file_name: pleroma.zip
+      update: 'true'
 
   upload-artifacts-arm64:
     image: *artifacts_uploader_image
@@ -127,7 +231,20 @@ steps:
       package_name: pleroma-otp-${CI_COMMIT_BRANCH}-arm64
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64
       file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
-      file_name: ./pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
+      file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
+
+  upload-latest-arm64:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "push" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-${CI_COMMIT_BRANCH}-arm64
+      package_version: latest
+      file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
+      file_name: pleroma.zip
+      update: 'true'
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   upload-artifacts-tag-arm64:
@@ -139,4 +256,17 @@ steps:
       package_name: pleroma-otp-stable-arm64
       package_version: stable-${CI_COMMIT_SHA:0:8}-arm64
       file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm64.zip
-      file_name: ./pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64.zip
+      file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64.zip
+
+  # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
+  upload-latest-tag-arm64:
+    image: *artifacts_uploader_image
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "tag"'
+    settings:
+      <<: *artifacts_uploader_settings
+      package_name: pleroma-otp-stable-arm64
+      package_version: latest
+      file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm64.zip
+      file_name: pleroma.zip
+      update: 'true'

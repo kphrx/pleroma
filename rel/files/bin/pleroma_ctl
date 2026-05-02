@@ -79,18 +79,18 @@ update() {
 	RELEASE_ROOT=$(dirname "$SCRIPTPATH")
 	uri="https://git.pleroma.social"
 	project_name="pleroma"
-	api_base="${uri}/api/v1/packages/${project_name}/generic"
 	package_base="${uri}/api/packages/${project_name}/generic"
-	project_branch="${BRANCH:-$(detect_branch)}"
-	flavour="${FLAVOUR:-$(detect_flavour)}"
-	# API responds in JSON, optimistically try to make it one object per line
-	ver=$(curl -s "${api_base}"/pleroma-otp-"${project_branch}"-"${flavour}"/-/latest | tr ',' '\n' | grep '"version":' | cut -d':' -f2 | tr -d '"')
-	file=$(curl -s "${api_base}"/pleroma-otp-"${project_branch}"-"${flavour}"/"${ver}"/files | tr ',' '\n' | grep '"name":' | cut -d':' -f2 | tr -d '"')
-	full_uri=${FULL_URI:-"${package_base}"/pleroma-otp-"${project_branch}"-"${flavour}"/"${ver}"/"${file}"}
+	if [ -n "$FULL_URI" ]; then
+		full_uri="$FULL_URI"
+	else
+		project_branch="${BRANCH:-$(detect_branch)}"
+		flavour="${FLAVOUR:-$(detect_flavour)}"
+		full_uri="${package_base}"/pleroma-otp-"${project_branch}"-"${flavour}"/latest/pleroma.zip
+	fi
 	tmp="${TMP_DIR:-/tmp}"
 	artifact="$tmp/pleroma.zip"
 	echo "Downloading the artifact from ${full_uri} to ${artifact}"
-	curl "$full_uri" -o "${artifact}"
+	curl -fL "$full_uri" -o "${artifact}"
 	echo "Unpacking ${artifact} to ${tmp}"
 	unzip -q "$artifact" -d "$tmp"
 	echo "Copying files over to $RELEASE_ROOT"
@@ -144,9 +144,12 @@ else
 
 	# HACK: Script arguments need to be sent as an array to Mix tasks, otherwise they will break (quoted) arguments with whitespace.
 	# Previously it was sent as string, which would get split on whitespace on the task side.
-	# Escaping does not help including non-POSIX printf %q
+	# Encode as Elixir binary literals to avoid string escaping and interpolation issues.
 	PREPARED_ARGS=""
-	for arg in "$@"; do PREPARED_ARGS="$PREPARED_ARGS \"$arg\","; done
+	for arg in "$@"; do
+		bytes=$(printf '%s' "$arg" | od -An -v -tu1 | tr -s '[:space:]' ',' | sed 's/^,//; s/,$//')
+		PREPARED_ARGS="$PREPARED_ARGS <<$bytes>>,"
+	done
 
 	ACTION="$1"
 	if [ $# -gt 0 ]; then

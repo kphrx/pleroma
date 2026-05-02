@@ -1,7 +1,7 @@
 when:
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
-    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
   - event: tag
   - event: manual
     branch: stable
