@@ -1,0 +1,94 @@
+when:
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
+  - event: tag
+  - event: manual
+    branch: stable
+
+matrix:
+  platform:
+    - linux/amd64
+    - linux/arm64
+
+# This is needed for the when clauses below.
+labels:
+  platform: ${platform}
+  memory: 'high'
+
+variables:
+  docker_variables: &docker_variables
+    repo: pleroma/pleroma
+    registry: git.pleroma.social
+    username:
+      from_secret: pleroma-ci-user
+    password:
+      from_secret: pleroma-ci-password
+  kaniko_image: &kaniko_image woodpeckerci/plugin-kaniko:2.3.1
+
+steps:
+  docker-develop-amd64:
+    image: woodpeckerci/plugin-kaniko:2.3.1
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+    settings:
+      <<: *docker_variables
+      tags:
+        - latest-amd64
+        - develop-amd64
+        - ${CI_COMMIT_SHA:0:8}-amd64
+
+  docker-develop-arm64:
+    image: woodpeckerci/plugin-kaniko:2.3.1
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+    settings:
+      <<: *docker_variables
+      tags:
+        - latest-arm64
+        - develop-arm64
+        - ${CI_COMMIT_SHA:0:8}-arm64
+
+  docker-stable-amd64:
+    image: *kaniko_image
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG == ""'
+    settings:
+      <<: *docker_variables
+      tags: &amd64_tags
+        - latest-amd64
+        - stable-amd64
+        - ${CI_COMMIT_SHA:0:8}-amd64
+
+  docker-stable-tag-amd64:
+    image: *kaniko_image
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "tag"'
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG != ""'
+    settings:
+      <<: *docker_variables
+      tags:
+        - <<: *amd64_tags
+        - ${CI_COMMIT_TAG}-amd64
+
+  docker-stable-arm64:
+    image: *kaniko_image
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG == ""'
+    settings:
+      <<: *docker_variables
+      tags: &arm64_tags
+        - latest-arm64
+        - stable-arm64
+        - ${CI_COMMIT_SHA:0:8}-arm64
+
+  docker-stable-tag-arm64:
+    image: *kaniko_image
+    when:
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "tag"'
+      - evaluate: 'platform == "linux/arm64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG != ""'
+    settings:
+      <<: *docker_variables
+      tags:
+        - <<: *arm64_tags
+        - ${CI_COMMIT_TAG}-arm64
