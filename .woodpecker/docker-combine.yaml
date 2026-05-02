@@ -4,6 +4,8 @@ when:
     path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
   - event: tag
   - event: manual
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: manual
     branch: stable
 
 depends_on:
@@ -16,6 +18,8 @@ steps:
     image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
     when:
       - event: push
+        branch: ${CI_REPO_DEFAULT_BRANCH}
+      - event: manual
         branch: ${CI_REPO_DEFAULT_BRANCH}
     settings: &docker_settings
       registry: "git.pleroma.social"

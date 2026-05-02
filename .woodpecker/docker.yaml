@@ -4,6 +4,8 @@ when:
     path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
   - event: tag
   - event: manual
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: manual
     branch: stable
 
 matrix:
