@@ -3,8 +3,10 @@ ARG ELIXIR_IMG=hexpm/elixir
 ARG ELIXIR_VER=1.17.3
 ARG ERLANG_VER=26.2.5.6
 ARG ALPINE_VER=3.17.9
+ARG ELIXIR_TAG=${ELIXIR_VER}-erlang-${ERLANG_VER}-alpine-${ALPINE_VER}
+ARG ALPINE_IMG=alpine
 
-FROM ${ELIXIR_IMG}:${ELIXIR_VER}-erlang-${ERLANG_VER}-alpine-${ALPINE_VER} AS build
+FROM ${ELIXIR_IMG}:${ELIXIR_TAG} AS build
 
 COPY . .
 
@@ -20,7 +22,7 @@ RUN apk add git gcc g++ musl-dev make cmake file-dev vips-dev &&\
 	mkdir release &&\
 	mix release --path release
 
-FROM alpine:${ALPINE_VER}
+FROM ${ALPINE_IMG}:${ALPINE_VER}
 
 ARG BUILD_DATE
 ARG VCS_REF
