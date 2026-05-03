@@ -146,6 +146,7 @@ steps:
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl
       file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
       file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
+      update: 'true'
 
   upload-latest-amd64-musl:
     image: *artifacts_uploader_image
@@ -171,6 +172,7 @@ steps:
       package_version: stable-${CI_COMMIT_SHA:0:8}-amd64-musl
       file_source: ./stable-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
       file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64-musl.zip
+      update: 'true'
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   upload-latest-tag-amd64-musl:
@@ -196,6 +198,7 @@ steps:
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm-musl
       file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm-musl.zip
       file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm-musl.zip
+      update: 'true'
 
   upload-latest-arm-musl:
     image: *artifacts_uploader_image
@@ -221,6 +224,7 @@ steps:
       package_version: stable-${CI_COMMIT_SHA:0:8}-arm-musl
       file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm-musl.zip
       file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-arm-musl.zip
+      update: 'true'
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   upload-latest-tag-arm-musl:
@@ -246,6 +250,7 @@ steps:
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl
       file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
       file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
+      update: 'true'
 
   upload-latest-arm64-musl:
     image: *artifacts_uploader_image
@@ -271,6 +276,7 @@ steps:
       package_version: stable-${CI_COMMIT_SHA:0:8}-arm64-musl
       file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
       file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64-musl.zip
+      update: 'true'
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   upload-latest-tag-arm64-musl:

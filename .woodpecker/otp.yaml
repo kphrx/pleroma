@@ -147,6 +147,7 @@ steps:
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64
       file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
       file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-amd64.zip
+      update: 'true'
 
   upload-latest-amd64:
     image: *artifacts_uploader_image
@@ -172,6 +173,7 @@ steps:
       package_version: stable-${CI_COMMIT_SHA:0:8}-amd64
       file_source: ./stable-${CI_COMMIT_SHA:0:8}-amd64.zip
       file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-amd64.zip
+      update: 'true'
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   upload-latest-tag-amd64:
@@ -197,6 +199,7 @@ steps:
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm
       file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm.zip
       file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm.zip
+      update: 'true'
 
   upload-latest-arm:
     image: *artifacts_uploader_image
@@ -222,6 +225,7 @@ steps:
       package_version: stable-${CI_COMMIT_SHA:0:8}-arm
       file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm.zip
       file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-arm.zip
+      update: 'true'
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   upload-latest-tag-arm:
@@ -247,6 +251,7 @@ steps:
       package_version: ${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64
       file_source: ./${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
       file_name: pleroma-${CI_COMMIT_BRANCH}-${CI_COMMIT_SHA:0:8}-arm64.zip
+      update: 'true'
 
   upload-latest-arm64:
     image: *artifacts_uploader_image
@@ -272,6 +277,7 @@ steps:
       package_version: stable-${CI_COMMIT_SHA:0:8}-arm64
       file_source: ./stable-${CI_COMMIT_SHA:0:8}-arm64.zip
       file_name: pleroma-stable-${CI_COMMIT_SHA:0:8}-arm64.zip
+      update: 'true'
 
   # Tag events don't have CI_COMMIT_BRANCH set, hardcode stable
   upload-latest-tag-arm64:
