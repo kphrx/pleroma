@@ -37,6 +37,18 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
   setup do: clear_config([:instance, :federating], true)
 
+  defp assign_valid_signature_for_actor(conn, %User{ap_id: actor_id}) do
+    assign_valid_signature_for_actor(conn, actor_id)
+  end
+
+  defp assign_valid_signature_for_actor(conn, actor) do
+    actor_id = Utils.get_ap_id(actor)
+
+    conn
+    |> assign(:valid_signature, true)
+    |> put_req_header("signature", "keyId=\"#{actor_id}#main-key\"")
+  end
+
   defp expect_signature_retry_from(%User{} = signer) do
     signer_json = UserView.render("user.json", %{user: signer}) |> Map.delete("featured")
 
@@ -707,7 +719,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", data)
 
@@ -735,7 +747,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", data)
 
@@ -954,7 +966,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(followed_relay)
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", accept)
                |> json_response(200)
@@ -1034,16 +1046,19 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     test "Unknown activity types are discarded", %{conn: conn} do
       unknown_types = ["Poke", "Read", "Dazzle"]
 
+      actor =
+        insert(:user, local: false, ap_id: "https://unknown.mastodon.instance/users/somebody")
+
       Enum.each(unknown_types, fn bad_type ->
         params =
           %{
             "type" => bad_type,
-            "actor" => "https://unknown.mastodon.instance/users/somebody"
+            "actor" => actor.ap_id
           }
           |> Jason.encode!()
 
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(actor)
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", params)
         |> json_response(400)
@@ -1112,7 +1127,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -1133,7 +1148,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -1202,7 +1217,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -1221,7 +1236,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -1252,7 +1267,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1273,7 +1288,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1294,7 +1309,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1318,7 +1333,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1345,7 +1360,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1375,7 +1390,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{recipient.nickname}/inbox", data)
 
@@ -1440,7 +1455,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{recipient.nickname}/inbox", data)
       |> json_response(200)
@@ -1530,7 +1545,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{reported_user.nickname}/inbox", data)
       |> json_response(200)
@@ -1584,7 +1599,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{reported_user.nickname}/inbox", data)
       |> json_response(200)
@@ -1617,7 +1632,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1640,7 +1655,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1663,7 +1678,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -2783,6 +2798,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     setup do: clear_config([:media_proxy])
     setup do: clear_config([Pleroma.Upload])
 
+    # majic's libmagic port is unavailable on local Darwin runs; Linux CI still runs this test.
+    @tag :skip_darwin
     test "POST /api/ap/upload_media", %{conn: conn} do
       user = insert(:user)
 
