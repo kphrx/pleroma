@@ -399,6 +399,31 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
     assert_mismatched_signature_cancelled(create, alice)
   end
 
+  test "cancels signature actor mismatch when payload actor is embedded" do
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+
+    create = %{
+      "type" => "Create",
+      "actor" => %{"id" => bob.ap_id},
+      "id" => "https://two.com/activities/embedded-actor-forged-create",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://two.com/objects/embedded-actor-forged-note",
+        "actor" => bob.ap_id,
+        "attributedTo" => bob.ap_id,
+        "content" => "forged post",
+        "published" => "2024-07-25T13:33:31Z",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => []
+      }
+    }
+
+    assert_mismatched_signature_cancelled(create, alice)
+  end
+
   test "logs signature actor mismatch retry rejections" do
     alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
     bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")

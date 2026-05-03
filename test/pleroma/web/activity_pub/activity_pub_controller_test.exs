@@ -819,6 +819,39 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       refute Activity.get_by_ap_id(data["id"])
     end
 
+    test "does not delete an object after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      note = insert(:note)
+      object_id = note.data["id"]
+
+      data = %{
+        "type" => "Delete",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-forged-delete",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => object_id
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      assert %Object{data: %{"type" => "Note"}} = Object.get_by_ap_id(object_id)
+    end
+
     test "does not create a forged post signed by a different actor", %{conn: conn} do
       alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
       bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")

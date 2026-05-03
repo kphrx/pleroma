@@ -237,6 +237,22 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
     refute Pleroma.Object.get_by_ap_id(object_id)
   end
 
+  test "fails closed for legacy retry jobs missing one metadata field" do
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    params = insert(:note_activity).data
+
+    assert {:cancel, :missing_signature_retry_metadata} =
+             ReceiverWorker.perform(%Oban.Job{
+               args: %{
+                 "op" => "incoming_ap_doc",
+                 "method" => "POST",
+                 "params" => params,
+                 "req_headers" => signature_headers_for(alice),
+                 "request_path" => "/inbox"
+               }
+             })
+  end
+
   test "fails closed for malformed legacy metadata jobs without params" do
     assert {:cancel, :missing_signature_retry_metadata} =
              ReceiverWorker.perform(%Oban.Job{
