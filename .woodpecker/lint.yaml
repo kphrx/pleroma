@@ -1,9 +1,9 @@
 when:
   - event: pull_request
-    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**" ]
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
-    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**" ]
 
 labels:
   platform: linux/amd64

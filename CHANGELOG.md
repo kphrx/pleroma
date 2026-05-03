@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 2.10.2
+
+### Security
+
+- ActivityPub: Fixed failed-signature inbox retry handling and signer identity checks to prevent spoofed remote activities from being processed
+
 ## 2.10.1
 
 ### Changed
