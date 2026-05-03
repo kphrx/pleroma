@@ -1,1 +1,0 @@
-Add immutable tag on cache-control header for several endpoints that's serving the same exact things.
