@@ -183,6 +183,7 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
     %{}
     |> maybe_filter_origin(params)
     |> maybe_filter_status(params)
+    |> maybe_filter_staff(params)
     |> maybe_filter_nickname(params)
     |> maybe_filter_name(params)
     |> maybe_filter_domain(params)
@@ -239,6 +240,9 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
 
   defp maybe_filter_email(criteria, %{email: email} = _params),
     do: Map.put(criteria, :email, email)
+
+  defp maybe_filter_staff(criteria, %{permissions: "staff"} = _params),
+    do: Map.put(criteria, :staff, true)
 
   defp maybe_filter_staff(criteria, %{staff: staff} = _params),
     do: Map.put(criteria, :staff, staff)

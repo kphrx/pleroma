@@ -126,7 +126,7 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.AccountOperation do
             :permissions,
             :query,
             :string,
-            "Filter for accounts with staff permissions (users that can manage reports). (not implemented yet)"
+            "Filter for accounts with staff permissions (users that can manage reports)."
           ),
           Operation.parameter(
             :role_ids,
