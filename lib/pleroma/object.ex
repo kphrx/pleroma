@@ -374,10 +374,18 @@ defmodule Pleroma.Object do
 
       voters = [actor | object.data["voters"] || []] |> Enum.uniq()
 
+      voters_count =
+        if Map.has_key?(object.data, "votersCount") do
+          object.data["votersCount"] + 1
+        else
+          length(voters)
+        end
+
       data =
         object.data
         |> Map.put(key, options)
         |> Map.put("voters", voters)
+        |> Map.put("votersCount", voters_count)
 
       object
       |> Object.change(%{data: data})

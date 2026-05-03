@@ -17,7 +17,7 @@ defmodule Pleroma.Utils do
     dir
     |> File.ls!()
     |> Enum.map(&Path.join(dir, &1))
-    |> Kernel.ParallelCompiler.compile()
+    |> Kernel.ParallelCompiler.compile(return_diagnostics: true)
   end
 
   @doc """

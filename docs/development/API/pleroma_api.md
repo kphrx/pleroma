@@ -690,6 +690,7 @@ Audio scrobbling in Pleroma is **deprecated**.
   * `album`: the album of the media playing [optional]
   * `artist`: the artist of the media playing [optional]
   * `length`: the length of the media playing [optional]
+  * `external_link`: a URL referencing the media playing [optional]
 * Response: the newly created media metadata entity representing the Listen activity
 
 # Emoji Reactions

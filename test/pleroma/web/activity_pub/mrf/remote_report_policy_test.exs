@@ -1,5 +1,5 @@
 defmodule Pleroma.Web.ActivityPub.MRF.RemoteReportPolicyTest do
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
 
   alias Pleroma.Web.ActivityPub.MRF.RemoteReportPolicy
 

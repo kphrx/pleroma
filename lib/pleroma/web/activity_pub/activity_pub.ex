@@ -1003,6 +1003,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_state(query, _), do: query
 
+  defp restrict_assigned_account(query, %{assigned_account: assigned_account}) do
+    from(activity in query,
+      where: fragment("?->>'assigned_account' = ?", activity.data, ^assigned_account)
+    )
+  end
+
+  defp restrict_assigned_account(query, _), do: query
+
   defp restrict_favorited_by(query, %{favorited_by: ap_id}) do
     from(
       [_activity, object] in query,
@@ -1471,6 +1479,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> restrict_actor(opts)
       |> restrict_type(opts)
       |> restrict_state(opts)
+      |> restrict_assigned_account(opts)
       |> restrict_favorited_by(opts)
       |> restrict_blocked(restrict_blocked_opts)
       |> restrict_blockers_visibility(opts)
@@ -1609,6 +1618,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp normalize_image(urls) when is_list(urls), do: urls |> List.first() |> normalize_image()
   defp normalize_image(_), do: nil
 
+  defp normalize_also_known_as(urls) when is_list(urls), do: urls
+  defp normalize_also_known_as(url) when is_binary(url), do: [url]
+  defp normalize_also_known_as(nil), do: []
+
   defp maybe_put_description(map, %{"name" => description}) when is_binary(description) do
     Map.put(map, "name", description)
   end
@@ -1684,7 +1697,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       featured_address: featured_address,
       bio: data["summary"] || "",
       actor_type: actor_type,
-      also_known_as: Map.get(data, "alsoKnownAs", []),
+      also_known_as: normalize_also_known_as(data["alsoKnownAs"]),
       public_key: public_key,
       inbox: data["inbox"],
       shared_inbox: shared_inbox,

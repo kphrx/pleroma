@@ -19,7 +19,12 @@ defmodule Pleroma.Web.StreamerTest do
 
   @moduletag needs_streamer: true, capture_log: true
 
-  setup do: clear_config([:instance, :skip_thread_containment])
+  setup do
+    clear_config([:instance, :skip_thread_containment])
+    Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
+
+    :ok
+  end
 
   describe "get_topic/_ (unauthenticated)" do
     test "allows no stream" do
@@ -215,7 +220,7 @@ defmodule Pleroma.Web.StreamerTest do
     } do
       %{token: read_lists_token} = oauth_access(["read:lists"], user: user)
       %{token: invalid_token} = oauth_access(["irrelevant:scope"], user: user)
-      {:ok, list} = List.create("Test", user)
+      {:ok, list} = List.create(%{title: "Test"}, user)
 
       assert {:error, _} = Streamer.get_topic("list:#{list.id}", user, read_oauth_token)
 
@@ -228,7 +233,7 @@ defmodule Pleroma.Web.StreamerTest do
 
     test "disallows list stream that are not owned by the user", %{user: user, token: oauth_token} do
       another_user = insert(:user)
-      {:ok, list} = List.create("Test", another_user)
+      {:ok, list} = List.create(%{title: "Test"}, another_user)
 
       assert {:error, _} = Streamer.get_topic("list:#{list.id}", user, oauth_token)
       assert {:error, _} = Streamer.get_topic("list", user, oauth_token, %{"list" => list.id})
@@ -798,7 +803,7 @@ defmodule Pleroma.Web.StreamerTest do
 
       {:ok, user_a, user_b} = User.follow(user_a, user_b)
 
-      {:ok, list} = List.create("Test", user_a)
+      {:ok, list} = List.create(%{title: "Test"}, user_a)
       {:ok, list} = List.follow(list, user_b)
 
       Streamer.get_topic_and_add_socket("list", user_a, user_a_token, %{"list" => list.id})
@@ -815,7 +820,7 @@ defmodule Pleroma.Web.StreamerTest do
     test "it doesn't send unwanted private posts to list", %{user: user_a, token: user_a_token} do
       user_b = insert(:user)
 
-      {:ok, list} = List.create("Test", user_a)
+      {:ok, list} = List.create(%{title: "Test"}, user_a)
       {:ok, list} = List.follow(list, user_b)
 
       Streamer.get_topic_and_add_socket("list", user_a, user_a_token, %{"list" => list.id})
@@ -834,7 +839,7 @@ defmodule Pleroma.Web.StreamerTest do
 
       {:ok, user_a, user_b} = User.follow(user_a, user_b)
 
-      {:ok, list} = List.create("Test", user_a)
+      {:ok, list} = List.create(%{title: "Test"}, user_a)
       {:ok, list} = List.follow(list, user_b)
 
       Streamer.get_topic_and_add_socket("list", user_a, user_a_token, %{"list" => list.id})

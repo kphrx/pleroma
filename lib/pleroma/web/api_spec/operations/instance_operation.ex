@@ -57,6 +57,22 @@ defmodule Pleroma.Web.ApiSpec.InstanceOperation do
     }
   end
 
+  def domain_blocks_operation do
+    %Operation{
+      tags: ["Instance misc"],
+      summary: "Retrieve instance domain blocks",
+      operationId: "InstanceController.domain_blocks",
+      responses: %{
+        200 =>
+          Operation.response(
+            "Array of domain blocks",
+            "application/json",
+            array_of_domain_blocks()
+          )
+      }
+    }
+  end
+
   def translation_languages_operation do
     %Operation{
       tags: ["Instance misc"],
@@ -326,6 +342,18 @@ defmodule Pleroma.Web.ApiSpec.InstanceOperation do
                 max_pinned_statuses: %Schema{
                   type: :integer,
                   description: "The maximum number of pinned statuses for each account."
+                },
+                max_profile_fields: %Schema{
+                  type: :integer,
+                  description: "The maximum number of custom profile fields allowed to be set."
+                },
+                profile_field_name_limit: %Schema{
+                  type: :integer,
+                  description: "The maximum size of a profile field name, in characters."
+                },
+                profile_field_value_limit: %Schema{
+                  type: :integer,
+                  description: "The maximum size of a profile field value, in characters."
                 }
               }
             },
@@ -416,6 +444,21 @@ defmodule Pleroma.Web.ApiSpec.InstanceOperation do
           id: %Schema{type: :string},
           text: %Schema{type: :string},
           hint: %Schema{type: :string}
+        }
+      }
+    }
+  end
+
+  defp array_of_domain_blocks do
+    %Schema{
+      type: :array,
+      items: %Schema{
+        type: :object,
+        properties: %{
+          domain: %Schema{type: :string},
+          digest: %Schema{type: :string},
+          severity: %Schema{type: :string},
+          comment: %Schema{type: :string}
         }
       }
     }

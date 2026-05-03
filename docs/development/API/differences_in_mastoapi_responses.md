@@ -74,7 +74,7 @@ Pleroma does not process remote images and therefore cannot include fields such 
 
 The `GET /api/v1/bookmarks` endpoint accepts optional parameter `folder_id` for bookmark folder ID.
 
-The `POST /api/v1/statuses/:id/bookmark` endpoint accepts optional parameter `folder_id` for bookmark folder ID.
+The `POST /api/v1/statuses/:id/bookmark` endpoint accepts optional parameter `folder_id` for bookmark folder ID. Bookmarking an already bookmarked post will update the folder association, or remove it if `folder_id` is omitted or `null`.
 
 ## Accounts
 
@@ -127,8 +127,6 @@ Has these additional fields under the `pleroma` object:
 - `notification_settings`: object, can be absent. See `/api/v1/pleroma/notification_settings` for the parameters/keys returned.
 - `accepts_chat_messages`: boolean, but can be null if we don't have that information about a user
 - `favicon`: nullable URL string, Favicon image of the user's instance
-- `avatar_description`: string, image description for user avatar, defaults to empty string
-- `header_description`: string, image description for user banner, defaults to empty string
 
 ### Source
 
