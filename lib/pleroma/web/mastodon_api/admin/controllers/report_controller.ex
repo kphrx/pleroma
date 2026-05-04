@@ -89,11 +89,46 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
     end
   end
 
+  def assign_to_self(%{assigns: %{user: admin}} = conn, %{id: id}) do
+    with {:ok, activity} <- CommonAPI.assign_report_to_account(id, admin.id),
+         report <- Activity.get_by_id_with_user_actor(activity.id) do
+      ModerationLog.insert_log(%{
+        action: "report_assigned",
+        actor: admin,
+        subject: activity,
+        subject_actor: report.user_actor,
+        assigned_account: admin.nickname
+      })
+
+      render(conn, "show.json", Report.extract_report_info(report))
+    else
+      {:error, error} ->
+        json_response(conn, :bad_request, %{error: error})
+    end
+  end
+
+  def unassign(%{assigns: %{user: admin}} = conn, %{id: id}) do
+    with {:ok, activity} <- CommonAPI.assign_report_to_account(id, nil),
+         report <- Activity.get_by_id_with_user_actor(activity.id) do
+      ModerationLog.insert_log(%{
+        action: "report_unassigned",
+        actor: admin,
+        subject: activity,
+        subject_actor: report.user_actor
+      })
+
+      render(conn, "show.json", Report.extract_report_info(report))
+    else
+      {:error, error} ->
+        json_response(conn, :bad_request, %{error: error})
+    end
+  end
+
   defp restrict_state(opts, %{resolved: true}), do: Map.put(opts, :state, "resolved")
 
-  defp restrict_state(opts, %{resolved: false}), do: Map.put(opts, :state, "open")
+  defp restrict_state(opts, %{resolved: _}), do: Map.put(opts, :state, "resolved")
 
-  defp restrict_state(opts, _params), do: opts
+  defp restrict_state(opts, _params), do: Map.put(opts, :state, "open")
 
   defp restrict_actor(opts, %{account_id: actor}) do
     with %User{ap_id: ap_id} <- User.get_by_id(actor) do

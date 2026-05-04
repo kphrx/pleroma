@@ -50,7 +50,17 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportControllerTest do
 
       assert [%{"id" => ^report_id1}] =
                conn
-               |> get("/api/v1/admin/reports?resolved=false")
+               |> get("/api/v1/admin/reports?unresolved=true")
+               |> json_response_and_validate_schema(200)
+
+      assert [%{"id" => ^report_id1}] =
+               conn
+               |> get("/api/v1/admin/reports")
+               |> json_response_and_validate_schema(200)
+
+      assert [%{"id" => ^report_id2}, %{"id" => ^report_id1}] =
+               conn
+               |> get("/api/v1/admin/reports?resolved=true&unresolved=true")
                |> json_response_and_validate_schema(200)
 
       assert [%{"id" => ^report_id2}] =

@@ -28,6 +28,7 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.ReportOperation do
       parameters:
         [
           Operation.parameter(:resolved, :query, :boolean, "Filter for resolved reports"),
+          Operation.parameter(:unresolved, :query, :boolean, "Filter for open reports"),
           Operation.parameter(:account_id, :query, :string, "Filter by author account id"),
           Operation.parameter(
             :target_account_id,
