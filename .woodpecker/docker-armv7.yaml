@@ -13,6 +13,7 @@ when:
 
 # Target the CAX21 arm64 host with native arm32 userspace support, not generic arm64 runners.
 labels:
+  platform: linux/arm
   armv7: native
 
 variables:
