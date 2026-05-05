@@ -1,16 +1,26 @@
 when:
   - event: pull_request
-    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**" ]
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
-    path: [ "*.ex", "*.eex", "*.exs", "mix.lock", ".woodpecker/**" ]
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**" ]
 
 depends_on:
   - lint
 
+labels:
+  platform: linux/amd64
+
+variables:
+  script_file_entrypoint: &script_file_entrypoint
+    - /bin/sh
+    - -c
+    - 'printf "%s" "$CI_SCRIPT" | base64 -d > /tmp/ci-script.sh && /bin/sh -xe /tmp/ci-script.sh'
+
 steps:
   unit-testing-elixir-1.15:
     image: elixir:1.15-alpine
+    entrypoint: *script_file_entrypoint
     environment:
       MIX_ENV: test
       DB_HOST: postgres
