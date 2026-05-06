@@ -1,1 +1,0 @@
-Admin API: Fixed self-revocation vulnerability where admins could accidentally revoke their own admin status via the single-user permission endpoint

@@ -9,7 +9,7 @@ defmodule Pleroma.Web.PleromaAPI.ScrobbleControllerTest do
 
   describe "POST /api/v1/pleroma/scrobble" do
     test "works correctly" do
-      %{conn: conn} = oauth_access(["write"])
+      %{conn: conn} = oauth_access(["write:scrobbles"])
 
       conn =
         conn
@@ -51,7 +51,7 @@ defmodule Pleroma.Web.PleromaAPI.ScrobbleControllerTest do
 
   describe "GET /api/v1/pleroma/accounts/:id/scrobbles" do
     test "works correctly" do
-      %{user: user, conn: conn} = oauth_access(["read"])
+      %{user: user, conn: conn} = oauth_access(["read:scrobbles"])
 
       {:ok, _activity} =
         CommonAPI.listen(user, %{

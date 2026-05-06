@@ -17,7 +17,6 @@ defmodule Pleroma.Web.ActivityPub.Builder do
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Web.CommonAPI.ActivityDraft
-  alias Pleroma.Web.Endpoint
 
   require Pleroma.Constants
 
@@ -64,15 +63,7 @@ defmodule Pleroma.Web.ActivityPub.Builder do
 
   defp add_emoji_content(data, emoji, url) do
     tag = [
-      %{
-        "id" => url,
-        "type" => "Emoji",
-        "name" => Emoji.maybe_quote(emoji),
-        "icon" => %{
-          "type" => "Image",
-          "url" => url
-        }
-      }
+      Emoji.build_emoji_tag({Emoji.maybe_strip_name(emoji), url})
     ]
 
     data
@@ -113,7 +104,7 @@ defmodule Pleroma.Web.ActivityPub.Builder do
 
   defp local_custom_emoji_react(data, emoji) do
     with %{file: path} = emojo <- Emoji.get(emoji) do
-      url = "#{Endpoint.url()}#{path}"
+      url = Emoji.local_url(path)
       add_emoji_content(data, emojo.code, url)
     else
       _ -> {:error, "Emoji does not exist"}
@@ -341,21 +332,18 @@ defmodule Pleroma.Web.ActivityPub.Builder do
 
   @spec announce(User.t(), Object.t(), keyword()) :: {:ok, map(), keyword()}
   def announce(actor, object, options \\ []) do
-    public? = Keyword.get(options, :public, false)
+    visibility = Keyword.get(options, :visibility, "public")
 
-    to =
-      cond do
-        actor.ap_id == Relay.ap_id() ->
-          [actor.follower_address]
-
-        public? and Visibility.local_public?(object) ->
-          [actor.follower_address, object.data["actor"], Utils.as_local_public()]
-
-        public? ->
-          [actor.follower_address, object.data["actor"], Pleroma.Constants.as_public()]
-
-        true ->
-          [actor.follower_address, object.data["actor"]]
+    {to, cc} =
+      if actor.ap_id == Relay.ap_id() do
+        {[actor.follower_address], []}
+      else
+        Pleroma.Web.CommonAPI.Utils.get_to_and_cc_for_visibility(
+          visibility,
+          actor.follower_address,
+          nil,
+          [object.data["actor"]]
+        )
       end
 
     {:ok,
@@ -364,6 +352,7 @@ defmodule Pleroma.Web.ActivityPub.Builder do
        "actor" => actor.ap_id,
        "object" => object.data["id"],
        "to" => to,
+       "cc" => cc,
        "context" => object.data["context"],
        "type" => "Announce",
        "published" => Utils.make_date()

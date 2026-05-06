@@ -72,7 +72,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.AnswerHandlingTest do
       |> Kernel.put_in(["object", "to"], user.ap_id)
 
     {:ok, %Activity{local: false} = activity} = Transmogrifier.handle_incoming(data)
-    {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+    {:ok, data} = Transmogrifier.prepare_activity(activity.data)
 
     assert data["object"]["type"] == "Note"
   end

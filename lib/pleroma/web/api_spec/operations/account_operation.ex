@@ -398,6 +398,28 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
     }
   end
 
+  def endorsements_operation do
+    %Operation{
+      tags: ["Retrieve account information"],
+      summary: "Endorsements",
+      description: "Returns endorsed accounts",
+      operationId: "AccountController.endorsements",
+      parameters: [
+        with_relationships_param(),
+        %Reference{"$ref": "#/components/parameters/accountIdOrNickname"}
+      ],
+      responses: %{
+        200 =>
+          Operation.response(
+            "Array of Accounts",
+            "application/json",
+            array_of_accounts()
+          ),
+        404 => Operation.response("Not Found", "application/json", ApiError)
+      }
+    }
+  end
+
   def remove_from_followers_operation do
     %Operation{
       tags: ["Account actions"],
@@ -461,7 +483,7 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
       security: [%{"oAuth" => ["follow", "read:mutes"]}],
       parameters: [with_relationships_param() | pagination_params()],
       responses: %{
-        200 => Operation.response("Accounts", "application/json", array_of_accounts())
+        200 => Operation.response("Accounts", "application/json", array_of_muted_accounts())
       }
     }
   end
@@ -475,7 +497,7 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
       security: [%{"oAuth" => ["read:blocks"]}],
       parameters: [with_relationships_param() | pagination_params()],
       responses: %{
-        200 => Operation.response("Accounts", "application/json", array_of_accounts())
+        200 => Operation.response("Accounts", "application/json", array_of_blocked_accounts())
       }
     }
   end
@@ -495,16 +517,17 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
       ],
       responses: %{
         200 => Operation.response("Account", "application/json", Account),
+        401 => Operation.response("Error", "application/json", ApiError),
         404 => Operation.response("Error", "application/json", ApiError)
       }
     }
   end
 
-  def endorsements_operation do
+  def own_endorsements_operation do
     %Operation{
       tags: ["Retrieve account information"],
       summary: "Endorsements",
-      operationId: "AccountController.endorsements",
+      operationId: "AccountController.own_endorsements",
       description: "Returns endorsed accounts",
       security: [%{"oAuth" => ["read:accounts"]}],
       responses: %{
@@ -871,6 +894,54 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
       type: :array,
       items: Account,
       example: [Account.schema().example]
+    }
+  end
+
+  def array_of_muted_accounts do
+    %Schema{
+      title: "ArrayOfMutedAccounts",
+      type: :array,
+      items: %Schema{
+        title: "MutedAccount",
+        description: "Response schema for a muted account",
+        allOf: [
+          Account,
+          %Schema{
+            type: :object,
+            properties: %{
+              mute_expires_at: %Schema{type: :string, format: "date-time", nullable: true}
+            }
+          }
+        ]
+      },
+      example: [
+        Account.schema().example
+        |> Map.put("mute_expires_at", "2025-11-29T16:23:13Z")
+      ]
+    }
+  end
+
+  def array_of_blocked_accounts do
+    %Schema{
+      title: "ArrayOfBlockedAccounts",
+      type: :array,
+      items: %Schema{
+        title: "BlockedAccount",
+        description: "Response schema for a blocked account",
+        allOf: [
+          Account,
+          %Schema{
+            type: :object,
+            properties: %{
+              block_expires_at: %Schema{type: :string, format: "date-time", nullable: true}
+            }
+          }
+        ]
+      },
+      example: [
+        Account.schema().example
+        |> Map.put("block_expires_at", "2025-11-29T16:23:13Z")
+      ]
     }
   end
 

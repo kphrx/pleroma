@@ -97,6 +97,7 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
       "users",
       "tags",
       "mailer",
+      "frontend_switcher",
       "inbox",
       "relay",
       "internal",
@@ -104,13 +105,45 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
       "nodeinfo",
       "manifest.json",
       "auth",
+      "embed",
       "proxy",
-      "phoenix",
       "test",
       "user_exists",
       "check_password"
     ]
 
     assert expected_routes == Pleroma.Web.Router.get_api_routes()
+  end
+
+  describe "preferred frontend cookie handling" do
+    test "returns preferred frontend file", %{conn: conn} do
+      name = "test-fe"
+      ref = "develop"
+
+      clear_config([:frontends, :pickable], ["#{name}/#{ref}"])
+      path = "#{@dir}/frontends/#{name}/#{ref}"
+
+      Pleroma.Backports.mkdir_p!(path)
+      File.write!("#{path}/index.html", "from frontend plug")
+
+      index =
+        conn
+        |> put_req_cookie("preferred_frontend", "#{name}/#{ref}")
+        |> get("/")
+
+      assert html_response(index, 200) == "from frontend plug"
+    end
+
+    test "only returns content from pickable frontends", %{conn: conn} do
+      clear_config([:instance, :static_dir], "instance/static")
+      clear_config([:frontends, :pickable], ["pleroma-fe/develop", "pl-fe/develop"])
+
+      config_file =
+        conn
+        |> put_req_cookie("preferred_frontend", "../../../config")
+        |> get("/config.exs")
+
+      refute response(config_file, 200) =~ "import Config"
+    end
   end
 end

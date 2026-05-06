@@ -259,7 +259,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       )
     end
 
-    test "Publishes with the new actor if prepare_outgoing changes the actor." do
+    test "Publishes with the new actor if prepare_activity changes the actor." do
       mock(fn
         %{method: :post, url: "https://domain.com/users/nick1/inbox", body: body} ->
           {:ok, %Tesla.Env{status: 200, body: body}}
@@ -281,7 +281,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
         )
 
       Pleroma.Web.ActivityPub.TransmogrifierMock
-      |> Mox.expect(:prepare_outgoing, fn data ->
+      |> Mox.expect(:prepare_activity, fn data ->
         {:ok, Map.put(data, "actor", replaced_actor.ap_id)}
       end)
 
@@ -326,6 +326,33 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
         args: %{
           "params" => %{
             inbox: "https://domain.com/users/nick1/inbox",
+            activity_id: note_activity.id
+          }
+        }
+      )
+    end
+
+    test "activity with BCC is published to a list member." do
+      actor = insert(:user)
+      {:ok, list} = Pleroma.List.create(%{title: "list"}, actor)
+      list_member = insert(:user, %{local: false})
+
+      Pleroma.List.follow(list, list_member)
+
+      note_activity =
+        insert(:note_activity,
+          # recipients: [follower.ap_id],
+          data_attrs: %{"bcc" => [list.ap_id]}
+        )
+
+      res = Publisher.publish(actor, note_activity)
+      assert res == :ok
+
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "params" => %{
+            inbox: list_member.inbox,
             activity_id: note_activity.id
           }
         }

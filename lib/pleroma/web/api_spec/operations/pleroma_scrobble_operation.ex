@@ -20,7 +20,7 @@ defmodule Pleroma.Web.ApiSpec.PleromaScrobbleOperation do
     %Operation{
       tags: ["Scrobbles"],
       summary: "Creates a new Listen activity for an account",
-      security: [%{"oAuth" => ["write"]}],
+      security: [%{"oAuth" => ["write:scrobbles"]}],
       operationId: "PleromaAPI.ScrobbleController.create",
       deprecated: true,
       requestBody: request_body("Parameters", create_request(), required: true),
@@ -39,7 +39,7 @@ defmodule Pleroma.Web.ApiSpec.PleromaScrobbleOperation do
       parameters: [
         %Reference{"$ref": "#/components/parameters/accountIdOrNickname"} | pagination_params()
       ],
-      security: [%{"oAuth" => ["read"]}],
+      security: [%{"oAuth" => ["read:scrobbles"]}],
       responses: %{
         200 =>
           Operation.response("Array of Scrobble", "application/json", %Schema{

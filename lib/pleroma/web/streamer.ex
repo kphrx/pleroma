@@ -10,6 +10,7 @@ defmodule Pleroma.Web.Streamer do
   alias Pleroma.Chat.MessageReference
   alias Pleroma.Config
   alias Pleroma.Conversation.Participation
+  alias Pleroma.Marker
   alias Pleroma.Notification
   alias Pleroma.Object
   alias Pleroma.User
@@ -299,7 +300,7 @@ defmodule Pleroma.Web.Streamer do
     end)
   end
 
-  defp do_stream("user", item) do
+  defp do_stream("user", %Activity{} = item) do
     Logger.debug("Trying to push to users")
 
     recipient_topics =
@@ -318,6 +319,16 @@ defmodule Pleroma.Web.Streamer do
 
     Enum.each(all_recipients, fn topic ->
       push_to_socket(topic, item)
+    end)
+  end
+
+  defp do_stream(topic, %Marker{} = marker) do
+    Registry.dispatch(@registry, "#{topic}:#{marker.user_id}", fn list ->
+      Enum.each(list, fn {pid, _auth} ->
+        text = StreamerView.render("marker.json", marker)
+
+        send(pid, {:text, text})
+      end)
     end)
   end
 

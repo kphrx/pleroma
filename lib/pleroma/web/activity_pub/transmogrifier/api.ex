@@ -7,5 +7,5 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.API do
   Behaviour for the subset of Transmogrifier used by Publisher.
   """
 
-  @callback prepare_outgoing(map()) :: {:ok, map()} | {:error, term()}
+  @callback prepare_activity(map()) :: {:ok, map()} | {:error, term()}
 end

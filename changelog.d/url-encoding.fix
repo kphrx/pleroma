@@ -1,1 +1,0 @@
-Fix HTTP client making invalid requests due to no percent encoding processing or validation.

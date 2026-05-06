@@ -19,6 +19,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.Endpoint
   alias Pleroma.Workers.ReceiverWorker
+  alias Pleroma.Workers.SignatureRetryWorker
 
   import Pleroma.Factory
 
@@ -35,6 +36,36 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   end
 
   setup do: clear_config([:instance, :federating], true)
+
+  defp assign_valid_signature_for_actor(conn, %User{ap_id: actor_id}) do
+    assign_valid_signature_for_actor(conn, actor_id)
+  end
+
+  defp assign_valid_signature_for_actor(conn, actor) do
+    actor_id = Utils.get_ap_id(actor)
+
+    conn
+    |> assign(:valid_signature, true)
+    |> put_req_header("signature", "keyId=\"#{actor_id}#main-key\"")
+  end
+
+  defp expect_signature_retry_from(%User{} = signer) do
+    signer_json = UserView.render("user.json", %{user: signer}) |> Map.delete("featured")
+
+    Tesla.Mock.mock(fn
+      %{url: url} when url == signer.ap_id ->
+        %Tesla.Env{
+          status: 200,
+          body: Jason.encode!(signer_json),
+          headers: HttpRequestMock.activitypub_object_headers()
+        }
+
+      env ->
+        apply(HttpRequestMock, :request, [env])
+    end)
+
+    Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> true end)
+  end
 
   describe "/relay" do
     setup do: clear_config([:instance, :allow_relay])
@@ -430,7 +461,133 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     end
   end
 
+  describe "/objects/:uuid/replies" do
+    test "it renders the top-level collection", %{
+      conn: conn
+    } do
+      user = insert(:user)
+      note = insert(:note_activity)
+      note = Pleroma.Activity.get_by_id_with_object(note.id)
+      uuid = String.split(note.object.data["id"], "/") |> List.last()
+
+      {:ok, _} =
+        CommonAPI.post(user, %{status: "reply1", in_reply_to_status_id: note.id})
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/objects/#{uuid}/replies")
+
+      assert match?(
+               %{
+                 "id" => _,
+                 "type" => "OrderedCollection",
+                 "totalItems" => 1,
+                 "first" => %{
+                   "id" => _,
+                   "type" => "OrderedCollectionPage",
+                   "orderedItems" => [_]
+                 }
+               },
+               json_response(conn, 200)
+             )
+    end
+
+    test "first page id includes `?page=true`", %{conn: conn} do
+      user = insert(:user)
+      note = insert(:note_activity)
+      note = Pleroma.Activity.get_by_id_with_object(note.id)
+      uuid = String.split(note.object.data["id"], "/") |> List.last()
+
+      {:ok, _} =
+        CommonAPI.post(user, %{status: "reply1", in_reply_to_status_id: note.id})
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/objects/#{uuid}/replies")
+
+      %{"id" => collection_id, "first" => %{"id" => page_id, "partOf" => part_of}} =
+        json_response(conn, 200)
+
+      assert part_of == collection_id
+      assert String.contains?(page_id, "page=true")
+    end
+
+    test "unknown query params do not crash the endpoint", %{conn: conn} do
+      user = insert(:user)
+      note = insert(:note_activity)
+      note = Pleroma.Activity.get_by_id_with_object(note.id)
+      uuid = String.split(note.object.data["id"], "/") |> List.last()
+
+      {:ok, _} =
+        CommonAPI.post(user, %{status: "reply1", in_reply_to_status_id: note.id})
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/objects/#{uuid}/replies?unknown_param=1")
+
+      assert %{"type" => "OrderedCollection"} = json_response(conn, 200)
+    end
+
+    test "it renders a collection page", %{
+      conn: conn
+    } do
+      user = insert(:user)
+      note = insert(:note_activity)
+      note = Pleroma.Activity.get_by_id_with_object(note.id)
+      uuid = String.split(note.object.data["id"], "/") |> List.last()
+
+      {:ok, r1} =
+        CommonAPI.post(user, %{status: "reply1", in_reply_to_status_id: note.id})
+
+      {:ok, r2} =
+        CommonAPI.post(user, %{status: "reply2", in_reply_to_status_id: note.id})
+
+      {:ok, _} =
+        CommonAPI.post(user, %{status: "reply3", in_reply_to_status_id: note.id})
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/objects/#{uuid}/replies?page=true&min_id=#{r1.object.id}&limit=1")
+
+      expected_uris = [r2.object.data["id"]]
+
+      assert match?(
+               %{
+                 "id" => _,
+                 "type" => "OrderedCollectionPage",
+                 "prev" => _,
+                 "next" => _,
+                 "orderedItems" => ^expected_uris
+               },
+               json_response(conn, 200)
+             )
+    end
+  end
+
   describe "/activities/:uuid" do
+    test "it does not include a top-level replies collection on activities", %{conn: conn} do
+      clear_config([:activitypub, :note_replies_output_limit], 1)
+
+      activity = insert(:note_activity)
+      activity = Activity.get_by_id_with_object(activity.id)
+
+      uuid = String.split(activity.data["id"], "/") |> List.last()
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/activities/#{uuid}")
+
+      res = json_response(conn, 200)
+
+      refute Map.has_key?(res, "replies")
+      assert get_in(res, ["object", "replies", "id"]) == activity.object.data["id"] <> "/replies"
+    end
+
     test "it doesn't return a local-only activity", %{conn: conn} do
       user = insert(:user)
       {:ok, post} = CommonAPI.post(user, %{status: "test", visibility: "local"})
@@ -562,7 +719,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", data)
 
@@ -590,7 +747,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", data)
 
@@ -598,6 +755,199 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
       assert Activity.get_by_ap_id(data["id"])
+    end
+
+    test "does not create a forged post after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      object_id = "https://two.com/objects/inbox-forged-note"
+
+      data = %{
+        "type" => "Create",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-forged-create",
+        "context" => "https://two.com/contexts/inbox-forged-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => object_id,
+          "actor" => bob.ap_id,
+          "attributedTo" => bob.ap_id,
+          "context" => "https://two.com/contexts/inbox-forged-create",
+          "content" => "forged post",
+          "published" => "2024-07-25T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      refute Object.get_by_ap_id(object_id)
+    end
+
+    test "does not create a forged like after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      note = insert(:note)
+
+      data = %{
+        "type" => "Like",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-forged-like",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => note.data["id"]
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+    end
+
+    test "does not delete an object after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      note = insert(:note)
+      object_id = note.data["id"]
+
+      data = %{
+        "type" => "Delete",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-forged-delete",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => object_id
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      assert %Object{data: %{"type" => "Note"}} = Object.get_by_ap_id(object_id)
+    end
+
+    test "does not create a forged post signed by a different actor", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      object_id = "https://two.com/objects/inbox-signed-forged-note"
+
+      data = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-signed-forged-create",
+        "context" => "https://two.com/contexts/inbox-signed-forged-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => object_id,
+          "actor" => bob.ap_id,
+          "attributedTo" => bob.ap_id,
+          "context" => "https://two.com/contexts/inbox-signed-forged-create",
+          "content" => "forged post",
+          "published" => "2024-07-25T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("digest", "SHA-256=fake-digest")
+        |> put_req_header(
+          "signature",
+          "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        )
+        |> post("/inbox", data)
+
+      assert conn.assigns.valid_signature == false
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      refute Object.get_by_ap_id(object_id)
+    end
+
+    test "does not create a forged like signed by a different actor", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      note = insert(:note)
+
+      data = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Like",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-signed-forged-like",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => note.data["id"]
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("digest", "SHA-256=fake-digest")
+        |> put_req_header(
+          "signature",
+          "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        )
+        |> post("/inbox", data)
+
+      assert conn.assigns.valid_signature == false
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
     end
 
     test "accept follow activity", %{conn: conn} do
@@ -616,7 +966,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(followed_relay)
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", accept)
                |> json_response(200)
@@ -696,16 +1046,19 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     test "Unknown activity types are discarded", %{conn: conn} do
       unknown_types = ["Poke", "Read", "Dazzle"]
 
+      actor =
+        insert(:user, local: false, ap_id: "https://unknown.mastodon.instance/users/somebody")
+
       Enum.each(unknown_types, fn bad_type ->
         params =
           %{
             "type" => bad_type,
-            "actor" => "https://unknown.mastodon.instance/users/somebody"
+            "actor" => actor.ap_id
           }
           |> Jason.encode!()
 
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(actor)
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", params)
         |> json_response(400)
@@ -774,7 +1127,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -795,7 +1148,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -864,7 +1217,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -883,7 +1236,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -914,7 +1267,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -935,7 +1288,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -956,7 +1309,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -980,7 +1333,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1007,7 +1360,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1037,7 +1390,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{recipient.nickname}/inbox", data)
 
@@ -1102,7 +1455,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{recipient.nickname}/inbox", data)
       |> json_response(200)
@@ -1192,7 +1545,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{reported_user.nickname}/inbox", data)
       |> json_response(200)
@@ -1246,7 +1599,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{reported_user.nickname}/inbox", data)
       |> json_response(200)
@@ -1279,7 +1632,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1302,7 +1655,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1325,7 +1678,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1580,6 +1933,41 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert object["content"] == activity["object"]["content"]
     end
 
+    test "it inserts an incoming reply create activity into the database", %{conn: conn} do
+      user = insert(:user)
+      replying_user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "cofe"})
+
+      data = %{
+        type: "Create",
+        object: %{
+          to: [Pleroma.Constants.as_public(), user.ap_id],
+          cc: [replying_user.follower_address],
+          inReplyTo: activity.object.data["id"],
+          content: "green tea",
+          type: "Note"
+        }
+      }
+
+      result =
+        conn
+        |> assign(:user, replying_user)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{replying_user.nickname}/outbox", data)
+        |> json_response(201)
+
+      updated_object = Object.normalize(activity.object.data["id"], fetch: false)
+
+      assert Activity.get_by_ap_id(result["id"])
+      assert result["object"]
+      assert %Object{data: object} = Object.normalize(result["object"], fetch: false)
+      assert object["content"] == data.object.content
+      assert Pleroma.Web.ActivityPub.Visibility.public?(object)
+      assert object["inReplyTo"] == activity.object.data["id"]
+      assert updated_object.data["repliesCount"] == 1
+    end
+
     test "it rejects anything beyond 'Note' creations", %{conn: conn, activity: activity} do
       user = insert(:user)
 
@@ -1704,6 +2092,289 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert json_response(conn, 400)
       assert note_object == Object.normalize(note_activity, fetch: false)
+    end
+
+    test "it rejects Add to other user's collection", %{conn: conn} do
+      user = insert(:user)
+      target_user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "Post"})
+      object = Object.normalize(activity, fetch: false)
+      object_id = object.data["id"]
+
+      data = %{
+        type: "Add",
+        target:
+          "#{Pleroma.Web.Endpoint.url()}/users/#{target_user.nickname}/collections/featured",
+        object: object_id
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects Remove to other user's collection", %{conn: conn} do
+      user = insert(:user)
+      target_user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "Post"})
+      object = Object.normalize(activity, fetch: false)
+      object_id = object.data["id"]
+
+      data = %{
+        type: "Remove",
+        target:
+          "#{Pleroma.Web.Endpoint.url()}/users/#{target_user.nickname}/collections/featured",
+        object: object_id
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects updating Actor's profile", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+      user_object_new = Map.put(user_object, "name", "lain")
+
+      data = %{
+        type: "Update",
+        object: user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      updated_user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+
+      assert updated_user_object == user_object
+      assert json_response(conn, 400)
+    end
+
+    # Actor publicKey tests are redundant with above test,
+    # left here for the case that Updating Actors is ever supported
+    test "it rejects updating Actor's publicKey", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      {:ok, pem} = Pleroma.Keys.generate_rsa_pem()
+      {:ok, _, public_key} = Pleroma.Keys.keys_from_pem(pem)
+      # Taken from UserView
+      public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+      public_key = :public_key.pem_encode([public_key])
+
+      user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+      user_object_public_key = Map.fetch!(user_object, "publicKey")
+      user_object_public_key = Map.put(user_object_public_key, "publicKeyPem", public_key)
+      user_object_new = Map.put(user_object, "publicKey", user_object_public_key)
+
+      refute user_object == user_object_new
+
+      data = %{
+        type: "Update",
+        object: user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      new_user_object = Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: user})
+
+      assert user_object == new_user_object
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects updating Actor's publicKey of another user", %{conn: conn} do
+      user = insert(:user)
+      target_user = insert(:user, local: true)
+
+      {:ok, pem} = Pleroma.Keys.generate_rsa_pem()
+      {:ok, _, public_key} = Pleroma.Keys.keys_from_pem(pem)
+      # Taken from UserView
+      public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+      public_key = :public_key.pem_encode([public_key])
+
+      target_user_object =
+        Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: target_user})
+
+      target_user_object_public_key = Map.fetch!(target_user_object, "publicKey")
+
+      target_user_object_public_key =
+        Map.put(target_user_object_public_key, "publicKeyPem", public_key)
+
+      target_user_object_new =
+        Map.put(target_user_object, "publicKey", target_user_object_public_key)
+
+      refute target_user_object == target_user_object_new
+
+      data = %{
+        type: "Update",
+        object: target_user_object_new
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{target_user.nickname}/outbox", data)
+
+      new_target_user_object =
+        Pleroma.Web.ActivityPub.UserView.render("user.json", %{user: target_user})
+
+      assert target_user_object == new_target_user_object
+      assert json_response(conn, 403)
+    end
+
+    test "it rejects creating Actors of type Application", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      data = %{
+        type: "Create",
+        object: %{
+          type: "Application"
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects creating Actors of type Person", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      data = %{
+        type: "Create",
+        object: %{
+          type: "Person"
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects creating Actors of type Service", %{conn: conn} do
+      user = insert(:user, local: true)
+
+      data = %{
+        type: "Create",
+        object: %{
+          type: "Service"
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/json")
+        |> post("/users/#{user.nickname}/outbox", data)
+
+      assert json_response(conn, 400)
+    end
+
+    test "it rejects like activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "Like",
+        object: %{
+          id: post_object.data["id"]
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
+    end
+
+    test "it rejects announce activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "Announce",
+        object: %{
+          id: post_object.data["id"]
+        }
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
+    end
+
+    test "it rejects emojireact activity to object invisible to actor", %{conn: conn} do
+      user = insert(:user)
+      stranger = insert(:user, local: true)
+      {:ok, post} = CommonAPI.post(user, %{status: "cofe", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, stranger)
+
+      post_object = Object.normalize(post, fetch: false)
+
+      data = %{
+        type: "EmojiReact",
+        object: %{
+          id: post_object.data["id"]
+        },
+        content: "😀"
+      }
+
+      conn =
+        conn
+        |> assign(:user, stranger)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{stranger.nickname}/outbox", data)
+
+      assert json_response(conn, 403)
     end
 
     test "it increases like count when receiving a like action", %{conn: conn} do
@@ -2127,6 +2798,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     setup do: clear_config([:media_proxy])
     setup do: clear_config([Pleroma.Upload])
 
+    # majic's libmagic port is unavailable on local Darwin runs; Linux CI still runs this test.
+    @tag :skip_darwin
     test "POST /api/ap/upload_media", %{conn: conn} do
       user = insert(:user)
 

@@ -886,17 +886,17 @@ defmodule Pleroma.UserTest do
   describe "get_or_fetch/1 remote users with tld, while BE is running on a subdomain" do
     setup do: clear_config([Pleroma.Web.WebFinger, :update_nickname_on_user_fetch], true)
 
-    test "for mastodon" do
-      ap_id = "a@mastodon.example"
-      {:ok, fetched_user} = User.get_or_fetch(ap_id)
+    test "fetches a mastodon split-domain nickname" do
+      nickname = "a@mastodon.example"
+      {:ok, fetched_user} = User.get_or_fetch(nickname)
 
       assert fetched_user.ap_id == "https://sub.mastodon.example/users/a"
       assert fetched_user.nickname == "a@mastodon.example"
     end
 
-    test "for pleroma" do
-      ap_id = "a@pleroma.example"
-      {:ok, fetched_user} = User.get_or_fetch(ap_id)
+    test "fetches a pleroma split-domain nickname" do
+      nickname = "a@pleroma.example"
+      {:ok, fetched_user} = User.get_or_fetch(nickname)
 
       assert fetched_user.ap_id == "https://sub.pleroma.example/users/a"
       assert fetched_user.nickname == "a@pleroma.example"
@@ -944,6 +944,89 @@ defmodule Pleroma.UserTest do
     test "returns nil for nonexistent local user" do
       {:error, fetched_user} = User.get_or_fetch_by_nickname("nonexistent")
       assert fetched_user == "not found nonexistent"
+    end
+
+    test "does not rename an existing remote actor from rogue WebFinger data" do
+      clear_config([Pleroma.Web.WebFinger, :update_nickname_on_user_fetch], true)
+
+      actor_id = "https://legit-actor.example/users/alice"
+
+      Tesla.Mock.mock(fn
+        %{url: "https://evil-webfinger.example/.well-known/host-meta"} ->
+          {:ok, %Tesla.Env{status: 404}}
+
+        %{
+          url:
+            "https://evil-webfinger.example/.well-known/webfinger?resource=acct:claimed@evil-webfinger.example"
+        } ->
+          Tesla.Mock.json(%{
+            "subject" => "acct:claimed@evil-webfinger.example",
+            "links" => [
+              %{
+                "rel" => "self",
+                "type" => "application/activity+json",
+                "href" => actor_id
+              }
+            ]
+          })
+
+        %{url: ^actor_id} ->
+          {:ok,
+           %Tesla.Env{
+             status: 200,
+             headers: [{"content-type", "application/activity+json"}],
+             body:
+               Jason.encode!(%{
+                 "id" => actor_id,
+                 "type" => "Person",
+                 "preferredUsername" => "alice",
+                 "name" => "Alice",
+                 "summary" => "",
+                 "inbox" => "https://legit-actor.example/users/alice/inbox",
+                 "outbox" => "https://legit-actor.example/users/alice/outbox",
+                 "followers" => "https://legit-actor.example/users/alice/followers",
+                 "following" => "https://legit-actor.example/users/alice/following"
+               })
+           }}
+
+        %{url: "https://legit-actor.example/.well-known/host-meta"} ->
+          {:ok, %Tesla.Env{status: 404}}
+
+        %{
+          url:
+            "https://legit-actor.example/.well-known/webfinger?resource=acct:alice@legit-actor.example"
+        } ->
+          Tesla.Mock.json(%{
+            "subject" => "acct:alice@legit-actor.example",
+            "links" => [
+              %{
+                "rel" => "self",
+                "type" => "application/activity+json",
+                "href" => actor_id
+              }
+            ]
+          })
+      end)
+
+      assert {:error, {:webfinger_actor_mismatch, "claimed@evil-webfinger.example", ^actor_id}} =
+               ActivityPub.make_user_from_nickname("claimed@evil-webfinger.example")
+
+      refute User.get_by_ap_id(actor_id)
+      refute User.get_by_nickname("claimed@evil-webfinger.example")
+
+      orig_user =
+        insert(:user,
+          local: false,
+          nickname: "alice@legit-actor.example",
+          ap_id: actor_id
+        )
+
+      assert {:error, {:webfinger_actor_mismatch, "claimed@evil-webfinger.example", ^actor_id}} =
+               ActivityPub.make_user_from_nickname("claimed@evil-webfinger.example")
+
+      assert {:error, _} = User.get_or_fetch_by_nickname("claimed@evil-webfinger.example")
+      assert User.get_by_id(orig_user.id).nickname == "alice@legit-actor.example"
+      refute User.get_by_nickname("claimed@evil-webfinger.example")
     end
 
     test "updates an existing user, if stale" do
@@ -1889,6 +1972,11 @@ defmodule Pleroma.UserTest do
       {:ok, user} = User.set_suggestion(user, false)
       refute user.is_suggested
     end
+  end
+
+  test "get_or_fetch_public_key_for_ap_id fetches a user that's not in the db" do
+    assert {:ok, _key} =
+             User.get_or_fetch_public_key_for_ap_id("http://mastodon.example.org/users/admin")
   end
 
   test "get_public_key_for_ap_id returns correctly for user that's not in the db" do

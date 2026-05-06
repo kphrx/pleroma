@@ -759,7 +759,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
     test "it allows to address a list" do
       user = insert(:user)
-      {:ok, list} = Pleroma.List.create("foo", user)
+      {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
 
@@ -830,7 +830,9 @@ defmodule Pleroma.Web.CommonAPITest do
       user = insert(:user)
 
       {:ok, quoted} = CommonAPI.post(user, %{status: "Hello world"})
-      {:ok, quote_post} = CommonAPI.post(user, %{status: "nice post", quote_id: quoted.id})
+
+      {:ok, quote_post} =
+        CommonAPI.post(user, %{status: "nice post", quoted_status_id: quoted.id})
 
       quoted = Object.normalize(quoted)
       quote_post = Object.normalize(quote_post)
@@ -841,13 +843,25 @@ defmodule Pleroma.Web.CommonAPITest do
       refute quoted.data["actor"] in quote_post.data["to"]
     end
 
+    test "it supports fallback from `quote_id`" do
+      user = insert(:user)
+
+      {:ok, quoted} = CommonAPI.post(user, %{status: "Hello world"})
+      {:ok, quote_post} = CommonAPI.post(user, %{status: "nice post", quote_id: quoted.id})
+
+      quoted = Object.normalize(quoted)
+      quote_post = Object.normalize(quote_post)
+
+      assert quote_post.data["quoteUrl"] == quoted.data["id"]
+    end
+
     test "quote posting with explicit addressing doesn't mention the OP" do
       user = insert(:user)
 
       {:ok, quoted} = CommonAPI.post(user, %{status: "Hello world"})
 
       {:ok, quote_post} =
-        CommonAPI.post(user, %{status: "nice post", quote_id: quoted.id, to: []})
+        CommonAPI.post(user, %{status: "nice post", quoted_status_id: quoted.id, to: []})
 
       assert Object.normalize(quote_post).data["to"] == [Pleroma.Constants.as_public()]
     end
@@ -862,15 +876,15 @@ defmodule Pleroma.Web.CommonAPITest do
       {:ok, local} = CommonAPI.post(user, %{status: ".", visibility: "local"})
       {:ok, public} = CommonAPI.post(user, %{status: ".", visibility: "public"})
 
-      {:error, _} = CommonAPI.post(user, %{status: "nice", quote_id: direct.id})
-      {:ok, _} = CommonAPI.post(user, %{status: "nice", quote_id: private.id})
-      {:error, _} = CommonAPI.post(another_user, %{status: "nice", quote_id: private.id})
-      {:ok, _} = CommonAPI.post(user, %{status: "nice", quote_id: unlisted.id})
-      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quote_id: unlisted.id})
-      {:ok, _} = CommonAPI.post(user, %{status: "nice", quote_id: local.id})
-      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quote_id: local.id})
-      {:ok, _} = CommonAPI.post(user, %{status: "nice", quote_id: public.id})
-      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quote_id: public.id})
+      {:error, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: direct.id})
+      {:ok, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: private.id})
+      {:error, _} = CommonAPI.post(another_user, %{status: "nice", quoted_status_id: private.id})
+      {:ok, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: unlisted.id})
+      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quoted_status_id: unlisted.id})
+      {:ok, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: local.id})
+      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quoted_status_id: local.id})
+      {:ok, _} = CommonAPI.post(user, %{status: "nice", quoted_status_id: public.id})
+      {:ok, _} = CommonAPI.post(another_user, %{status: "nice", quoted_status_id: public.id})
     end
 
     test "it properly mentions punycode domain" do
@@ -1072,7 +1086,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
     test "only public can be pinned", %{user: user} do
       {:ok, activity} = CommonAPI.post(user, %{status: "private status", visibility: "private"})
-      {:error, :visibility_error} = CommonAPI.pin(activity.id, user)
+      {:error, :non_public_error} = CommonAPI.pin(activity.id, user)
     end
 
     test "unpin status", %{user: user, activity: activity} do
@@ -1286,6 +1300,47 @@ defmodule Pleroma.Web.CommonAPITest do
              } = flag_activity
     end
 
+    test "doesn't create a report when post is not visible to user" do
+      reporter = insert(:user)
+      target_user = insert(:user)
+      {:ok, post} = CommonAPI.post(target_user, %{status: "Eric", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(post)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(post, reporter)
+
+      # Fails when all status are invisible
+      report_data = %{
+        account_id: target_user.id,
+        comment: "foobar",
+        status_ids: [post.id]
+      }
+
+      assert {:error, :visibility_error} = CommonAPI.report(reporter, report_data)
+    end
+
+    test "doesn't create a report when some posts are not visible to user" do
+      reporter = insert(:user)
+      target_user = insert(:user)
+
+      {:ok, visible_activity} = CommonAPI.post(target_user, %{status: "cofe"})
+
+      {:ok, invisibile_activity} =
+        CommonAPI.post(target_user, %{status: "cawfee", visibility: "private"})
+
+      assert Pleroma.Web.ActivityPub.Visibility.private?(invisibile_activity)
+      assert Pleroma.Web.ActivityPub.Visibility.public?(visible_activity)
+      refute Pleroma.Web.ActivityPub.Visibility.visible_for_user?(invisibile_activity, reporter)
+
+      # Fails when some statuses are invisible
+      report_data_partial = %{
+        account_id: target_user.id,
+        comment: "foobar",
+        status_ids: [visible_activity.id, invisibile_activity.id]
+      }
+
+      assert {:error, :visibility_error} = CommonAPI.report(reporter, report_data_partial)
+    end
+
     test "updates report state" do
       [reporter, target_user] = insert_pair(:user)
       activity = insert(:note_activity, user: target_user)
@@ -1402,6 +1457,29 @@ defmodule Pleroma.Web.CommonAPITest do
                  "rules" => [^rule_id]
                }
              } = flag_activity
+    end
+
+    test "assigns report to an account" do
+      [reporter, target_user] = insert_pair(:user)
+      %{id: assigned} = insert(:user)
+
+      {:ok, %Activity{id: report_id}} = CommonAPI.report(reporter, %{account_id: target_user.id})
+
+      {:ok, activity} = CommonAPI.assign_report_to_account(report_id, assigned)
+
+      assert %{data: %{"assigned_account" => ^assigned}} = activity
+    end
+
+    test "unassigns report from account" do
+      [reporter, target_user] = insert_pair(:user)
+      %{id: assigned} = insert(:user)
+
+      {:ok, %Activity{id: report_id}} = CommonAPI.report(reporter, %{account_id: target_user.id})
+
+      CommonAPI.assign_report_to_account(report_id, assigned)
+      {:ok, activity} = CommonAPI.assign_report_to_account(report_id, nil)
+
+      refute Map.has_key?(activity.data, "assigned_account")
     end
   end
 

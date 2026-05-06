@@ -268,6 +268,23 @@ defmodule Pleroma.Web.Plugs.RateLimiterTest do
     refute {:err, :not_found} == RateLimiter.inspect_bucket(conn, limiter_name, opts)
   end
 
+  test "doesn't crash if rate limit scale is invalid (e.g. broken DB config)" do
+    limiter_name = :test_invalid_rate_limit_config
+
+    clear_config([:rate_limit, limiter_name], [{"", 0}, {"", ""}])
+    clear_config([Pleroma.Web.Endpoint, :http, :ip], {8, 8, 8, 8})
+
+    opts = RateLimiter.init(name: limiter_name)
+
+    conn = %{build_conn(:get, "/") | remote_ip: {127, 0, 0, 1}}
+
+    conn_limited = RateLimiter.call(conn, opts)
+
+    refute conn_limited.status == Conn.Status.code(:too_many_requests)
+    refute conn_limited.resp_body
+    refute conn_limited.halted
+  end
+
   def expire_ttl(%{remote_ip: remote_ip} = _conn, bucket_name_root) do
     bucket_name = "anon:#{bucket_name_root}" |> String.to_atom()
     key_name = "ip::#{remote_ip |> Tuple.to_list() |> Enum.join(".")}"

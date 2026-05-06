@@ -4,7 +4,7 @@
 
 defmodule Pleroma.Web.PleromaAPI.ChatMessageReferenceViewTest do
   alias Pleroma.NullCache
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
 
   alias Pleroma.Chat
   alias Pleroma.Chat.MessageReference
@@ -17,6 +17,11 @@ defmodule Pleroma.Web.PleromaAPI.ChatMessageReferenceViewTest do
 
   import Mox
   import Pleroma.Factory
+
+  setup do
+    Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
+    :ok
+  end
 
   setup do: clear_config([:rich_media, :enabled], true)
 

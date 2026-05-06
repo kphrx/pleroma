@@ -54,7 +54,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
                count: 2,
                me: false,
                name: "dinosaur",
-               url: "http://localhost:4001/emoji/dino walking.gif",
+               url: "http://localhost:4001/emoji/dino%20walking.gif",
                account_ids: [other_user.id, user.id]
              },
              %{name: "🍵", count: 1, me: false, url: nil, account_ids: [third_user.id]}
@@ -70,7 +70,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
                count: 2,
                me: true,
                name: "dinosaur",
-               url: "http://localhost:4001/emoji/dino walking.gif",
+               url: "http://localhost:4001/emoji/dino%20walking.gif",
                account_ids: [other_user.id, user.id]
              },
              %{name: "🍵", count: 1, me: false, url: nil, account_ids: [third_user.id]}
@@ -344,7 +344,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
         quotes_count: 0,
         bookmark_folder: nil,
         list_id: nil
-      }
+      },
+      quotes_count: 0
     }
 
     assert status == expected
@@ -436,8 +437,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     post = insert(:note_activity)
     user = insert(:user)
 
-    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quote_id: post.id})
-    {:ok, quoted_quote_post} = CommonAPI.post(user, %{status: "yo", quote_id: quote_post.id})
+    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quoted_status_id: post.id})
+
+    {:ok, quoted_quote_post} =
+      CommonAPI.post(user, %{status: "yo", quoted_status_id: quote_post.id})
 
     status = StatusView.render("show.json", %{activity: quoted_quote_post})
 
@@ -508,7 +511,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     post = insert(:note_activity)
     user = insert(:user)
 
-    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quote_id: post.id})
+    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quoted_status_id: post.id})
     {:ok, repost} = CommonAPI.repeat(quote_post.id, user)
 
     [status] = StatusView.render("index.json", %{activities: [repost], as: :activity})
@@ -906,7 +909,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
   test "visibility/list" do
     user = insert(:user)
 
-    {:ok, list} = Pleroma.List.create("foo", user)
+    {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
 
     {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
 

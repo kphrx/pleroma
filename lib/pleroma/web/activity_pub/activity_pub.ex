@@ -502,6 +502,28 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> Repo.all()
   end
 
+  def fetch_objects_for_replies_collection(parent_ap_id, opts \\ %{}) do
+    opts =
+      opts
+      |> Map.put(:order_asc, true)
+      |> Map.put(:id_type, :integer)
+
+    from(o in Object,
+      where:
+        fragment("?->>'inReplyTo' = ?", o.data, ^parent_ap_id) and
+          fragment(
+            "(?->'to' \\? ?::text OR ?->'cc' \\? ?::text)",
+            o.data,
+            ^Pleroma.Constants.as_public(),
+            o.data,
+            ^Pleroma.Constants.as_public()
+          ) and
+          fragment("?->>'type' <> 'Answer'", o.data),
+      select: %{id: o.id, ap_id: fragment("?->>'id'", o.data)}
+    )
+    |> Pagination.fetch_paginated(opts, :keyset)
+  end
+
   @spec fetch_latest_direct_activity_id_for_context(String.t(), keyword() | map()) ::
           Ecto.UUID.t() | nil
   def fetch_latest_direct_activity_id_for_context(context, opts \\ %{}) do
@@ -984,6 +1006,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_state(query, _), do: query
 
+  defp restrict_assigned_account(query, %{assigned_account: assigned_account}) do
+    from(activity in query,
+      where: fragment("?->>'assigned_account' = ?", activity.data, ^assigned_account)
+    )
+  end
+
+  defp restrict_assigned_account(query, _), do: query
+
   defp restrict_favorited_by(query, %{favorited_by: ap_id}) do
     from(
       [_activity, object] in query,
@@ -1452,6 +1482,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> restrict_actor(opts)
       |> restrict_type(opts)
       |> restrict_state(opts)
+      |> restrict_assigned_account(opts)
       |> restrict_favorited_by(opts)
       |> restrict_blocked(restrict_blocked_opts)
       |> restrict_blockers_visibility(opts)
@@ -1572,7 +1603,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp get_actor_url(_url), do: nil
 
-  defp normalize_image(%{"url" => url} = data) do
+  defp normalize_image(%{"url" => url} = data) when is_binary(url) do
     %{
       "type" => "Image",
       "url" => [%{"href" => url}]
@@ -1580,8 +1611,19 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> maybe_put_description(data)
   end
 
+  defp normalize_image(%{"url" => urls}) when is_list(urls) do
+    url = urls |> List.first()
+
+    %{"url" => url}
+    |> normalize_image()
+  end
+
   defp normalize_image(urls) when is_list(urls), do: urls |> List.first() |> normalize_image()
   defp normalize_image(_), do: nil
+
+  defp normalize_also_known_as(urls) when is_list(urls), do: urls
+  defp normalize_also_known_as(url) when is_binary(url), do: [url]
+  defp normalize_also_known_as(nil), do: []
 
   defp maybe_put_description(map, %{"name" => description}) when is_binary(description) do
     Map.put(map, "name", description)
@@ -1638,44 +1680,80 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
     show_birthday = !!birthday
 
-    # if WebFinger request was already done, we probably have acct, otherwise
-    # we request WebFinger here
-    nickname = additional[:nickname_from_acct] || generate_nickname(data)
+    with {:ok, nickname} <- nickname_from_actor(data, additional) do
+      {:ok,
+       %{
+         ap_id: data["id"],
+         uri: get_actor_url(data["url"]),
+         banner: normalize_image(data["image"]),
+         fields: fields,
+         emoji: emojis,
+         is_locked: is_locked,
+         is_discoverable: is_discoverable,
+         invisible: invisible,
+         avatar: normalize_image(data["icon"]),
+         name: data["name"],
+         follower_address: data["followers"],
+         following_address: data["following"],
+         featured_address: featured_address,
+         bio: data["summary"] || "",
+         actor_type: actor_type,
+         also_known_as: normalize_also_known_as(data["alsoKnownAs"]),
+         public_key: public_key,
+         inbox: data["inbox"],
+         shared_inbox: shared_inbox,
+         accepts_chat_messages: accepts_chat_messages,
+         birthday: birthday,
+         show_birthday: show_birthday,
+         pinned_objects: pinned_objects,
+         nickname: nickname
+       }}
+    end
+  end
 
-    %{
-      ap_id: data["id"],
-      uri: get_actor_url(data["url"]),
-      banner: normalize_image(data["image"]),
-      fields: fields,
-      emoji: emojis,
-      is_locked: is_locked,
-      is_discoverable: is_discoverable,
-      invisible: invisible,
-      avatar: normalize_image(data["icon"]),
-      name: data["name"],
-      follower_address: data["followers"],
-      following_address: data["following"],
-      featured_address: featured_address,
-      bio: data["summary"] || "",
-      actor_type: actor_type,
-      also_known_as: Map.get(data, "alsoKnownAs", []),
-      public_key: public_key,
-      inbox: data["inbox"],
-      shared_inbox: shared_inbox,
-      accepts_chat_messages: accepts_chat_messages,
-      birthday: birthday,
-      show_birthday: show_birthday,
-      pinned_objects: pinned_objects,
-      nickname: nickname
-    }
+  defp nickname_from_actor(data, additional) do
+    generated = generated_nickname(data)
+
+    case additional[:nickname_from_acct] do
+      ^generated when is_binary(generated) ->
+        {:ok, generated}
+
+      acct when is_binary(acct) ->
+        with ^acct <- webfinger_nickname(data) do
+          {:ok, acct}
+        else
+          _ -> {:error, {:webfinger_actor_mismatch, acct, data["id"]}}
+        end
+
+      _ ->
+        {:ok, generate_nickname(data)}
+    end
+  end
+
+  defp generated_nickname(%{"preferredUsername" => username, "id" => ap_id})
+       when is_binary(username) and is_binary(ap_id) do
+    case URI.parse(ap_id) do
+      %URI{host: host} when is_binary(host) -> "#{username}@#{host}"
+      _ -> nil
+    end
+  end
+
+  defp generated_nickname(_), do: nil
+
+  defp webfinger_nickname(data) do
+    with generated when is_binary(generated) <- generated_nickname(data),
+         {:ok, %{"subject" => "acct:" <> acct, "ap_id" => ap_id}} <- WebFinger.finger(generated),
+         true <- ap_id == data["id"] do
+      acct
+    end
   end
 
   defp generate_nickname(%{"preferredUsername" => username} = data) when is_binary(username) do
-    generated = "#{username}@#{URI.parse(data["id"]).host}"
+    generated = generated_nickname(data)
 
     if Config.get([WebFinger, :update_nickname_on_user_fetch]) do
-      case WebFinger.finger(generated) do
-        {:ok, %{"subject" => "acct:" <> acct}} -> acct
+      case webfinger_nickname(data) do
+        acct when is_binary(acct) -> acct
         _ -> generated
       end
     else
@@ -1755,9 +1833,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp collection_private(_data), do: {:ok, true}
 
   def user_data_from_user_object(data, additional \\ []) do
-    with {:ok, data} <- MRF.filter(data) do
-      {:ok, object_to_user_data(data, additional)}
+    with {:ok, data} <- MRF.filter(data),
+         {:ok, data} <- object_to_user_data(data, additional) do
+      {:ok, data}
     else
+      {:error, _} = e -> e
       e -> {:error, e}
     end
   end

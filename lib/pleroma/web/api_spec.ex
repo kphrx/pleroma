@@ -152,7 +152,8 @@ defmodule Pleroma.Web.ApiSpec do
               "Suggestions",
               "Announcements",
               "Remote interaction",
-              "Others"
+              "Others",
+              "Preferred frontends"
             ]
           }
         ]

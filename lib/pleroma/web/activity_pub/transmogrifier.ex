@@ -9,6 +9,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   @behaviour Pleroma.Web.ActivityPub.Transmogrifier.API
   alias Pleroma.Activity
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
+  alias Pleroma.Emoji
   alias Pleroma.Maps
   alias Pleroma.Object
   alias Pleroma.Object.Containment
@@ -23,7 +24,6 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Web.Federator
 
-  import Ecto.Query
   import Pleroma.Web.Utils.Guards, only: [not_empty_string: 1]
 
   require Pleroma.Constants
@@ -104,6 +104,24 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
+  @doc """
+  Bovine compatibility
+  https://codeberg.org/bovine/bovine/issues/53
+  """
+  def fix_addressing_public(map, field) do
+    addrs = Map.get(map, field, []) |> List.wrap()
+
+    Map.put(
+      map,
+      field,
+      Enum.map(addrs, fn
+        "Public" -> Pleroma.Constants.as_public()
+        "as:Public" -> Pleroma.Constants.as_public()
+        x -> x
+      end)
+    )
+  end
+
   # if directMessage flag is set to true, leave the addressing alone
   def fix_explicit_addressing(%{"directMessage" => true} = object, _follower_collection),
     do: object
@@ -161,6 +179,10 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> fix_addressing_list("cc")
     |> fix_addressing_list("bto")
     |> fix_addressing_list("bcc")
+    |> fix_addressing_public("to")
+    |> fix_addressing_public("cc")
+    |> fix_addressing_public("bto")
+    |> fix_addressing_public("bcc")
     |> fix_explicit_addressing(follower_collection)
     |> fix_implicit_addressing(follower_collection)
   end
@@ -740,50 +762,34 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   def set_quote_url(obj), do: obj
 
   @doc """
-  Serialized Mastodon-compatible `replies` collection containing _self-replies_.
-  Based on Mastodon's ActivityPub::NoteSerializer#replies.
+  Inline first page of the `replies` collection,
+  containing any replies in chronological order.
   """
-  def set_replies(obj_data) do
-    replies_uris =
-      with limit when limit > 0 <-
-             Pleroma.Config.get([:activitypub, :note_replies_output_limit], 0),
-           %Object{} = object <- Object.get_cached_by_ap_id(obj_data["id"]) do
-        object
-        |> Object.self_replies()
-        |> select([o], fragment("?->>'id'", o.data))
-        |> limit(^limit)
-        |> Repo.all()
-      else
-        _ -> []
-      end
-
-    set_replies(obj_data, replies_uris)
+  def set_replies(%{"type" => type} = obj_data)
+      when type in Pleroma.Constants.status_object_types() do
+    with obj_ap_id when is_binary(obj_ap_id) <- obj_data["id"],
+         limit when limit > 0 <-
+           Pleroma.Config.get([:activitypub, :note_replies_output_limit], 0),
+         collection <-
+           Pleroma.Web.ActivityPub.ObjectView.render("object_replies.json", %{
+             render_params: %{object_ap_id: obj_data["id"], limit: limit, skip_ap_ctx: true}
+           }) do
+      Map.put(obj_data, "replies", collection)
+    else
+      0 -> Map.put(obj_data, "replies", obj_data["id"] <> "/replies")
+      _ -> obj_data
+    end
   end
 
-  defp set_replies(obj, []) do
-    obj
+  def set_replies(obj_data), do: obj_data
+
+  defp set_voters_count(%{"voters" => [_ | _] = voters} = obj) do
+    Map.merge(obj, %{"votersCount" => length(voters)})
   end
 
-  defp set_replies(obj, replies_uris) do
-    replies_collection = %{
-      "type" => "Collection",
-      "items" => replies_uris
-    }
+  defp set_voters_count(obj), do: obj
 
-    Map.merge(obj, %{"replies" => replies_collection})
-  end
-
-  def replies(%{"replies" => %{"first" => %{"items" => items}}}) when not is_nil(items) do
-    items
-  end
-
-  def replies(%{"replies" => %{"items" => items}}) when not is_nil(items) do
-    items
-  end
-
-  def replies(_), do: []
-
-  # Prepares the object of an outgoing create activity.
+  # Prepares and sanitizes the object for federation.
   def prepare_object(object) do
     object
     |> add_hashtags
@@ -795,6 +801,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> set_reply_to_uri
     |> set_quote_url
     |> set_replies
+    |> set_voters_count
     |> CommonFixes.maybe_add_content_map()
     |> strip_internal_fields
     |> strip_internal_tags
@@ -824,7 +831,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   #  internal -> Mastodon
   #  """
 
-  def prepare_outgoing(%{"type" => activity_type, "object" => object_id} = data)
+  def prepare_activity(%{"type" => activity_type, "object" => object_id} = data)
       when activity_type in ["Create", "Listen"] do
     object =
       object_id
@@ -840,7 +847,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     {:ok, data}
   end
 
-  def prepare_outgoing(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
+  def prepare_activity(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
       when objtype in Pleroma.Constants.updatable_object_types() do
     data =
       data
@@ -851,7 +858,28 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     {:ok, data}
   end
 
-  def prepare_outgoing(%{"type" => "Announce", "actor" => ap_id, "object" => object_id} = data) do
+  def prepare_activity(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
+      when objtype in Pleroma.Constants.actor_types() do
+    object =
+      object
+      |> maybe_fix_user_object()
+      |> strip_internal_fields()
+
+    data =
+      data
+      |> Map.put("object", object)
+      |> strip_internal_fields()
+      |> Map.merge(Utils.make_json_ld_header(object))
+      |> Map.delete("bcc")
+
+    {:ok, data}
+  end
+
+  def prepare_activity(%{"type" => "Update", "object" => %{}} = data) do
+    raise "Requested to serve an Update for non-updateable object type:  #{inspect(data)}"
+  end
+
+  def prepare_activity(%{"type" => "Announce", "actor" => ap_id, "object" => object_id} = data) do
     object =
       object_id
       |> Object.normalize(fetch: false)
@@ -874,7 +902,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   # Mastodon Accept/Reject requires a non-normalized object containing the actor URIs,
   # because of course it does.
-  def prepare_outgoing(%{"type" => "Accept"} = data) do
+  def prepare_activity(%{"type" => "Accept"} = data) do
     with follow_activity <- Activity.normalize(data["object"]) do
       object = %{
         "actor" => follow_activity.actor,
@@ -892,7 +920,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
-  def prepare_outgoing(%{"type" => "Reject"} = data) do
+  def prepare_activity(%{"type" => "Reject"} = data) do
     with follow_activity <- Activity.normalize(data["object"]) do
       object = %{
         "actor" => follow_activity.actor,
@@ -910,7 +938,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
-  def prepare_outgoing(%{"type" => "Flag"} = data) do
+  def prepare_activity(%{"type" => "Flag"} = data) do
     with {:ok, stripped_activity} <- Utils.strip_report_status_data(data),
          stripped_activity <- Utils.maybe_anonymize_reporter(stripped_activity),
          stripped_activity <- Map.merge(stripped_activity, Utils.make_json_ld_header()) do
@@ -918,7 +946,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
-  def prepare_outgoing(%{"type" => _type} = data) do
+  def prepare_activity(%{"type" => _type} = data) do
     data =
       data
       |> strip_internal_fields
@@ -985,31 +1013,19 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   def take_emoji_tags(%User{emoji: emoji}) do
     emoji
     |> Map.to_list()
-    |> Enum.map(&build_emoji_tag/1)
+    |> Enum.map(&Emoji.build_emoji_tag/1)
   end
 
   # TODO: we should probably send mtime instead of unix epoch time for updated
   def add_emoji_tags(%{"emoji" => emoji} = object) do
     tags = object["tag"] || []
 
-    out = Enum.map(emoji, &build_emoji_tag/1)
+    out = Enum.map(emoji, &Emoji.build_emoji_tag/1)
 
     Map.put(object, "tag", tags ++ out)
   end
 
   def add_emoji_tags(object), do: object
-
-  def build_emoji_tag({name, url}) do
-    url = URI.encode(url)
-
-    %{
-      "icon" => %{"url" => "#{url}", "type" => "Image"},
-      "name" => ":" <> name <> ":",
-      "type" => "Emoji",
-      "updated" => "1970-01-01T00:00:00Z",
-      "id" => url
-    }
-  end
 
   def set_conversation(object) do
     Map.put(object, "conversation", object["context"])

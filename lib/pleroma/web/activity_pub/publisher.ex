@@ -79,7 +79,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   Determine if an activity can be represented by running it through Transmogrifier.
   """
   def representable?(%Activity{} = activity) do
-    with {:ok, _data} <- @transmogrifier_impl.prepare_outgoing(activity.data) do
+    with {:ok, _data} <- @transmogrifier_impl.prepare_activity(activity.data) do
       true
     else
       _e ->
@@ -102,14 +102,14 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     Logger.debug("Federating #{ap_id} to #{inbox}")
     uri = %{path: path} = URI.parse(inbox)
 
-    {:ok, data} = @transmogrifier_impl.prepare_outgoing(activity.data)
+    {:ok, data} = @transmogrifier_impl.prepare_activity(activity.data)
 
     {actor, data} =
       with {_, false} <- {:actor_changed?, data["actor"] != activity.data["actor"]} do
         {actor, data}
       else
         {:actor_changed?, true} ->
-          # If prepare_outgoing changes the actor, re-get it from the db
+          # If prepare_activity changes the actor, re-get it from the db
           new_actor = User.get_cached_by_ap_id(data["actor"])
           {new_actor, data}
       end
@@ -331,17 +331,21 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     Repo.checkout(fn ->
       Enum.each([priority_inboxes, other_inboxes], fn inboxes ->
         Enum.each(inboxes, fn inbox ->
-          %User{ap_id: ap_id} = Enum.find(recipients, fn actor -> actor.inbox == inbox end)
+          {%User{ap_id: ap_id}, priority} =
+            get_user_with_priority(inbox, priority_recipients, recipients)
 
           # Get all the recipients on the same host and add them to cc. Otherwise, a remote
           # instance would only accept a first message for the first recipient and ignore the rest.
           cc = get_cc_ap_ids(ap_id, recipients)
 
-          __MODULE__.enqueue_one(%{
-            inbox: inbox,
-            cc: cc,
-            activity_id: activity.id
-          })
+          __MODULE__.enqueue_one(
+            %{
+              inbox: inbox,
+              cc: cc,
+              activity_id: activity.id
+            },
+            priority: priority
+          )
         end)
       end)
     end)
@@ -403,4 +407,15 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   end
 
   def gather_nodeinfo_protocol_names, do: ["activitypub"]
+
+  defp get_user_with_priority(inbox, priority_recipients, recipients) do
+    [{priority_recipients, 0}, {recipients, 1}]
+    |> Enum.find_value(fn {recipients, priority} ->
+      with %User{} = user <- Enum.find(recipients, fn actor -> actor.inbox == inbox end) do
+        {user, priority}
+      else
+        _ -> nil
+      end
+    end)
+  end
 end

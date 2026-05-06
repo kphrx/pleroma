@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Repo.Migrations.AutolinkerToLinkifyTest do
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
   import Pleroma.Factory
   import Pleroma.Tests.Helpers
   alias Pleroma.ConfigDB
