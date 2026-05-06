@@ -775,7 +775,7 @@ config :pleroma, :frontends,
       "name" => "pleroma-fe",
       "git" => "https://git.pleroma.social/pleroma/pleroma-fe",
       "build_url" =>
-        "https://git.pleroma.social/pleroma/pleroma-fe/-/jobs/artifacts/${ref}/download?job=build",
+        "https://git.pleroma.social/api/packages/pleroma/generic/pleroma-fe-builds/${ref}/latest.zip",
       "ref" => "develop"
     },
     "fedi-fe" => %{
