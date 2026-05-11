@@ -740,7 +740,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
       {:ok, activity} =
         CommonAPI.post(user, %{
-          status: "$[spin.speed=1s=boom malformed]",
+          status: "$[spin malformed",
           content_type: "text/x.misskeymarkdown"
         })
 
