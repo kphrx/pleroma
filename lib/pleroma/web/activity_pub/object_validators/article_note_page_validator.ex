@@ -8,10 +8,10 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator do
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
   alias Pleroma.HTML
   alias Pleroma.User
-  alias Pleroma.Web.CommonAPI.Utils
   alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
   alias Pleroma.Web.ActivityPub.ObjectValidators.CommonValidations
   alias Pleroma.Web.ActivityPub.Transmogrifier
+  alias Pleroma.Web.CommonAPI.Utils
 
   import Ecto.Changeset
 
