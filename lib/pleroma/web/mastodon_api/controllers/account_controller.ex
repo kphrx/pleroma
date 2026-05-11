@@ -26,7 +26,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   alias Pleroma.Web.OAuth.OAuthController
   alias Pleroma.Web.Plugs.OAuthScopesPlug
   alias Pleroma.Web.Plugs.RateLimiter
-  alias Pleroma.Web.TwitterAPI.TwitterAPI
+  alias Pleroma.Web.Registration
   alias Pleroma.Web.Utils.Params
 
   plug(Pleroma.Web.ApiSpec.CastAndValidate, replace_params: false)
@@ -111,8 +111,8 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
         _params
       ) do
     with :ok <- validate_email_param(params),
-         :ok <- TwitterAPI.validate_captcha(app, params),
-         {:ok, user} <- TwitterAPI.register_user(params),
+         :ok <- Registration.validate_captcha(app, params),
+         {:ok, user} <- Registration.register_user(params),
          {_, {:ok, token}} <-
            {:login, OAuthController.login(user, app, app.scopes)} do
       OAuthController.after_token_exchange(conn, %{user: user, token: token})

@@ -167,10 +167,192 @@ defmodule Pleroma.Web.MastodonAPI.PollViewTest do
            } = PollView.render("show.json", %{object: object})
   end
 
-  test "that poll is non anonymous" do
+  test "displays correct voters count" do
+    object = Object.normalize("https://friends.grishka.me/posts/54642", fetch: true)
+    result = PollView.render("show.json", %{object: object})
+
+    assert result[:voters_count] == 14
+  end
+
+  test "detects that poll is non anonymous" do
     object = Object.normalize("https://friends.grishka.me/posts/54642", fetch: true)
     result = PollView.render("show.json", %{object: object})
 
     assert result[:pleroma][:non_anonymous] == true
+  end
+
+  test "prefers votersCount over voters list when both are present" do
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "Which flavor?",
+        poll: %{options: ["chocolate", "vanilla"], expires_in: 20}
+      })
+
+    object = Object.normalize(activity, fetch: false)
+
+    voter = insert(:user)
+    {:ok, _, object} = CommonAPI.vote(object, voter, [0])
+
+    assert object.data["votersCount"] == 1
+    assert length(object.data["voters"]) == 1
+
+    object = %{
+      object
+      | data: Map.put(object.data, "votersCount", 42)
+    }
+
+    result = PollView.render("show.json", %{object: object})
+
+    assert result[:voters_count] == 42
+  end
+
+  test "falls back to voters list when votersCount is absent" do
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "Which flavor?",
+        poll: %{options: ["chocolate", "vanilla"], expires_in: 20}
+      })
+
+    object = Object.normalize(activity, fetch: false)
+
+    voter = insert(:user)
+    {:ok, _, object} = CommonAPI.vote(object, voter, [0])
+
+    assert length(object.data["voters"]) == 1
+
+    data = Map.delete(object.data, "votersCount")
+    object = %{object | data: data}
+
+    result = PollView.render("show.json", %{object: object})
+
+    assert result[:voters_count] == 1
+  end
+
+  test "returns 0 when both votersCount and voters are absent" do
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "Which flavor?",
+        poll: %{options: ["chocolate", "vanilla"], expires_in: 20}
+      })
+
+    object = Object.normalize(activity, fetch: false)
+
+    data =
+      object.data
+      |> Map.delete("votersCount")
+      |> Map.delete("voters")
+
+    object = %{object | data: data}
+
+    result = PollView.render("show.json", %{object: object})
+
+    assert result[:voters_count] == 0
+  end
+
+  test "returns 0 when voters list is empty" do
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "Which flavor?",
+        poll: %{options: ["chocolate", "vanilla"], expires_in: 20}
+      })
+
+    object = Object.normalize(activity, fetch: false)
+
+    data =
+      object.data
+      |> Map.delete("votersCount")
+      |> Map.put("voters", [])
+
+    object = %{object | data: data}
+
+    result = PollView.render("show.json", %{object: object})
+
+    assert result[:voters_count] == 0
+  end
+
+  test "does not inflate votersCount when same voter picks multiple options" do
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "Pick several",
+        poll: %{options: ["a", "b", "c"], expires_in: 20, multiple: true}
+      })
+
+    object = Object.normalize(activity, fetch: false)
+
+    voter = insert(:user)
+    {:ok, _, object} = CommonAPI.vote(object, voter, [0, 2])
+
+    assert object.data["votersCount"] == 1
+    assert length(object.data["voters"]) == 1
+  end
+
+  test "preserves votersCount from remote source when existing voter picks another option" do
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "Pick several",
+        poll: %{options: ["a", "b"], expires_in: 20, multiple: true}
+      })
+
+    object = Object.normalize(activity, fetch: false)
+
+    voter = insert(:user)
+    {:ok, _, object} = CommonAPI.vote(object, voter, [0, 1])
+
+    object = %{object | data: Map.put(object.data, "votersCount", 14)}
+
+    result = PollView.render("show.json", %{object: object})
+
+    assert result[:voters_count] == 14
+  end
+
+  test "returns 0 when votersCount is explicitly 0" do
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "Pick one",
+        poll: %{options: ["a", "b"], expires_in: 20}
+      })
+
+    object = Object.normalize(activity, fetch: false)
+
+    object = %{object | data: Map.put(object.data, "votersCount", 0)}
+
+    result = PollView.render("show.json", %{object: object})
+
+    assert result[:voters_count] == 0
+  end
+
+  test "falls back to voters list when votersCount is nil" do
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        status: "Pick one",
+        poll: %{options: ["a", "b"], expires_in: 20}
+      })
+
+    object = Object.normalize(activity, fetch: false)
+
+    voter = insert(:user)
+    {:ok, _, object} = CommonAPI.vote(object, voter, [0])
+
+    object = %{object | data: Map.put(object.data, "votersCount", nil)}
+
+    result = PollView.render("show.json", %{object: object})
+
+    assert result[:voters_count] == length(object.data["voters"])
   end
 end

@@ -88,6 +88,49 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     Pleroma.ReverseProxy.Client.Hackney.close(ref)
   end
 
+  test "hackney reverse proxy follows nested redirects via proxy", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/nested_redirect"
+
+    opts = [
+      pool: :media,
+      proxy: proxy.proxy_url,
+      insecure: true,
+      connect_timeout: 1_000,
+      recv_timeout: 1_000,
+      follow_redirect: true
+    ]
+
+    assert {:ok, 200, _headers, ref} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    assert collect_body(ref) == "ok"
+    Pleroma.ReverseProxy.Client.Hackney.close(ref)
+  end
+
+  test "hackney reverse proxy stops following redirects after limit is reached", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/infinite_redirect"
+
+    opts = [
+      pool: :media,
+      proxy: proxy.proxy_url,
+      insecure: true,
+      connect_timeout: 1_000,
+      recv_timeout: 1_000,
+      follow_redirect: true
+    ]
+
+    assert {:ok, 302, _headers, ref} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    Pleroma.ReverseProxy.Client.Hackney.close(ref)
+  end
+
   defp collect_body(ref, acc \\ "") do
     case Pleroma.ReverseProxy.Client.Hackney.stream_body(ref) do
       :done -> acc
@@ -148,6 +191,12 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
          {:ok, data} <- recv_ssl_headers(ssl_socket),
          {:ok, path} <- parse_path(data) do
       case path do
+        "/infinite_redirect" ->
+          send_ssl_response(ssl_socket, 302, "Found", [{"Location", "/infinite_redirect"}], "")
+
+        "/nested_redirect" ->
+          send_ssl_response(ssl_socket, 302, "Found", [{"Location", "/redirect"}], "")
+
         "/redirect" ->
           send_ssl_response(ssl_socket, 302, "Found", [{"Location", "/final"}], "")
 

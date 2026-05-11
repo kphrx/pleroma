@@ -10,10 +10,8 @@ defmodule Pleroma.Web.PleromaAPI.BookmarkFolderController do
 
   plug(Pleroma.Web.ApiSpec.CastAndValidate)
 
-  # Note: scope not present in Mastodon: read:bookmarks
   plug(OAuthScopesPlug, %{scopes: ["read:bookmarks"]} when action == :index)
 
-  # Note: scope not present in Mastodon: write:bookmarks
   plug(
     OAuthScopesPlug,
     %{scopes: ["write:bookmarks"]} when action in [:create, :update, :delete]

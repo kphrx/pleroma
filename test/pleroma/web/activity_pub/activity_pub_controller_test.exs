@@ -19,6 +19,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.Endpoint
   alias Pleroma.Workers.ReceiverWorker
+  alias Pleroma.Workers.SignatureRetryWorker
 
   import Pleroma.Factory
 
@@ -35,6 +36,36 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   end
 
   setup do: clear_config([:instance, :federating], true)
+
+  defp assign_valid_signature_for_actor(conn, %User{ap_id: actor_id}) do
+    assign_valid_signature_for_actor(conn, actor_id)
+  end
+
+  defp assign_valid_signature_for_actor(conn, actor) do
+    actor_id = Utils.get_ap_id(actor)
+
+    conn
+    |> assign(:valid_signature, true)
+    |> put_req_header("signature", "keyId=\"#{actor_id}#main-key\"")
+  end
+
+  defp expect_signature_retry_from(%User{} = signer) do
+    signer_json = UserView.render("user.json", %{user: signer}) |> Map.delete("featured")
+
+    Tesla.Mock.mock(fn
+      %{url: url} when url == signer.ap_id ->
+        %Tesla.Env{
+          status: 200,
+          body: Jason.encode!(signer_json),
+          headers: HttpRequestMock.activitypub_object_headers()
+        }
+
+      env ->
+        apply(HttpRequestMock, :request, [env])
+    end)
+
+    Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> true end)
+  end
 
   describe "/relay" do
     setup do: clear_config([:instance, :allow_relay])
@@ -688,7 +719,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", data)
 
@@ -716,7 +747,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", data)
 
@@ -724,6 +755,199 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
       assert Activity.get_by_ap_id(data["id"])
+    end
+
+    test "does not create a forged post after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      object_id = "https://two.com/objects/inbox-forged-note"
+
+      data = %{
+        "type" => "Create",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-forged-create",
+        "context" => "https://two.com/contexts/inbox-forged-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => object_id,
+          "actor" => bob.ap_id,
+          "attributedTo" => bob.ap_id,
+          "context" => "https://two.com/contexts/inbox-forged-create",
+          "content" => "forged post",
+          "published" => "2024-07-25T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      refute Object.get_by_ap_id(object_id)
+    end
+
+    test "does not create a forged like after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      note = insert(:note)
+
+      data = %{
+        "type" => "Like",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-forged-like",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => note.data["id"]
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+    end
+
+    test "does not delete an object after failed signature retry", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      note = insert(:note)
+      object_id = note.data["id"]
+
+      data = %{
+        "type" => "Delete",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-forged-delete",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => object_id
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> assign(:valid_signature, false)
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      assert %Object{data: %{"type" => "Note"}} = Object.get_by_ap_id(object_id)
+    end
+
+    test "does not create a forged post signed by a different actor", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      object_id = "https://two.com/objects/inbox-signed-forged-note"
+
+      data = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-signed-forged-create",
+        "context" => "https://two.com/contexts/inbox-signed-forged-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => object_id,
+          "actor" => bob.ap_id,
+          "attributedTo" => bob.ap_id,
+          "context" => "https://two.com/contexts/inbox-signed-forged-create",
+          "content" => "forged post",
+          "published" => "2024-07-25T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("digest", "SHA-256=fake-digest")
+        |> put_req_header(
+          "signature",
+          "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        )
+        |> post("/inbox", data)
+
+      assert conn.assigns.valid_signature == false
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
+      refute Object.get_by_ap_id(object_id)
+    end
+
+    test "does not create a forged like signed by a different actor", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+      note = insert(:note)
+
+      data = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Like",
+        "actor" => bob.ap_id,
+        "id" => "https://two.com/activities/inbox-signed-forged-like",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => note.data["id"]
+      }
+
+      expect_signature_retry_from(alice)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("digest", "SHA-256=fake-digest")
+        |> put_req_header(
+          "signature",
+          "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        )
+        |> post("/inbox", data)
+
+      assert conn.assigns.valid_signature == false
+      assert "ok" == json_response(conn, 200)
+
+      assert [{:cancel, :actor_signature_mismatch}] =
+               ObanHelpers.perform(all_enqueued(worker: SignatureRetryWorker))
+
+      refute Activity.get_by_ap_id(data["id"])
     end
 
     test "accept follow activity", %{conn: conn} do
@@ -742,7 +966,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(followed_relay)
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", accept)
                |> json_response(200)
@@ -822,16 +1046,19 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     test "Unknown activity types are discarded", %{conn: conn} do
       unknown_types = ["Poke", "Read", "Dazzle"]
 
+      actor =
+        insert(:user, local: false, ap_id: "https://unknown.mastodon.instance/users/somebody")
+
       Enum.each(unknown_types, fn bad_type ->
         params =
           %{
             "type" => bad_type,
-            "actor" => "https://unknown.mastodon.instance/users/somebody"
+            "actor" => actor.ap_id
           }
           |> Jason.encode!()
 
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(actor)
         |> put_req_header("content-type", "application/activity+json")
         |> post("/inbox", params)
         |> json_response(400)
@@ -900,7 +1127,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -921,7 +1148,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -990,7 +1217,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -1009,7 +1236,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert "ok" ==
                conn
-               |> assign(:valid_signature, true)
+               |> assign_valid_signature_for_actor(data["actor"])
                |> put_req_header("content-type", "application/activity+json")
                |> post("/inbox", data)
                |> json_response(200)
@@ -1040,7 +1267,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1061,7 +1288,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1082,7 +1309,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1106,7 +1333,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1133,7 +1360,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1163,7 +1390,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{recipient.nickname}/inbox", data)
 
@@ -1228,7 +1455,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{recipient.nickname}/inbox", data)
       |> json_response(200)
@@ -1318,7 +1545,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{reported_user.nickname}/inbox", data)
       |> json_response(200)
@@ -1372,7 +1599,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       }
 
       conn
-      |> assign(:valid_signature, true)
+      |> assign_valid_signature_for_actor(data["actor"])
       |> put_req_header("content-type", "application/activity+json")
       |> post("/users/#{reported_user.nickname}/inbox", data)
       |> json_response(200)
@@ -1405,7 +1632,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1428,7 +1655,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -1451,7 +1678,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       conn =
         conn
-        |> assign(:valid_signature, true)
+        |> assign_valid_signature_for_actor(data["actor"])
         |> put_req_header("content-type", "application/activity+json")
         |> post("/users/#{user.nickname}/inbox", data)
 
@@ -2571,6 +2798,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     setup do: clear_config([:media_proxy])
     setup do: clear_config([Pleroma.Upload])
 
+    # majic's libmagic port is unavailable on local Darwin runs; Linux CI still runs this test.
+    @tag :skip_darwin
     test "POST /api/ap/upload_media", %{conn: conn} do
       user = insert(:user)
 

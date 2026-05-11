@@ -348,7 +348,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   end
 
   def inbox(%{assigns: %{valid_signature: false}} = conn, params) do
-    Federator.incoming_ap_doc(%{
+    Federator.incoming_failed_signature_ap_doc(%{
       method: conn.method,
       req_headers: conn.req_headers,
       request_path: conn.request_path,

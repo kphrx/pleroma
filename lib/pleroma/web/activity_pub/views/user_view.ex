@@ -35,32 +35,14 @@ defmodule Pleroma.Web.ActivityPub.UserView do
   def render("endpoints.json", _), do: %{}
 
   def render("service.json", %{user: user}) do
-    {:ok, _, public_key} = Keys.keys_from_pem(user.keys)
-    public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
-    public_key = :public_key.pem_encode([public_key])
-
-    endpoints = render("endpoints.json", %{user: user})
-
-    %{
-      "id" => user.ap_id,
+    Map.merge(common_actor_fields(user), %{
       "type" => "Application",
-      "following" => "#{user.ap_id}/following",
-      "followers" => "#{user.ap_id}/followers",
-      "inbox" => "#{user.ap_id}/inbox",
-      "outbox" => "#{user.ap_id}/outbox",
       "name" => "Pleroma",
       "summary" =>
         "An internal service actor for this Pleroma instance.  No user-serviceable parts inside.",
-      "url" => user.ap_id,
       "manuallyApprovesFollowers" => false,
-      "publicKey" => %{
-        "id" => "#{user.ap_id}#main-key",
-        "owner" => user.ap_id,
-        "publicKeyPem" => public_key
-      },
-      "endpoints" => endpoints,
       "invisible" => User.invisible?(user)
-    }
+    })
     |> Map.merge(Utils.make_json_ld_header())
   end
 
@@ -77,12 +59,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
   end
 
   def render("user.json", %{user: user}) do
-    {:ok, _, public_key} = Keys.keys_from_pem(user.keys)
-    public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
-    public_key = :public_key.pem_encode([public_key])
     user = User.sanitize_html(user)
-
-    endpoints = render("endpoints.json", %{user: user})
 
     emoji_tags = Transmogrifier.take_emoji_tags(user)
 
@@ -102,25 +79,9 @@ defmodule Pleroma.Web.ActivityPub.UserView do
         do: Date.to_iso8601(user.birthday),
         else: nil
 
-    %{
-      "id" => user.ap_id,
-      "type" => user.actor_type,
-      "following" => "#{user.ap_id}/following",
-      "followers" => "#{user.ap_id}/followers",
-      "inbox" => "#{user.ap_id}/inbox",
-      "outbox" => "#{user.ap_id}/outbox",
+    Map.merge(common_actor_fields(user), %{
       "featured" => "#{user.ap_id}/collections/featured",
       "preferredUsername" => user.nickname,
-      "name" => user.name,
-      "summary" => user.bio,
-      "url" => user.ap_id,
-      "manuallyApprovesFollowers" => user.is_locked,
-      "publicKey" => %{
-        "id" => "#{user.ap_id}#main-key",
-        "owner" => user.ap_id,
-        "publicKeyPem" => public_key
-      },
-      "endpoints" => endpoints,
       "attachment" => fields,
       "tag" => emoji_tags,
       # Note: key name is indeed "discoverable" (not an error)
@@ -130,7 +91,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
       "vcard:bday" => birthday,
       "webfinger" => "acct:#{User.full_nickname(user)}",
       "published" => Pleroma.Web.CommonAPI.Utils.to_masto_date(user.inserted_at)
-    }
+    })
     |> Map.merge(
       maybe_make_image(
         &User.avatar_url/2,
@@ -307,6 +268,33 @@ defmodule Pleroma.Web.ActivityPub.UserView do
       "totalItems" => length(objects)
     }
     |> Map.merge(Utils.make_json_ld_header())
+  end
+
+  defp common_actor_fields(%User{} = user) do
+    endpoints = render("endpoints.json", %{user: user})
+
+    {:ok, _, public_key} = Keys.keys_from_pem(user.keys)
+    public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+    public_key = :public_key.pem_encode([public_key])
+
+    %{
+      "id" => user.ap_id,
+      "type" => user.actor_type,
+      "following" => "#{user.ap_id}/following",
+      "followers" => "#{user.ap_id}/followers",
+      "inbox" => "#{user.ap_id}/inbox",
+      "outbox" => "#{user.ap_id}/outbox",
+      "name" => user.name,
+      "summary" => user.bio,
+      "url" => user.ap_id,
+      "manuallyApprovesFollowers" => user.is_locked,
+      "endpoints" => endpoints,
+      "publicKey" => %{
+        "id" => "#{user.ap_id}#main-key",
+        "owner" => user.ap_id,
+        "publicKeyPem" => public_key
+      }
+    }
   end
 
   defp maybe_put_total_items(map, false, _total), do: map
