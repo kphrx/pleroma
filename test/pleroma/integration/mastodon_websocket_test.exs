@@ -279,7 +279,7 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
       end)
     end
 
-    test "accepts Phoenix 1.8 sec-websocket headers connect info before query params", %{
+    test "prefers sec-websocket-protocol token over query access_token", %{
       token: token,
       user: user
     } do
