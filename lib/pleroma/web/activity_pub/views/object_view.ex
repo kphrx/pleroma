@@ -19,7 +19,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectView do
   end
 
   def render("object.json", %{object: %Activity{} = activity}) do
-    {:ok, ap_data} = Transmogrifier.prepare_outgoing(activity.data)
+    {:ok, ap_data} = Transmogrifier.prepare_activity(activity.data)
     ap_data
   end
 

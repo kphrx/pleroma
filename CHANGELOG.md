@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 2.10.2
+
+### Security
+
+- ActivityPub: Fixed failed-signature inbox retry handling and signer identity checks to prevent spoofed remote activities from being processed
+
+## 2.10.1
+
+### Changed
+
+- Move avatar_description and header_description fields to the account object
+- Update Bandit to 1.10.4
+- No-op code correctness improvements detected by Elixir 1.19 compiler
+- Downgrade Hackney to 1.20.1
+- Use a custom redirect handler to ensure MediaProxy redirects are followed with Hackney
+- Update Hackney, the default HTTP client, to the latest release which supports Happy Eyeballs for improved IPv6 federation
+- Paginate follow requests
+- Moved Phoenix LiveDashboard to /pleroma/live_dashboard
+- Add mute/block expiry to the relationship object
+- Filter indexable activities before inserting indexing jobs into the queue.
+
+### Added
+
+- Allow assigning users to reports
+- Allow fine-grained announce visibilities
+- Add immutable tag on cache-control header for several endpoints that's serving the same exact things.
+- Add reasonable defaults for :database_config_whitelist
+- Support lists `exclusive` param
+- Add v1/instance/domain_blocks endpoint
+- Add /api/v2/instance profile fields limits info used by Mastodon
+- Added Oban Web dashboard located at /pleroma/oban
+- Add instructions on how to run a release in docker, to make it easier to run on older distros.
+
+### Fixed
+
+- Fix the daily email digest job which was not executing
+- Encode custom emoji URLs in EmojiReact activity tags.
+- Gopher: Fix Ranch listener not being stopped properly on Pleroma restart when database configuration is enabled
+- Fix fetching Hubzilla Actors with alsoKnownAs as string
+- Fix /phoenix/live_dashboard redirect not working when user added a path segment
+- Fix 404 error codes for missing static files
+- Fix OAuth app registration to accept `redirect_uris` as an array of strings (RFC 7591), while keeping backwards compatibility with string input.
+- Correct old migrations for expiring activities and user access tokens.
+- Federate `votersCount` correctly
+- DB prune: Check if user follows hashtag with no objects before deletion
+- Stop the rate limiter from crashing when run with wrong settings.
+- Restore embeds route
+- ReverseProxy: Recursively follow redirects until redirect_limit is reached
+- Fix compilation with vips-8.18.0 with bumping to vix 0.36.0
+
+### Removed
+
+- Docs: Removed outdated, incorrect, unmaintained and inappropriate installation documentation (Arch, NetBSD, NixOS)
+
 ## 2.10
 
 ### Security

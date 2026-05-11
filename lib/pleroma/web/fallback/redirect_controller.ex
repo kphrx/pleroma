@@ -29,9 +29,18 @@ defmodule Pleroma.Web.Fallback.RedirectController do
     )
   end
 
-  def live_dashboard(conn, _params) do
+  def live_dashboard(conn, %{"path" => path}) do
+    query_params = conn.query_string
+
+    redirect_path =
+      if query_params == "" do
+        "/pleroma/live_dashboard/#{path}"
+      else
+        "/pleroma/live_dashboard/#{path}?#{query_params}"
+      end
+
     conn
-    |> redirect(to: "/pleroma/live_dashboard")
+    |> redirect(to: redirect_path)
   end
 
   def redirector(conn, _params, code \\ 200) do

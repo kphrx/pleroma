@@ -363,7 +363,7 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
     test "accepts the 'list' stream", %{token: token, user: user} do
       posting_user = insert(:user)
 
-      {:ok, list} = Pleroma.List.create("test", user)
+      {:ok, list} = Pleroma.List.create(%{title: "test"}, user)
       Pleroma.List.follow(list, posting_user)
 
       assert {:ok, _} = start_socket("?stream=list&access_token=#{token.token}&list=#{list.id}")

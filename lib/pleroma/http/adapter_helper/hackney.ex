@@ -6,8 +6,9 @@ defmodule Pleroma.HTTP.AdapterHelper.Hackney do
   @behaviour Pleroma.HTTP.AdapterHelper
 
   @defaults [
-    follow_redirect: true,
-    force_redirect: true
+    follow_redirect: false,
+    force_redirect: false,
+    with_body: true
   ]
 
   @spec options(keyword(), URI.t()) :: keyword()

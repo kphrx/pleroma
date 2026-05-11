@@ -709,6 +709,47 @@ defmodule Pleroma.Web.CommonAPITest do
       assert object.data["source"]["content"] == post
     end
 
+    test "it renders MFM posts and marks their ActivityPub representation" do
+      user = insert(:user)
+
+      post = "<p class='scrub-this'>$[spin.speed=1s 13:37]</p>"
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: post,
+          content_type: "text/x.misskeymarkdown"
+        })
+
+      object = Object.normalize(activity, fetch: false)
+
+      assert object.data["htmlMfm"] == true
+
+      assert object.data["source"] == %{
+               "content" => post,
+               "mediaType" => "text/x.misskeymarkdown"
+             }
+
+      assert object.data["content"] =~ ~s(class="mfm-spin")
+      assert object.data["content"] =~ ~s(data-mfm-speed="1s")
+      assert object.data["content"] =~ "13:37"
+      refute object.data["content"] =~ "scrub-this"
+    end
+
+    test "it falls back safely for malformed MFM" do
+      user = insert(:user)
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: "$[spin malformed",
+          content_type: "text/x.misskeymarkdown"
+        })
+
+      object = Object.normalize(activity, fetch: false)
+
+      refute object.data["content"] =~ ~s(class="mfm-spin")
+      assert object.data["content"] =~ "malformed"
+    end
+
     test "it does not allow replies to direct messages that are not direct messages themselves" do
       user = insert(:user)
 
@@ -759,7 +800,7 @@ defmodule Pleroma.Web.CommonAPITest do
 
     test "it allows to address a list" do
       user = insert(:user)
-      {:ok, list} = Pleroma.List.create("foo", user)
+      {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
 
@@ -1457,6 +1498,29 @@ defmodule Pleroma.Web.CommonAPITest do
                  "rules" => [^rule_id]
                }
              } = flag_activity
+    end
+
+    test "assigns report to an account" do
+      [reporter, target_user] = insert_pair(:user)
+      %{id: assigned} = insert(:user)
+
+      {:ok, %Activity{id: report_id}} = CommonAPI.report(reporter, %{account_id: target_user.id})
+
+      {:ok, activity} = CommonAPI.assign_report_to_account(report_id, assigned)
+
+      assert %{data: %{"assigned_account" => ^assigned}} = activity
+    end
+
+    test "unassigns report from account" do
+      [reporter, target_user] = insert_pair(:user)
+      %{id: assigned} = insert(:user)
+
+      {:ok, %Activity{id: report_id}} = CommonAPI.report(reporter, %{account_id: target_user.id})
+
+      CommonAPI.assign_report_to_account(report_id, assigned)
+      {:ok, activity} = CommonAPI.assign_report_to_account(report_id, nil)
+
+      refute Map.has_key?(activity.data, "assigned_account")
     end
   end
 

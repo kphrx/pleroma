@@ -46,8 +46,10 @@ defmodule Pleroma.Web.Endpoint do
   plug(Pleroma.Web.Plugs.HTTPSecurityPlug)
   plug(Pleroma.Web.Plugs.UploadedMedia)
 
-  @static_cache_control "public, max-age=1209600"
+  @static_cache_control "public, max-age=1209600, immutable"
   @static_cache_disabled "public, no-cache"
+  # cache for a day
+  @favicon_cache_control "public, max=age=86400, immutable"
 
   # InstanceStatic needs to be before Plug.Static to be able to override shipped-static files
   # If you're adding new paths to `only:` you'll need to configure them in InstanceStatic as well
@@ -61,6 +63,15 @@ defmodule Pleroma.Web.Endpoint do
     cache_control_for_etags: @static_cache_control,
     headers: %{
       "cache-control" => @static_cache_control
+    }
+  )
+
+  plug(Pleroma.Web.Plugs.FaviconPlug,
+    at: "/",
+    only: ["favicon.png"],
+    cache_control_for_etags: @favicon_cache_control,
+    headers: %{
+      "cache-control" => @favicon_cache_control
     }
   )
 

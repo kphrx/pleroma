@@ -1815,7 +1815,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
     test "returns lists to which the account belongs" do
       %{user: user, conn: conn} = oauth_access(["read:lists"])
       other_user = insert(:user)
-      assert {:ok, %Pleroma.List{id: _list_id} = list} = Pleroma.List.create("Test List", user)
+
+      assert {:ok, %Pleroma.List{id: _list_id} = list} =
+               Pleroma.List.create(%{title: "Test List"}, user)
+
       {:ok, %{following: _following}} = Pleroma.List.follow(list, other_user)
 
       assert [%{"id" => _list_id, "title" => "Test List"}] =
@@ -1901,7 +1904,13 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
 
     {:ok, _user_relationships} = User.mute(user, other_user1)
     {:ok, _user_relationships} = User.mute(user, other_user2)
-    {:ok, _user_relationships} = User.mute(user, other_user3)
+    {:ok, _user_relationships} = User.mute(user, other_user3, %{duration: 24 * 60 * 60})
+
+    date =
+      DateTime.utc_now()
+      |> DateTime.add(24 * 60 * 60)
+      |> DateTime.truncate(:second)
+      |> DateTime.to_iso8601()
 
     result =
       conn
@@ -1937,6 +1946,17 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
       |> json_response_and_validate_schema(200)
 
     assert [%{"id" => ^id3}] = result
+
+    result =
+      conn
+      |> get("/api/v1/mutes")
+      |> json_response_and_validate_schema(200)
+
+    assert [
+             %{"id" => ^id3, "mute_expires_at" => ^date},
+             %{"id" => ^id2, "mute_expires_at" => nil},
+             %{"id" => ^id1, "mute_expires_at" => nil}
+           ] = result
   end
 
   test "list of mutes with with_relationships parameter" do
@@ -1951,20 +1971,44 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
 
     {:ok, _} = User.mute(user, other_user1)
     {:ok, _} = User.mute(user, other_user2)
-    {:ok, _} = User.mute(user, other_user3)
+    {:ok, _} = User.mute(user, other_user3, %{duration: 24 * 60 * 60})
+
+    date =
+      DateTime.utc_now()
+      |> DateTime.add(24 * 60 * 60)
+      |> DateTime.truncate(:second)
+      |> DateTime.to_iso8601()
 
     assert [
              %{
                "id" => ^id3,
-               "pleroma" => %{"relationship" => %{"muting" => true, "followed_by" => true}}
+               "pleroma" => %{
+                 "relationship" => %{
+                   "muting" => true,
+                   "mute_expires_at" => ^date,
+                   "followed_by" => true
+                 }
+               }
              },
              %{
                "id" => ^id2,
-               "pleroma" => %{"relationship" => %{"muting" => true, "followed_by" => true}}
+               "pleroma" => %{
+                 "relationship" => %{
+                   "muting" => true,
+                   "mute_expires_at" => nil,
+                   "followed_by" => true
+                 }
+               }
              },
              %{
                "id" => ^id1,
-               "pleroma" => %{"relationship" => %{"muting" => true, "followed_by" => true}}
+               "pleroma" => %{
+                 "relationship" => %{
+                   "muting" => true,
+                   "mute_expires_at" => nil,
+                   "followed_by" => true
+                 }
+               }
              }
            ] =
              conn
@@ -1980,7 +2024,13 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
 
     {:ok, _user_relationship} = User.block(user, other_user1)
     {:ok, _user_relationship} = User.block(user, other_user3)
-    {:ok, _user_relationship} = User.block(user, other_user2)
+    {:ok, _user_relationship} = User.block(user, other_user2, %{duration: 24 * 60 * 60})
+
+    date =
+      DateTime.utc_now()
+      |> DateTime.add(24 * 60 * 60)
+      |> DateTime.truncate(:second)
+      |> DateTime.to_iso8601()
 
     result =
       conn
@@ -2045,6 +2095,18 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
       |> json_response_and_validate_schema(200)
 
     assert [%{"id" => ^id1}] = result
+
+    result =
+      conn
+      |> assign(:user, user)
+      |> get("/api/v1/blocks")
+      |> json_response_and_validate_schema(200)
+
+    assert [
+             %{"id" => ^id3, "block_expires_at" => nil},
+             %{"id" => ^id2, "block_expires_at" => ^date},
+             %{"id" => ^id1, "block_expires_at" => nil}
+           ] = result
   end
 
   test "list of blocks with with_relationships parameter" do
@@ -2059,20 +2121,44 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
 
     {:ok, _} = User.block(user, other_user1)
     {:ok, _} = User.block(user, other_user2)
-    {:ok, _} = User.block(user, other_user3)
+    {:ok, _} = User.block(user, other_user3, %{duration: 24 * 60 * 60})
+
+    date =
+      DateTime.utc_now()
+      |> DateTime.add(24 * 60 * 60)
+      |> DateTime.truncate(:second)
+      |> DateTime.to_iso8601()
 
     assert [
              %{
                "id" => ^id3,
-               "pleroma" => %{"relationship" => %{"blocking" => true, "followed_by" => false}}
+               "pleroma" => %{
+                 "relationship" => %{
+                   "blocking" => true,
+                   "block_expires_at" => ^date,
+                   "followed_by" => false
+                 }
+               }
              },
              %{
                "id" => ^id2,
-               "pleroma" => %{"relationship" => %{"blocking" => true, "followed_by" => false}}
+               "pleroma" => %{
+                 "relationship" => %{
+                   "blocking" => true,
+                   "block_expires_at" => nil,
+                   "followed_by" => false
+                 }
+               }
              },
              %{
                "id" => ^id1,
-               "pleroma" => %{"relationship" => %{"blocking" => true, "followed_by" => false}}
+               "pleroma" => %{
+                 "relationship" => %{
+                   "blocking" => true,
+                   "block_expires_at" => nil,
+                   "followed_by" => false
+                 }
+               }
              }
            ] =
              conn

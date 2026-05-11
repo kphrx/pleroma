@@ -15,7 +15,7 @@ defmodule Pleroma.Web.ActivityPub.MRF.HashtagPolicyTest do
     user = insert(:user)
 
     {:ok, activity} = CommonAPI.post(user, %{status: "#nsfw hey"})
-    {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+    {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
     assert modified["object"]["sensitive"]
   end
@@ -94,7 +94,7 @@ defmodule Pleroma.Web.ActivityPub.MRF.HashtagPolicyTest do
     user = insert(:user)
 
     {:ok, activity} = CommonAPI.post(user, %{status: "#cofe hey"})
-    {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+    {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
     refute modified["object"]["sensitive"]
   end

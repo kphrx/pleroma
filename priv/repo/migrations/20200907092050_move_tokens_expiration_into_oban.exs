@@ -21,7 +21,7 @@ defmodule Pleroma.Repo.Migrations.MoveTokensExpirationIntoOban do
       from(t in Pleroma.Web.OAuth.Token, where: t.valid_until > ^NaiveDateTime.utc_now())
       |> Pleroma.Repo.stream()
       |> Stream.each(fn token ->
-        Pleroma.Workers.PurgeExpiredToken.enqueue(%{
+        enqueue(%{
           token_id: token.id,
           valid_until: DateTime.from_naive!(token.valid_until, "Etc/UTC"),
           mod: Pleroma.Web.OAuth.Token
@@ -33,12 +33,22 @@ defmodule Pleroma.Repo.Migrations.MoveTokensExpirationIntoOban do
     from(t in Pleroma.MFA.Token, where: t.valid_until > ^NaiveDateTime.utc_now())
     |> Pleroma.Repo.stream()
     |> Stream.each(fn token ->
-      Pleroma.Workers.PurgeExpiredToken.enqueue(%{
+      enqueue(%{
         token_id: token.id,
         valid_until: DateTime.from_naive!(token.valid_until, "Etc/UTC"),
         mod: Pleroma.MFA.Token
       })
     end)
     |> Stream.run()
+  end
+
+  @spec enqueue(%{token_id: integer(), valid_until: DateTime.t()}) ::
+          {:ok, Oban.Job.t()} | {:error, Ecto.Changeset.t()}
+  defp enqueue(args) do
+    {scheduled_at, args} = Map.pop(args, :valid_until)
+
+    args
+    |> Pleroma.Workers.PurgeExpiredToken.new(scheduled_at: scheduled_at)
+    |> Oban.insert()
   end
 end

@@ -194,6 +194,16 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
 
     setup do: clear_config(:configurable_from_database, true)
 
+    setup do:
+            clear_config(:database_config_whitelist, [
+              {:pleroma},
+              {:http},
+              {:idna},
+              {:oban},
+              {:tesla},
+              {:ueberauth}
+            ])
+
     test "create new config setting in db", %{conn: conn} do
       ueberauth = Application.get_env(:ueberauth, Ueberauth)
       on_exit(fn -> Application.put_env(:ueberauth, Ueberauth, ueberauth) end)
@@ -807,7 +817,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
                                   %{
                                     "tuple" => [
                                       "/websocket",
-                                      "Phoenix.Endpoint.CowboyWebSocket",
+                                      ":sth",
                                       %{
                                         "tuple" => [
                                           "Phoenix.Transports.WebSocket",
@@ -871,7 +881,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
                                        %{
                                          "tuple" => [
                                            "/websocket",
-                                           "Phoenix.Endpoint.CowboyWebSocket",
+                                           ":sth",
                                            %{
                                              "tuple" => [
                                                "Phoenix.Transports.WebSocket",
@@ -1210,6 +1220,31 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       assert Application.get_env(:not_real, :anything) == "value6"
     end
 
+    test "doesn't allow updating the database_config_whitelist itself", %{conn: conn} do
+      original_whitelist = Pleroma.Config.get(:database_config_whitelist)
+
+      refute ConfigDB.get_by_group_and_key(:pleroma, :database_config_whitelist)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/pleroma/admin/config", %{
+          configs: [
+            %{
+              group: ":pleroma",
+              key: ":database_config_whitelist",
+              value: [%{"tuple" => [":pleroma", ":key1"]}]
+            }
+          ]
+        })
+
+      %{"configs" => configs} = json_response_and_validate_schema(conn, 200)
+
+      assert configs == []
+      assert Pleroma.Config.get(:database_config_whitelist) == original_whitelist
+      refute ConfigDB.get_by_group_and_key(:pleroma, :database_config_whitelist)
+    end
+
     test "args for Pleroma.Upload.Filter.Mogrify with custom tuples", %{conn: conn} do
       assert conn
              |> put_req_header("content-type", "application/json")
@@ -1471,6 +1506,14 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
 
       web_endpoint = Enum.find(children, fn c -> c["key"] == "Pleroma.Upload" end)
       assert web_endpoint["children"]
+    end
+
+    test "all keys from description are whitelisted", %{conn: conn} do
+      conn = get(conn, "/api/pleroma/admin/config/descriptions")
+
+      assert response = json_response_and_validate_schema(conn, 200)
+
+      assert length(response) == length(Pleroma.Docs.JSON.compiled_descriptions())
     end
   end
 end

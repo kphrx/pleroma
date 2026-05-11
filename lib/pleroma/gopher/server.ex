@@ -21,10 +21,13 @@ defmodule Pleroma.Gopher.Server do
 
   def init([ip, port]) do
     Logger.info("Starting gopher server on #{port}")
+    Process.flag(:trap_exit, true)
+
+    listener = :gopher
 
     {:ok, _pid} =
       :ranch.start_listener(
-        :gopher,
+        listener,
         :ranch_tcp,
         %{
           num_acceptors: 100,
@@ -35,7 +38,11 @@ defmodule Pleroma.Gopher.Server do
         []
       )
 
-    {:ok, %{ip: ip, port: port}}
+    {:ok, %{ip: ip, port: port, listener: listener}}
+  end
+
+  def terminate(_reason, state) do
+    :ranch.stop_listener(state.listener)
   end
 end
 

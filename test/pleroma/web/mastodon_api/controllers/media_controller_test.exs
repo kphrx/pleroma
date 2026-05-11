@@ -129,8 +129,8 @@ defmodule Pleroma.Web.MastodonAPI.MediaControllerTest do
       assert :ok == File.rm(Path.absname("test/tmp/large_binary.data"))
     end
 
-    test "Do not allow nested filename", %{conn: conn, image: image} do
-      image = %Plug.Upload{
+    test "Do not allow nested filename", %{conn: conn, image: %Plug.Upload{} = image} do
+      image = %{
         image
         | filename: "../../../../../nested/file.jpg"
       }
