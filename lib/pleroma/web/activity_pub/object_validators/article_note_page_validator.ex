@@ -6,6 +6,9 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator do
   use Ecto.Schema
 
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
+  alias Pleroma.HTML
+  alias Pleroma.User
+  alias Pleroma.Web.CommonAPI.Utils
   alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
   alias Pleroma.Web.ActivityPub.ObjectValidators.CommonValidations
   alias Pleroma.Web.ActivityPub.Transmogrifier
@@ -26,6 +29,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator do
     end
 
     field(:replies, {:array, ObjectValidators.ObjectID}, default: [])
+    field(:source, :map)
   end
 
   def cast_and_apply(data) do
@@ -80,6 +84,113 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator do
 
   def fix_attachments(data), do: data
 
+  defp remote_mention_resolver(
+         %{"id" => ap_id, "tag" => tags},
+         "@" <> nickname = mention,
+         buffer,
+         opts,
+         acc
+       )
+       when is_binary(ap_id) and is_list(tags) do
+    initial_host =
+      ap_id
+      |> URI.parse()
+      |> Map.get(:host)
+
+    with mention_tag when not is_nil(mention_tag) <-
+           Enum.find(tags, &mention_tag?(&1, mention, initial_host)),
+         href when is_binary(href) <- mention_tag["href"],
+         %User{} = user <- User.get_cached_by_ap_id(href) do
+      link = Pleroma.Formatter.mention_from_user(user, opts)
+      {link, %{acc | mentions: MapSet.put(acc.mentions, {"@" <> nickname, user})}}
+    else
+      _ -> {buffer, acc}
+    end
+  end
+
+  defp remote_mention_resolver(_object, _mention, buffer, _opts, acc), do: {buffer, acc}
+
+  defp mention_tag?(%{"type" => "Mention", "name" => name}, mention, initial_host)
+       when is_binary(name) do
+    name == mention || mention == "#{name}@#{initial_host}"
+  end
+
+  defp mention_tag?(_tag, _mention, _initial_host), do: false
+
+  defp scrub_content(%{"content" => content} = object) when is_binary(content) do
+    Map.put(object, "content", HTML.filter_tags(content))
+  end
+
+  defp scrub_content(object), do: object
+
+  defp mfm_parse_limit do
+    min(Pleroma.Config.get([:instance, :limit]), Pleroma.Config.get([:instance, :remote_limit]))
+  end
+
+  defp normalize_source(%{"source" => source} = object) when is_binary(source) do
+    object
+    |> Map.put("source", %{"content" => source})
+    |> normalize_source()
+  end
+
+  defp normalize_source(%{"source" => source} = object) when is_map(source) do
+    source =
+      case source["content"] do
+        content when is_binary(content) ->
+          if String.length(content) <= mfm_parse_limit() do
+            source
+          else
+            Map.delete(source, "content")
+          end
+
+        nil ->
+          source
+
+        _ ->
+          Map.delete(source, "content")
+      end
+
+    Map.put(object, "source", source)
+  end
+
+  defp normalize_source(object), do: object
+
+  defp fix_misskey_content(%{"htmlMfm" => true, "content" => content} = object)
+       when is_binary(content) do
+    Map.put(object, "content", HTML.filter_tags(content))
+  end
+
+  defp fix_misskey_content(%{"htmlMfm" => true} = object), do: object
+
+  defp fix_misskey_content(
+         %{"source" => %{"mediaType" => "text/x.misskeymarkdown", "content" => content}} = object
+       )
+       when is_binary(content) do
+    mention_handler = fn nick, buffer, opts, acc ->
+      remote_mention_resolver(object, nick, buffer, opts, acc)
+    end
+
+    {linked, _mentions, _tags} =
+      Utils.format_input(content, "text/x.misskeymarkdown", mention_handler: mention_handler)
+
+    Map.put(object, "content", linked)
+  end
+
+  defp fix_misskey_content(%{"source" => %{"mediaType" => "text/x.misskeymarkdown"}} = object),
+    do: scrub_content(object)
+
+  defp fix_misskey_content(%{"_misskey_content" => content} = object) when is_binary(content) do
+    object
+    |> Map.put("source", %{
+      "content" => content,
+      "mediaType" => "text/x.misskeymarkdown"
+    })
+    |> Map.delete("_misskey_content")
+    |> fix_misskey_content()
+  end
+
+  defp fix_misskey_content(object), do: object
+
   defp fix(data) do
     data
     |> CommonFixes.fix_actor()
@@ -88,6 +199,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator do
     |> fix_tag()
     |> fix_replies()
     |> fix_attachments()
+    |> normalize_source()
+    |> fix_misskey_content()
     |> CommonFixes.fix_quote_url()
     |> CommonFixes.fix_likes()
     |> Transmogrifier.fix_emoji()

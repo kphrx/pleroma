@@ -127,11 +127,22 @@ defmodule Pleroma.Formatter do
     Earmark.as_html!(text, %Earmark.Options{compact_output: true, smartypants: false})
   end
 
+  def markdown_to_html(text, opts) do
+    Earmark.as_html!(
+      text,
+      %Earmark.Options{compact_output: true, smartypants: false} |> Map.merge(opts)
+    )
+  end
+
   def html_escape({text, mentions, hashtags}, type) do
     {html_escape(text, type), mentions, hashtags}
   end
 
   def html_escape(text, "text/html") do
+    HTML.filter_tags(text)
+  end
+
+  def html_escape(text, "text/x.misskeymarkdown") do
     HTML.filter_tags(text)
   end
 
