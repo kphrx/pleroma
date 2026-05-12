@@ -430,6 +430,12 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end)
   end
 
+  defp reject_third_party_report(%User{local: false}, %User{local: false} = account) do
+    {:reject, "[Transmogrifier] third-party report: #{account.ap_id}"}
+  end
+
+  defp reject_third_party_report(_, _), do: :ok
+
   def handle_incoming(data, options \\ []) do
     data
     |> fix_recursive(&strip_internal_fields/1)
@@ -447,6 +453,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
          %User{} = actor <- User.get_cached_by_ap_id(actor),
          # Reduce the object list to find the reported user.
          %User{} = account <- get_reported(objects),
+         :ok <- reject_third_party_report(actor, account),
          # Remove the reported user from the object list.
          statuses <- Enum.filter(objects, fn ap_id -> ap_id != account.ap_id end) do
       %{
