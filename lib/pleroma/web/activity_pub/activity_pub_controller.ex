@@ -303,7 +303,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     end
   end
 
-  def inbox(%{assigns: %{valid_signature: true, valid_host_header: true}} = conn, %{"nickname" => nickname} = params) do
+  def inbox(
+        %{
+          assigns: %{valid_signature: true, valid_host_header: true}
+        } = conn,
+        %{"nickname" => nickname} = params
+      ) do
     with {:recipient_exists, %User{} = recipient} <-
            {:recipient_exists, User.get_cached_by_nickname(nickname)},
          {:sender_exists, {:ok, %User{} = actor}} <-

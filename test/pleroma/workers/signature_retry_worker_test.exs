@@ -281,13 +281,14 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
         }
       ]
 
-    assert {:ok, oban_job} = Federator.incoming_failed_signature_ap_doc(%{
-        method: "POST",
-        req_headers: headers,
-        request_path: "/inbox",
-        params: create,
-        query_string: ""
-      })
+    assert {:ok, oban_job} =
+             Federator.incoming_failed_signature_ap_doc(%{
+               method: "POST",
+               req_headers: headers,
+               request_path: "/inbox",
+               params: create,
+               query_string: ""
+             })
 
     log =
       capture_log([level: :warning], fn ->
