@@ -55,6 +55,19 @@ defmodule Pleroma.Web.Plugs.EnsureHostMatchesPlugTest do
       assert conn.resp_body == "Host header does not match this instance"
     end
 
+    test "it rejects Host header not matching Endpoint with port", %{conn: conn} do
+      endpoint = URI.parse(Endpoint.url())
+
+      conn =
+        conn
+        |> set_host("invalid.example.com:#{endpoint.port}")
+        |> EnsureHostMatchesPlug.call(%{})
+
+      assert conn.status == 400
+      assert conn.halted == true
+      assert conn.resp_body == "Host header does not match this instance"
+    end
+
     test "it rejects Host header not matching Endpoint port", %{conn: conn} do
       endpoint = URI.parse(Endpoint.url())
 
@@ -78,6 +91,18 @@ defmodule Pleroma.Web.Plugs.EnsureHostMatchesPlugTest do
       assert conn.status == 400
       assert conn.halted == true
       assert conn.resp_body == "More than one Host header provided"
+    end
+
+    test "it works for Host header without port", %{conn: conn} do
+      endpoint = URI.parse(Endpoint.url())
+
+      conn =
+        conn
+        |> set_host("#{endpoint.host}")
+        |> EnsureHostMatchesPlug.call(%{})
+
+      assert conn.halted == false
+      assert Map.get(conn.assigns, :valid_host_header, nil)
     end
 
     test "it works for Host header with port as 80", %{conn: conn} do
