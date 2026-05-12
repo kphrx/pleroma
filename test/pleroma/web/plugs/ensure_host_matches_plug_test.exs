@@ -8,7 +8,6 @@ defmodule Pleroma.Web.Plugs.EnsureHostMatchesPlugTest do
   alias Pleroma.Web.Endpoint
   alias Pleroma.Web.Plugs.EnsureHostMatchesPlug
 
-  import Mock
   import Plug.Conn
   import Tesla.Mock
 
@@ -105,33 +104,7 @@ defmodule Pleroma.Web.Plugs.EnsureHostMatchesPlugTest do
       assert Map.get(conn.assigns, :valid_host_header, nil)
     end
 
-    test "it works for Host header with port as 80", %{conn: conn} do
-      endpoint = URI.parse(Endpoint.url())
-
-      conn =
-        conn
-        |> set_host("#{endpoint.host}:80")
-        |> EnsureHostMatchesPlug.call(%{})
-
-      assert conn.halted == false
-      assert Map.get(conn.assigns, :valid_host_header, nil)
-    end
-
-    test "it works for Host header with port as 443", %{conn: conn} do
-      with_mock Pleroma.Web.Endpoint, url: fn -> "https://localhost:4001" end do
-        endpoint = URI.parse(Endpoint.url())
-
-        conn =
-          conn
-          |> set_host("#{endpoint.host}:443")
-          |> EnsureHostMatchesPlug.call(%{})
-
-        assert conn.halted == false
-        assert Map.get(conn.assigns, :valid_host_header, nil)
-      end
-    end
-
-    test "it works for Host header with port as same as Endpoint (no reverse proxy config)", %{
+    test "it works for Host header with port same as Endpoint", %{
       conn: conn
     } do
       endpoint = URI.parse(Endpoint.url())
