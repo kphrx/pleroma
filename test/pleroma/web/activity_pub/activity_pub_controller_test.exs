@@ -974,16 +974,17 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         }
       }
 
-      expect_signature_retry_from(alice)
-
-      conn = %{conn | req_headers: [{"host", "invalid.example.com"}]}
-
+      # Plug will complain when replacing raw host header with put_req_header.
+      # The Plug way is updating conn.host, but that isn't the raw header
+      # and that isn't used in the EnsureHostMatchesPlug, because it doesn't include the port.
       conn =
         conn
-        |> assign(:valid_signature, false)
+        |> assign_valid_signature_for_actor(alice)
+        |> delete_req_header("host")
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
-        |> post("/inbox", data)
+
+      conn = %{conn | req_headers: conn.req_headers ++ [{"host", "invalid.example.com"}]}
+      conn = post(conn, "/inbox", data)
 
       assert "Host header does not match this instance" == conn.resp_body
       assert 400 == conn.status
