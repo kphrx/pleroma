@@ -1032,6 +1032,8 @@ defmodule Pleroma.Web.Router do
     pipe_through(:pleroma_html)
 
     post("/auth/password", OAuth.PasswordController, :request)
+
+    get("/embed/:id", EmbedController, :show)
   end
 
   scope "/proxy/", Pleroma.Web do
@@ -1093,7 +1095,7 @@ defmodule Pleroma.Web.Router do
     get("/:maybe_nickname_or_id", RedirectController, :redirector_with_meta)
     match(:*, "/api/pleroma/*path", LegacyPleromaApiRerouterPlug, [])
     get("/api/*path", RedirectController, :api_not_implemented)
-    get("/phoenix/live_dashboard", RedirectController, :live_dashboard)
+    get("/phoenix/live_dashboard/*path", RedirectController, :live_dashboard)
     get("/*path", RedirectController, :redirector_with_preload)
 
     options("/*path", RedirectController, :empty)

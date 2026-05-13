@@ -322,12 +322,30 @@ defmodule Pleroma.Web.CommonAPI.Utils do
     |> Formatter.linkify(options)
   end
 
+  def format_input(text, "text/x.misskeymarkdown", options) do
+    text
+    |> Formatter.markdown_to_html(%{breaks: true})
+    |> safe_mfm_to_html()
+    |> Formatter.linkify(options)
+    |> Formatter.html_escape("text/x.misskeymarkdown")
+  end
+
   def format_input(text, "text/markdown", options) do
     text
     |> Formatter.mentions_escape(options)
     |> Formatter.markdown_to_html()
     |> Formatter.linkify(options)
     |> Formatter.html_escape("text/html")
+  end
+
+  defp safe_mfm_to_html(html) do
+    html
+    |> MfmParser.Parser.parse()
+    |> MfmParser.Encoder.to_html()
+  rescue
+    _ -> html
+  catch
+    _, _ -> html
   end
 
   def format_naive_asctime(date) do

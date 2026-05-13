@@ -317,6 +317,7 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
 
     emoji = Map.merge(emoji, summary_emoji)
 
+    media_type = Utils.get_content_type(draft.params[:content_type])
     {:ok, note_data, _meta} = Builder.note(draft)
 
     object =
@@ -324,13 +325,17 @@ defmodule Pleroma.Web.CommonAPI.ActivityDraft do
       |> Map.put("emoji", emoji)
       |> Map.put("source", %{
         "content" => draft.status,
-        "mediaType" => Utils.get_content_type(draft.params[:content_type])
+        "mediaType" => media_type
       })
+      |> maybe_put("htmlMfm", true, media_type == "text/x.misskeymarkdown")
       |> Map.put("generator", draft.params[:generator])
       |> Map.put("language", draft.language)
 
     %{draft | object: object}
   end
+
+  defp maybe_put(map, key, value, true), do: Map.put(map, key, value)
+  defp maybe_put(map, _key, _value, _condition), do: map
 
   defp preview?(%__MODULE__{} = draft) do
     preview? = Pleroma.Web.Utils.Params.truthy_param?(draft.params[:preview])

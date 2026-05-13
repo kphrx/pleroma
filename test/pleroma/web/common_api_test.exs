@@ -709,6 +709,47 @@ defmodule Pleroma.Web.CommonAPITest do
       assert object.data["source"]["content"] == post
     end
 
+    test "it renders MFM posts and marks their ActivityPub representation" do
+      user = insert(:user)
+
+      post = "<p class='scrub-this'>$[spin.speed=1s 13:37]</p>"
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: post,
+          content_type: "text/x.misskeymarkdown"
+        })
+
+      object = Object.normalize(activity, fetch: false)
+
+      assert object.data["htmlMfm"] == true
+
+      assert object.data["source"] == %{
+               "content" => post,
+               "mediaType" => "text/x.misskeymarkdown"
+             }
+
+      assert object.data["content"] =~ ~s(class="mfm-spin")
+      assert object.data["content"] =~ ~s(data-mfm-speed="1s")
+      assert object.data["content"] =~ "13:37"
+      refute object.data["content"] =~ "scrub-this"
+    end
+
+    test "it falls back safely for malformed MFM" do
+      user = insert(:user)
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: "$[spin malformed",
+          content_type: "text/x.misskeymarkdown"
+        })
+
+      object = Object.normalize(activity, fetch: false)
+
+      refute object.data["content"] =~ ~s(class="mfm-spin")
+      assert object.data["content"] =~ "malformed"
+    end
+
     test "it does not allow replies to direct messages that are not direct messages themselves" do
       user = insert(:user)
 

@@ -82,12 +82,50 @@ defmodule Pleroma.HTML.Scrubber.Default do
     "recipients-inline",
     "quote-inline",
     "invisible",
-    "ellipsis"
+    "ellipsis",
+    "mfm-center",
+    "mfm-flip",
+    "mfm-font",
+    "mfm-blur",
+    "mfm-rotate",
+    "mfm-x2",
+    "mfm-x3",
+    "mfm-x4",
+    "mfm-position",
+    "mfm-scale",
+    "mfm-fg",
+    "mfm-bg",
+    "mfm-jelly",
+    "mfm-twitch",
+    "mfm-shake",
+    "mfm-spin",
+    "mfm-jump",
+    "mfm-bounce",
+    "mfm-rainbow",
+    "mfm-tada",
+    "mfm-sparkle"
   ])
 
   Meta.allow_tag_with_this_attribute_values(:p, "class", ["quote-inline"])
 
-  Meta.allow_tag_with_these_attributes(:span, ["lang"])
+  Meta.allow_tag_with_these_attributes(:span, [
+    "lang",
+    "data-mfm-h",
+    "data-mfm-v",
+    "data-mfm-x",
+    "data-mfm-y",
+    "data-mfm-alternate",
+    "data-mfm-speed",
+    "data-mfm-deg",
+    "data-mfm-left",
+    "data-mfm-serif",
+    "data-mfm-monospace",
+    "data-mfm-cursive",
+    "data-mfm-fantasy",
+    "data-mfm-emoji",
+    "data-mfm-math",
+    "data-mfm-color"
+  ])
 
   Meta.allow_tag_with_this_attribute_values(:code, "class", ["inline"])
 
