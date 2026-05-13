@@ -19,7 +19,7 @@ variables:
 
 steps:
   unit-testing-elixir-1.18:
-    image: elixir:1.18-otp-27-alpine
+    image: elixir:1.19-otp-28-alpine
     entrypoint: *script_file_entrypoint
     environment:
       MIX_ENV: test
