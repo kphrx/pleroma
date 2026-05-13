@@ -450,6 +450,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
        ) do
     with context <- data["context"] || Utils.generate_context_id(),
          content <- data["content"] || "",
+         objects <- List.wrap(objects),
          %User{} = actor <- User.get_cached_by_ap_id(actor),
          # Reduce the object list to find the reported user.
          %User{} = account <- get_reported(objects),
