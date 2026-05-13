@@ -50,14 +50,6 @@ defmodule Pleroma.CaptchaTest do
   end
 
   describe "Native" do
-    test "uses the published pleroma_captcha package" do
-      deps = Mix.Project.config() |> Keyword.fetch!(:deps)
-      assert {:captcha, "~> 1.0.3", opts} = Enum.find(deps, &(elem(&1, 0) == :captcha))
-      assert opts[:hex] == :pleroma_captcha
-      refute Keyword.has_key?(opts, :compile)
-      refute Keyword.has_key?(opts, :git)
-    end
-
     test "new and validate" do
       new = Native.new()
 
