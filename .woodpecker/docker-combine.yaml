@@ -1,0 +1,60 @@
+when:
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
+  - event: tag
+  - event: manual
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: manual
+    branch: stable
+
+depends_on:
+  - docker
+
+skip_clone: true
+
+labels:
+  platform: linux/amd64
+
+steps:
+  docker-develop-combine:
+    image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
+    when:
+      - event: push
+        branch: ${CI_REPO_DEFAULT_BRANCH}
+      - event: manual
+        branch: ${CI_REPO_DEFAULT_BRANCH}
+    settings: &docker_settings
+      registry: "git.pleroma.social"
+      image: "pleroma/pleroma"
+      architectures: [amd64, arm64]
+      tags:
+        - latest
+        - develop
+        - ${CI_COMMIT_SHA:0:8}
+      username:
+        from_secret: pleroma-ci-user
+      password:
+        from_secret: pleroma-ci-password
+
+  docker-stable-combine:
+    image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
+    when:
+      - evaluate: 'CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG == ""'
+    settings:
+      <<: *docker_settings
+      tags: &stable_docker_tags
+        - latest
+        - stable
+        - ${CI_COMMIT_SHA:0:8}
+
+  docker-stable-tag-combine:
+    image: git.fluffytail.org/phnt/wpc-docker-tagger:latest
+    when:
+      - event: tag
+      - evaluate: 'CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG != ""'
+    settings:
+      <<: *docker_settings
+      tags:
+        - <<: *stable_docker_tags
+        - ${CI_COMMIT_TAG}

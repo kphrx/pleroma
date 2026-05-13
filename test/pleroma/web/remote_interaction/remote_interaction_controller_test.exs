@@ -83,7 +83,9 @@ defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionControllerTest do
 
       response =
         conn
-        |> get(remote_interaction_path(conn, :follow, %{acct: "https://mastodon.social/users/emelie"}))
+        |> get(
+          remote_interaction_path(conn, :follow, %{acct: "https://mastodon.social/users/emelie"})
+        )
         |> html_response(200)
 
       assert response =~ "Log in to follow"
@@ -114,7 +116,9 @@ defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionControllerTest do
       response =
         conn
         |> assign(:user, user)
-        |> get(remote_interaction_path(conn, :follow, %{acct: "https://mastodon.social/users/emelie"}))
+        |> get(
+          remote_interaction_path(conn, :follow, %{acct: "https://mastodon.social/users/emelie"})
+        )
         |> html_response(200)
 
       assert response =~ "Remote follow"
@@ -157,7 +161,9 @@ defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionControllerTest do
                  conn
                  |> assign(:user, user)
                  |> assign(:token, read_token)
-                 |> post(remote_interaction_path(conn, :do_follow), %{"user" => %{"id" => user2.id}})
+                 |> post(remote_interaction_path(conn, :do_follow), %{
+                   "user" => %{"id" => user2.id}
+                 })
                  |> response(200)
 
                assert response =~ "Error following account"
@@ -496,7 +502,9 @@ defmodule Pleroma.Web.RemoteInteraction.RemoteInteractionControllerTest do
         )
 
       assert redirected_to(conn) ==
-               remote_interaction_path(conn, :follow, %{acct: "https://mastodon.social/users/emelie"})
+               remote_interaction_path(conn, :follow, %{
+                 acct: "https://mastodon.social/users/emelie"
+               })
     end
   end
 

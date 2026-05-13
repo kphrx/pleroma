@@ -105,6 +105,7 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
       "nodeinfo",
       "manifest.json",
       "auth",
+      "embed",
       "proxy",
       "test",
       "user_exists",

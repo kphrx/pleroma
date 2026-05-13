@@ -75,15 +75,40 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateValidator do
     end
   end
 
-  # For remote Updates, verify the host is the same.
+  # For remote Updates, verify the Actor is the same
   def validate_updating_rights_remote(cng) do
     with actor = get_field(cng, :actor),
          object = get_field(cng, :object),
          {:ok, object_id} <- ObjectValidators.ObjectID.cast(object),
-         actor_uri <- URI.parse(actor),
-         object_uri <- URI.parse(object_id),
-         true <- actor_uri.host == object_uri.host do
-      cng
+         entity <-
+           Object.normalize(object_id, fetch: false) || User.get_cached_by_ap_id(object_id) do
+      case entity do
+        # Actor must own Object to update it
+        %Object{} ->
+          if actor == entity.data["actor"] do
+            cng
+          else
+            cng
+            |> add_error(:object, "Can't be updated by this actor")
+          end
+
+        # Actor must only be allowed to update itself
+        %User{} ->
+          if actor == entity.ap_id do
+            cng
+          else
+            cng
+            |> add_error(:object, "Can't be updated by this actor")
+          end
+
+        nil ->
+          cng
+          |> add_error(:object, "Can't be updated by this actor")
+
+        _ ->
+          cng
+          |> add_error(:object, "Update is neither for Object or Actor")
+      end
     else
       _e ->
         cng

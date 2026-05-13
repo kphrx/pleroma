@@ -32,8 +32,8 @@ defmodule Pleroma.Web.Plugs.MappedSignatureToIdentityPlug do
       # remove me once testsuite uses mapped capabilities instead of what we do now
       {:user, nil} ->
         Logger.debug("Failed to map identity from signature (lookup failure)")
-        Logger.debug("key_id=#{inspect(key_id_from_conn(conn))}, actor=#{actor}")
-        conn
+        Logger.debug("key_id=#{inspect(key_id_from_conn(conn))}, actor=#{inspect(actor)}")
+        assign(conn, :valid_signature, false)
     end
   end
 
