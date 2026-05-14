@@ -203,7 +203,8 @@ config :pleroma, :instance,
     "text/plain",
     "text/html",
     "text/markdown",
-    "text/bbcode"
+    "text/bbcode",
+    "text/x.misskeymarkdown"
   ],
   autofollowed_nicknames: [],
   autofollowing_nicknames: [],
@@ -737,6 +738,7 @@ config :pleroma, Pleroma.Workers.PurgeExpiredActivity, enabled: true, min_lifeti
 config :pleroma, Pleroma.Web.Plugs.RemoteIp,
   enabled: true,
   headers: ["x-forwarded-for"],
+  clients: [],
   proxies: [],
   reserved: [
     "127.0.0.0/8",
@@ -775,7 +777,7 @@ config :pleroma, :frontends,
       "name" => "pleroma-fe",
       "git" => "https://git.pleroma.social/pleroma/pleroma-fe",
       "build_url" =>
-        "https://git.pleroma.social/pleroma/pleroma-fe/-/jobs/artifacts/${ref}/download?job=build",
+        "https://git.pleroma.social/api/packages/pleroma/generic/pleroma-fe-builds/${ref}/latest.zip",
       "ref" => "develop"
     },
     "fedi-fe" => %{
@@ -959,6 +961,15 @@ config :pleroma, Pleroma.Search.QdrantSearch,
   qdrant_index_configuration: %{
     vectors: %{size: 384, distance: "Cosine"}
   }
+
+config :pleroma, :database_config_whitelist, [
+  {:pleroma},
+  {:cors_plug},
+  {:ex_aws, :s3},
+  {:mime},
+  {:prometheus, Pleroma.Web.Endpoint.MetricsExporter},
+  {:web_push_encryption, :vapid_details}
+]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

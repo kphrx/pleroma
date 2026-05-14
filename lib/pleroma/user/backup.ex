@@ -342,7 +342,7 @@ defmodule Pleroma.User.Backup do
       dir,
       "outbox",
       fn a ->
-        with {:ok, activity} <- Transmogrifier.prepare_outgoing(a.data) do
+        with {:ok, activity} <- Transmogrifier.prepare_activity(a.data) do
           {:ok, Map.delete(activity, "@context")}
         end
       end

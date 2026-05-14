@@ -216,6 +216,7 @@ defmodule Pleroma.Web.Router do
   pipeline :http_signature do
     plug(Pleroma.Web.Plugs.HTTPSignaturePlug)
     plug(Pleroma.Web.Plugs.MappedSignatureToIdentityPlug)
+    plug(Pleroma.Web.Plugs.EnsureHostMatchesPlug)
   end
 
   pipeline :inbox_guard do
@@ -226,21 +227,26 @@ defmodule Pleroma.Web.Router do
     plug(Pleroma.Web.Plugs.StaticFEPlug)
   end
 
-  scope "/api/v1/pleroma", Pleroma.Web.TwitterAPI do
+  scope "/api/v1/pleroma", Pleroma.Web.OAuth do
     pipe_through(:pleroma_api)
 
     get("/password_reset/:token", PasswordController, :reset, as: :reset_password)
     post("/password_reset", PasswordController, :do_reset, as: :reset_password)
-    get("/emoji", UtilController, :emoji)
-    get("/captcha", UtilController, :captcha)
-    get("/healthcheck", UtilController, :healthcheck)
-    post("/remote_interaction", UtilController, :remote_interaction)
   end
 
   scope "/api/v1/pleroma", Pleroma.Web.PleromaAPI do
     pipe_through(:pleroma_api)
 
+    get("/emoji", UtilController, :emoji)
+    get("/captcha", UtilController, :captcha)
+    get("/healthcheck", UtilController, :healthcheck)
     get("/federation_status", InstancesController, :show)
+  end
+
+  scope "/api/v1/pleroma", Pleroma.Web.RemoteInteraction do
+    pipe_through(:pleroma_api)
+
+    post("/remote_interaction", RemoteInteractionController, :remote_interaction)
   end
 
   scope "/api/v1/pleroma", Pleroma.Web do
@@ -395,6 +401,7 @@ defmodule Pleroma.Web.Router do
     get("/reports", ReportController, :index)
     get("/reports/:id", ReportController, :show)
     patch("/reports", ReportController, :update)
+    post("/reports/assign_account", ReportController, :assign_account)
     post("/reports/:id/notes", ReportController, :notes_create)
     delete("/reports/:report_id/notes/:id", ReportController, :notes_delete)
   end
@@ -483,18 +490,18 @@ defmodule Pleroma.Web.Router do
     end
   end
 
-  scope "/", Pleroma.Web.TwitterAPI do
+  scope "/", Pleroma.Web.RemoteInteraction do
     pipe_through(:pleroma_html)
 
-    post("/main/ostatus", UtilController, :remote_subscribe)
-    get("/main/ostatus", UtilController, :show_subscribe_form)
-    get("/ostatus_subscribe", RemoteFollowController, :follow)
-    post("/ostatus_subscribe", RemoteFollowController, :do_follow)
+    post("/main/ostatus", RemoteInteractionController, :remote_subscribe)
+    get("/main/ostatus", RemoteInteractionController, :show_subscribe_form)
+    get("/ostatus_subscribe", RemoteInteractionController, :follow)
+    post("/ostatus_subscribe", RemoteInteractionController, :do_follow)
 
-    get("/authorize_interaction", RemoteFollowController, :authorize_interaction)
+    get("/authorize_interaction", RemoteInteractionController, :authorize_interaction)
   end
 
-  scope "/api/pleroma", Pleroma.Web.TwitterAPI do
+  scope "/api/pleroma", Pleroma.Web.PleromaAPI do
     pipe_through(:authenticated_api)
 
     post("/change_email", UtilController, :change_email)
@@ -852,7 +859,7 @@ defmodule Pleroma.Web.Router do
   scope "/api", Pleroma.Web do
     pipe_through(:config)
 
-    get("/pleroma/frontend_configurations", TwitterAPI.UtilController, :frontend_configurations)
+    get("/pleroma/frontend_configurations", PleromaAPI.UtilController, :frontend_configurations)
   end
 
   scope "/api", Pleroma.Web do
@@ -860,7 +867,7 @@ defmodule Pleroma.Web.Router do
 
     get(
       "/account/confirm_email/:user_id/:token",
-      TwitterAPI.Controller,
+      OAuth.TokenController,
       :confirm_email,
       as: :confirm_email
     )
@@ -872,11 +879,11 @@ defmodule Pleroma.Web.Router do
     get("/openapi", OpenApiSpex.Plug.RenderSpec, [])
   end
 
-  scope "/api", Pleroma.Web, as: :authenticated_twitter_api do
+  scope "/api", Pleroma.Web, as: :authenticated_pleroma_api do
     pipe_through(:authenticated_api)
 
-    get("/oauth_tokens", TwitterAPI.Controller, :oauth_tokens)
-    delete("/oauth_tokens/:id", TwitterAPI.Controller, :revoke_token)
+    get("/oauth_tokens", OAuth.TokenController, :oauth_tokens)
+    delete("/oauth_tokens/:id", OAuth.TokenController, :revoke_token)
   end
 
   scope "/", Pleroma.Web do
@@ -1025,7 +1032,9 @@ defmodule Pleroma.Web.Router do
   scope "/", Pleroma.Web do
     pipe_through(:pleroma_html)
 
-    post("/auth/password", TwitterAPI.PasswordController, :request)
+    post("/auth/password", OAuth.PasswordController, :request)
+
+    get("/embed/:id", EmbedController, :show)
   end
 
   scope "/proxy/", Pleroma.Web do
@@ -1087,7 +1096,7 @@ defmodule Pleroma.Web.Router do
     get("/:maybe_nickname_or_id", RedirectController, :redirector_with_meta)
     match(:*, "/api/pleroma/*path", LegacyPleromaApiRerouterPlug, [])
     get("/api/*path", RedirectController, :api_not_implemented)
-    get("/phoenix/live_dashboard", RedirectController, :live_dashboard)
+    get("/phoenix/live_dashboard/*path", RedirectController, :live_dashboard)
     get("/*path", RedirectController, :redirector_with_preload)
 
     options("/*path", RedirectController, :empty)

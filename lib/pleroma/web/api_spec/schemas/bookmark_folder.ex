@@ -15,12 +15,18 @@ defmodule Pleroma.Web.ApiSpec.Schemas.BookmarkFolder do
     properties: %{
       id: FlakeID,
       name: %Schema{type: :string, description: "Folder name"},
-      emoji: %Schema{type: :string, description: "Folder emoji", nullable: true}
+      emoji: %Schema{type: :string, description: "Folder emoji", nullable: true},
+      emoji_url: %Schema{
+        type: :string,
+        description: "URL of the folder emoji if it's a custom emoji, null otherwise",
+        nullable: true
+      }
     },
     example: %{
       "id" => "9toJCu5YZW7O7gfvH6",
       "name" => "Read later",
-      "emoji" => nil
+      "emoji" => nil,
+      "emoji_url" => nil
     }
   })
 end

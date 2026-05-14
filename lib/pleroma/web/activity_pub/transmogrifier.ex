@@ -489,6 +489,12 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end)
   end
 
+  defp reject_third_party_report(%User{local: false}, %User{local: false} = account) do
+    {:reject, "[Transmogrifier] third-party report: #{account.ap_id}"}
+  end
+
+  defp reject_third_party_report(_, _), do: :ok
+
   def handle_incoming(data, options \\ []) do
     data
     |> fix_recursive(&strip_internal_fields/1)
@@ -509,9 +515,11 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
        ) do
     with context <- data["context"] || Utils.generate_context_id(),
          content <- data["content"] || "",
+         objects <- List.wrap(objects),
          %User{} = actor <- User.get_cached_by_ap_id(actor),
          # Reduce the object list to find the reported user.
          %User{} = account <- get_reported(objects),
+         :ok <- reject_third_party_report(actor, account),
          # Remove the reported user from the object list.
          statuses <- Enum.filter(objects, fn ap_id -> ap_id != account.ap_id end) do
       %{
@@ -848,7 +856,13 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   def set_replies(obj_data), do: obj_data
 
-  # Prepares the object of an outgoing create activity.
+  defp set_voters_count(%{"voters" => [_ | _] = voters} = obj) do
+    Map.merge(obj, %{"votersCount" => length(voters)})
+  end
+
+  defp set_voters_count(obj), do: obj
+
+  # Prepares and sanitizes the object for federation.
   def prepare_object(object) do
     object
     |> add_hashtags
@@ -860,6 +874,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> set_reply_to_uri
     |> set_quote_url
     |> set_replies
+    |> set_voters_count
     |> CommonFixes.maybe_add_content_map()
     |> strip_internal_fields
     |> strip_internal_tags
@@ -889,7 +904,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   #  internal -> Mastodon
   #  """
 
-  def prepare_outgoing(%{"type" => activity_type, "object" => object_id} = data)
+  def prepare_activity(%{"type" => activity_type, "object" => object_id} = data)
       when activity_type in ["Create", "Listen"] do
     object =
       object_id
@@ -905,7 +920,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     {:ok, data}
   end
 
-  def prepare_outgoing(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
+  def prepare_activity(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
       when objtype in Pleroma.Constants.updatable_object_types() do
     data =
       data
@@ -916,7 +931,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     {:ok, data}
   end
 
-  def prepare_outgoing(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
+  def prepare_activity(%{"type" => "Update", "object" => %{"type" => objtype} = object} = data)
       when objtype in Pleroma.Constants.actor_types() do
     object =
       object
@@ -933,11 +948,11 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     {:ok, data}
   end
 
-  def prepare_outgoing(%{"type" => "Update", "object" => %{}} = data) do
+  def prepare_activity(%{"type" => "Update", "object" => %{}} = data) do
     raise "Requested to serve an Update for non-updateable object type:  #{inspect(data)}"
   end
 
-  def prepare_outgoing(%{"type" => "Announce", "actor" => ap_id, "object" => object_id} = data) do
+  def prepare_activity(%{"type" => "Announce", "actor" => ap_id, "object" => object_id} = data) do
     object =
       object_id
       |> Object.normalize(fetch: false)
@@ -960,7 +975,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   # Mastodon Accept/Reject requires a non-normalized object containing the actor URIs,
   # because of course it does.
-  def prepare_outgoing(%{"type" => "Accept"} = data) do
+  def prepare_activity(%{"type" => "Accept"} = data) do
     with follow_activity <- Activity.normalize(data["object"]) do
       object = %{
         "actor" => follow_activity.actor,
@@ -978,7 +993,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
-  def prepare_outgoing(%{"type" => "Reject"} = data) do
+  def prepare_activity(%{"type" => "Reject"} = data) do
     with follow_activity <- Activity.normalize(data["object"]) do
       object = %{
         "actor" => follow_activity.actor,
@@ -996,7 +1011,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
-  def prepare_outgoing(%{"type" => "Flag"} = data) do
+  def prepare_activity(%{"type" => "Flag"} = data) do
     with {:ok, stripped_activity} <- Utils.strip_report_status_data(data),
          stripped_activity <- Utils.maybe_anonymize_reporter(stripped_activity),
          stripped_activity <- Map.merge(stripped_activity, Utils.make_json_ld_header()) do
@@ -1004,7 +1019,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     end
   end
 
-  def prepare_outgoing(%{"type" => _type} = data) do
+  def prepare_activity(%{"type" => _type} = data) do
     data =
       data
       |> strip_internal_fields

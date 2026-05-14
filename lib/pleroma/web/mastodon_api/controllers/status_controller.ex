@@ -81,10 +81,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusController do
 
   plug(OAuthScopesPlug, %{scopes: ["write:accounts"]} when action in [:pin, :unpin])
 
-  # Note: scope not present in Mastodon: read:bookmarks
   plug(OAuthScopesPlug, %{scopes: ["read:bookmarks"]} when action == :bookmarks)
 
-  # Note: scope not present in Mastodon: write:bookmarks
   plug(
     OAuthScopesPlug,
     %{scopes: ["write:bookmarks"]} when action in [:bookmark, :unbookmark]

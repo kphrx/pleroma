@@ -26,7 +26,9 @@ defmodule Pleroma.Web.ApiSpec.Schemas.AccountRelationship do
       requested: %Schema{type: :boolean},
       showing_reblogs: %Schema{type: :boolean},
       subscribing: %Schema{type: :boolean},
-      notifying: %Schema{type: :boolean}
+      notifying: %Schema{type: :boolean},
+      mute_expires_at: %Schema{type: :string, format: "date-time", nullable: true},
+      block_expires_at: %Schema{type: :string, format: "date-time", nullable: true}
     },
     example: %{
       "blocked_by" => false,

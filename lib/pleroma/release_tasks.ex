@@ -5,8 +5,25 @@
 defmodule Pleroma.ReleaseTasks do
   @repo Pleroma.Repo
 
-  def run(args) do
+  # TODO: Kept for some backwards compatibility with buggy pleroma_ctl,
+  # if a mismatch between pleroma_ctl and Pleroma accidentaly happens.
+  # Remove in the future.
+  def run(args) when is_binary(args) do
     [task | args] = String.split(args)
+
+    case task do
+      "migrate" -> migrate(args)
+      "create" -> create()
+      "rollback" -> rollback(args)
+      task -> mix_task(task, args)
+    end
+  end
+
+  # HACK: Script arguments need to be received as a list, otherwise (quoted) arguments with
+  # whitespace will be broken. Previously the broken string form above was used,
+  # escaping in the shell does not help.
+  def run(args) when is_list(args) do
+    [task | args] = args
 
     case task do
       "migrate" -> migrate(args)

@@ -279,6 +279,26 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
       end)
     end
 
+    test "prefers sec-websocket-protocol token over query access_token", %{
+      token: token,
+      user: user
+    } do
+      assert {:ok, state} =
+               Pleroma.Web.MastodonAPI.WebsocketHandler.connect(%{
+                 params: %{"stream" => "user", "access_token" => "invalid"},
+                 connect_info: %{
+                   sec_websocket_headers: [
+                     {"sec-websocket-version", "13"},
+                     {"sec-websocket-protocol", token.token}
+                   ]
+                 }
+               })
+
+      assert state.user.id == user.id
+      assert state.oauth_token.id == token.id
+      assert state.topics != []
+    end
+
     test "accepts valid token on client-sent event", %{token: token} do
       assert {:ok, pid} = start_socket()
 
@@ -363,7 +383,7 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
     test "accepts the 'list' stream", %{token: token, user: user} do
       posting_user = insert(:user)
 
-      {:ok, list} = Pleroma.List.create("test", user)
+      {:ok, list} = Pleroma.List.create(%{title: "test"}, user)
       Pleroma.List.follow(list, posting_user)
 
       assert {:ok, _} = start_socket("?stream=list&access_token=#{token.token}&list=#{list.id}")

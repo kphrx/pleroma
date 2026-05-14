@@ -303,7 +303,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     end
   end
 
-  def inbox(%{assigns: %{valid_signature: true}} = conn, %{"nickname" => nickname} = params) do
+  def inbox(
+        %{
+          assigns: %{valid_signature: true, valid_host_header: true}
+        } = conn,
+        %{"nickname" => nickname} = params
+      ) do
     with {:recipient_exists, %User{} = recipient} <-
            {:recipient_exists, User.get_cached_by_nickname(nickname)},
          {:sender_exists, {:ok, %User{} = actor}} <-
@@ -342,13 +347,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     end
   end
 
-  def inbox(%{assigns: %{valid_signature: true}} = conn, params) do
+  def inbox(%{assigns: %{valid_signature: true, valid_host_header: true}} = conn, params) do
     Federator.incoming_ap_doc(params)
     json(conn, "ok")
   end
 
   def inbox(%{assigns: %{valid_signature: false}} = conn, params) do
-    Federator.incoming_ap_doc(%{
+    Federator.incoming_failed_signature_ap_doc(%{
       method: conn.method,
       req_headers: conn.req_headers,
       request_path: conn.request_path,

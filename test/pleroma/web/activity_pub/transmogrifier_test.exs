@@ -86,6 +86,43 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       assert activity.data["cc"] == [user.ap_id]
     end
 
+    test "it rejects Flag activities when both reporter and reported account are remote" do
+      reporter = insert(:user, local: false, domain: "mastodon.cat")
+      reported = insert(:user, local: false, domain: "nicecrew.digital")
+
+      message = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "actor" => reporter.ap_id,
+        "content" => "blocked AND reported!!!",
+        "object" => [reported.ap_id, "https://nicecrew.digital/objects/report-status"],
+        "type" => "Flag"
+      }
+
+      assert {:reject, reason} = Transmogrifier.handle_incoming(message)
+      assert reason =~ "third-party report"
+      refute "Flag" |> Pleroma.Activity.Queries.by_type() |> Pleroma.Repo.one()
+    end
+
+    test "it accepts Flag activities with just actor id as object" do
+      user = insert(:user)
+      other_user = insert(:user)
+
+      message = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "cc" => [user.ap_id],
+        "object" => user.ap_id,
+        "type" => "Flag",
+        "content" => "blocked AND reported!!!",
+        "actor" => other_user.ap_id
+      }
+
+      assert {:ok, activity} = Transmogrifier.handle_incoming(message)
+
+      assert activity.data["content"] == "blocked AND reported!!!"
+      assert activity.data["actor"] == other_user.ap_id
+      assert activity.data["cc"] == [user.ap_id]
+    end
+
     test "it accepts Move activities" do
       old_user = insert(:user)
       new_user = insert(:user)
@@ -433,7 +470,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
 
       {:ok, announce_activity} = CommonAPI.repeat(activity.id, user)
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(announce_activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(announce_activity.data)
 
       assert modified["object"]["content"] == "hey"
       assert modified["object"]["actor"] == modified["object"]["attributedTo"]
@@ -448,7 +485,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
 
       with_mock Pleroma.Notification,
         get_notified_from_activity: fn _, _ -> [] end do
-        {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+        {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
         object = modified["object"]
 
@@ -474,7 +511,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       user = insert(:user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "hey"})
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert modified["@context"] == Utils.make_json_ld_header()["@context"]
 
@@ -485,7 +522,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       user = insert(:user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "hey"})
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert modified["object"]["actor"] == modified["object"]["attributedTo"]
     end
@@ -501,7 +538,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
         "name" => "#2hu"
       }
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert modified["object"]["tag"] == [expected_tag]
     end
@@ -524,7 +561,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
                url: "https://pleroma.social"
              } == activity.object.data["generator"]
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert length(modified["object"]["tag"]) == 2
 
@@ -541,7 +578,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
     test "it strips internal fields of article" do
       activity = insert(:article_activity)
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert length(modified["object"]["tag"]) == 2
 
@@ -558,13 +595,13 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
 
       {:ok, activity} = CommonAPI.post(user, %{status: "2hu :moominmamma:"})
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert modified["directMessage"] == false
 
       {:ok, activity} = CommonAPI.post(user, %{status: "@#{other_user.nickname} :moominmamma:"})
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert modified["directMessage"] == false
 
@@ -574,18 +611,18 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
           visibility: "direct"
         })
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert modified["directMessage"] == true
     end
 
     test "it strips BCC field" do
       user = insert(:user)
-      {:ok, list} = Pleroma.List.create("foo", user)
+      {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert is_nil(modified["bcc"])
     end
@@ -594,7 +631,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       listen_activity = insert(:listen)
 
       # This has an inlined object as in ObjectView
-      {:ok, modified} = Transmogrifier.prepare_outgoing(listen_activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(listen_activity.data)
 
       assert modified["type"] == "Listen"
 
@@ -610,7 +647,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       object_type = activity.object.data["type"]
 
       # This does not have an inlined object
-      {:ok, modified2} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified2} = Transmogrifier.prepare_activity(activity.data)
 
       assert match?(
                %{
@@ -640,7 +677,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
 
       {:ok, activity} = CommonAPI.post(user, %{status: "everybody do the dinosaur :dinosaur:"})
 
-      {:ok, prepared} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, prepared} = Transmogrifier.prepare_activity(activity.data)
 
       assert length(prepared["object"]["tag"]) == 1
 
@@ -655,7 +692,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       {:ok, activity} = CommonAPI.post(user, %{status: "everybody do the dinosaur :dinosaur:"})
       {:ok, update} = CommonAPI.update(activity, user, %{status: "mew mew :blank:"})
 
-      {:ok, prepared} = Transmogrifier.prepare_outgoing(update.data)
+      {:ok, prepared} = Transmogrifier.prepare_activity(update.data)
 
       assert %{
                "content" => "mew mew :blank:",
@@ -689,7 +726,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
           user_update_changeset: changeset
         )
 
-      assert {:ok, prepared} = Transmogrifier.prepare_outgoing(activity.data)
+      assert {:ok, prepared} = Transmogrifier.prepare_activity(activity.data)
       assert prepared["type"] == "Update"
       assert prepared["@context"]
       assert prepared["object"]["type"] == user.actor_type
@@ -704,7 +741,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
 
       {:ok, %Activity{} = block_activity} = CommonAPI.block(blocked, blocker)
       {:ok, %Activity{} = undo_activity} = CommonAPI.unblock(blocked, blocker)
-      {:ok, data} = Transmogrifier.prepare_outgoing(undo_activity.data)
+      {:ok, data} = Transmogrifier.prepare_activity(undo_activity.data)
 
       block_ap_id = block_activity.data["id"]
       assert is_binary(block_ap_id)
@@ -738,7 +775,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       assert is_binary(note_ap_id)
 
       {:ok, react_activity} = CommonAPI.react_with_emoji(note_activity.id, user, "🐈")
-      {:ok, data} = Transmogrifier.prepare_outgoing(react_activity.data)
+      {:ok, data} = Transmogrifier.prepare_activity(react_activity.data)
 
       assert match?(
                %{
@@ -764,7 +801,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       note_activity = insert(:note_activity)
 
       {:ok, react_activity} = CommonAPI.react_with_emoji(note_activity.id, user, ":dinosaur:")
-      {:ok, data} = Transmogrifier.prepare_outgoing(react_activity.data)
+      {:ok, data} = Transmogrifier.prepare_activity(react_activity.data)
 
       assert length(data["tag"]) == 1
 
@@ -781,7 +818,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       {:ok, quoted_post} = CommonAPI.post(user, %{status: "hey"})
       {:ok, quote_post} = CommonAPI.post(user, %{status: "hey", quoted_status_id: quoted_post.id})
 
-      {:ok, modified} = Transmogrifier.prepare_outgoing(quote_post.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(quote_post.data)
 
       %{data: %{"id" => quote_id}} = Object.normalize(quoted_post)
 
@@ -793,7 +830,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       user = insert(:user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "Cześć", language: "pl"})
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.object.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.object.data)
 
       assert [_, _, %{"@language" => "pl"}] = modified["@context"]
     end
@@ -802,7 +839,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       user = insert(:user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "Cześć", language: "pl"})
-      {:ok, modified} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, modified} = Transmogrifier.prepare_activity(activity.data)
 
       assert [_, _, %{"@language" => "pl"}] = modified["@context"]
     end
@@ -825,7 +862,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
                  content: content
                })
 
-      {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, data} = Transmogrifier.prepare_activity(activity.data)
 
       expected_data =
         activity.data
@@ -859,7 +896,7 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       clear_config([:activitypub, :anonymize_reporter], true)
       clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
 
-      {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+      {:ok, data} = Transmogrifier.prepare_activity(activity.data)
 
       expected_data =
         activity.data

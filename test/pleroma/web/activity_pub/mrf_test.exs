@@ -10,18 +10,25 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
 
   alias Pleroma.Web.ActivityPub.MRF
 
+  defp regexes_match!([], []), do: true
+
+  defp regexes_match!([authority | authority_rest], [checked | checked_rest]) do
+    authority.source == checked.source and regexes_match!(authority_rest, checked_rest)
+  end
+
+  defp regexes_match!(_, _), do: false
+
   test "subdomains_regex/1" do
-    assert MRF.subdomains_regex(["unsafe.tld", "*.unsafe.tld"]) == [
-             ~r/^unsafe.tld$/i,
-             ~r/^(.*\.)*unsafe.tld$/i
-           ]
+    regexes = MRF.subdomains_regex(["unsafe.tld", "*.unsafe.tld"])
+
+    assert regexes_match!(regexes, [~r/^unsafe.tld$/i, ~r/^(.*\.)*unsafe.tld$/i])
   end
 
   describe "subdomain_match/2" do
     test "common domains" do
       regexes = MRF.subdomains_regex(["unsafe.tld", "unsafe2.tld"])
 
-      assert regexes == [~r/^unsafe.tld$/i, ~r/^unsafe2.tld$/i]
+      assert regexes_match!(regexes, [~r/^unsafe.tld$/i, ~r/^unsafe2.tld$/i])
 
       assert MRF.subdomain_match?(regexes, "unsafe.tld")
       assert MRF.subdomain_match?(regexes, "unsafe2.tld")
@@ -32,7 +39,7 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
     test "wildcard domains with one subdomain" do
       regexes = MRF.subdomains_regex(["*.unsafe.tld"])
 
-      assert regexes == [~r/^(.*\.)*unsafe.tld$/i]
+      assert regexes_match!(regexes, [~r/^(.*\.)*unsafe.tld$/i])
 
       assert MRF.subdomain_match?(regexes, "unsafe.tld")
       assert MRF.subdomain_match?(regexes, "sub.unsafe.tld")
@@ -43,7 +50,7 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
     test "wildcard domains with two subdomains" do
       regexes = MRF.subdomains_regex(["*.unsafe.tld"])
 
-      assert regexes == [~r/^(.*\.)*unsafe.tld$/i]
+      assert regexes_match!(regexes, [~r/^(.*\.)*unsafe.tld$/i])
 
       assert MRF.subdomain_match?(regexes, "unsafe.tld")
       assert MRF.subdomain_match?(regexes, "sub.sub.unsafe.tld")
@@ -54,7 +61,7 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
     test "matches are case-insensitive" do
       regexes = MRF.subdomains_regex(["UnSafe.TLD", "UnSAFE2.Tld"])
 
-      assert regexes == [~r/^UnSafe.TLD$/i, ~r/^UnSAFE2.Tld$/i]
+      assert regexes_match!(regexes, [~r/^UnSafe.TLD$/i, ~r/^UnSAFE2.Tld$/i])
 
       assert MRF.subdomain_match?(regexes, "UNSAFE.TLD")
       assert MRF.subdomain_match?(regexes, "UNSAFE2.TLD")
