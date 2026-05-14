@@ -815,7 +815,8 @@ config :pleroma, :config_description, [
           "text/plain",
           "text/html",
           "text/markdown",
-          "text/bbcode"
+          "text/bbcode",
+          "text/x.misskeymarkdown"
         ]
       },
       %{
@@ -1394,7 +1395,13 @@ config :pleroma, :config_description, [
             label: "Post Content Type",
             type: {:dropdown, :atom},
             description: "Default post formatting option",
-            suggestions: ["text/plain", "text/html", "text/markdown", "text/bbcode"]
+            suggestions: [
+              "text/plain",
+              "text/html",
+              "text/markdown",
+              "text/bbcode",
+              "text/x.misskeymarkdown"
+            ]
           },
           %{
             key: :redirectRootNoLogin,
@@ -2903,7 +2910,7 @@ config :pleroma, :config_description, [
     key: Pleroma.Web.Plugs.RemoteIp,
     type: :group,
     description: """
-    `Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://git.pleroma.social/pleroma/remote_ip) but with runtime configuration.
+    `Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://hex.pm/packages/remote_ip) but with runtime configuration.
     **If your instance is not behind at least one reverse proxy, you should not enable this plug.**
     """,
     children: [
@@ -2918,6 +2925,12 @@ config :pleroma, :config_description, [
         description: """
           A list of strings naming the HTTP headers to use when deriving the true client IP. Default: `["x-forwarded-for"]`.
         """
+      },
+      %{
+        key: :clients,
+        type: {:list, :string},
+        description:
+          "A list of client IPs or subnets in CIDR notation. These will not be treated as proxies or reserved ranges. Defaults to `[]`. IPv4 entries without a bitmask will be assumed to be /32 and IPv6 /128."
       },
       %{
         key: :proxies,
