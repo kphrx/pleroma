@@ -130,8 +130,7 @@ defmodule Pleroma.Mixfile do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:phoenix,
-       git: "https://github.com/feld/phoenix", branch: "v1.7.14-websocket-headers", override: true},
+      {:phoenix, "~> 1.8.0"},
       {:phoenix_ecto, "~> 4.6"},
       {:ecto_sql, "~> 3.13"},
       {:ecto_enum, "~> 1.4"},
@@ -189,12 +188,9 @@ defmodule Pleroma.Mixfile do
       {:plug_static_index_html, "~> 1.0.0"},
       {:flake_id, "~> 0.1.0"},
       {:concurrent_limiter, "~> 0.1.1"},
-      {:remote_ip,
-       git: "https://git.pleroma.social/pleroma/remote_ip.git",
-       ref: "b647d0deecaa3acb140854fe4bda5b7e1dc6d1c8"},
-      {:captcha,
-       git: "https://git.pleroma.social/pleroma/elixir-libraries/elixir-captcha.git",
-       ref: "e7b7cc34cc16b383461b966484c297e4ec9aeef6"},
+      {:remote_ip, "~> 1.2.0"},
+      {:inet_cidr, "~> 1.0"},
+      {:captcha, "~> 1.0.3", hex: :pleroma_captcha},
       {:restarter, path: "./restarter"},
       {:majic, "~> 1.2"},
       {:open_api_spex, "~> 3.22"},

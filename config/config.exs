@@ -737,6 +737,7 @@ config :pleroma, Pleroma.Workers.PurgeExpiredActivity, enabled: true, min_lifeti
 config :pleroma, Pleroma.Web.Plugs.RemoteIp,
   enabled: true,
   headers: ["x-forwarded-for"],
+  clients: [],
   proxies: [],
   reserved: [
     "127.0.0.0/8",
