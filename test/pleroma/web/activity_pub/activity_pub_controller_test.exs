@@ -950,6 +950,50 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       refute Activity.get_by_ap_id(data["id"])
     end
 
+    test "does not process post with Host header not for us", %{conn: conn} do
+      alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+      object_id = "https://one.com/objects/inbox-forged-note"
+
+      data = %{
+        "type" => "Create",
+        "actor" => alice.ap_id,
+        "id" => "https://one.com/activities/inbox-forged-create",
+        "context" => "https://one.com/contexts/inbox-forged-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => object_id,
+          "actor" => alice.ap_id,
+          "attributedTo" => alice.ap_id,
+          "context" => "https://one.com/contexts/inbox-forged-create",
+          "content" => "forged post",
+          "published" => "2024-07-25T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      # Plug will complain when replacing raw host header with put_req_header.
+      # The Plug way is updating conn.host, but that isn't the raw header
+      # and that isn't used in the EnsureHostMatchesPlug, because it doesn't include the port.
+      conn =
+        conn
+        |> assign_valid_signature_for_actor(alice)
+        |> delete_req_header("host")
+        |> put_req_header("content-type", "application/activity+json")
+
+      conn = %{conn | req_headers: conn.req_headers ++ [{"host", "invalid.example.com"}]}
+      conn = post(conn, "/inbox", data)
+
+      assert "Host header does not match this instance" == conn.resp_body
+      assert 400 == conn.status
+      assert true == conn.halted
+
+      refute Activity.get_by_ap_id(data["id"])
+      refute Object.get_by_ap_id(object_id)
+    end
+
     test "accept follow activity", %{conn: conn} do
       clear_config([:instance, :federating], true)
       relay = Relay.get_actor()

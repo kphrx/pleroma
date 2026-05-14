@@ -119,7 +119,10 @@ defmodule Pleroma.Web.ConnCase do
     DataCase.stub_pipeline()
 
     Mox.verify_on_exit!()
+    endpoint = URI.parse(Pleroma.Web.Endpoint.url())
+    conn = Phoenix.ConnTest.build_conn()
+    conn = %{conn | req_headers: [{"host", "#{endpoint.host}:#{endpoint.port}"}]}
 
-    {:ok, conn: Phoenix.ConnTest.build_conn()}
+    {:ok, conn: conn}
   end
 end
