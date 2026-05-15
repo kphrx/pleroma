@@ -23,4 +23,26 @@ defmodule Pleroma.Web.RichMedia.BackfillTest do
 
     Backfill.run(%{"url" => url})
   end
+
+  test "sets a warm_cache entry" do
+    url = "https://good.example.com/"
+    url_hash = Card.url_to_hash(url)
+
+    Tesla.Mock.mock(fn %{url: ^url} ->
+      {:ok,
+       %Tesla.Env{
+         status: 200,
+         body: "<head><meta name=\"twitter:title\" content=\"Cofe\"></head>"
+       }}
+    end)
+
+    Pleroma.CachexMock
+    |> expect(:put, fn :rich_media_cache,
+                       ^url_hash,
+                       %Pleroma.Web.RichMedia.Card{url_hash: ^url_hash} ->
+      {:ok, true}
+    end)
+
+    Backfill.run(%{"url" => url})
+  end
 end
