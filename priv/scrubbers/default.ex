@@ -105,7 +105,7 @@ defmodule Pleroma.HTML.Scrubber.Default do
     "mfm-sparkle",
     "mfm-rotate",
     "mfm-ruby",
-    "mfm-unixtime",
+    "mfm-unixtime"
   ])
 
   Meta.allow_tag_with_this_attribute_values(:p, "class", ["quote-inline"])
@@ -131,7 +131,7 @@ defmodule Pleroma.HTML.Scrubber.Default do
     "data-mfm-fantasy",
     "data-mfm-emoji",
     "data-mfm-math",
-    "data-mfm-deg",
+    "data-mfm-deg"
   ])
 
   Meta.allow_tag_with_this_attribute_values(:code, "class", ["inline"])
