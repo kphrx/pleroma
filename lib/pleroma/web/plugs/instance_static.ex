@@ -4,7 +4,7 @@
 
 defmodule Pleroma.Web.Plugs.InstanceStatic do
   require Pleroma.Constants
-  import Plug.Conn, only: [put_resp_header: 3, put_status: 2, send_resp: 3, halt: 1]
+  import Plug.Conn, only: [put_resp_header: 3]
 
   @moduledoc """
   This is a shim to call `Plug.Static` but with runtime `from` configuration.
@@ -51,37 +51,10 @@ defmodule Pleroma.Web.Plugs.InstanceStatic do
       |> Map.put(:from, from)
       |> Map.put(:content_types, false)
 
-    conn =
-      conn
-      |> set_content_type(conn.request_path)
-      |> Plug.Static.call(opts)
+    conn = set_content_type(conn, conn.request_path)
 
-    if conn.halted do
-      conn
-    else
-      path = String.trim_leading(conn.request_path, "/")
-
-      if not File.exists?(file_path(path)) do
-        conn
-        |> put_status(:not_found)
-        |> send_404()
-        |> halt()
-      else
-        conn
-      end
-    end
-  end
-
-  defp send_404(conn) do
-    if String.ends_with?(String.downcase(conn.request_path), ".json") do
-      conn
-      |> put_resp_header("content-type", "application/json")
-      |> send_resp(404, Jason.encode!(%{error: "not found"}))
-    else
-      conn
-      |> put_resp_header("content-type", "text/plain")
-      |> send_resp(404, "Not found")
-    end
+    # Call Plug.Static with our sanitized content-type
+    Plug.Static.call(conn, opts)
   end
 
   defp set_content_type(conn, "/emoji/" <> filepath) do
