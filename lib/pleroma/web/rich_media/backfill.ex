@@ -11,6 +11,8 @@ defmodule Pleroma.Web.RichMedia.Backfill do
 
   require Logger
 
+  @callback run(map()) :: :ok | Parser.parse_errors() | Helpers.get_errors()
+
   @cachex Pleroma.Config.get([:cachex, :provider], Cachex)
   @stream_out_impl Pleroma.Config.get(
                      [__MODULE__, :stream_out],
@@ -26,11 +28,7 @@ defmodule Pleroma.Web.RichMedia.Backfill do
         {:ok, card} = Card.create(url, fields)
 
         maybe_schedule_expiration(url, fields)
-
-        with %{"activity_id" => activity_id} <- args,
-             false <- is_nil(activity_id) do
-          stream_update(args)
-        end
+        maybe_update_stream(args)
 
         warm_cache(url_hash, card)
         :ok
@@ -55,11 +53,15 @@ defmodule Pleroma.Web.RichMedia.Backfill do
     end
   end
 
-  defp stream_update(%{"activity_id" => activity_id}) do
+  defp maybe_update_stream(%{"activity_id" => activity_id, "stream" => true}) when is_binary(activity_id) do
     Pleroma.Activity.get_by_id(activity_id)
     |> Pleroma.Activity.normalize()
     |> @stream_out_impl.stream_out()
   end
+
+  # Streamer.stream_out returns noop when unsupported activity type is requested to be streamed.
+  # Do the same here for unwanted streaming
+  defp maybe_update_stream(_), do: :noop
 
   defp warm_cache(key, val), do: @cachex.put(:rich_media_cache, key, val)
 
