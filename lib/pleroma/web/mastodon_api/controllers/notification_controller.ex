@@ -8,10 +8,12 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
   import Pleroma.Web.ControllerHelper, only: [add_link_headers: 2]
 
   alias Pleroma.Notification
+  alias Pleroma.User
+  alias Pleroma.Web.MastodonAPI.AccountView
   alias Pleroma.Web.MastodonAPI.MastodonAPI
   alias Pleroma.Web.Plugs.OAuthScopesPlug
 
-  @oauth_read_actions [:show, :index]
+  @oauth_read_actions [:show, :index, :grouped_index, :show_group, :unread_count]
 
   plug(Pleroma.Web.ApiSpec.CastAndValidate, replace_params: false)
 
@@ -39,7 +41,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
 
   # GET /api/v1/notifications
   def index(%{private: %{open_api_spex: %{params: %{account_id: account_id} = params}}} = conn, _) do
-    case Pleroma.User.get_cached_by_id(account_id) do
+    case User.get_cached_by_id(account_id) do
       %{ap_id: account_ap_id} ->
         params =
           params
@@ -59,10 +61,110 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
     do_get_notifications(conn, params)
   end
 
+  # GET /api/v2/notifications
+  def grouped_index(
+        %{private: %{open_api_spex: %{params: %{account_id: account_id} = params}}} = conn,
+        _
+      ) do
+    case User.get_cached_by_id(account_id) do
+      %{ap_id: account_ap_id} ->
+        params =
+          params
+          |> Map.delete(:account_id)
+          |> Map.put(:account_ap_id, account_ap_id)
+
+        do_get_grouped_notifications(conn, params)
+
+      _ ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{"error" => "Account is not found"})
+    end
+  end
+
+  def grouped_index(%{private: %{open_api_spex: %{params: params}}} = conn, _) do
+    do_get_grouped_notifications(conn, params)
+  end
+
+  # GET /api/v2/notifications/:group_key
+  def show_group(
+        %{assigns: %{user: user}, private: %{open_api_spex: %{params: %{group_key: group_key}}}} =
+          conn,
+        _
+      ) do
+    notifications = MastodonAPI.get_notification_group(user, group_key, %{})
+
+    if Enum.empty?(notifications) do
+      conn
+      |> put_status(:not_found)
+      |> json(%{"error" => "Notification group is not found"})
+    else
+      grouped_types = if String.starts_with?(group_key, "ungrouped-"), do: [], else: nil
+
+      render(conn, "grouped_index.json",
+        notification_groups: [notifications],
+        for: user,
+        grouped_types: grouped_types
+      )
+    end
+  end
+
+  # GET /api/v2/notifications/:group_key/accounts
+  def group_accounts(
+        %{assigns: %{user: user}, private: %{open_api_spex: %{params: %{group_key: group_key}}}} =
+          conn,
+        _
+      ) do
+    users =
+      user
+      |> MastodonAPI.get_notification_group(group_key, %{})
+      |> notification_actors()
+
+    json(conn, AccountView.render("index.json", %{users: users, for: user}))
+  end
+
+  # GET /api/v2/notifications/unread_count
+  def unread_count(
+        %{private: %{open_api_spex: %{params: %{account_id: account_id} = params}}} = conn,
+        _
+      ) do
+    case User.get_cached_by_id(account_id) do
+      %{ap_id: account_ap_id} ->
+        params =
+          params
+          |> Map.delete(:account_id)
+          |> Map.put(:account_ap_id, account_ap_id)
+
+        do_get_unread_group_count(conn, params)
+
+      _ ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{"error" => "Account is not found"})
+    end
+  end
+
+  def unread_count(%{private: %{open_api_spex: %{params: params}}} = conn, _) do
+    do_get_unread_group_count(conn, params)
+  end
+
+  # POST /api/v2/notifications/:group_key/dismiss
+  def dismiss_group(
+        %{assigns: %{user: user}, private: %{open_api_spex: %{params: %{group_key: group_key}}}} =
+          conn,
+        _
+      ) do
+    ids =
+      user
+      |> MastodonAPI.get_notification_group(group_key, %{})
+      |> Enum.map(& &1.id)
+
+    Notification.destroy_multiple(user, ids)
+    json(conn, %{})
+  end
+
   defp do_get_notifications(%{assigns: %{user: user}} = conn, params) do
-    params =
-      Map.new(params, fn {k, v} -> {to_string(k), v} end)
-      |> Map.put_new("types", Map.get(params, :include_types, @default_notification_types))
+    params = normalize_notification_params(params)
 
     notifications = MastodonAPI.get_notifications(user, params)
 
@@ -72,6 +174,40 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
       notifications: notifications,
       for: user
     )
+  end
+
+  defp do_get_grouped_notifications(%{assigns: %{user: user}} = conn, params) do
+    params = normalize_notification_params(params)
+
+    {notification_groups, page_notifications, notification_group_counts} =
+      MastodonAPI.get_grouped_notification_page(user, params)
+
+    conn
+    |> add_link_headers(page_notifications)
+    |> render("grouped_index.json",
+      notification_groups: notification_groups,
+      notification_group_counts: notification_group_counts,
+      for: user,
+      grouped_types: params["grouped_types"]
+    )
+  end
+
+  defp do_get_unread_group_count(%{assigns: %{user: user}} = conn, params) do
+    params = normalize_notification_params(params)
+    json(conn, %{count: MastodonAPI.unread_notification_group_count(user, params)})
+  end
+
+  defp normalize_notification_params(params) do
+    params
+    |> Map.new(fn {k, v} -> {to_string(k), v} end)
+    |> Map.put_new("types", Map.get(params, :include_types, @default_notification_types))
+  end
+
+  defp notification_actors(notifications) do
+    notifications
+    |> Enum.map(&User.get_cached_by_ap_id(&1.activity.data["actor"]))
+    |> Enum.filter(& &1)
+    |> Enum.uniq_by(& &1.id)
   end
 
   # GET /api/v1/notifications/:id

@@ -101,7 +101,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
 
     expected = %{
       id: to_string(notification.id),
-      group_key: "ungrouped-#{to_string(notification.id)}",
+      group_key: Notification.group_key(notification),
       pleroma: %{is_seen: false, is_muted: false},
       type: "favourite",
       account: AccountView.render("show.json", %{user: another_user, for: user}),
@@ -122,7 +122,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
 
     expected = %{
       id: to_string(notification.id),
-      group_key: "ungrouped-#{to_string(notification.id)}",
+      group_key: Notification.group_key(notification),
       pleroma: %{is_seen: false, is_muted: false},
       type: "reblog",
       account: AccountView.render("show.json", %{user: another_user, for: user}),
@@ -141,7 +141,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
 
     expected = %{
       id: to_string(notification.id),
-      group_key: "ungrouped-#{to_string(notification.id)}",
+      group_key: Notification.group_key(notification),
       pleroma: %{is_seen: false, is_muted: false},
       type: "follow",
       account: AccountView.render("show.json", %{user: follower, for: followed}),
@@ -333,7 +333,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
 
     expected = %{
       id: to_string(notification.id),
-      group_key: "ungrouped-#{to_string(notification.id)}",
+      group_key: Notification.group_key(notification),
       pleroma: %{is_seen: true, is_muted: true},
       type: "favourite",
       account: AccountView.render("show.json", %{user: another_user, for: user}),

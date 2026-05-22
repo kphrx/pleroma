@@ -62,6 +62,90 @@ defmodule Pleroma.Notification do
     |> Repo.aggregate(:count, :id)
   end
 
+  @groupable_notification_types ~w{favourite follow reblog}
+  @group_bucket_seconds 12 * 60 * 60
+
+  def groupable_notification_types, do: @groupable_notification_types
+
+  def group_notifications(notifications, grouped_types \\ nil) do
+    grouped_types = normalize_grouped_types(grouped_types)
+
+    {group_keys, grouped_notifications} =
+      Enum.reduce(notifications, {[], %{}}, fn notification,
+                                               {group_keys, grouped_notifications} ->
+        group_key = group_key(notification, grouped_types)
+
+        if Map.has_key?(grouped_notifications, group_key) do
+          {group_keys, Map.update!(grouped_notifications, group_key, &[notification | &1])}
+        else
+          {[group_key | group_keys], Map.put(grouped_notifications, group_key, [notification])}
+        end
+      end)
+
+    group_keys
+    |> Enum.reverse()
+    |> Enum.map(fn group_key ->
+      grouped_notifications
+      |> Map.fetch!(group_key)
+      |> Enum.reverse()
+    end)
+  end
+
+  def group_key(notification, grouped_types \\ nil)
+
+  def group_key(%Notification{} = notification, nil) do
+    group_key(notification, @groupable_notification_types)
+  end
+
+  def group_key(%Notification{type: type} = notification, grouped_types) do
+    grouped_types = normalize_grouped_types(grouped_types)
+
+    if type in @groupable_notification_types and type in grouped_types do
+      case group_target_id(notification) do
+        nil -> ungrouped_group_key(notification)
+        target_id -> "#{type}-#{target_id}-#{group_time_bucket(notification)}"
+      end
+    else
+      ungrouped_group_key(notification)
+    end
+  end
+
+  def normalize_grouped_types(nil), do: @groupable_notification_types
+  def normalize_grouped_types(types) when is_list(types), do: types
+  def normalize_grouped_types(type), do: [type]
+
+  defp ungrouped_group_key(%Notification{id: id}), do: "ungrouped-#{id}"
+
+  defp group_time_bucket(%Notification{inserted_at: inserted_at}) do
+    inserted_at
+    |> NaiveDateTime.to_erl()
+    |> :calendar.datetime_to_gregorian_seconds()
+    |> div(@group_bucket_seconds)
+  end
+
+  defp group_target_id(%Notification{type: type, activity: activity})
+       when type in ["favourite", "reblog"] do
+    with object_id when is_binary(object_id) <- object_id_for(activity),
+         %Activity{id: id} <- Activity.get_create_by_object_ap_id(object_id) do
+      to_string(id)
+    else
+      _ -> nil
+    end
+  end
+
+  defp group_target_id(%Notification{type: "follow", activity: %{data: %{"object" => ap_id}}}) do
+    case User.get_cached_by_ap_id(ap_id) do
+      %User{id: id} -> to_string(id)
+      _ -> nil
+    end
+  end
+
+  defp group_target_id(_), do: nil
+
+  defp object_id_for(%{data: %{"object" => %{"id" => id}}}) when is_binary(id), do: id
+  defp object_id_for(%{data: %{"object" => id}}) when is_binary(id), do: id
+  defp object_id_for(_), do: nil
+
   @notification_types ~w{
     favourite
     follow

@@ -845,6 +845,16 @@ defmodule Pleroma.Web.Router do
   end
 
   scope "/api/v2", Pleroma.Web.MastodonAPI do
+    pipe_through(:authenticated_api)
+
+    get("/notifications", NotificationController, :grouped_index)
+    get("/notifications/unread_count", NotificationController, :unread_count)
+    get("/notifications/:group_key/accounts", NotificationController, :group_accounts)
+    get("/notifications/:group_key", NotificationController, :show_group)
+    post("/notifications/:group_key/dismiss", NotificationController, :dismiss_group)
+  end
+
+  scope "/api/v2", Pleroma.Web.MastodonAPI do
     pipe_through(:api)
 
     get("/search", SearchController, :search2)
