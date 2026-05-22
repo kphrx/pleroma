@@ -1,14 +1,22 @@
 <item>
-  <title><%= activity_title(@data, Keyword.get(@feed_config, :post_title, %{})) %></title>
-
-
-  <guid isPermalink="true"><%= activity_context(@activity) %></guid>
-  <link><%= activity_context(@activity) %></link>
+  <guid isPermalink="true"><%= activity_link(@activity, @data) %></guid>
+  <link><%= activity_link(@activity, @data) %></link>
   <pubDate><%= to_rfc2822(@data["published"]) %></pubDate>
-
+  <title><%= activity_title(@data, Keyword.get(@feed_config, :post_title, %{})) %></title>
   <description><%= activity_description(@data) %></description>
+  <content:encoded><![CDATA[<%= rss_content_encoded(@data) %>]]></content:encoded>
+
   <%= for attachment <- @data["attachment"] || [] do %>
-    <enclosure url="<%= attachment_href(attachment) %>" type="<%= attachment_type(attachment) %>"/>
+    <%= size = attachment_size_positive(attachment) %>
+    <%= unless attachment_previewable?(attachment) do %>
+      <enclosure url="<%= attachment_href(attachment) %>" type="<%= attachment_type(attachment) %>" length="<%= size || 0 %>"/>
+    <% end %>
+    <%= media_content_xml(attachment) %>
   <% end %>
 
+  <%= for tag <- Pleroma.Object.hashtags(@object) do %>
+    <%= if tag && tag != "" do %>
+      <category><%= tag %></category>
+    <% end %>
+  <% end %>
 </item>

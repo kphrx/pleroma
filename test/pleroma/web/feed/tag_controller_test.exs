@@ -141,7 +141,7 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
              FeedView.to_rfc2822(activity1.data["published"])
            ]
 
-    assert xpath(xml, ~x"//channel/item/enclosure/@url"sl) == [
+    assert xpath(xml, ~x"//channel/item/media:content/@url"sl) == [
              "https://peertube.moe/static/webseed/df5f464b-be8d-46fb-ad81-2d4c2d1630e3-480.mp4"
            ]
 

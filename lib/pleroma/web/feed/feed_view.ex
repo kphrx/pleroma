@@ -97,6 +97,64 @@ defmodule Pleroma.Web.Feed.FeedView do
     end
   end
 
+  def rss_content_encoded(data) do
+    data
+    |> feed_content_encoded()
+    |> String.replace("]]>", "]]&gt;")
+  end
+
+  def atom_content_encoded(data), do: feed_content_encoded(data)
+
+  defp feed_content_encoded(data) do
+    base_content =
+      case activity_content(data) do
+        "" ->
+          data["summary"] || data["type"] ||
+            ""
+            |> escape()
+
+        content ->
+          content
+      end
+
+    attachments_html =
+      (data["attachment"] || [])
+      |> Enum.map(&rss_attachment_preview/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.join("<br/><br/>")
+
+    [base_content, attachments_html]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("<br/><br/>")
+  end
+
+  defp rss_attachment_preview(attachment) do
+    href = attachment_href(attachment)
+
+    if is_binary(href) and href != "" do
+      media_type = attachment_type(attachment) || "application/octet-stream"
+      escaped_href = escape(href)
+      name = attachment["name"] || "Attachment"
+      escaped_name = escape(name)
+
+      cond do
+        String.starts_with?(media_type, "image/") ->
+          ~s(<p><img src="#{escaped_href}" alt="#{escaped_name}" loading="lazy"/></p>)
+
+        String.starts_with?(media_type, "video/") ->
+          ~s(<p><video controls preload="metadata" src="#{escaped_href}"></video></p><p><a href="#{escaped_href}">#{escaped_name}</a></p>)
+
+        String.starts_with?(media_type, "audio/") ->
+          ~s(<p><audio controls preload="metadata" src="#{escaped_href}"></audio></p><p><a href="#{escaped_href}">#{escaped_name}</a></p>)
+
+        true ->
+          ~s(<p><a href="#{escaped_href}">#{escaped_name}</a></p>)
+      end
+    else
+      ""
+    end
+  end
+
   def activity_content(%{"content" => content}) do
     content
     |> String.replace(~r/[\n\r]/, "")
@@ -106,16 +164,99 @@ defmodule Pleroma.Web.Feed.FeedView do
 
   def activity_context(activity), do: escape(activity.data["context"])
 
+  def feed_self_url(conn), do: Phoenix.Controller.current_url(conn)
+
+  def activity_link(activity, data) do
+    cond do
+      activity.local -> data["id"] || data["url"]
+      true -> data["external_url"] || data["id"] || data["url"]
+    end
+  end
+
   def attachment_href(attachment) do
-    attachment["url"]
-    |> hd()
+    attachment
+    |> attachment_url_data()
     |> Map.get("href")
   end
 
   def attachment_type(attachment) do
-    attachment["url"]
-    |> hd()
-    |> Map.get("mediaType")
+    attachment
+    |> attachment_url_data()
+    |> Map.get("mediaType") || attachment["mediaType"]
+  end
+
+  def attachment_size(attachment) do
+    attachment
+    |> attachment_url_data()
+    |> Map.get("size", 0)
+  end
+
+  def attachment_size_positive(attachment) do
+    case attachment_size(attachment) do
+      size when is_integer(size) and size > 0 ->
+        size
+
+      size when is_binary(size) ->
+        case Integer.parse(size) do
+          {parsed, ""} when parsed > 0 -> parsed
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  def attachment_medium(attachment) do
+    case attachment_type(attachment) do
+      "image/" <> _rest -> "image"
+      "video/" <> _rest -> "video"
+      "audio/" <> _rest -> "audio"
+      _ -> "document"
+    end
+  end
+
+  def attachment_previewable?(attachment) do
+    attachment_medium(attachment) in ["image", "video", "audio"]
+  end
+
+  def attachment_description(attachment) do
+    attachment["name"] || ""
+  end
+
+  def media_content_xml(attachment) do
+    href = escape(attachment_href(attachment) || "")
+    type = escape(attachment_type(attachment) || "application/octet-stream")
+    medium = escape(attachment_medium(attachment))
+
+    file_size_attr =
+      case attachment_size_positive(attachment) do
+        size when is_integer(size) -> ~s( fileSize="#{size}")
+        _ -> ""
+      end
+
+    description_xml =
+      case attachment_description(attachment) do
+        "" ->
+          ""
+
+        description ->
+          ~s(\n  <media:description type="plain">#{escape(description)}</media:description>)
+      end
+
+    """
+    <media:content url="#{href}" type="#{type}"#{file_size_attr} medium="#{medium}">
+      <media:rating scheme="urn:simple">nonadult</media:rating>#{description_xml}
+    </media:content>
+    """
+  end
+
+  defp attachment_url_data(attachment) do
+    case attachment["url"] do
+      [first | _] when is_map(first) -> first
+      %{} = map -> map
+      _ -> %{}
+    end
   end
 
   def get_href(id) do
