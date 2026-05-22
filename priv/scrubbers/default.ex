@@ -105,7 +105,9 @@ defmodule Pleroma.HTML.Scrubber.Default do
     "mfm-sparkle",
     "mfm-rotate",
     "mfm-ruby",
-    "mfm-unixtime"
+    "mfm-unixtime",
+    # Exists in Akkoma but not Misskey?
+    "mfm-center"
   ])
 
   Meta.allow_tag_with_this_attribute_values(:p, "class", ["quote-inline"])
