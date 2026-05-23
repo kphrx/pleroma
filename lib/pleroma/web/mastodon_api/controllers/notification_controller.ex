@@ -5,7 +5,7 @@
 defmodule Pleroma.Web.MastodonAPI.NotificationController do
   use Pleroma.Web, :controller
 
-  import Pleroma.Web.ControllerHelper, only: [add_link_headers: 2]
+  import Pleroma.Web.ControllerHelper, only: [add_link_headers: 2, add_link_headers: 3]
 
   alias Pleroma.Notification
   alias Pleroma.User
@@ -184,7 +184,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
       MastodonAPI.get_grouped_notification_page(user, params)
 
     conn
-    |> add_link_headers(page_notifications)
+    |> add_link_headers(page_notifications, %{drop_id_params: true})
     |> render("grouped_index.json",
       notification_groups: notification_groups,
       notification_group_counts: notification_group_counts,
