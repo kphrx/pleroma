@@ -90,12 +90,19 @@ defmodule Pleroma.Web.RichMedia.Card do
 
         nil ->
           activity_id = Keyword.get(opts, :activity_id, nil)
-          # Nested opts, first layer comes from get_by_activity/2 as Keyword, second from API views/Federation as Map.
+
+          # Nested opts, first layer comes from get_by_activity/2 as Keyword,
+          # second from API views/Federation as Map.
           # Provide default Map when called directly.
           opts = Keyword.get(opts, :opts, %{})
           stream = Map.get(opts, :stream, true)
 
-          RichMediaWorker.new(%{"op" => "backfill", "url" => url, "activity_id" => activity_id, "stream" => stream})
+          RichMediaWorker.new(%{
+            "op" => "backfill",
+            "url" => url,
+            "activity_id" => activity_id,
+            "stream" => stream
+          })
           |> Oban.insert()
 
           nil

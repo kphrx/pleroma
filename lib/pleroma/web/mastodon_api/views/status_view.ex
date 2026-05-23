@@ -32,6 +32,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   # otherwise old posts can show up on timelines.
   defp fetch_rich_media_for_activities(activities, opts) do
     opts = Map.put(opts, :stream, false)
+
     Enum.each(activities, fn activity ->
       Card.get_by_activity(activity, opts)
     end)

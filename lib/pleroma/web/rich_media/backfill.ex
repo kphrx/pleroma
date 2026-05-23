@@ -53,7 +53,8 @@ defmodule Pleroma.Web.RichMedia.Backfill do
     end
   end
 
-  defp maybe_update_stream(%{"activity_id" => activity_id, "stream" => true}) when is_binary(activity_id) do
+  defp maybe_update_stream(%{"activity_id" => activity_id, "stream" => true})
+       when is_binary(activity_id) do
     Pleroma.Activity.get_by_id(activity_id)
     |> Pleroma.Activity.normalize()
     |> @stream_out_impl.stream_out()

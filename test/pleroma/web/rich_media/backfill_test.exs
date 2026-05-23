@@ -5,15 +5,15 @@
 defmodule Pleroma.Web.RichMedia.BackfillTest do
   use Pleroma.DataCase
 
+  alias Pleroma.Tests.ObanHelpers
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.RichMedia.Backfill
   alias Pleroma.Web.RichMedia.Card
-  alias Pleroma.Tests.ObanHelpers
 
   import Mox
   import Pleroma.Factory
 
-  setup do 
+  setup do
     clear_config([:rich_media, :enabled], true)
 
     Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Test.StaticConfig)
@@ -131,7 +131,11 @@ defmodule Pleroma.Web.RichMedia.BackfillTest do
     Pleroma.Activity.HTML.invalidate_cache_for(activity.id)
     Pleroma.Web.RichMedia.Card.delete(url)
 
-    Pleroma.Web.MastodonAPI.StatusView.render("index.json", %{activities: [activity], as: :activity})
+    Pleroma.Web.MastodonAPI.StatusView.render("index.json", %{
+      activities: [activity],
+      as: :activity
+    })
+
     ObanHelpers.perform_all()
   end
 
