@@ -1,1 +1,1 @@
-Add Mastodon-compatible grouped notifications API endpoints under `/api/v2/notifications`
+Add Mastodon-compatible grouped notifications API endpoints under `/api/v2/notifications` for newly-created notifications

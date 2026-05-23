@@ -98,6 +98,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     {:ok, favorite_activity} = CommonAPI.favorite(create_activity.id, another_user)
     {:ok, [notification]} = Notification.create_notifications(favorite_activity)
     create_activity = Activity.get_by_id(create_activity.id)
+    assert is_binary(notification.group_key)
 
     expected = %{
       id: to_string(notification.id),
@@ -119,6 +120,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     {:ok, reblog_activity} = CommonAPI.repeat(create_activity.id, another_user)
     {:ok, [notification]} = Notification.create_notifications(reblog_activity)
     reblog_activity = Activity.get_by_id(create_activity.id)
+    assert is_binary(notification.group_key)
 
     expected = %{
       id: to_string(notification.id),
@@ -138,6 +140,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     followed = insert(:user)
     {:ok, followed, follower, _activity} = CommonAPI.follow(followed, follower)
     notification = Notification |> Repo.one() |> Repo.preload(:activity)
+    assert is_binary(notification.group_key)
 
     expected = %{
       id: to_string(notification.id),

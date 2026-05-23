@@ -4,7 +4,6 @@
 
 defmodule Pleroma.Web.ApiSpec.NotificationOperation do
   alias OpenApiSpex.Operation
-  alias OpenApiSpex.Operation
   alias OpenApiSpex.Schema
   alias Pleroma.Web.ApiSpec.Schemas.Account
   alias Pleroma.Web.ApiSpec.Schemas.ApiError
@@ -125,7 +124,7 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
       tags: ["Notifications"],
       summary: "Retrieve notification group accounts",
       operationId: "NotificationController.group_accounts",
-      security: [%{"oAuth" => ["write:notifications"]}],
+      security: [%{"oAuth" => ["read:notifications"]}],
       parameters: [group_key_param()],
       responses: %{
         200 =>
@@ -269,7 +268,7 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
       },
       example: %{
         "id" => "34975861",
-        "group-key" => "ungrouped-34975861",
+        "group_key" => "ungrouped-34975861",
         "type" => "mention",
         "created_at" => "2019-11-23T07:49:02.064Z",
         "account" => Account.schema().example,

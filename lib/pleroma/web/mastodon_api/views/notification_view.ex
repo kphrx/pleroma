@@ -90,6 +90,8 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
       ) do
     grouped_types = Notification.normalize_grouped_types(opts[:grouped_types])
     notification_group_counts = Map.get(opts, :notification_group_counts, %{})
+    notification_group_bounds = Map.get(opts, :notification_group_bounds, %{})
+    include_page_metadata = Map.get(opts, :include_page_metadata, true)
 
     statuses =
       notification_groups
@@ -110,7 +112,14 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
       notification_groups:
         Enum.map(
           notification_groups,
-          &render_group(&1, reading_user, grouped_types, notification_group_counts)
+          &render_group(
+            &1,
+            reading_user,
+            grouped_types,
+            notification_group_counts,
+            notification_group_bounds,
+            include_page_metadata
+          )
         )
     }
   end
@@ -184,26 +193,49 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
          [%Notification{} = notification | _] = notifications,
          _reading_user,
          grouped_types,
-         notification_group_counts
+         notification_group_counts,
+         notification_group_bounds,
+         include_page_metadata
        ) do
     latest_notification = List.first(notifications)
     oldest_notification = List.last(notifications)
     status_activity = status_activity_for_group(notifications, grouped_types)
     group_key = Notification.group_key(notification, grouped_types)
+    bounds = Map.get(notification_group_bounds, group_key, %{})
 
     response = %{
       group_key: group_key,
       notifications_count: Map.get(notification_group_counts, group_key, length(notifications)),
       type: notification.type,
-      most_recent_notification_id: to_string(latest_notification.id),
-      page_min_id: to_string(oldest_notification.id),
-      page_max_id: to_string(latest_notification.id),
-      latest_page_notification_at: CommonAPI.Utils.to_masto_date(latest_notification.inserted_at),
+      most_recent_notification_id:
+        bounds
+        |> Map.get(:page_max_id, latest_notification.id)
+        |> to_string(),
       sample_account_ids:
         notifications
         |> notification_actors()
         |> Enum.map(&to_string(&1.id))
     }
+
+    response =
+      if include_page_metadata do
+        Map.merge(response, %{
+          page_min_id:
+            bounds
+            |> Map.get(:page_min_id, oldest_notification.id)
+            |> to_string(),
+          page_max_id:
+            bounds
+            |> Map.get(:page_max_id, latest_notification.id)
+            |> to_string(),
+          latest_page_notification_at:
+            bounds
+            |> Map.get(:latest_page_notification_at, latest_notification.inserted_at)
+            |> CommonAPI.Utils.to_masto_date()
+        })
+      else
+        response
+      end
 
     if status_activity do
       Map.put(response, :status_id, to_string(status_activity.id))

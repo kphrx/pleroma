@@ -55,16 +55,24 @@ defmodule Pleroma.Web.ControllerHelper do
 
   # TODO: Only fetch the params from open_api_spex when everything is converted
   @id_keys Pagination.page_keys() -- ["limit", "order"]
+  @id_key_atoms Enum.map(@id_keys, &String.to_atom/1)
   defp build_pagination_fields(conn, min_id, max_id, extra_params, order) do
+    path_param_keys =
+      conn.path_params
+      |> Map.keys()
+      |> Enum.flat_map(&[&1, String.to_existing_atom(&1)])
+
     params =
       if Map.has_key?(conn.private, :open_api_spex) do
         get_in(conn, [Access.key(:private), Access.key(:open_api_spex), Access.key(:params)])
       else
         conn.params
       end
-      |> Map.drop(Map.keys(conn.path_params) |> Enum.map(&String.to_existing_atom/1))
+      |> Map.drop(path_param_keys)
       |> Map.merge(extra_params)
-      |> Map.drop(@id_keys)
+      # OpenApiSpex casts params to atoms while uncast conn params are string-keyed. Drop both so
+      # generated links replace pagination cursors instead of preserving stale request cursors.
+      |> Map.drop(@id_keys ++ @id_key_atoms)
 
     {{next_id, nid}, {prev_id, pid}} =
       if order == :desc,

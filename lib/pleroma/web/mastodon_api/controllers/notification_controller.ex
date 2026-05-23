@@ -13,7 +13,9 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
   alias Pleroma.Web.MastodonAPI.MastodonAPI
   alias Pleroma.Web.Plugs.OAuthScopesPlug
 
-  @oauth_read_actions [:show, :index, :grouped_index, :show_group, :unread_count]
+  # Mastodon's docs currently list write:notifications for group accounts, but the endpoint is
+  # read-only and Mastodon's implementation accepts read:notifications. Prefer least privilege.
+  @oauth_read_actions [:show, :index, :grouped_index, :show_group, :group_accounts, :unread_count]
 
   plug(Pleroma.Web.ApiSpec.CastAndValidate, replace_params: false)
 
@@ -92,7 +94,8 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
           conn,
         _
       ) do
-    notifications = MastodonAPI.get_notification_group(user, group_key, %{})
+    {notifications, notification_group_counts, notification_group_bounds} =
+      MastodonAPI.get_notification_group_result(user, group_key, %{})
 
     if Enum.empty?(notifications) do
       conn
@@ -103,8 +106,11 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
 
       render(conn, "grouped_index.json",
         notification_groups: [notifications],
+        notification_group_counts: notification_group_counts,
+        notification_group_bounds: notification_group_bounds,
         for: user,
-        grouped_types: grouped_types
+        grouped_types: grouped_types,
+        include_page_metadata: false
       )
     end
   end
@@ -115,10 +121,9 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
           conn,
         _
       ) do
-    users =
-      user
-      |> MastodonAPI.get_notification_group(group_key, %{})
-      |> notification_actors()
+    # Mastodon paginates this endpoint in code, but the public docs say it returns accounts of all
+    # notifications in the group and do not document cursor params here. Follow the documented API.
+    users = MastodonAPI.get_notification_group_accounts(user, group_key)
 
     json(conn, AccountView.render("index.json", %{users: users, for: user}))
   end
@@ -154,12 +159,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
           conn,
         _
       ) do
-    ids =
-      user
-      |> MastodonAPI.get_notification_group(group_key, %{})
-      |> Enum.map(& &1.id)
-
-    Notification.destroy_multiple(user, ids)
+    MastodonAPI.dismiss_notification_group(user, group_key)
     json(conn, %{})
   end
 
@@ -179,7 +179,8 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
   defp do_get_grouped_notifications(%{assigns: %{user: user}} = conn, params) do
     params = normalize_notification_params(params)
 
-    {notification_groups, page_notifications, notification_group_counts} =
+    {notification_groups, page_notifications, notification_group_counts,
+     notification_group_bounds} =
       MastodonAPI.get_grouped_notification_page(user, params)
 
     conn
@@ -187,6 +188,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
     |> render("grouped_index.json",
       notification_groups: notification_groups,
       notification_group_counts: notification_group_counts,
+      notification_group_bounds: notification_group_bounds,
       for: user,
       grouped_types: params["grouped_types"]
     )
@@ -201,13 +203,6 @@ defmodule Pleroma.Web.MastodonAPI.NotificationController do
     params
     |> Map.new(fn {k, v} -> {to_string(k), v} end)
     |> Map.put_new("types", Map.get(params, :include_types, @default_notification_types))
-  end
-
-  defp notification_actors(notifications) do
-    notifications
-    |> Enum.map(&User.get_cached_by_ap_id(&1.activity.data["actor"]))
-    |> Enum.filter(& &1)
-    |> Enum.uniq_by(& &1.id)
   end
 
   # GET /api/v1/notifications/:id
