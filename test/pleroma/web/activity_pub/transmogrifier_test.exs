@@ -86,6 +86,43 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       assert activity.data["cc"] == [user.ap_id]
     end
 
+    test "it rejects Flag activities when both reporter and reported account are remote" do
+      reporter = insert(:user, local: false, domain: "mastodon.cat")
+      reported = insert(:user, local: false, domain: "nicecrew.digital")
+
+      message = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "actor" => reporter.ap_id,
+        "content" => "blocked AND reported!!!",
+        "object" => [reported.ap_id, "https://nicecrew.digital/objects/report-status"],
+        "type" => "Flag"
+      }
+
+      assert {:reject, reason} = Transmogrifier.handle_incoming(message)
+      assert reason =~ "third-party report"
+      refute "Flag" |> Pleroma.Activity.Queries.by_type() |> Pleroma.Repo.one()
+    end
+
+    test "it accepts Flag activities with just actor id as object" do
+      user = insert(:user)
+      other_user = insert(:user)
+
+      message = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "cc" => [user.ap_id],
+        "object" => user.ap_id,
+        "type" => "Flag",
+        "content" => "blocked AND reported!!!",
+        "actor" => other_user.ap_id
+      }
+
+      assert {:ok, activity} = Transmogrifier.handle_incoming(message)
+
+      assert activity.data["content"] == "blocked AND reported!!!"
+      assert activity.data["actor"] == other_user.ap_id
+      assert activity.data["cc"] == [user.ap_id]
+    end
+
     test "it accepts Move activities" do
       old_user = insert(:user)
       new_user = insert(:user)

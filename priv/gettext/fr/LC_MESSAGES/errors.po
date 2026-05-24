@@ -8,16 +8,15 @@
 ## to merge POT files into PO files.
 msgid ""
 msgstr ""
-"PO-Revision-Date: 2020-05-12 15:52+0000\n"
-"Last-Translator: Haelwenn (lanodan) Monnier "
-"<contact+translate.pleroma.social@hacktivis.me>\n"
+"PO-Revision-Date: 2025-12-27 07:08+0000\n"
+"Last-Translator: Codimp <contact@lithio.fr>\n"
 "Language-Team: French <https://translate.pleroma.social/projects/pleroma/"
-"pleroma/fr/>\n"
+"pleroma-backend-domain-errors/fr/>\n"
 "Language: fr\n"
 "Content-Type: text/plain; charset=UTF-8\n"
-"Plural-Forms: nplurals=2; plural=n > 1;\n"
-"X-Generator: Weblate 4.0.4\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n > 1;\n"
+"X-Generator: Weblate 4.13.1\n"
 
 msgid "can't be blank"
 msgstr "ne peut être vide"
@@ -357,7 +356,7 @@ msgstr "Ne peut poster dans la boite d'émission de %{nickname} en tant que %{as
 #: lib/pleroma/web/common_api/common_api.ex:335
 #, elixir-format
 msgid "conversation is already muted"
-msgstr "la conversation est déjà baillonée"
+msgstr "la conversation est déjà silenciée"
 
 #: lib/pleroma/web/activity_pub/activity_pub_controller.ex:192
 #: lib/pleroma/web/activity_pub/activity_pub_controller.ex:317
@@ -421,7 +420,7 @@ msgstr "Erreur interne"
 #: lib/pleroma/web/oauth/fallback_controller.ex:29
 #, elixir-format
 msgid "Invalid Username/Password"
-msgstr "Nom d'utilisateur/mot de passe invalide"
+msgstr "Nom d'utilisateur·ice/mot de passe invalide"
 
 #: lib/pleroma/captcha/captcha.ex:107
 #, elixir-format
