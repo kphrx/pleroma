@@ -28,9 +28,13 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   # This is a naive way to do this, just spawning a process per activity
   # to fetch the preview. However it should be fine considering
   # pagination is restricted to 40 activities at a time
-  defp fetch_rich_media_for_activities(activities) do
+  # Force disable Websockets streaming for backfill jobs,
+  # otherwise old posts can show up on timelines.
+  defp fetch_rich_media_for_activities(activities, opts) do
+    opts = Map.put(opts, :stream, false)
+
     Enum.each(activities, fn activity ->
-      Card.get_by_activity(activity)
+      Card.get_by_activity(activity, opts)
     end)
   end
 
@@ -113,7 +117,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     activities = Enum.filter(opts.activities, & &1)
 
     # Start prefetching rich media before doing anything else
-    fetch_rich_media_for_activities(activities)
+    fetch_rich_media_for_activities(activities, opts)
+
     replied_to_activities = get_replied_to_activities(activities)
     quoted_activities = get_quoted_activities(activities)
 
@@ -361,8 +366,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
 
     summary = object.data["summary"] || ""
 
+    # Force disable Websockets streaming for backfill jobs which the below call will create,
+    # otherwise old posts can show up on timelines.
     card =
-      case Card.get_by_activity(activity) do
+      case Card.get_by_activity(activity, Map.put(opts, :stream, false)) do
         %Card{} = result -> render("card.json", result)
         _ -> nil
       end

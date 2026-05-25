@@ -1,0 +1,85 @@
+when:
+  # Temporary PR validation while arm/v7 Docker builds are being brought up.
+  - event: pull_request
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**", "Dockerfile" ]
+  - event: tag
+  - event: manual
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+  - event: manual
+    branch: stable
+
+# Target the CAX21 arm64 host with native arm32 userspace support, not generic arm64 runners.
+labels:
+  platform: linux/arm
+  armv7: native
+
+variables:
+  docker_variables: &docker_variables
+    repo: pleroma/pleroma
+    registry: git.pleroma.social
+  armv7_build_settings: &armv7_build_settings
+    <<: *docker_variables
+    build_args:
+      - ELIXIR_IMG=arm32v7/elixir
+      - ELIXIR_TAG=1.17.3-otp-26-alpine
+      - ALPINE_IMG=arm32v7/alpine
+      - ALPINE_VER=3.20
+    extra_opts: --custom-platform=linux/arm/v7
+  armv7_push_settings: &armv7_push_settings
+    <<: *armv7_build_settings
+    username:
+      from_secret: pleroma-ci-user
+    password:
+      from_secret: pleroma-ci-password
+
+steps:
+  docker-armv7-pr:
+    image: woodpeckerci/plugin-kaniko:2.3.1
+    when:
+      - event: pull_request
+    settings:
+      <<: *armv7_build_settings
+      dry_run: true
+      tags:
+        - armv7-pr-check
+
+  docker-develop-armv7:
+    image: woodpeckerci/plugin-kaniko:2.3.1
+    when:
+      - event: push
+        branch: ${CI_REPO_DEFAULT_BRANCH}
+      - event: manual
+        branch: ${CI_REPO_DEFAULT_BRANCH}
+    settings:
+      <<: *armv7_push_settings
+      tags:
+        - latest-armv7
+        - develop-armv7
+        - ${CI_COMMIT_SHA:0:8}-armv7
+
+  docker-stable-armv7:
+    image: woodpeckerci/plugin-kaniko:2.3.1
+    when:
+      - evaluate: 'CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG == ""'
+    settings:
+      <<: *armv7_push_settings
+      tags:
+        - latest-armv7
+        - stable-armv7
+        - ${CI_COMMIT_SHA:0:8}-armv7
+
+  docker-stable-tag-armv7:
+    image: woodpeckerci/plugin-kaniko:2.3.1
+    when:
+      - event: tag
+      - evaluate: 'CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG != ""'
+    settings:
+      <<: *armv7_push_settings
+      tags:
+        - latest-armv7
+        - stable-armv7
+        - ${CI_COMMIT_SHA:0:8}-armv7
+        - ${CI_COMMIT_TAG}-armv7

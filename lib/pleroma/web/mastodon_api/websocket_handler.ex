@@ -67,9 +67,10 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
 
   @impl Phoenix.Socket.Transport
   def handle_in({text, [opcode: :text]}, state) do
-    with {:ok, %{} = event} <- Jason.decode(text) do
-      handle_client_event(event, state)
-    else
+    case Jason.decode(text) do
+      {:ok, %{} = event} ->
+        handle_client_event(event, state)
+
       _ ->
         Logger.error("#{__MODULE__} received non-JSON event: #{inspect(text)}")
         {:ok, state}
@@ -85,11 +86,11 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
   def handle_info({:render_with_user, view, template, item, topic}, state) do
     user = %User{} = User.get_cached_by_ap_id(state.user.ap_id)
 
-    unless Streamer.filtered_by_user?(user, item) do
+    if Streamer.filtered_by_user?(user, item) do
+      {:ok, state}
+    else
       message = view.render(template, item, user, topic)
       {:push, {:text, message}, %{state | user: user}}
-    else
-      {:ok, state}
     end
   end
 
@@ -253,7 +254,7 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
 
   defp find_sec_websocket_protocol(sec_headers) do
     Enum.find_value(sec_headers, fn
-      {"sec-websocket-protocol", token} -> token
+      {"sec-websocket-protocol", protocols} -> protocols |> Plug.Conn.Utils.list() |> List.first()
       _ -> nil
     end)
   end
