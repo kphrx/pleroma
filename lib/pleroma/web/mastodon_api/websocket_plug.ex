@@ -94,7 +94,6 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketPlug do
       [protocols | _] ->
         case Plug.Conn.Utils.list(protocols) do
           [protocol | _] -> put_resp_header(conn, "sec-websocket-protocol", protocol)
-          nil -> conn
           [] -> conn
         end
 
