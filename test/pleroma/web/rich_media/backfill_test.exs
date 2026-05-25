@@ -74,9 +74,12 @@ defmodule Pleroma.Web.RichMedia.BackfillTest do
     |> expect(:put, fn :rich_media_cache, _, _ -> {:ok, true} end)
 
     Pleroma.Web.ActivityPub.ActivityPubMock
-    |> expect(:stream_out, fn _ -> :ok end)
+    |> expect(:stream_out, fn %Pleroma.Activity{id: id} ->
+      assert id == activity.id
+      :ok
+    end)
 
-    Backfill.run(%{"url" => url, "activity_id" => "#{activity.data["id"]}", "stream" => true})
+    Backfill.run(%{"url" => url, "activity_id" => activity.id, "stream" => true})
   end
 
   test "does not stream out update when stream == false" do
