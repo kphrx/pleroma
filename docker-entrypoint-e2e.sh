@@ -19,7 +19,7 @@ config :pleroma, Pleroma.Captcha,
 config :pleroma, :instance,
 	registrations_open: true,
 	account_activation_required: false,
-	approval_required: false
+	account_approval_required: false
 EOF
 
 echo '-- Running migrations...'
