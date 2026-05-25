@@ -25,6 +25,20 @@ EOF
 echo '-- Running migrations...'
 /opt/pleroma/bin/pleroma_ctl migrate
 
+if [ ! -f "$SEED_SENTINEL_PATH" ]; then
+	if [ -n "${E2E_ADMIN_USERNAME:-}" ] && [ -n "${E2E_ADMIN_PASSWORD:-}" ] && [ -n "${E2E_ADMIN_EMAIL:-}" ]; then
+		echo '-- Seeding admin user' "$E2E_ADMIN_USERNAME" '...'
+		if ! PLEROMA_CTL_RPC_DISABLED=true /opt/pleroma/bin/pleroma_ctl user new "$E2E_ADMIN_USERNAME" "$E2E_ADMIN_EMAIL" --admin --password "$E2E_ADMIN_PASSWORD" -y; then
+			echo '-- User already exists or creation failed, ensuring admin + confirmed...'
+			PLEROMA_CTL_RPC_DISABLED=true /opt/pleroma/bin/pleroma_ctl user set "$E2E_ADMIN_USERNAME" --admin --confirmed
+		fi
+	else
+		echo '-- Skipping admin seeding (missing E2E_ADMIN_* env)'
+	fi
+
+	touch "$SEED_SENTINEL_PATH"
+fi
+
 echo '-- Starting!'
 /opt/pleroma/bin/pleroma start &
 PLEROMA_PID=$!
@@ -51,20 +65,6 @@ done
 if [ "$api_ok" != true ]; then
 	echo 'Timed out waiting for Pleroma API to become available'
 	exit 1
-fi
-
-if [ ! -f "$SEED_SENTINEL_PATH" ]; then
-	if [ -n "${E2E_ADMIN_USERNAME:-}" ] && [ -n "${E2E_ADMIN_PASSWORD:-}" ] && [ -n "${E2E_ADMIN_EMAIL:-}" ]; then
-		echo '-- Seeding admin user' "$E2E_ADMIN_USERNAME" '...'
-		if ! /opt/pleroma/bin/pleroma_ctl user new "$E2E_ADMIN_USERNAME" "$E2E_ADMIN_EMAIL" --admin --password "$E2E_ADMIN_PASSWORD" -y; then
-			echo '-- User already exists or creation failed, ensuring admin + confirmed...'
-			/opt/pleroma/bin/pleroma_ctl user set "$E2E_ADMIN_USERNAME" --admin --confirmed
-		fi
-	else
-		echo '-- Skipping admin seeding (missing E2E_ADMIN_* env)'
-	fi
-
-	touch "$SEED_SENTINEL_PATH"
 fi
 
 wait "$PLEROMA_PID"
