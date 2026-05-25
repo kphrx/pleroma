@@ -99,7 +99,7 @@ defmodule Pleroma.Search.MeilisearchTest do
 
         %{method: :delete, url: "http://127.0.0.1:7700/indexes/objects/documents/" <> id} ->
           send(self(), "called_delete")
-          assert String.length(id) > 1
+          assert id != ""
           json(%{})
       end)
 

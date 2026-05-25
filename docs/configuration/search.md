@@ -85,7 +85,7 @@ You will see a "Default Admin API Key", this is the key you actually put into yo
 
 ### Initial indexing
 
-After setting up the configuration, you'll want to index all of your already existing posts. Only public posts are indexed.  You'll only
+After setting up the configuration, you'll want to index all of your already existing posts. Only public/unlisted posts are indexed.  You'll only
 have to do it one time, but it might take a while, depending on the amount of posts your instance has seen. This is also a fairly RAM
 consuming process for `meilisearch`, and it will take a lot of RAM when running if you have a lot of posts (seems to be around 5G for ~1.2
 million posts while idle and up to 7G while indexing initially, but your experience may be different).
@@ -153,8 +153,10 @@ external search backend by pointing Pleroma at a separate Postgres instance with
 
 Pleroma will maintain a small `pleroma_search_documents` table in that database (via the existing search indexing queue) and run search
 queries against it.
+The indexed text includes status content, content warnings, and attachment descriptions.
 
 To use it, set the search module to `Pleroma.Search.ParadeDB` and configure the ParadeDB database URL:
+These settings must be in static/runtime config (or `PARADEDB_DATABASE_URL`) so the dedicated ParadeDB Repo is started with the application.
 
 > config :pleroma, Pleroma.Search, module: Pleroma.Search.ParadeDB
 >
@@ -162,6 +164,10 @@ To use it, set the search module to `Pleroma.Search.ParadeDB` and configure the 
 >   url: System.get_env("PARADEDB_DATABASE_URL") || "postgres://postgres:postgres@127.0.0.1:5432/paradedb",
 >   table: "pleroma_search_documents",
 >   fuzzy_distance: 0
+>
+> config :pleroma, Pleroma.Search.ParadeDB.Repo,
+>   pool_size: 2,
+>   prepare: :unnamed
 
 Then, create the table and BM25 index once:
 

@@ -5,13 +5,12 @@ defmodule Pleroma.Search do
   alias Pleroma.Workers.SearchIndexingWorker
 
   @spec add_to_index(Activity.t()) :: {:ok, Oban.Job.t() | :noop} | {:error, Oban.Job.changeset()}
-  def add_to_index(%Activity{id: activity_id, object: %Object{} = object} = activity) do
-    with {_, true} <- {:indexable, indexable?(activity)},
-         {_, "public"} <- {:visibility, Visibility.get_visibility(object)} do
+  def add_to_index(%Activity{id: activity_id, object: %Object{}} = activity) do
+    if indexable?(activity) do
       SearchIndexingWorker.new(%{"op" => "add_to_index", "activity" => activity_id})
       |> Oban.insert()
     else
-      _ -> {:ok, :noop}
+      {:ok, :noop}
     end
   end
 
@@ -41,40 +40,59 @@ defmodule Pleroma.Search do
   def object_to_search_data(%Object{} = object) do
     data = object.data
 
-    content_str =
-      case data["content"] do
-        [nil | rest] -> to_string(rest)
-        str -> str
-      end
-
     content =
-      with {:ok, scrubbed} <-
-             FastSanitize.Sanitizer.scrub(content_str, Pleroma.HTML.Scrubber.SearchIndexing),
-           trimmed <- String.trim(scrubbed) do
-        trimmed
-      end
+      data
+      |> search_texts()
+      |> Enum.map(&sanitize_search_text/1)
+      |> Enum.reject(&(&1 in ["", "."]))
+      |> Enum.join(" ")
 
-    # Make sure we have a non-empty string
-    if content != "" do
-      {:ok, published, _} = DateTime.from_iso8601(data["published"])
-
+    with true <- content != "",
+         published when is_binary(published) <- data["published"],
+         {:ok, published, _} <- DateTime.from_iso8601(published) do
       %{
         id: object.id,
         content: content,
         ap: data["id"],
         published: published |> DateTime.to_unix()
       }
+    else
+      _ -> nil
     end
   end
 
-  defp indexable?(%Activity{
-         data: %{"type" => "Create"},
-         object: %Object{
-           data: %{"content" => content, "published" => published, "type" => "Note"}
-         }
-       })
-       when not is_nil(content) and content not in ["", "."] and not is_nil(published),
-       do: true
+  def indexable?(%Activity{
+        data: %{"type" => "Create"},
+        object: %Object{data: %{"published" => published, "type" => "Note"}} = object
+      })
+      when not is_nil(published) do
+    Visibility.get_visibility(object) in ["public", "unlisted"] and
+      not is_nil(object_to_search_data(object))
+  end
 
-  defp indexable?(_), do: false
+  def indexable?(_), do: false
+
+  defp search_texts(data) do
+    [data["content"], data["summary"] | attachment_names(data["attachment"])]
+  end
+
+  defp attachment_names(attachments) when is_list(attachments) do
+    Enum.map(attachments, fn
+      %{"name" => name} -> name
+      _ -> nil
+    end)
+  end
+
+  defp attachment_names(_), do: []
+
+  defp sanitize_search_text([nil | rest]), do: sanitize_search_text(to_string(rest))
+
+  defp sanitize_search_text(text) when is_binary(text) do
+    case FastSanitize.Sanitizer.scrub(text, Pleroma.HTML.Scrubber.SearchIndexing) do
+      {:ok, scrubbed} -> String.trim(scrubbed)
+      _ -> ""
+    end
+  end
+
+  defp sanitize_search_text(_), do: ""
 end

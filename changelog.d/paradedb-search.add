@@ -1,1 +1,1 @@
-Add ParadeDB (pg_search) as an optional external search backend.
+Add ParadeDB (pg_search) as an optional external search backend, indexing status content, content warnings, and attachment descriptions.

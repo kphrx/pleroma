@@ -66,9 +66,10 @@ defmodule Pleroma.Search.ParadeDB do
 
   @impl true
   def drop_index do
-    with {:ok, _} <- client_impl().query("DROP TABLE IF EXISTS #{table()}", []) do
-      :ok
-    else
+    case client_impl().query("DROP TABLE IF EXISTS #{table()}", []) do
+      {:ok, _} ->
+        :ok
+
       {:error, error} ->
         Logger.error("ParadeDB drop_index failed: #{inspect(error)}")
         {:error, error}
@@ -80,9 +81,9 @@ defmodule Pleroma.Search.ParadeDB do
 
   @impl true
   def add_to_index(activity) do
-    maybe_search_data = Search.object_to_search_data(activity.object)
-
-    if activity.data["type"] == "Create" and maybe_search_data do
+    with true <- Search.indexable?(activity),
+         maybe_search_data when not is_nil(maybe_search_data) <-
+           Search.object_to_search_data(activity.object) do
       dumped_activity_id = dump_activity_id(activity.id)
       actor_ap_id = activity.data["actor"]
       published_at = DateTime.from_unix!(maybe_search_data.published)
@@ -122,7 +123,7 @@ defmodule Pleroma.Search.ParadeDB do
         end
       end
     else
-      :ok
+      _ -> :ok
     end
   end
 

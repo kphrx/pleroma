@@ -946,7 +946,7 @@ config :pleroma, Pleroma.Search.ParadeDB,
   fuzzy_distance: 0
 
 config :pleroma, Pleroma.Search.ParadeDB.Repo,
-  pool_size: 10,
+  pool_size: 2,
   prepare: :unnamed
 
 config :pleroma, Pleroma.Application,

@@ -75,15 +75,21 @@ defmodule Pleroma.Search.ParadeDBTest do
           })
 
         args = %{"op" => "add_to_index", "activity" => activity.id}
-        assert_enqueued(worker: SearchIndexingWorker, args: args)
+        refute_enqueued(worker: SearchIndexingWorker, args: args)
+      end)
+    end
 
-        Config
-        |> expect(:get, fn
-          [Pleroma.Search, :module], nil ->
-            ParadeDB
-        end)
+    test "backend skips non-public posts when called directly" do
+      user = insert(:user)
 
-        assert :ok = perform_job(SearchIndexingWorker, args)
+      Enum.each(["private", "direct"], fn visibility ->
+        {:ok, activity} =
+          CommonAPI.post(user, %{
+            status: "guys i just don't wanna leave the swamp",
+            visibility: visibility
+          })
+
+        assert :ok = ParadeDB.add_to_index(activity)
       end)
     end
 
