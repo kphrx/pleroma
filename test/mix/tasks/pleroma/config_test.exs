@@ -144,7 +144,13 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
           quarantined_instances: [],
           managed_config: true,
           static_dir: "instance/static/",
-          allowed_post_formats: ["text/plain", "text/html", "text/markdown", "text/bbcode"],
+          allowed_post_formats: [
+            "text/plain",
+            "text/html",
+            "text/markdown",
+            "text/bbcode",
+            "text/x.misskeymarkdown"
+          ],
           autofollowed_nicknames: [],
           max_pinned_statuses: 1,
           attachment_links: false,

@@ -120,7 +120,8 @@ defmodule Pleroma.Web.ActivityPub.Utils do
         "https://www.w3.org/ns/activitystreams",
         "#{Endpoint.url()}/schemas/litepub-0.1.jsonld",
         %{
-          "@language" => get_language(data)
+          "@language" => get_language(data),
+          "htmlMfm" => "https://w3id.org/fep/c16b#htmlMfm"
         }
       ]
     }
