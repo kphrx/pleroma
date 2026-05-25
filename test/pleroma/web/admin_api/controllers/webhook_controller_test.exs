@@ -52,7 +52,7 @@ defmodule Pleroma.Web.AdminAPI.WebhookControllerTest do
 
   describe "PATCH /api/pleroma/admin/webhooks" do
     test "edits a webhook", %{conn: conn} do
-      %{id: id} =
+      {:ok, %{id: id}} =
         Webhook.create(%{url: "https://example.com/webhook1", events: [:"report.created"]})
 
       conn
@@ -66,7 +66,7 @@ defmodule Pleroma.Web.AdminAPI.WebhookControllerTest do
     end
 
     test "can't edit an internal webhook", %{conn: conn} do
-      %{id: id} =
+      {:ok, %{id: id}} =
         Webhook.create(%{url: "https://example.com/webhook1", events: [], internal: true})
 
       conn
@@ -82,7 +82,7 @@ defmodule Pleroma.Web.AdminAPI.WebhookControllerTest do
 
   describe "DELETE /api/pleroma/admin/webhooks" do
     test "deletes a webhook", %{conn: conn} do
-      %{id: id} =
+      {:ok, %{id: id}} =
         Webhook.create(%{url: "https://example.com/webhook1", events: [:"report.created"]})
 
       conn

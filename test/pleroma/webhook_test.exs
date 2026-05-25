@@ -8,14 +8,15 @@ defmodule Pleroma.WebhookTest do
   alias Pleroma.Webhook
 
   test "creating a webhook" do
-    %{id: id} = Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+    {:ok, %{id: id}} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
 
     assert %{url: "https://example.com/webhook"} = Webhook.get(id)
   end
 
   test "editing a webhook" do
-    %{id: id} =
-      webhook = Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+    {:ok, %{id: id} = webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
 
     Webhook.update(webhook, %{events: [:"account.created"]})
 
@@ -23,10 +24,10 @@ defmodule Pleroma.WebhookTest do
   end
 
   test "filter webhooks by type" do
-    %{id: id1} =
+    {:ok, %{id: id1}} =
       Webhook.create(%{url: "https://example.com/webhook1", events: [:"report.created"]})
 
-    %{id: id2} =
+    {:ok, %{id: id2}} =
       Webhook.create(%{
         url: "https://example.com/webhook2",
         events: [:"account.created", :"report.created"]
@@ -38,16 +39,16 @@ defmodule Pleroma.WebhookTest do
   end
 
   test "change webhook state" do
-    %{id: id, enabled: true} =
-      webhook = Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+    {:ok, %{id: id, enabled: true} = webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
 
     Webhook.set_enabled(webhook, false)
     assert %{enabled: false} = Webhook.get(id)
   end
 
   test "rotate webhook secrets" do
-    %{id: id, secret: secret} =
-      webhook = Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+    {:ok, %{id: id, secret: secret} = webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
 
     Webhook.rotate_secret(webhook)
     %{secret: new_secret} = Webhook.get(id)

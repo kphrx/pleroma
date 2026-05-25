@@ -59,8 +59,8 @@ defmodule Pleroma.Webhook.NotifyTest do
   test "notifies have a valid signature" do
     activity = insert(:report_activity)
 
-    %{secret: secret} =
-      webhook = Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+    {:ok, %{secret: secret} = webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
 
     Tesla.Mock.mock(fn %{url: "https://example.com/webhook", body: body, headers: headers} = _ ->
       {"X-Hub-Signature", "sha256=" <> signature} =
