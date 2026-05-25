@@ -1,0 +1,1 @@
+Fixed `/api/v1/pleroma/accounts/:id/favourites` ordering and pagination to use the favourite date.

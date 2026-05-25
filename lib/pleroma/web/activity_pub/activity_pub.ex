@@ -537,8 +537,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     #   and extra sorting on "activities.id DESC NULLS LAST" would worse the query plan
     opts = Map.put(opts, :skip_extra_order, true)
 
-    Pagination.fetch_paginated(query, opts, pagination)
+    Pagination.fetch_paginated(query, opts, pagination, pagination_binding(opts))
   end
+
+  defp pagination_binding(%{favorited_by: _}), do: :favorited_activity
+  defp pagination_binding(_), do: nil
 
   def fetch_activities(recipients, opts \\ %{}, pagination \\ :keyset) do
     list_memberships = Pleroma.List.memberships(opts[:user])
@@ -786,6 +789,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_since(query, %{since_id: ""}), do: query
 
+  defp restrict_since(query, %{favorited_by: _, since_id: _}), do: query
+
   defp restrict_since(query, %{since_id: since_id}) do
     from(activity in query, where: activity.id > ^since_id)
   end
@@ -1013,8 +1018,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_favorited_by(query, %{favorited_by: ap_id}) do
     from(
-      [_activity, object] in query,
-      where: fragment("(?)->'likes' \\? (?)", object.data, ^ap_id)
+      [activity, object: object] in query,
+      join: favorited_activity in Activity,
+      as: :favorited_activity,
+      on:
+        favorited_activity.actor == ^ap_id and
+          fragment("?->>'type' = ?", favorited_activity.data, "Like") and
+          fragment("associated_object_id(?) = (?)->>'id'", favorited_activity.data, object.data),
+      select: %Activity{activity | pagination_id: favorited_activity.id}
     )
   end
 
