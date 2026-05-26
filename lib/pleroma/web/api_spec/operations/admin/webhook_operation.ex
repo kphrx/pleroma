@@ -58,9 +58,10 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
             required: [:url, :events],
             properties: %{
               url: %Schema{type: :string, format: :uri},
-              events: event_type(),
+              events: event_type(min_items: 1),
               enabled: %Schema{type: :boolean}
-            }
+            },
+            additionalProperties: false
           }
         ),
       responses: %{
@@ -84,9 +85,10 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
             type: :object,
             properties: %{
               url: %Schema{type: :string, format: :uri},
-              events: event_type(),
+              events: event_type(min_items: 1),
               enabled: %Schema{type: :boolean}
-            }
+            },
+            additionalProperties: false
           }
         ),
       responses: %{
@@ -180,8 +182,8 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
     }
   end
 
-  defp event_type do
-    %Schema{
+  defp event_type(opts \\ []) do
+    schema = %Schema{
       type: :array,
       items: %Schema{
         title: "Event",
@@ -190,6 +192,11 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
         enum: ["account.created", "report.created"]
       }
     }
+
+    case Keyword.fetch(opts, :min_items) do
+      {:ok, min_items} -> %{schema | minItems: min_items}
+      :error -> schema
+    end
   end
 
   defp id_param do

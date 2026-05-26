@@ -61,6 +61,27 @@ defmodule Pleroma.Web.AdminAPI.WebhookControllerTest do
 
       assert %{url: "http://example.com/webhook", events: [:"account.created"]} = Webhook.get(id)
     end
+
+    test "rejects empty events", %{conn: conn} do
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/pleroma/admin/webhooks", %{
+        url: "http://example.com/webhook",
+        events: []
+      })
+      |> json_response(:bad_request)
+    end
+
+    test "rejects internal flag", %{conn: conn} do
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/pleroma/admin/webhooks", %{
+        url: "http://example.com/webhook",
+        events: ["account.created"],
+        internal: true
+      })
+      |> json_response(:bad_request)
+    end
   end
 
   describe "PATCH /api/pleroma/admin/webhooks" do
@@ -76,6 +97,30 @@ defmodule Pleroma.Web.AdminAPI.WebhookControllerTest do
       |> json_response_and_validate_schema(:ok)
 
       assert %{events: [:"report.created", :"account.created"]} = Webhook.get(id)
+    end
+
+    test "rejects empty events", %{conn: conn} do
+      {:ok, %{id: id}} =
+        Webhook.create(%{url: "https://example.com/webhook1", events: [:"report.created"]})
+
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> patch("/api/pleroma/admin/webhooks/#{id}", %{events: []})
+      |> json_response(:bad_request)
+
+      assert %{events: [:"report.created"]} = Webhook.get(id)
+    end
+
+    test "rejects internal flag", %{conn: conn} do
+      {:ok, %{id: id}} =
+        Webhook.create(%{url: "https://example.com/webhook1", events: [:"report.created"]})
+
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> patch("/api/pleroma/admin/webhooks/#{id}", %{internal: true})
+      |> json_response(:bad_request)
+
+      assert %{internal: false} = Webhook.get(id)
     end
 
     test "can't edit an internal webhook", %{conn: conn} do

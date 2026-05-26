@@ -40,14 +40,14 @@ defmodule Pleroma.Web.AdminAPI.WebhookController do
   end
 
   def create(%{body_params: params} = conn, _) do
-    with {:ok, webhook} <- Webhook.create(params) do
+    with {:ok, webhook} <- Webhook.create(webhook_params(params)) do
       render(conn, "show.json", webhook: webhook)
     end
   end
 
   def update(%{body_params: params} = conn, %{id: id}) do
     with %Webhook{internal: false} = webhook <- Webhook.get(id),
-         {:ok, webhook} <- Webhook.update(webhook, params) do
+         {:ok, webhook} <- Webhook.update(webhook, webhook_params(params)) do
       render(conn, "show.json", webhook: webhook)
     else
       %Webhook{internal: true} -> {:error, :forbidden}
@@ -93,5 +93,9 @@ defmodule Pleroma.Web.AdminAPI.WebhookController do
       %Webhook{internal: true} -> {:error, :forbidden}
       nil -> {:error, :not_found}
     end
+  end
+
+  defp webhook_params(params) do
+    Map.drop(params, [:internal, "internal"])
   end
 end
