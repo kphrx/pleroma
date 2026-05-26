@@ -37,7 +37,6 @@ defmodule Pleroma.Webhook do
     |> cast(params, [:url, :events, :enabled, :internal])
     |> validate_required([:url, :events])
     |> unique_constraint(:url)
-    |> strip_events()
     |> put_secret()
   end
 
@@ -45,7 +44,6 @@ defmodule Pleroma.Webhook do
     webhook
     |> cast(params, [:url, :events, :enabled, :internal])
     |> unique_constraint(:url)
-    |> strip_events()
   end
 
   def create(params) do
@@ -73,16 +71,6 @@ defmodule Pleroma.Webhook do
     webhook
     |> cast(%{enabled: enabled}, [:enabled])
     |> Repo.update()
-  end
-
-  defp strip_events(changeset) do
-    case get_change(changeset, :events) do
-      nil ->
-        changeset
-
-      events ->
-        put_change(changeset, :events, Enum.filter(events, &(&1 in @event_types)))
-    end
   end
 
   defp put_secret(changeset) do

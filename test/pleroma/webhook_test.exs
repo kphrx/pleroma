@@ -23,6 +23,16 @@ defmodule Pleroma.WebhookTest do
     assert %{events: [:"account.created"]} = Webhook.get(id)
   end
 
+  test "rejects invalid events" do
+    assert {:error, _changeset} =
+             Webhook.create(%{url: "https://example.com/webhook", events: [:"status.created"]})
+
+    {:ok, webhook} =
+      Webhook.create(%{url: "https://example.com/valid-webhook", events: [:"report.created"]})
+
+    assert {:error, _changeset} = Webhook.update(webhook, %{events: [:"status.created"]})
+  end
+
   test "filter webhooks by type" do
     {:ok, %{id: id1}} =
       Webhook.create(%{url: "https://example.com/webhook1", events: [:"report.created"]})
