@@ -1,5 +1,6 @@
 when:
   - event: pull_request
+    evaluate: 'CI_COMMIT_SOURCE_BRANCH != "weblate"'
 
 labels:
   platform: linux/amd64
