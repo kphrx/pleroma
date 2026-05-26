@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.AdminAPI.WebhookControllerTest do
-  use Pleroma.Web.ConnCase, async: true
+  use Pleroma.Web.ConnCase, async: false
 
   import Pleroma.Factory
 
@@ -32,6 +32,19 @@ defmodule Pleroma.Web.AdminAPI.WebhookControllerTest do
         |> json_response_and_validate_schema(:ok)
 
       assert length(response) == 2
+    end
+
+    test "requires an admin even if a moderator can manage announcements" do
+      clear_config([:instance, :moderator_privileges], [:announcements_manage_announcements])
+
+      moderator = insert(:user, is_moderator: true)
+      token = insert(:oauth_admin_token, user: moderator)
+
+      build_conn()
+      |> assign(:user, moderator)
+      |> assign(:token, token)
+      |> get("/api/pleroma/admin/webhooks")
+      |> json_response(:forbidden)
     end
   end
 
