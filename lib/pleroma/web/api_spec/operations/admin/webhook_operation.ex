@@ -19,7 +19,7 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
       tags: ["Webhooks"],
       summary: "Retrieve a list of webhooks",
       operationId: "AdminAPI.WebhookController.index",
-      security: [%{"oAuth" => ["admin:show"]}],
+      security: [%{"oAuth" => ["admin:read"]}],
       responses: %{
         200 =>
           Operation.response("Array of webhooks", "application/json", %Schema{
@@ -35,7 +35,7 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
       tags: ["Webhooks"],
       summary: "Retrieve a webhook",
       operationId: "AdminAPI.WebhookController.show",
-      security: [%{"oAuth" => ["admin:show"]}],
+      security: [%{"oAuth" => ["admin:read"]}],
       parameters: [id_param()],
       responses: %{
         200 => Operation.response("Webhook", "application/json", webhook())
