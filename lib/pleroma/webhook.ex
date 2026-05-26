@@ -36,6 +36,7 @@ defmodule Pleroma.Webhook do
     webhook
     |> cast(params, [:url, :events, :enabled, :internal])
     |> validate_required([:url, :events])
+    |> validate_events_present()
     |> unique_constraint(:url)
     |> put_secret()
   end
@@ -43,6 +44,7 @@ defmodule Pleroma.Webhook do
   def update_changeset(%__MODULE__{} = webhook, params \\ %{}) do
     webhook
     |> cast(params, [:url, :events, :enabled, :internal])
+    |> validate_events_present()
     |> unique_constraint(:url)
   end
 
@@ -71,6 +73,15 @@ defmodule Pleroma.Webhook do
     webhook
     |> cast(%{enabled: enabled}, [:enabled])
     |> Repo.update()
+  end
+
+  defp validate_events_present(changeset) do
+    cond do
+      Keyword.has_key?(changeset.errors, :events) -> changeset
+      get_field(changeset, :internal) -> changeset
+      match?([_ | _], get_field(changeset, :events)) -> changeset
+      true -> add_error(changeset, :events, "can't be blank")
+    end
   end
 
   defp put_secret(changeset) do

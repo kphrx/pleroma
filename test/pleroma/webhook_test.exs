@@ -33,6 +33,24 @@ defmodule Pleroma.WebhookTest do
     assert {:error, _changeset} = Webhook.update(webhook, %{events: [:"status.created"]})
   end
 
+  test "rejects empty events for non-internal webhooks" do
+    assert {:error, changeset} = Webhook.create(%{url: "https://example.com/webhook", events: []})
+    assert %{events: ["can't be blank"]} = errors_on(changeset)
+
+    {:ok, webhook} =
+      Webhook.create(%{url: "https://example.com/valid-webhook", events: [:"report.created"]})
+
+    assert {:error, changeset} = Webhook.update(webhook, %{events: []})
+    assert %{events: ["can't be blank"]} = errors_on(changeset)
+
+    assert {:ok, _webhook} =
+             Webhook.create(%{
+               url: "https://example.com/internal-webhook",
+               events: [],
+               internal: true
+             })
+  end
+
   test "filter webhooks by type" do
     {:ok, %{id: id1}} =
       Webhook.create(%{url: "https://example.com/webhook1", events: [:"report.created"]})

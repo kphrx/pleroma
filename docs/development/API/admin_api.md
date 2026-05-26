@@ -1877,7 +1877,7 @@ Note that this differs from the Mastodon API variant: Mastodon API only returns 
 - Method: `POST`
 - Params:
   - `url`: **string** Webhook URL
-  - *optional* `events`: **[string]** Types of events to trigger on (`account.created`, `report.created`)
+  - `events`: **[string]** Types of events to trigger on (`account.created`, `report.created`)
   - *optional* `enabled`: **boolean** Whether webhook is enabled
 - Response: A webhook
 

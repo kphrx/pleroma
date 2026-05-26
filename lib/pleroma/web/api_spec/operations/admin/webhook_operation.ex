@@ -55,9 +55,10 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
           %Schema{
             description: "POST body for creating a webhook",
             type: :object,
+            required: [:url, :events],
             properties: %{
-              url: %Schema{type: :string, format: :uri, required: true},
-              events: event_type(true),
+              url: %Schema{type: :string, format: :uri},
+              events: event_type(),
               enabled: %Schema{type: :boolean}
             }
           }
@@ -179,15 +180,14 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
     }
   end
 
-  defp event_type(required \\ nil) do
+  defp event_type do
     %Schema{
       type: :array,
       items: %Schema{
         title: "Event",
         description: "Event type",
         type: :string,
-        enum: ["account.created", "report.created"],
-        required: required
+        enum: ["account.created", "report.created"]
       }
     }
   end
