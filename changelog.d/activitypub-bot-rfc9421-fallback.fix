@@ -1,0 +1,1 @@
+Reject unsupported RFC 9421 inbox signatures instead of queueing a doomed failed-signature retry, allowing clients to fall back to legacy HTTP Signatures.

@@ -353,15 +353,21 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   end
 
   def inbox(%{assigns: %{valid_signature: false}} = conn, params) do
-    Federator.incoming_failed_signature_ap_doc(%{
-      method: conn.method,
-      req_headers: conn.req_headers,
-      request_path: conn.request_path,
-      params: params,
-      query_string: conn.query_string
-    })
+    if unsupported_http_message_signature?(conn) do
+      conn
+      |> put_status(:unauthorized)
+      |> json("error, unsupported HTTP Message Signature")
+    else
+      Federator.incoming_failed_signature_ap_doc(%{
+        method: conn.method,
+        req_headers: conn.req_headers,
+        request_path: conn.request_path,
+        params: params,
+        query_string: conn.query_string
+      })
 
-    json(conn, "ok")
+      json(conn, "ok")
+    end
   end
 
   # POST /relay/inbox -or- POST /internal/fetch/inbox
@@ -379,6 +385,17 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     conn
     |> put_status(:bad_request)
     |> json("error, missing HTTP Signature")
+  end
+
+  defp unsupported_http_message_signature?(conn) do
+    Plug.Conn.get_req_header(conn, "signature-input") != [] and
+      not cavage_signature?(conn)
+  end
+
+  defp cavage_signature?(conn) do
+    conn
+    |> Plug.Conn.get_req_header("signature")
+    |> Enum.any?(&Regex.match?(~r/(^|,)\s*keyId\s*=/, &1))
   end
 
   defp post_inbox_relayed_create(conn, params) do

@@ -757,6 +757,83 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       assert Activity.get_by_ap_id(data["id"])
     end
 
+    test "rejects unsupported HTTP Message Signatures so clients can fall back", %{conn: conn} do
+      data = %{
+        "type" => "Create",
+        "actor" => "https://activitypubbot.example/user/ok",
+        "id" => "https://activitypubbot.example/activities/rfc9421-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => "https://activitypubbot.example/objects/rfc9421-note",
+          "actor" => "https://activitypubbot.example/user/ok",
+          "attributedTo" => "https://activitypubbot.example/user/ok",
+          "content" => "hello from activitypub-bot",
+          "published" => "2026-05-29T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", "Fri, 29 May 2026 13:33:31 GMT")
+        |> put_req_header("content-digest", "sha-256=:fake-digest:")
+        |> put_req_header(
+          "signature-input",
+          "sig1=(\"@method\" \"@target-uri\" \"date\" \"content-type\" \"content-digest\");keyid=\"https://activitypubbot.example/user/ok/publickey\";alg=\"rsa-v1_5-sha256\";created=1780061611"
+        )
+        |> put_req_header("signature", "sig1=:fake-signature:")
+        |> post("/inbox", data)
+
+      assert "error, unsupported HTTP Message Signature" == json_response(conn, 401)
+      assert [] == all_enqueued(worker: SignatureRetryWorker)
+    end
+
+    test "keeps failed-signature retry for legacy signatures with Signature-Input", %{conn: conn} do
+      data = %{
+        "type" => "Create",
+        "actor" => "https://activitypubbot.example/user/ok",
+        "id" => "https://activitypubbot.example/activities/legacy-create",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => "https://activitypubbot.example/objects/legacy-note",
+          "actor" => "https://activitypubbot.example/user/ok",
+          "attributedTo" => "https://activitypubbot.example/user/ok",
+          "content" => "hello from activitypub-bot",
+          "published" => "2026-05-29T13:33:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", "Fri, 29 May 2026 13:33:31 GMT")
+        |> put_req_header("digest", "SHA-256=fake-digest")
+        |> put_req_header(
+          "signature-input",
+          "sig1=(\"@method\" \"@target-uri\" \"date\" \"content-type\" \"digest\");keyid=\"https://activitypubbot.example/user/ok/publickey\";alg=\"rsa-v1_5-sha256\";created=1780061611"
+        )
+        |> put_req_header(
+          "signature",
+          "keyId=\"https://activitypubbot.example/user/ok#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        )
+        |> post("/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+      assert [_] = all_enqueued(worker: SignatureRetryWorker)
+    end
+
     test "does not create a forged post after failed signature retry", %{conn: conn} do
       alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
       bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
