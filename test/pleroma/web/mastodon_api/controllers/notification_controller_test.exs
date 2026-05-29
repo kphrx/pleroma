@@ -837,40 +837,28 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
       refute link_header =~ "since_id="
     end
 
-    test "lists accounts from and dismisses a notification group" do
-      %{user: user, conn: conn} = oauth_access(["read:notifications", "write:notifications"])
-      other_users = insert_list(9, :user)
+    test "lists accounts from a notification group" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
 
-      {:ok, status} = CommonAPI.post(user, %{status: "hello"})
-
-      Enum.each(other_users, fn other_user ->
-        {:ok, _} = CommonAPI.favorite(status.id, other_user)
-      end)
-
-      %{
-        "notification_groups" => [
-          %{
-            "group_key" => group_key,
-            "notifications_count" => 9,
-            "sample_account_ids" => sample_account_ids
-          }
-        ]
-      } =
-        conn
-        |> get("/api/v2/notifications")
-        |> json_response_and_validate_schema(200)
+      {other_users, %{"group_key" => group_key, "sample_account_ids" => sample_account_ids}} =
+        create_favourite_notification_group(user, conn)
 
       assert length(sample_account_ids) == 8
 
-      %{conn: read_conn} = oauth_access(["read:notifications"], user: user)
-
       account_ids =
-        read_conn
+        conn
         |> get("/api/v2/notifications/#{group_key}/accounts")
         |> json_response_and_validate_schema(200)
         |> Enum.map(& &1["id"])
 
       assert Enum.sort(account_ids) == Enum.sort(Enum.map(other_users, & &1.id))
+    end
+
+    test "dismisses a notification group" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications", "write:notifications"])
+
+      {_other_users, %{"group_key" => group_key}} =
+        create_favourite_notification_group(user, conn)
 
       assert %{} =
                conn
@@ -1010,6 +998,29 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
     |> Repo.get_by(activity_id: id)
     |> Map.get(:id)
     |> to_string()
+  end
+
+  defp create_favourite_notification_group(user, conn) do
+    other_users = insert_list(9, :user)
+
+    {:ok, status} = CommonAPI.post(user, %{status: "hello"})
+
+    Enum.each(other_users, fn other_user ->
+      {:ok, _} = CommonAPI.favorite(status.id, other_user)
+    end)
+
+    %{
+      "notification_groups" => [
+        %{
+          "notifications_count" => 9
+        } = group
+      ]
+    } =
+      conn
+      |> get("/api/v2/notifications")
+      |> json_response_and_validate_schema(200)
+
+    {other_users, group}
   end
 
   defp params_to_query(%{} = params) do

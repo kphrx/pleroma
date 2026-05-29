@@ -73,7 +73,7 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPI do
   def get_grouped_notification_page(user, params \\ %{}) do
     grouped_types =
       params
-      |> Map.get("grouped_types", Map.get(params, :grouped_types))
+      |> Map.get("grouped_types")
       |> Notification.normalize_grouped_types()
 
     query = notifications_query(user, params)
@@ -96,13 +96,6 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPI do
       notification_group_counts(group_rows),
       notification_group_bounds(group_rows)
     }
-  end
-
-  def get_grouped_notification_groups(user, params \\ %{}) do
-    {groups, _notifications, _notification_group_counts, _notification_group_bounds} =
-      get_grouped_notification_page(user, params)
-
-    groups
   end
 
   def get_notification_group_result(user, group_key, params \\ %{}) do
@@ -163,21 +156,21 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPI do
 
   defp group_pagination(params) do
     cond do
-      min_id = Map.get(params, "min_id", Map.get(params, :min_id)) ->
+      min_id = Map.get(params, "min_id") ->
         cursor_filters = [{:gt, min_id}]
 
         cursor_filters =
-          case Map.get(params, "max_id", Map.get(params, :max_id)) do
+          case Map.get(params, "max_id") do
             nil -> cursor_filters
             max_id -> [{:lt, max_id} | cursor_filters]
           end
 
         {:asc, cursor_filters}
 
-      since_id = Map.get(params, "since_id", Map.get(params, :since_id)) ->
+      since_id = Map.get(params, "since_id") ->
         {:desc, [{:gt, since_id}]}
 
-      max_id = Map.get(params, "max_id", Map.get(params, :max_id)) ->
+      max_id = Map.get(params, "max_id") ->
         {:desc, [{:lt, max_id}]}
 
       true ->
@@ -187,7 +180,7 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPI do
 
   defp grouped_limit(params) do
     params
-    |> Map.get("limit", Map.get(params, :limit, 40))
+    |> Map.get("limit", 40)
     |> parse_limit(40)
     |> min(80)
   end
@@ -195,7 +188,7 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPI do
   def unread_notification_group_count(user, params \\ %{}) do
     grouped_types =
       params
-      |> Map.get("grouped_types", Map.get(params, :grouped_types))
+      |> Map.get("grouped_types")
       |> Notification.normalize_grouped_types()
 
     limit = unread_count_limit(params)
@@ -406,7 +399,7 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPI do
 
   defp unread_count_limit(params) do
     params
-    |> Map.get("limit", Map.get(params, :limit, 100))
+    |> Map.get("limit", 100)
     |> parse_limit(100)
     |> min(1000)
   end
