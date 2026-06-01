@@ -139,13 +139,7 @@ defmodule Pleroma.Web.Endpoint do
     from: {:pleroma, "priv/static/adminfe/"}
   )
 
-  plug(Pleroma.Web.Plugs.StaticNotFoundPlug,
-    at: "/",
-    cache_control_for_etags: @static_cache_disabled,
-    headers: %{
-      "cache-control" => @static_cache_disabled
-    }
-  )
+  plug(Pleroma.Web.Plugs.StaticNotFoundPlug)
 
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
