@@ -61,6 +61,28 @@ defmodule Pleroma.Web.Plugs.InstanceStaticTest do
     File.write!(@dir <> "/static/kaniini.html", "<h1>rabbit hugs as a service</h1>")
     index = get(build_conn(), "/static/kaniini.html")
     assert html_response(index, 200) == "<h1>rabbit hugs as a service</h1>"
+
+    File.write!(@dir <> "/static/kaniini the bnuuy.html", "<h1>rabbit hugs as a service</h1>")
+    index = get(build_conn(), "/static/kaniini%20the%20bnuuy.html")
+    assert html_response(index, 200) == "<h1>rabbit hugs as a service</h1>"
+  end
+
+  test "overrides /static/styles files with spaces in URL" do
+    Pleroma.Backports.mkdir_p!(@dir <> "/static/styles")
+    File.write(@dir <> "/static/styles/Redmond DX.iss", "overridden")
+
+    index = get(build_conn(), "/static/styles/Redmond%20DX.iss")
+    assert index.status == 200
+    assert index.resp_body == File.read!(@dir <> "/static/styles/Redmond DX.iss")
+    assert index.halted == true
+  end
+
+  test "serves fallback /static/styles files with spaces in URL" do
+    index = get(build_conn(), "/static/styles/Redmond%20DX.iss")
+
+    assert index.status == 200
+    assert index.resp_body == File.read!("priv/static/static/styles/Redmond DX.iss")
+    assert index.halted == true
   end
 
   test "does not sanitize dangerous files in general, as there can be html and javascript files legitimately in this folder" do
