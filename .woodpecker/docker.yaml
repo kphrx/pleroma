@@ -39,7 +39,7 @@ variables:
 
 steps:
   docker-develop-amd64:
-    image: woodpeckerci/plugin-kaniko:2.3.1
+    image: *kaniko_image
     when:
       - evaluate: 'platform == "linux/amd64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
     settings:
@@ -50,7 +50,7 @@ steps:
         - ${CI_COMMIT_SHA:0:8}-amd64
 
   docker-develop-arm64:
-    image: woodpeckerci/plugin-kaniko:2.3.1
+    image: *kaniko_image
     when:
       - evaluate: 'platform == "linux/arm64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
     settings:
@@ -61,7 +61,7 @@ steps:
         - ${CI_COMMIT_SHA:0:8}-arm64
 
   docker-develop-armv7:
-    image: woodpeckerci/plugin-kaniko:2.3.1
+    image: *kaniko_image
     when:
       - evaluate: 'platform == "linux/arm" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
     settings:
