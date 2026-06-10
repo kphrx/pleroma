@@ -160,6 +160,7 @@ defmodule Pleroma.Web.NodeInfoTest do
     default_features = [
       "pleroma_api",
       "mastodon_api",
+      "mastodon_api_grouped_notifications",
       "mastodon_api_streaming",
       "polls",
       "pleroma_explicit_addressing",

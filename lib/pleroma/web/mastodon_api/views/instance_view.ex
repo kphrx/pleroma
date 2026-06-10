@@ -166,6 +166,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     [
       "pleroma_api",
       "mastodon_api",
+      "mastodon_api_grouped_notifications",
       "mastodon_api_streaming",
       "polls",
       "v2_suggestions",
