@@ -95,4 +95,72 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       assert Enum.sort(InstanceView.features()) == Enum.sort(features)
     end
   end
+
+  describe "federation/0" do
+    setup do: clear_config([:mrf, :transparency], true)
+
+    test "quarantined instances" do
+      clear_config([:instance, :quarantined_instances], [{"quarantine.example.com", "crimes"}])
+
+      output = InstanceView.federation()
+      assert %{quarantined_instances: ["quarantine.example.com"]} = output
+      assert %{quarantined_instances_info:  %{"quarantined_instances" => %{"quarantine.example.com" => %{"reason" => "crimes"}}}} = output
+    end
+
+    test "rejected instances" do
+      clear_config([:instance, :rejected_instances], [{"rejected.example.com", "not enough #cofe posting"}])
+
+      output = InstanceView.federation()
+      assert %{rejected_instances: %{"rejected.example.com" => %{"reason" => "not enough #cofe posting"}}} = output
+    end
+
+    test "federating" do
+      clear_config([:instance, :federating], true)
+
+      output = InstanceView.federation()
+      assert %{enabled: true} = output
+    end
+
+    test "transparency" do
+      clear_config([:instance, :quarantined_instances], [{"quarantine.example.com", "crimes"}])
+      clear_config([:instance, :rejected_instances], [{"rejected.example.com", "not enough #cofe posting"}])
+      clear_config([:instance, :federating], true)
+      clear_config([:mrf, :transparency], false)
+
+      output = InstanceView.federation()
+      assert %{enabled: true} == output
+    end
+
+    test "MRFs" do
+      clear_config([:mrf, :policies], [Pleroma.Web.ActivityPub.MRF.SimplePolicy])
+      clear_config([:mrf, :transparency_exclusions], [{"media1.example.com", "the Fediverse doesn't need to know"}])
+      clear_config([:mrf_simple, :media_removal], [{"media1.example.com", "NSFW"}, {"media2.example.com", "usual suspects"}])
+      clear_config([:mrf_simple, :reject], [{"rejected.example.com", "not enough #cofe posting"}])
+
+      output = InstanceView.federation()
+
+      expected = %{
+        mrf_simple: %{
+          reject: ["rejected.example.com"],
+          media_removal: ["media2.example.com"],
+        },
+        mrf_hashtag: %{
+          sensitive: ["nsfw"],
+        },
+        exclusions: true,
+        mrf_policies: ["SimplePolicy", "HashtagPolicy"],
+        mrf_simple_info: %{
+          reject: %{
+            "rejected.example.com" => %{"reason" => "not enough #cofe posting"}
+          },
+          media_removal: %{"media2.example.com" => %{"reason" => "usual suspects"}}
+        }
+      }
+
+      assert expected.mrf_simple.reject == output.mrf_simple.reject
+      assert expected.mrf_simple.media_removal == output.mrf_simple.media_removal
+      assert expected.mrf_simple_info == output.mrf_simple_info
+      assert expected.exclusions == output.exclusions
+    end
+  end
 end
