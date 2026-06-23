@@ -59,9 +59,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   # When this fails, a new feature flag was probably added. Add it to the macros above.
   describe "uncofigurable features" do
-    setup do
-      Enum.each(@configurable_features_flags, &clear_config(&1, false))
-    end
+    setup do: Enum.each(@configurable_features_flags, &clear_config(&1, false))
 
     test "returns always enabled features" do
       features = @features
@@ -198,9 +196,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   end
 
   describe "render translation_languages.json" do
-    setup do
-      clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
-    end
+    setup do: clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
 
     test "returns language matrix" do
       output = InstanceView.render("translation_languages.json", %{})
