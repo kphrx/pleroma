@@ -163,4 +163,49 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       assert expected.exclusions == output.exclusions
     end
   end
+
+  describe "render rule.json" do
+    setup do
+      rule = Pleroma.Rule.create(%{text: "hambaga"})
+
+      %{rule: rule}
+    end
+
+    test "renders properly", %{rule: rule} do
+      output = InstanceView.render("rule.json", %{rule: rule})
+
+      assert %{text: "hambaga"} = output
+    end
+  end
+
+  describe "render rules.json" do
+    setup do
+      Pleroma.Rule.create(%{text: "rule 1"})
+      Pleroma.Rule.create(%{text: "rule 2"})
+      Pleroma.Rule.create(%{text: "rule 3"})
+      Pleroma.Rule.create(%{text: "rule 4"})
+
+      :ok
+    end
+
+    test "renders properly" do
+      output = InstanceView.render("rules.json", %{})
+      keys = Enum.map(output, fn %{text: text} -> text end)
+
+      assert length(keys) == 4
+      assert Enum.all?(output, fn %{text: "rule " <> num} -> String.to_integer(num) end)
+    end
+  end
+
+  describe "render translation_languages.json" do
+    setup do
+      clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
+    end
+
+    test "returns language matrix" do
+      output = InstanceView.render("translation_languages.json", %{})
+
+      assert %{"en" => ["pl"], "pl" => ["en"]} == output
+    end
+  end
 end
