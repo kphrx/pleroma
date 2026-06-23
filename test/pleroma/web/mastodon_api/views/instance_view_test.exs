@@ -195,6 +195,46 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     end
   end
 
+  describe "render domain_blocks.json" do
+    setup do
+      clear_config([:mrf, :transparency], true)
+      clear_config([:mrf, :transparency_exclusions], [{"removed1.example.com", "the Fediverse doesn't need to know"}])
+      clear_config([:mrf_simple, :media_removal], [{"media1.example.com", "NSFW"}])
+      clear_config([:mrf_simple, :reject], [{"rejected.example.com", "not enough #cofe posting"}, {"rejected-without-reason.example.com", ""}])
+      clear_config([:mrf_simple, :federated_timeline_removal], [{"removed1.example.com", "spam"}, {"removed2.example.com", "more spam"}])
+
+      :ok
+    end
+
+    test "renders properly" do
+      output = InstanceView.render("domain_blocks.json", %{})
+
+      # Media removal is not in @block_severities in the view.
+      # NOTE: Order of these two matters!
+      expected = [
+        %{
+          domain: "removed2.example.com",
+          comment: "more spam",
+          severity: "silence",
+          digest: "5f6649cfc780fac5172dbbcc8a552953f6621a14368d82728b6e8faf51295dc0"
+        },
+        %{
+          domain: "rejected.example.com",
+          comment: "not enough #cofe posting",
+          severity: "suspend",
+          digest: "c15082d347fb7eccd251e199a98dcdce94a8dfc1d33d6ece80889eed374b6f92"
+        },
+        %{
+          domain: "rejected-without-reason.example.com",
+          severity: "suspend",
+          digest: "48297155018c626c8867ca0bba4a2621eccdf51c6f7ac91b7099ed8b2ee9863f"
+        }
+      ]
+
+      assert expected == output
+    end
+  end
+
   describe "render translation_languages.json" do
     setup do: clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
 
