@@ -29,12 +29,20 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     :polls
   ]
 
+  @atom_configuration2_keys @atom_configuration_keys ++ [
+    :urls,
+    :vapid,
+    :translation,
+    :timelines_access
+  ]
+
   @atom_pleroma_configuration_keys [
     :metadata,
     :stats,
     :vapid_public_key
   ]
 
+  # TODO: Simplify this, so ideally only atoms are macroed
   @show_keys @common_information_keys ++ [
     "uri",
     "description",
@@ -61,6 +69,19 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     "chat_limit",
     "pleroma"
   ]
+
+  @show2_keys @common_information_keys ++ [
+      "domain",
+      "source_url",
+      "description",
+      "usage",
+      "thumbnail",
+      "configuration",
+      "registrations",
+      "contact",
+      # Extra (not present in Mastodon):
+      "pleroma"
+    ]
 
   @features [
     "pleroma_api",
@@ -121,6 +142,27 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     Map.equal?(expected, filtered_info)
   end
 
+  defp check_thumbnail(info) do
+    thumbnail = info[:thumbnail]
+
+    expected = %{
+      url: URI.merge(Pleroma.Web.Endpoint.url(), "https://example.com/thumbnail.png") |> to_string
+    }
+
+    expected == thumbnail
+  end
+
+  defp check_contact(info, user) do
+    contact = info[:contact]
+
+    expected = %{
+      email: "nonexist@example.com",
+      account: Pleroma.Web.MastodonAPI.AccountView.render("show.json", %{user: user, for: nil})
+    }
+
+    Map.equal?(expected, contact)
+  end
+
   defp check_contact_name(info, user) do
     contact = info[:contact_account]
     view = Pleroma.Web.MastodonAPI.AccountView.render("show.json", %{user: user, for: nil})
@@ -154,6 +196,70 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     }
 
     Map.equal?(expected, filtered_configuration)
+  end
+
+  defp check_configuration2(info) do
+    configuration = info[:configuration]
+    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @atom_configuration2_keys end)
+
+    # configuration2 also includes parts from configuration
+    expected = %{
+      accounts: %{
+        max_featured_tags: 0,
+        max_pinned_statuses: 1,
+        max_profile_fields: 1,
+        profile_field_name_limit: 1,
+        profile_field_value_limit: 1
+      },
+      statuses: %{
+        max_characters: 4096,
+        max_media_attachments: 1,
+        characters_reserved_per_url: 0
+      },
+      media_attachments: %{
+        image_size_limit: 1024,
+        video_size_limit: 1024,
+        supported_mime_types: ["application/octet-stream"]
+      },
+      polls: %{
+        max_options: 4,
+        max_characters_per_option: 120,
+        min_expiration: 1,
+        max_expiration: 2
+      },
+      urls: %{
+        streaming: Pleroma.Web.Endpoint.websocket_url(),
+        status: "https://status.example.com"
+      },
+      vapid: %{
+        public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
+      },
+      translation: %{enabled: true},
+      timelines_access: %{
+        live_feeds: %{local: "authenticated", remote: "authenticated"},
+        hashtag_feeds: %{local: "authenticated", remote: "authenticated"},
+        # not implemented in Pleroma
+        trending_link_feeds: %{
+          local: "disabled",
+          remote: "disabled"
+        }
+      }
+    }
+
+    Map.equal?(expected, filtered_configuration)
+  end
+
+  defp check_registrations(info) do
+    registrations = info[:registrations]
+
+    expected = %{
+      enabled: false,
+      approval_required: true,
+      message: nil,
+      url: nil
+    }
+
+    Map.equal?(expected, registrations)
   end
 
   defp check_pleroma_configuration(info) do
@@ -190,6 +296,56 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
             allow_headings: true,
             allow_tables: true
         }
+      },
+      stats: %{mau: Pleroma.User.active_user_count()},
+      vapid_public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
+    }
+
+    Map.equal?(expected, filtered_configuration)
+  end
+
+  defp check_pleroma_configuration2(info) do
+    configuration = info[:pleroma]
+    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @atom_pleroma_configuration_keys end)
+    metadata = Map.fetch!(filtered_configuration, :metadata)
+    # Tested elsewhere already
+    filtered_metadata = Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
+    filtered_configuration = %{filtered_configuration | metadata: filtered_metadata}
+
+    # pleroma_configuration2 also includes parts from pleroma_configuration
+    expected = %{
+      metadata: %{
+        account_activation_required: true,
+        fields_limits: %{
+          max_fields: 1,
+          max_remote_fields: 1,
+          name_length: 1,
+          value_length: 1
+        },
+        post_formats: ["text/plain"],
+        birthday_required: true,
+        birthday_min_age: 1,
+        translation:
+          %{
+            source_languages: ["en", "pl"],
+            target_languages: ["en", "pl"]
+          },
+        base_urls: %{
+          media_proxy: "https://mediaproxy.example.com",
+          upload: "https://upload.example.com"
+        },
+        markup: %{
+            allow_inline_images: true,
+            allow_headings: true,
+            allow_tables: true
+        },
+        avatar_upload_limit: 1024,
+        background_upload_limit: 1024,
+        banner_upload_limit: 1024,
+        background_image: Pleroma.Web.Endpoint.url() <> "/media/background.png",
+        chat_limit: 120,
+        description_limit: 120,
+        shout_limit: 120
       },
       stats: %{mau: Pleroma.User.active_user_count()},
       vapid_public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
@@ -303,7 +459,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     end
   end
 
-  describe "render show.json" do
+  describe "render show.json/show2.json" do
     setup do
       Pleroma.Rule.create(%{text: "rule 1"})
       Pleroma.Rule.create(%{text: "rule 2"})
@@ -332,6 +488,23 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       clear_config([:instance, :birthday_required], true)
       clear_config([:instance, :birthday_min_age], 1)
 
+      clear_config([:instance, :short_description], "Corndog Emporium!")
+      clear_config([:instance, :instance_thumbnail], "https://example.com/thumbnail.png")
+      clear_config([:instance, :registrations_open], false)
+      clear_config([:instance, :account_approval_required], true)
+
+      clear_config([:instance, :max_pinned_statuses], 1)
+      clear_config([:instance, :status_page], "https://status.example.com")
+
+      clear_config([:instance, :email], "nonexist@example.com")
+
+      clear_config([:instance, :avatar_upload_limit], 1024)
+      clear_config([:instance, :background_upload_limit], 1024)
+      clear_config([:instance, :banner_upload_limit], 1024)
+      clear_config([:instance, :background_image], "/media/background.png")
+      clear_config([:instance, :chat_limit], 120)
+      clear_config([:instance, :description_limit], 120)
+
       clear_config([:media_proxy, :enabled], true)
       clear_config([:media_proxy, :base_url], "https://mediaproxy.example.com")
 
@@ -341,10 +514,14 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       clear_config([:markup, :allow_headings], true)
       clear_config([:markup, :allow_tables], true)
 
+      clear_config([:restrict_unauthenticated, :timelines], %{local: true, federated: true})
+
+      clear_config([:shout, :limit], 120)
+
       %{user: user}
     end
 
-    test "renders properly", %{user: user} do
+    test "renders show.json properly", %{user: user} do
       output = InstanceView.render("show.json", %{})
       expected_keys = Enum.sort(@show_keys)
 
@@ -352,6 +529,19 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       assert check_contact_name(output, user)
       assert check_configuration(output)
       assert check_pleroma_configuration(output)
+      assert expected_keys == Enum.sort(Enum.map(Map.keys(output), &to_string/1))
+    end
+
+    test "renders show2.json properly", %{user: user} do
+      output = InstanceView.render("show2.json", %{})
+      expected_keys = Enum.sort(@show2_keys)
+
+      assert check_common_information(output)
+      assert check_thumbnail(output)
+      assert check_configuration2(output)
+      assert check_registrations(output)
+      assert check_contact(output, user)
+      assert check_pleroma_configuration2(output)
       assert expected_keys == Enum.sort(Enum.map(Map.keys(output), &to_string/1))
     end
   end
