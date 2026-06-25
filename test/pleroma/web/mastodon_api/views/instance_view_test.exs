@@ -27,16 +27,23 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     :polls
   ]
 
-  @configuration2_keys @configuration_keys ++ [
-    :urls,
-    :vapid,
-    :translation,
-    :timelines_access
-  ]
+  @configuration2_keys @configuration_keys ++
+                         [
+                           :urls,
+                           :vapid,
+                           :translation,
+                           :timelines_access
+                         ]
 
   # Used for filtering out values from configuration.json render in configuration2.json render
   @configuration2_filter [
-    {:accounts, [:max_pinned_statuses, :max_profile_fields, :profile_field_name_limit, :profile_field_value_limit]},
+    {:accounts,
+     [
+       :max_pinned_statuses,
+       :max_profile_fields,
+       :profile_field_name_limit,
+       :profile_field_value_limit
+     ]},
     {:statuses, [:characters_reserved_per_url]},
     {:urls, [:streaming, :status]},
     {:vapid, [:public_key]},
@@ -51,48 +58,59 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   ]
 
   @pleroma_configuration2_filter [
-    {:metadata, [:avatar_upload_limit, :background_upload_limit, :banner_upload_limit, :background_image, :chat_limit, :description_limit, :shout_limit]}
+    {:metadata,
+     [
+       :avatar_upload_limit,
+       :background_upload_limit,
+       :banner_upload_limit,
+       :background_image,
+       :chat_limit,
+       :description_limit,
+       :shout_limit
+     ]}
   ]
 
-  @show_keys @common_information_keys ++ [
-    :uri,
-    :description,
-    :short_description,
-    :email,
-    :urls,
-    :stats,
-    :thumbnail,
-    :registrations,
-    :approval_required,
-    :contact_account,
-    :configuration,
-    # Extra (not present in Mastodon)
-    :max_toot_chars,
-    :max_media_attachments,
-    :poll_limits,
-    :upload_limit,
-    :avatar_upload_limit,
-    :background_upload_limit,
-    :banner_upload_limit,
-    :background_image,
-    :shout_limit,
-    :description_limit,
-    :chat_limit,
-    :pleroma
-  ]
+  @show_keys @common_information_keys ++
+               [
+                 :uri,
+                 :description,
+                 :short_description,
+                 :email,
+                 :urls,
+                 :stats,
+                 :thumbnail,
+                 :registrations,
+                 :approval_required,
+                 :contact_account,
+                 :configuration,
+                 # Extra (not present in Mastodon)
+                 :max_toot_chars,
+                 :max_media_attachments,
+                 :poll_limits,
+                 :upload_limit,
+                 :avatar_upload_limit,
+                 :background_upload_limit,
+                 :banner_upload_limit,
+                 :background_image,
+                 :shout_limit,
+                 :description_limit,
+                 :chat_limit,
+                 :pleroma
+               ]
 
-  @show2_keys @common_information_keys ++ [
-      :domain,
-      :source_url,
-      :description,
-      :usage,
-      :thumbnail,
-      :configuration,
-      :registrations,
-      :contact,
-      # Extra (not present in Mastodon)
-      :pleroma
-    ]
+  @show2_keys @common_information_keys ++
+                [
+                  :domain,
+                  :source_url,
+                  :description,
+                  :usage,
+                  :thumbnail,
+                  :configuration,
+                  :registrations,
+                  :contact,
+                  # Extra (not present in Mastodon)
+                  :pleroma
+                ]
 
   @features [
     "pleroma_api",
@@ -158,7 +176,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       languages: ["en", "cs"],
       rules: InstanceView.render("rules.json", %{}),
       title: "test title",
-      version: InstanceView.mastodon_api_level() <> " (compatible; #{Pleroma.Application.named_version()})"
+      version:
+        InstanceView.mastodon_api_level() <>
+          " (compatible; #{Pleroma.Application.named_version()})"
     }
 
     Map.equal?(expected, filtered_info)
@@ -194,7 +214,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_configuration(info) do
     configuration = info[:configuration]
-    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @configuration_keys end)
+
+    filtered_configuration =
+      Map.reject(configuration, fn {key, _value} -> key not in @configuration_keys end)
 
     expected = %{
       accounts: %{
@@ -222,6 +244,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_configuration2(info) do
     configuration = info[:configuration]
+
     filtered_configuration =
       configuration
       |> Map.reject(fn {key, _value} -> key not in @configuration2_keys end)
@@ -274,11 +297,16 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_pleroma_configuration(info) do
     configuration = info[:pleroma]
-    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
+
+    filtered_configuration =
+      Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
 
     # Tested elsewhere already
     metadata = Map.fetch!(filtered_configuration, :metadata)
-    filtered_metadata = Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
+
+    filtered_metadata =
+      Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
+
     filtered_configuration = %{filtered_configuration | metadata: filtered_metadata}
 
     expected = %{
@@ -293,19 +321,18 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
         post_formats: ["text/plain"],
         birthday_required: true,
         birthday_min_age: 1,
-        translation:
-          %{
-            source_languages: ["en", "pl"],
-            target_languages: ["en", "pl"]
-          },
+        translation: %{
+          source_languages: ["en", "pl"],
+          target_languages: ["en", "pl"]
+        },
         base_urls: %{
           media_proxy: "https://mediaproxy.example.com",
           upload: "https://upload.example.com"
         },
         markup: %{
-            allow_inline_images: true,
-            allow_headings: true,
-            allow_tables: true
+          allow_inline_images: true,
+          allow_headings: true,
+          allow_tables: true
         }
       },
       stats: %{mau: Pleroma.User.active_user_count()},
@@ -317,11 +344,16 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_pleroma_configuration2(info) do
     configuration = info[:pleroma]
-    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
+
+    filtered_configuration =
+      Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
 
     # Tested elsewhere already
     metadata = Map.fetch!(filtered_configuration, :metadata)
-    filtered_metadata = Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
+
+    filtered_metadata =
+      Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
+
     filtered_configuration =
       %{filtered_configuration | metadata: filtered_metadata}
       |> filter_render(@pleroma_configuration2_filter, %{})
@@ -386,14 +418,26 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
       output = InstanceView.federation()
       assert %{quarantined_instances: ["quarantine.example.com"]} = output
-      assert %{quarantined_instances_info:  %{"quarantined_instances" => %{"quarantine.example.com" => %{"reason" => "crimes"}}}} = output
+
+      assert %{
+               quarantined_instances_info: %{
+                 "quarantined_instances" => %{"quarantine.example.com" => %{"reason" => "crimes"}}
+               }
+             } = output
     end
 
     test "rejected instances" do
-      clear_config([:instance, :rejected_instances], [{"rejected.example.com", "not enough #cofe posting"}])
+      clear_config([:instance, :rejected_instances], [
+        {"rejected.example.com", "not enough #cofe posting"}
+      ])
 
       output = InstanceView.federation()
-      assert %{rejected_instances: %{"rejected.example.com" => %{"reason" => "not enough #cofe posting"}}} = output
+
+      assert %{
+               rejected_instances: %{
+                 "rejected.example.com" => %{"reason" => "not enough #cofe posting"}
+               }
+             } = output
     end
 
     test "federating" do
@@ -405,9 +449,12 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
     test "transparency" do
       clear_config([:instance, :quarantined_instances], [{"quarantine.example.com", "crimes"}])
-      clear_config([:instance, :rejected_instances], [{"rejected.example.com", "not enough #cofe posting"}])
       clear_config([:instance, :federating], true)
       clear_config([:mrf, :transparency], false)
+
+      clear_config([:instance, :rejected_instances], [
+        {"rejected.example.com", "not enough #cofe posting"}
+      ])
 
       output = InstanceView.federation()
       assert %{enabled: true} == output
@@ -415,19 +462,26 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
     test "MRFs" do
       clear_config([:mrf, :policies], [Pleroma.Web.ActivityPub.MRF.SimplePolicy])
-      clear_config([:mrf, :transparency_exclusions], [{"media1.example.com", "the Fediverse doesn't need to know"}])
-      clear_config([:mrf_simple, :media_removal], [{"media1.example.com", "NSFW"}, {"media2.example.com", "usual suspects"}])
       clear_config([:mrf_simple, :reject], [{"rejected.example.com", "not enough #cofe posting"}])
+
+      clear_config([:mrf, :transparency_exclusions], [
+        {"media1.example.com", "the Fediverse doesn't need to know"}
+      ])
+
+      clear_config([:mrf_simple, :media_removal], [
+        {"media1.example.com", "NSFW"},
+        {"media2.example.com", "usual suspects"}
+      ])
 
       output = InstanceView.federation()
 
       expected = %{
         mrf_simple: %{
           reject: ["rejected.example.com"],
-          media_removal: ["media2.example.com"],
+          media_removal: ["media2.example.com"]
         },
         mrf_hashtag: %{
-          sensitive: ["nsfw"],
+          sensitive: ["nsfw"]
         },
         exclusions: true,
         mrf_policies: ["SimplePolicy", "HashtagPolicy"],
@@ -569,10 +623,21 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   describe "render domain_blocks.json" do
     setup do
       clear_config([:mrf, :transparency], true)
-      clear_config([:mrf, :transparency_exclusions], [{"removed1.example.com", "the Fediverse doesn't need to know"}])
       clear_config([:mrf_simple, :media_removal], [{"media1.example.com", "NSFW"}])
-      clear_config([:mrf_simple, :reject], [{"rejected.example.com", "not enough #cofe posting"}, {"rejected-without-reason.example.com", ""}])
-      clear_config([:mrf_simple, :federated_timeline_removal], [{"removed1.example.com", "spam"}, {"removed2.example.com", "more spam"}])
+
+      clear_config([:mrf, :transparency_exclusions], [
+        {"removed1.example.com", "the Fediverse doesn't need to know"}
+      ])
+
+      clear_config([:mrf_simple, :reject], [
+        {"rejected.example.com", "not enough #cofe posting"},
+        {"rejected-without-reason.example.com", ""}
+      ])
+
+      clear_config([:mrf_simple, :federated_timeline_removal], [
+        {"removed1.example.com", "spam"},
+        {"removed2.example.com", "more spam"}
+      ])
 
       :ok
     end
