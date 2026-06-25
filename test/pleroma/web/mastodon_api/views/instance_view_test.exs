@@ -34,10 +34,24 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     :timelines_access
   ]
 
+  # Used for filtering out values from configuration.json render in configuration2.json render
+  @configuration2_filter [
+    {:accounts, [:max_pinned_statuses, :max_profile_fields, :profile_field_name_limit, :profile_field_value_limit]},
+    {:statuses, [:characters_reserved_per_url]},
+    {:urls, [:streaming, :status]},
+    {:vapid, [:public_key]},
+    {:translation, [:enabled]},
+    {:timelines_access, [:live_feeds, :hashtag_feeds, :trending_link_feeds]}
+  ]
+
   @pleroma_configuration_keys [
     :metadata,
     :stats,
     :vapid_public_key
+  ]
+
+  @pleroma_configuration2_filter [
+    {:metadata, [:avatar_upload_limit, :background_upload_limit, :banner_upload_limit, :background_image, :chat_limit, :description_limit, :shout_limit]}
   ]
 
   @show_keys @common_information_keys ++ [
@@ -126,6 +140,17 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     [:instance, :profile_directory]
   ]
 
+  # Filters out values from one layer deep nested Maps.
+  defp filter_render(%{}, [], acc), do: acc
+
+  defp filter_render(input, filter, acc) do
+    {{filter_key, filters}, filter_rest} = List.pop_at(filter, 0)
+    {config_key_values, input_rest} = Map.pop!(input, filter_key)
+    filtered = Map.reject(config_key_values, fn {key, _} -> key not in filters end)
+
+    filter_render(input_rest, filter_rest, Map.put(acc, filter_key, filtered))
+  end
+
   defp check_common_information(info) do
     filtered_info = Map.reject(info, fn {key, _value} -> key not in @common_information_keys end)
 
@@ -197,32 +222,20 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_configuration2(info) do
     configuration = info[:configuration]
-    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @configuration2_keys end)
+    filtered_configuration =
+      configuration
+      |> Map.reject(fn {key, _value} -> key not in @configuration2_keys end)
+      |> filter_render(@configuration2_filter, %{})
 
-    # configuration2 also includes parts from configuration
     expected = %{
       accounts: %{
-        max_featured_tags: 0,
         max_pinned_statuses: 1,
         max_profile_fields: 1,
         profile_field_name_limit: 1,
         profile_field_value_limit: 1
       },
       statuses: %{
-        max_characters: 4096,
-        max_media_attachments: 1,
         characters_reserved_per_url: 0
-      },
-      media_attachments: %{
-        image_size_limit: 1024,
-        video_size_limit: 1024,
-        supported_mime_types: ["application/octet-stream"]
-      },
-      polls: %{
-        max_options: 4,
-        max_characters_per_option: 120,
-        min_expiration: 1,
-        max_expiration: 2
       },
       urls: %{
         streaming: Pleroma.Web.Endpoint.websocket_url(),
@@ -262,8 +275,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   defp check_pleroma_configuration(info) do
     configuration = info[:pleroma]
     filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
-    metadata = Map.fetch!(filtered_configuration, :metadata)
+
     # Tested elsewhere already
+    metadata = Map.fetch!(filtered_configuration, :metadata)
     filtered_metadata = Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
     filtered_configuration = %{filtered_configuration | metadata: filtered_metadata}
 
@@ -304,38 +318,16 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   defp check_pleroma_configuration2(info) do
     configuration = info[:pleroma]
     filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
-    metadata = Map.fetch!(filtered_configuration, :metadata)
-    # Tested elsewhere already
-    filtered_metadata = Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
-    filtered_configuration = %{filtered_configuration | metadata: filtered_metadata}
 
-    # pleroma_configuration2 also includes parts from pleroma_configuration
+    # Tested elsewhere already
+    metadata = Map.fetch!(filtered_configuration, :metadata)
+    filtered_metadata = Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
+    filtered_configuration =
+      %{filtered_configuration | metadata: filtered_metadata}
+      |> filter_render(@pleroma_configuration2_filter, %{})
+
     expected = %{
       metadata: %{
-        account_activation_required: true,
-        fields_limits: %{
-          max_fields: 1,
-          max_remote_fields: 1,
-          name_length: 1,
-          value_length: 1
-        },
-        post_formats: ["text/plain"],
-        birthday_required: true,
-        birthday_min_age: 1,
-        translation:
-          %{
-            source_languages: ["en", "pl"],
-            target_languages: ["en", "pl"]
-          },
-        base_urls: %{
-          media_proxy: "https://mediaproxy.example.com",
-          upload: "https://upload.example.com"
-        },
-        markup: %{
-            allow_inline_images: true,
-            allow_headings: true,
-            allow_tables: true
-        },
         avatar_upload_limit: 1024,
         background_upload_limit: 1024,
         banner_upload_limit: 1024,
@@ -343,9 +335,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
         chat_limit: 120,
         description_limit: 120,
         shout_limit: 120
-      },
-      stats: %{mau: Pleroma.User.active_user_count()},
-      vapid_public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
+      }
     }
 
     Map.equal?(expected, filtered_configuration)
