@@ -13,74 +13,71 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   import Mox
 
-  @atom_common_information_keys [
+  @common_information_keys [
     :languages,
     :rules,
     :title,
     :version
   ]
 
-  @common_information_keys Enum.map(@atom_common_information_keys, &to_string/1)
-
-  @atom_configuration_keys [
+  @configuration_keys [
     :accounts,
     :statuses,
     :media_attachments,
     :polls
   ]
 
-  @atom_configuration2_keys @atom_configuration_keys ++ [
+  @configuration2_keys @configuration_keys ++ [
     :urls,
     :vapid,
     :translation,
     :timelines_access
   ]
 
-  @atom_pleroma_configuration_keys [
+  @pleroma_configuration_keys [
     :metadata,
     :stats,
     :vapid_public_key
   ]
 
-  # TODO: Simplify this, so ideally only atoms are macroed
   @show_keys @common_information_keys ++ [
-    "uri",
-    "description",
-    "short_description",
-    "email",
-    "urls",
-    "stats",
-    "thumbnail",
-    "registrations",
-    "approval_required",
-    "contact_account",
-    "configuration",
-    # Extra (not present in Mastodon)"
-    "max_toot_chars",
-    "max_media_attachments",
-    "poll_limits",
-    "upload_limit",
-    "avatar_upload_limit",
-    "background_upload_limit",
-    "banner_upload_limit",
-    "background_image",
-    "shout_limit",
-    "description_limit",
-    "chat_limit",
-    "pleroma"
+    :uri,
+    :description,
+    :short_description,
+    :email,
+    :urls,
+    :stats,
+    :thumbnail,
+    :registrations,
+    :approval_required,
+    :contact_account,
+    :configuration,
+    # Extra (not present in Mastodon)
+    :max_toot_chars,
+    :max_media_attachments,
+    :poll_limits,
+    :upload_limit,
+    :avatar_upload_limit,
+    :background_upload_limit,
+    :banner_upload_limit,
+    :background_image,
+    :shout_limit,
+    :description_limit,
+    :chat_limit,
+    :pleroma
   ]
 
   @show2_keys @common_information_keys ++ [
-      "domain",
-      "source_url",
-      "description",
-      "usage",
-      "thumbnail",
-      "configuration",
-      "registrations",
-      "contact",
-      # Extra (not present in Mastodon):
-      "pleroma"
+      :domain,
+      :source_url,
+      :description,
+      :usage,
+      :thumbnail,
+      :configuration,
+      :registrations,
+      :contact,
+      # Extra (not present in Mastodon)
+      :pleroma
     ]
 
   @features [
@@ -106,7 +103,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     "pleroma:block_expiration"
   ]
 
-  @configureable_features [
+  @configurable_features [
     "blockers_visible",
     "media_proxy",
     "gopher",
@@ -130,7 +127,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   ]
 
   defp check_common_information(info) do
-    filtered_info = Map.reject(info, fn {key, _value} -> key not in @atom_common_information_keys end)
+    filtered_info = Map.reject(info, fn {key, _value} -> key not in @common_information_keys end)
 
     expected = %{
       languages: ["en", "cs"],
@@ -172,7 +169,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_configuration(info) do
     configuration = info[:configuration]
-    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @atom_configuration_keys end)
+    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @configuration_keys end)
 
     expected = %{
       accounts: %{
@@ -200,7 +197,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_configuration2(info) do
     configuration = info[:configuration]
-    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @atom_configuration2_keys end)
+    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @configuration2_keys end)
 
     # configuration2 also includes parts from configuration
     expected = %{
@@ -264,7 +261,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_pleroma_configuration(info) do
     configuration = info[:pleroma]
-    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @atom_pleroma_configuration_keys end)
+    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
     metadata = Map.fetch!(filtered_configuration, :metadata)
     # Tested elsewhere already
     filtered_metadata = Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
@@ -306,7 +303,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
   defp check_pleroma_configuration2(info) do
     configuration = info[:pleroma]
-    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @atom_pleroma_configuration_keys end)
+    filtered_configuration = Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
     metadata = Map.fetch!(filtered_configuration, :metadata)
     # Tested elsewhere already
     filtered_metadata = Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
@@ -385,7 +382,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     end
 
     test "returns all features including configurable ones" do
-      features = @features ++ @configureable_features
+      features = @features ++ @configurable_features
 
       assert Enum.sort(InstanceView.features()) == Enum.sort(features)
     end
@@ -529,7 +526,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       assert check_contact_name(output, user)
       assert check_configuration(output)
       assert check_pleroma_configuration(output)
-      assert expected_keys == Enum.sort(Enum.map(Map.keys(output), &to_string/1))
+      assert expected_keys == Enum.sort(Map.keys(output))
     end
 
     test "renders show2.json properly", %{user: user} do
@@ -542,7 +539,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       assert check_registrations(output)
       assert check_contact(output, user)
       assert check_pleroma_configuration2(output)
-      assert expected_keys == Enum.sort(Enum.map(Map.keys(output), &to_string/1))
+      assert expected_keys == Enum.sort(Map.keys(output))
     end
   end
 
