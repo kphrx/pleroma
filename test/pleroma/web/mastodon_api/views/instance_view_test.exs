@@ -79,6 +79,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
                  :pleroma
                ]
 
+  # Checked in other check_* functions
+  @show_filter @common_information_keys ++ [:contact_account, :configuration, :pleroma]
+
   @show2_keys @common_information_keys ++
                 [
                   :domain,
@@ -188,7 +191,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     Map.equal?(expected, filtered_info)
   end
 
-  defp check_thumbnail(info) do
+  defp check_thumbnail2(info) do
     thumbnail = info[:thumbnail]
 
     expected = %{
@@ -209,7 +212,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     Map.equal?(expected, contact)
   end
 
-  defp check_contact_name(info, user) do
+  defp check_contact_account(info, user) do
     contact = info[:contact_account]
     view = Pleroma.Web.MastodonAPI.AccountView.render("show.json", %{user: user, for: nil})
 
@@ -280,7 +283,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     Map.equal?(expected, configuration)
   end
 
-  defp check_registrations(info) do
+  defp check_registrations2(info) do
     registrations = info[:registrations]
 
     expected = %{
@@ -349,6 +352,43 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     }
 
     Map.equal?(expected, configuration)
+  end
+
+  defp check_show(info) do
+    filter = @show_filter
+    filtered_info = Map.reject(info, fn {key, _value} -> key in filter end)
+
+    expected = %{
+      uri: Pleroma.Web.WebFinger.host(),
+      description: "Pleroma: An efficient and flexible fediverse server",
+      short_description: "Corndog Emporium!",
+      email: "nonexist@example.com",
+      urls: %{
+        streaming_api: Pleroma.Web.Endpoint.websocket_url(),
+      },
+      stats: Pleroma.Stats.get_stats(),
+      thumbnail: "https://example.com/thumbnail.png",
+      registrations: false,
+      approval_required: true,
+      max_toot_chars: 4096,
+      max_media_attachments: 1,
+      poll_limits: %{
+        max_options: 4,
+        max_option_chars: 120,
+        min_expiration: 1,
+        max_expiration: 2
+      },
+      upload_limit: 1024,
+      avatar_upload_limit: 1024,
+      background_upload_limit: 1024,
+      banner_upload_limit: 1024,
+      background_image: Pleroma.Web.Endpoint.url() <> "/media/background.png",
+      shout_limit: 120,
+      description_limit: 120,
+      chat_limit: 120,
+    }
+
+    Map.equal?(expected, filtered_info)
   end
 
   # When this fails, a new feature flag was probably added. Add it to the macros above.
@@ -545,7 +585,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       expected_keys = Enum.sort(@show_keys)
 
       assert check_common_information(output)
-      assert check_contact_name(output, user)
+      assert check_show(output)
+      assert check_contact_account(output, user)
       assert check_configuration(output)
       assert check_pleroma_configuration(output)
       assert expected_keys == Enum.sort(Map.keys(output))
@@ -556,9 +597,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       expected_keys = Enum.sort(@show2_keys)
 
       assert check_common_information(output)
-      assert check_thumbnail(output)
+      assert check_thumbnail2(output)
       assert check_configuration2(output)
-      assert check_registrations(output)
+      assert check_registrations2(output)
       assert check_contact(output, user)
       assert check_pleroma_configuration2(output)
       assert expected_keys == Enum.sort(Map.keys(output))
