@@ -182,9 +182,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     filtered_info = Map.reject(info, fn {key, _value} -> key not in @common_information_keys end)
 
     expected = %{
-      languages: ["en", "cs"],
+      languages: ["en"],
       rules: InstanceView.render("rules.json", %{}),
-      title: "test title",
+      title: "Pleroma",
       version:
         InstanceView.mastodon_api_level() <>
           " (compatible; #{Pleroma.Application.named_version()})"
@@ -197,7 +197,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     thumbnail = info[:thumbnail]
 
     expected = %{
-      url: URI.merge(Pleroma.Web.Endpoint.url(), "https://example.com/thumbnail.png") |> to_string
+      url: URI.merge(Pleroma.Web.Endpoint.url(), "http://localhost:4001/instance/thumbnail.jpeg") |> to_string
     }
 
     expected == thumbnail
@@ -207,7 +207,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     contact = info[:contact]
 
     expected = %{
-      email: "nonexist@example.com",
+      email: "admin@example.com",
       account: Pleroma.Web.MastodonAPI.AccountView.render("show.json", %{user: user, for: nil})
     }
 
@@ -229,19 +229,19 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
         max_featured_tags: 0
       },
       statuses: %{
-        max_characters: 4096,
-        max_media_attachments: 1
+        max_characters: 5_000,
+        max_media_attachments: 1_000
       },
       media_attachments: %{
-        image_size_limit: 1024,
-        video_size_limit: 1024,
+        image_size_limit: 16_000_000,
+        video_size_limit: 16_000_000,
         supported_mime_types: ["application/octet-stream"]
       },
       polls: %{
-        max_options: 4,
-        max_characters_per_option: 120,
-        min_expiration: 1,
-        max_expiration: 2
+        max_options: 20,
+        max_characters_per_option: 200,
+        min_expiration: 0,
+        max_expiration: 365 * 24 * 60 * 60
       }
     }
 
@@ -256,24 +256,24 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     expected = %{
       accounts: %{
         max_pinned_statuses: 1,
-        max_profile_fields: 1,
-        profile_field_name_limit: 1,
-        profile_field_value_limit: 1
+        max_profile_fields: 10,
+        profile_field_name_limit: 512,
+        profile_field_value_limit: 2048
       },
       statuses: %{
         characters_reserved_per_url: 0
       },
       urls: %{
         streaming: Pleroma.Web.Endpoint.websocket_url(),
-        status: "https://status.example.com"
+        status: nil
       },
       vapid: %{
         public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
       },
       translation: %{enabled: true},
       timelines_access: %{
-        live_feeds: %{local: "authenticated", remote: "authenticated"},
-        hashtag_feeds: %{local: "authenticated", remote: "authenticated"},
+        live_feeds: %{local: "public", remote: "public"},
+        hashtag_feeds: %{local: "public", remote: "public"},
         # not implemented in Pleroma
         trending_link_feeds: %{
           local: "disabled",
@@ -289,8 +289,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     registrations = info[:registrations]
 
     expected = %{
-      enabled: false,
-      approval_required: true,
+      enabled: true,
+      approval_required: false,
       message: nil,
       url: nil
     }
@@ -305,28 +305,31 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
     expected = %{
       metadata: %{
-        account_activation_required: true,
+        account_activation_required: false,
         fields_limits: %{
-          max_fields: 1,
-          max_remote_fields: 1,
-          name_length: 1,
-          value_length: 1
+          max_fields: 10,
+          max_remote_fields: 20,
+          name_length: 512,
+          value_length: 2048
         },
-        post_formats: ["text/plain"],
-        birthday_required: true,
-        birthday_min_age: 1,
+        post_formats: [
+              "text/plain",
+              "text/html",
+              "text/markdown",
+              "text/bbcode",
+              "text/x.misskeymarkdown"
+        ],
+        birthday_required: false,
+        birthday_min_age: 0,
         translation: %{
           source_languages: ["en", "pl"],
           target_languages: ["en", "pl"]
         },
-        base_urls: %{
-          media_proxy: "https://mediaproxy.example.com",
-          upload: "https://upload.example.com"
-        },
+        base_urls: %{},
         markup: %{
           allow_inline_images: true,
-          allow_headings: true,
-          allow_tables: true
+          allow_headings: false,
+          allow_tables: false
         }
       },
       stats: %{mau: Pleroma.User.active_user_count()},
@@ -343,13 +346,13 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
     expected = %{
       metadata: %{
-        avatar_upload_limit: 1024,
-        background_upload_limit: 1024,
-        banner_upload_limit: 1024,
-        background_image: Pleroma.Web.Endpoint.url() <> "/media/background.png",
-        chat_limit: 120,
-        description_limit: 120,
-        shout_limit: 120
+        avatar_upload_limit: 2_000_000,
+        background_upload_limit: 4_000_000,
+        banner_upload_limit: 4_000_000,
+        background_image: Pleroma.Web.Endpoint.url() <> "/images/city.jpg",
+        chat_limit: 5_000,
+        description_limit: 5_000,
+        shout_limit: 5_000
       }
     }
 
@@ -363,31 +366,31 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     expected = %{
       uri: Pleroma.Web.WebFinger.host(),
       description: "Pleroma: An efficient and flexible fediverse server",
-      short_description: "Corndog Emporium!",
-      email: "nonexist@example.com",
+      short_description: "",
+      email: "admin@example.com",
       urls: %{
         streaming_api: Pleroma.Web.Endpoint.websocket_url(),
       },
       stats: Pleroma.Stats.get_stats(),
-      thumbnail: "https://example.com/thumbnail.png",
-      registrations: false,
-      approval_required: true,
-      max_toot_chars: 4096,
-      max_media_attachments: 1,
+      thumbnail: "http://localhost:4001/instance/thumbnail.jpeg",
+      registrations: true,
+      approval_required: false,
+      max_toot_chars: 5_000,
+      max_media_attachments: 1_000,
       poll_limits: %{
-        max_options: 4,
-        max_option_chars: 120,
-        min_expiration: 1,
-        max_expiration: 2
+        max_options: 20,
+        max_option_chars: 200,
+        min_expiration: 0,
+        max_expiration: 365 * 24 * 60 * 60
       },
-      upload_limit: 1024,
-      avatar_upload_limit: 1024,
-      background_upload_limit: 1024,
-      banner_upload_limit: 1024,
-      background_image: Pleroma.Web.Endpoint.url() <> "/media/background.png",
-      shout_limit: 120,
-      description_limit: 120,
-      chat_limit: 120,
+      upload_limit: 16_000_000,
+      avatar_upload_limit: 2_000_000,
+      background_upload_limit: 4_000_000,
+      banner_upload_limit: 4_000_000,
+      background_image: Pleroma.Web.Endpoint.url() <> "/images/city.jpg",
+      shout_limit: 5_000,
+      description_limit: 5_000,
+      chat_limit: 5_000,
     }
 
     Map.equal?(expected, filtered_info)
@@ -400,7 +403,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     expected = %{
       domain: Pleroma.Web.WebFinger.host(),
       source_url: Pleroma.Application.repository(),
-      description: "Corndog Emporium!",
+      description: "",
       usage: %{users: %{active_month: Pleroma.User.active_user_count()}}
     }
 
@@ -541,57 +544,14 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
 
       user = insert(:user)
 
-      # Wall of configs for testing whether they are rendered properly
+      # contact in show2.json
+      clear_config([:instance, :contact_username], user.nickname)
+
+      # Pleroma.Language.Translation.configured?() -> true
       clear_config([Pleroma.Language.Translation, :provider], TranslationMock)
 
-      clear_config([:instance, :languages], ["en", "cs"])
-      clear_config([:instance, :name], "test title")
-      clear_config([:instance, :contact_username], user.nickname)
-      clear_config([:instance, :limit], 4096)
-      clear_config([:instance, :max_media_attachments], 1)
-      clear_config([:instance, :upload_limit], 1024)
-      clear_config([:instance, :poll_limits, :max_options], 4)
-      clear_config([:instance, :poll_limits, :max_option_chars], 120)
-      clear_config([:instance, :poll_limits, :min_expiration], 1)
-      clear_config([:instance, :poll_limits, :max_expiration], 2)
-      clear_config([:instance, :account_activation_required], true)
-      clear_config([:instance, :max_account_fields], 1)
-      clear_config([:instance, :max_remote_account_fields], 1)
-      clear_config([:instance, :account_field_name_length], 1)
-      clear_config([:instance, :account_field_value_length], 1)
-      clear_config([:instance, :allowed_post_formats], ["text/plain"])
-      clear_config([:instance, :birthday_required], true)
-      clear_config([:instance, :birthday_min_age], 1)
-
-      clear_config([:instance, :short_description], "Corndog Emporium!")
-      clear_config([:instance, :instance_thumbnail], "https://example.com/thumbnail.png")
-      clear_config([:instance, :registrations_open], false)
-      clear_config([:instance, :account_approval_required], true)
-
-      clear_config([:instance, :max_pinned_statuses], 1)
-      clear_config([:instance, :status_page], "https://status.example.com")
-
-      clear_config([:instance, :email], "nonexist@example.com")
-
-      clear_config([:instance, :avatar_upload_limit], 1024)
-      clear_config([:instance, :background_upload_limit], 1024)
-      clear_config([:instance, :banner_upload_limit], 1024)
-      clear_config([:instance, :background_image], "/media/background.png")
-      clear_config([:instance, :chat_limit], 120)
-      clear_config([:instance, :description_limit], 120)
-
-      clear_config([:media_proxy, :enabled], true)
-      clear_config([:media_proxy, :base_url], "https://mediaproxy.example.com")
-
-      clear_config([Pleroma.Upload, :base_url], "https://upload.example.com")
-
-      clear_config([:markup, :allow_inline_images], true)
-      clear_config([:markup, :allow_headings], true)
-      clear_config([:markup, :allow_tables], true)
-
-      clear_config([:restrict_unauthenticated, :timelines], %{local: true, federated: true})
-
-      clear_config([:shout, :limit], 120)
+      # Deprecated, but still used in view
+      clear_config([:instance, :chat_limit], 5_000)
 
       %{user: user}
     end
