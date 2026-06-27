@@ -96,6 +96,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
                   :pleroma
                 ]
 
+  @show2_filter @common_information_keys ++ [:thumbnail, :configuration, :registrations, :contact, :pleroma]
+
   @features [
     "pleroma_api",
     "mastodon_api",
@@ -391,6 +393,20 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     Map.equal?(expected, filtered_info)
   end
 
+  defp check_show2(info) do
+    filter = @show2_filter
+    filtered_info = Map.reject(info, fn {key, _value} -> key in filter end)
+
+    expected = %{
+      domain: Pleroma.Web.WebFinger.host(),
+      source_url: Pleroma.Application.repository(),
+      description: "Corndog Emporium!",
+      usage: %{users: %{active_month: Pleroma.User.active_user_count()}}
+    }
+
+    Map.equal?(expected, filtered_info)
+  end
+
   # When this fails, a new feature flag was probably added. Add it to the macros above.
   describe "uncofigurable features" do
     setup do: Enum.each(@configurable_features_flags, &clear_config(&1, false))
@@ -597,6 +613,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       expected_keys = Enum.sort(@show2_keys)
 
       assert check_common_information(output)
+      assert check_show2(output)
       assert check_thumbnail2(output)
       assert check_configuration2(output)
       assert check_registrations2(output)
