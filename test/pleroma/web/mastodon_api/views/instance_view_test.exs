@@ -157,26 +157,19 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     do: Map.merge(input_rest, acc)
 
   defp filter_render(input, filter, type, acc) do
-    {current_filter, filter_rest} = List.pop_at(filter, 0)
+    {{filter_key, filters}, filter_rest} = List.pop_at(filter, 0)
+    {config_key_values, input_rest} = Map.pop!(input, filter_key)
 
-    case current_filter do
-      nil ->
-        filter_render(input, filter_rest, type, acc)
+    filtered =
+      case type do
+        :inclusive ->
+          Map.reject(config_key_values, fn {key, _} -> key not in filters end)
 
-      {filter_key, filters} ->
-        {config_key_values, input_rest} = Map.pop!(input, filter_key)
+        :discriminative ->
+          Map.reject(config_key_values, fn {key, _} -> key in filters end)
+      end
 
-        filtered =
-          case type do
-            :inclusive ->
-              Map.reject(config_key_values, fn {key, _} -> key not in filters end)
-
-            :discriminative ->
-              Map.reject(config_key_values, fn {key, _} -> key in filters end)
-          end
-
-        filter_render(input_rest, filter_rest, type, Map.put(acc, filter_key, filtered))
-    end
+    filter_render(input_rest, filter_rest, type, Map.put(acc, filter_key, filtered))
   end
 
   defp check_common_information(info) do
