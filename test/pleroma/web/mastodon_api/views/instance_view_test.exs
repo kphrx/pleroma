@@ -20,21 +20,6 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     :version
   ]
 
-  @configuration_keys [
-    :accounts,
-    :statuses,
-    :media_attachments,
-    :polls
-  ]
-
-  @configuration2_keys @configuration_keys ++
-                         [
-                           :urls,
-                           :vapid,
-                           :translation,
-                           :timelines_access
-                         ]
-
   # Used for filtering out values from configuration.json render in configuration2.json render
   @configuration2_filter [
     {:accounts,
@@ -49,12 +34,6 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     {:vapid, [:public_key]},
     {:translation, [:enabled]},
     {:timelines_access, [:live_feeds, :hashtag_feeds, :trending_link_feeds]}
-  ]
-
-  @pleroma_configuration_keys [
-    :metadata,
-    :stats,
-    :vapid_public_key
   ]
 
   @pleroma_configuration2_filter [
@@ -159,14 +138,37 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   ]
 
   # Filters out values from one layer deep nested Maps.
-  defp filter_render(%{}, [], acc), do: acc
+  # Filtering types:
+  #   - :inclusive -> filters out everything that is not in the filters
+  #   - :discriminative -> filters out what is in the filters
+  defp filter_render(input, filter, type, acc)
 
-  defp filter_render(input, filter, acc) do
-    {{filter_key, filters}, filter_rest} = List.pop_at(filter, 0)
-    {config_key_values, input_rest} = Map.pop!(input, filter_key)
-    filtered = Map.reject(config_key_values, fn {key, _} -> key not in filters end)
+  defp filter_render(_input_rest, [], type, acc) when type == :inclusive, do: acc
 
-    filter_render(input_rest, filter_rest, Map.put(acc, filter_key, filtered))
+  defp filter_render(input_rest, [], type, acc) when type == :discriminative,
+    do: Map.merge(input_rest, acc)
+
+  defp filter_render(input, filter, type, acc) do
+    {current_filter, filter_rest} = List.pop_at(filter, 0)
+
+    case current_filter do
+      nil ->
+        filter_render(input, filter_rest, type, acc)
+
+      {filter_key, filters} ->
+        {config_key_values, input_rest} = Map.pop!(input, filter_key)
+
+        filtered =
+          case type do
+            :inclusive ->
+              Map.reject(config_key_values, fn {key, _} -> key not in filters end)
+
+            :discriminative ->
+              Map.reject(config_key_values, fn {key, _} -> key in filters end)
+          end
+
+        filter_render(input_rest, filter_rest, type, Map.put(acc, filter_key, filtered))
+    end
   end
 
   defp check_common_information(info) do
@@ -215,9 +217,6 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   defp check_configuration(info) do
     configuration = info[:configuration]
 
-    filtered_configuration =
-      Map.reject(configuration, fn {key, _value} -> key not in @configuration_keys end)
-
     expected = %{
       accounts: %{
         max_featured_tags: 0
@@ -239,16 +238,13 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       }
     }
 
-    Map.equal?(expected, filtered_configuration)
+    Map.equal?(expected, configuration)
   end
 
   defp check_configuration2(info) do
-    configuration = info[:configuration]
-
-    filtered_configuration =
-      configuration
-      |> Map.reject(fn {key, _value} -> key not in @configuration2_keys end)
-      |> filter_render(@configuration2_filter, %{})
+    configuration =
+      info[:configuration]
+      |> filter_render(@configuration2_filter, :inclusive, %{})
 
     expected = %{
       accounts: %{
@@ -279,7 +275,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       }
     }
 
-    Map.equal?(expected, filtered_configuration)
+    Map.equal?(expected, configuration)
   end
 
   defp check_registrations(info) do
@@ -296,18 +292,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   end
 
   defp check_pleroma_configuration(info) do
-    configuration = info[:pleroma]
-
-    filtered_configuration =
-      Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
-
-    # Tested elsewhere already
-    metadata = Map.fetch!(filtered_configuration, :metadata)
-
-    filtered_metadata =
-      Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
-
-    filtered_configuration = %{filtered_configuration | metadata: filtered_metadata}
+    configuration =
+      info[:pleroma]
+      |> filter_render([{:metadata, [:features, :federation]}], :discriminative, %{})
 
     expected = %{
       metadata: %{
@@ -339,24 +326,13 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       vapid_public_key: Keyword.get(Pleroma.Web.Push.vapid_config(), :public_key)
     }
 
-    Map.equal?(expected, filtered_configuration)
+    Map.equal?(expected, configuration)
   end
 
   defp check_pleroma_configuration2(info) do
-    configuration = info[:pleroma]
-
-    filtered_configuration =
-      Map.reject(configuration, fn {key, _value} -> key not in @pleroma_configuration_keys end)
-
-    # Tested elsewhere already
-    metadata = Map.fetch!(filtered_configuration, :metadata)
-
-    filtered_metadata =
-      Map.reject(metadata, fn {key, _value} -> key in [:features, :federation] end)
-
-    filtered_configuration =
-      %{filtered_configuration | metadata: filtered_metadata}
-      |> filter_render(@pleroma_configuration2_filter, %{})
+    configuration =
+      info[:pleroma]
+      |> filter_render(@pleroma_configuration2_filter, :inclusive, %{})
 
     expected = %{
       metadata: %{
@@ -370,7 +346,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       }
     }
 
-    Map.equal?(expected, filtered_configuration)
+    Map.equal?(expected, configuration)
   end
 
   # When this fails, a new feature flag was probably added. Add it to the macros above.
