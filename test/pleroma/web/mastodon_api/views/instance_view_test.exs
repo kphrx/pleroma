@@ -36,6 +36,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     {:timelines_access, [:live_feeds, :hashtag_feeds, :trending_link_feeds]}
   ]
 
+  @pleroma_configuration_filter [{:metadata, [:features, :federation]}]
+
   @pleroma_configuration2_filter [
     {:metadata,
      [
@@ -294,7 +296,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
   defp check_pleroma_configuration(info) do
     configuration =
       info[:pleroma]
-      |> filter_render([{:metadata, [:features, :federation]}], :discriminative, %{})
+      |> filter_render(@pleroma_configuration_filter, :discriminative, %{})
 
     expected = %{
       metadata: %{
