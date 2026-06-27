@@ -96,7 +96,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
                   :pleroma
                 ]
 
-  @show2_filter @common_information_keys ++ [:thumbnail, :configuration, :registrations, :contact, :pleroma]
+  @show2_filter @common_information_keys ++
+                  [:thumbnail, :configuration, :registrations, :contact, :pleroma]
 
   @features [
     "pleroma_api",
@@ -197,7 +198,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     thumbnail = info[:thumbnail]
 
     expected = %{
-      url: URI.merge(Pleroma.Web.Endpoint.url(), "http://localhost:4001/instance/thumbnail.jpeg") |> to_string
+      url:
+        URI.merge(Pleroma.Web.Endpoint.url(), "http://localhost:4001/instance/thumbnail.jpeg")
+        |> to_string
     }
 
     expected == thumbnail
@@ -313,11 +316,11 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
           value_length: 2048
         },
         post_formats: [
-              "text/plain",
-              "text/html",
-              "text/markdown",
-              "text/bbcode",
-              "text/x.misskeymarkdown"
+          "text/plain",
+          "text/html",
+          "text/markdown",
+          "text/bbcode",
+          "text/x.misskeymarkdown"
         ],
         birthday_required: false,
         birthday_min_age: 0,
@@ -369,7 +372,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       short_description: "",
       email: "admin@example.com",
       urls: %{
-        streaming_api: Pleroma.Web.Endpoint.websocket_url(),
+        streaming_api: Pleroma.Web.Endpoint.websocket_url()
       },
       stats: Pleroma.Stats.get_stats(),
       thumbnail: "http://localhost:4001/instance/thumbnail.jpeg",
@@ -390,7 +393,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       background_image: Pleroma.Web.Endpoint.url() <> "/images/city.jpg",
       shout_limit: 5_000,
       description_limit: 5_000,
-      chat_limit: 5_000,
+      chat_limit: 5_000
     }
 
     Map.equal?(expected, filtered_info)
