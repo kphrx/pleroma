@@ -17,6 +17,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     reject: "suspend"
   }
 
+  def mastodon_api_level, do: @mastodon_api_level
+
   def render("show.json", _) do
     instance = Config.get(:instance)
 
@@ -166,6 +168,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
     [
       "pleroma_api",
       "mastodon_api",
+      "mastodon_api_grouped_notifications",
       "mastodon_api_streaming",
       "polls",
       "v2_suggestions",
