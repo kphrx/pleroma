@@ -435,7 +435,7 @@ defmodule Pleroma.Config.DeprecationWarnings do
       """)
 
       if log_level, do: :logger.update_handler_config(:default, :level, log_level)
-      :logger.update_handler_config(:default, :formatter, formatter)
+      :logger.set_handler_config(:default, :formatter, formatter)
     end
   end
 
