@@ -46,6 +46,7 @@ defmodule Pleroma.HTML.Scrubber.Default do
   Meta.allow_tag_with_these_attributes(:b, ["lang"])
   Meta.allow_tag_with_these_attributes(:blockquote, ["lang"])
   Meta.allow_tag_with_these_attributes(:br, ["lang"])
+  Meta.allow_tag_with_these_attributes(:center, [])
   Meta.allow_tag_with_these_attributes(:cite, ["lang"])
   Meta.allow_tag_with_these_attributes(:code, ["lang"])
   Meta.allow_tag_with_these_attributes(:del, ["lang"])
@@ -83,48 +84,57 @@ defmodule Pleroma.HTML.Scrubber.Default do
     "quote-inline",
     "invisible",
     "ellipsis",
-    "mfm-center",
-    "mfm-flip",
-    "mfm-font",
-    "mfm-blur",
-    "mfm-rotate",
-    "mfm-x2",
-    "mfm-x3",
-    "mfm-x4",
-    "mfm-position",
-    "mfm-scale",
-    "mfm-fg",
-    "mfm-bg",
+    "mfm-tada",
     "mfm-jelly",
     "mfm-twitch",
     "mfm-shake",
     "mfm-spin",
     "mfm-jump",
     "mfm-bounce",
+    "mfm-flip",
+    "mfm-x2",
+    "mfm-x3",
+    "mfm-x4",
+    "mfm-scale",
+    "mfm-position",
+    "mfm-fg",
+    "mfm-bg",
+    "mfm-border",
+    "mfm-font",
+    "mfm-blur",
     "mfm-rainbow",
-    "mfm-tada",
-    "mfm-sparkle"
+    "mfm-sparkle",
+    "mfm-rotate",
+    "mfm-ruby",
+    "mfm-unixtime",
+    # Exists in Akkoma but not Misskey?
+    "mfm-center"
   ])
 
   Meta.allow_tag_with_this_attribute_values(:p, "class", ["quote-inline"])
 
   Meta.allow_tag_with_these_attributes(:span, [
     "lang",
-    "data-mfm-h",
-    "data-mfm-v",
+    "data-mfm-speed",
+    "data-mfm-delay",
+    "data-mfm-left",
+    "data-mfm-alternate",
     "data-mfm-x",
     "data-mfm-y",
-    "data-mfm-alternate",
-    "data-mfm-speed",
-    "data-mfm-deg",
-    "data-mfm-left",
+    "data-mfm-h",
+    "data-mfm-v",
+    "data-mfm-color",
+    "data-mfm-width",
+    "data-mfm-style",
+    "data-mfm-radius",
+    "data-mfm-noclip",
     "data-mfm-serif",
     "data-mfm-monospace",
     "data-mfm-cursive",
     "data-mfm-fantasy",
     "data-mfm-emoji",
     "data-mfm-math",
-    "data-mfm-color"
+    "data-mfm-deg"
   ])
 
   Meta.allow_tag_with_this_attribute_values(:code, "class", ["inline"])

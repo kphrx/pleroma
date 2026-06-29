@@ -55,16 +55,28 @@ defmodule Pleroma.Web.ControllerHelper do
 
   # TODO: Only fetch the params from open_api_spex when everything is converted
   @id_keys Pagination.page_keys() -- ["limit", "order"]
+  @id_key_atoms Enum.map(@id_keys, &String.to_atom/1)
+  @drop_id_params_key :drop_id_params
   defp build_pagination_fields(conn, min_id, max_id, extra_params, order) do
+    drop_id_params? = Map.get(extra_params, @drop_id_params_key, false)
+    extra_params = Map.delete(extra_params, @drop_id_params_key)
+
+    path_param_keys =
+      conn.path_params
+      |> Map.keys()
+      |> Enum.flat_map(&[&1, String.to_existing_atom(&1)])
+
     params =
       if Map.has_key?(conn.private, :open_api_spex) do
         get_in(conn, [Access.key(:private), Access.key(:open_api_spex), Access.key(:params)])
       else
         conn.params
       end
-      |> Map.drop(Map.keys(conn.path_params) |> Enum.map(&String.to_existing_atom/1))
+      |> Map.drop(path_param_keys)
       |> Map.merge(extra_params)
-      |> Map.drop(@id_keys)
+      # Some OpenApiSpex routes cast cursor params to atoms. Keep the historical default for
+      # existing endpoints, but allow grouped notifications to opt out of stale request cursors.
+      |> Map.drop(@id_keys ++ if(drop_id_params?, do: @id_key_atoms, else: []))
 
     {{next_id, nid}, {prev_id, pid}} =
       if order == :desc,
