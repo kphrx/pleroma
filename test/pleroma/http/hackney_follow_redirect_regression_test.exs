@@ -19,7 +19,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     {:ok, tls_server: tls_server, proxy: proxy}
   end
 
-  test "hackney follow_redirect crashes behind CONNECT proxy on relative redirects", %{
+  test "hackney follow_redirect handles relative redirects behind CONNECT proxy", %{
     tls_server: tls_server,
     proxy: proxy
   } do
@@ -28,19 +28,15 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: true,
-      force_redirect: true
+      force_redirect: true,
+      with_body: true
     ]
 
-    {pid, ref} = spawn_monitor(fn -> :hackney.request(:get, url, [], <<>>, opts) end)
-
-    assert_receive {:DOWN, ^ref, :process, ^pid, reason}, 5_000
-
-    assert match?({%FunctionClauseError{}, _}, reason) or match?(%FunctionClauseError{}, reason) or
-             match?({:function_clause, _}, reason)
+    assert {:ok, 200, _headers, "ok"} = :hackney.request(:get, url, [], <<>>, opts)
   end
 
   test "redirects work via proxy when hackney follow_redirect is disabled", %{
@@ -52,7 +48,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     adapter_opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: false,
@@ -75,7 +71,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: true
@@ -97,7 +93,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: true
@@ -119,7 +115,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: true
@@ -161,7 +157,13 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
         accept_tls_loop(listener)
       end)
 
-    {:ok, %{listener: listener, acceptor: acceptor, base_url: "https://127.0.0.1:#{port}"}}
+    {:ok,
+     %{
+       listener: listener,
+       acceptor: acceptor,
+       certfile: certfile,
+       base_url: "https://127.0.0.1:#{port}"
+     }}
   end
 
   defp stop_tls_redirect_server(%{listener: listener, acceptor: acceptor}) do
@@ -210,10 +212,16 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
       :ssl.close(ssl_socket)
     else
       _ ->
-        _ = :gen_tcp.close(tcp_socket)
+        _ = :ssl.close(tcp_socket)
         :ok
     end
   end
+
+  defp tls_client_options(_tls_server) do
+    [server_name_indication: ~c"localhost", verify_fun: {&accept_test_certificate/3, []}]
+  end
+
+  defp accept_test_certificate(_cert, _event, state), do: {:valid, state}
 
   defp recv_ssl_headers(socket, acc \\ <<>>) do
     case :ssl.recv(socket, 0, 1_000) do

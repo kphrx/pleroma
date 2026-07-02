@@ -35,10 +35,11 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
     if opts[:follow_redirect] != false do
       {_state, req_opts} = Access.get_and_update(opts, :follow_redirect, fn a -> {a, false} end)
       env = %{method: method, headers: headers, body: body, req_opts: req_opts}
-      res = :hackney.request(method, url, headers, body, req_opts)
+      res = do_request(method, url, headers, body, req_opts)
 
       case res do
-        {:ok, code, resp_headers, _client} when code in @redirect_statuses ->
+        {:ok, code, resp_headers, client} when code in @redirect_statuses ->
+          close(client)
           redirect(url, resp_headers, env, @redirect_limit)
 
         {:ok, code, resp_headers} when code in @redirect_statuses ->
@@ -48,11 +49,22 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
           res
       end
     else
-      :hackney.request(method, url, headers, body, opts)
+      do_request(method, url, headers, body, opts)
     end
   end
 
   @impl true
+  def stream_body(%{ref: ref, recv_timeout: recv_timeout} = client) do
+    _ = :hackney.stream_next(ref)
+
+    case receive_response(ref, recv_timeout) do
+      {:ok, data} when is_binary(data) -> {:ok, data, client}
+      {:ok, :done} -> :done
+      {:ok, {:error, error}} -> {:error, error}
+      {:error, error} -> {:error, error}
+    end
+  end
+
   def stream_body(ref) do
     case :hackney.stream_body(ref) do
       :done -> :done
@@ -62,7 +74,32 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
   end
 
   @impl true
+  def close(%{ref: ref}), do: :hackney.close(ref)
+
   def close(ref), do: :hackney.close(ref)
+
+  defp do_request(method, url, headers, body, opts) do
+    recv_timeout = Keyword.get(opts, :recv_timeout, :infinity)
+
+    req_opts =
+      opts
+      |> Keyword.put(:async, :once)
+      |> Keyword.put(:stream_to, self())
+
+    with {:ok, ref} <- :hackney.request(method, url, headers, body, req_opts),
+         {:ok, {:status, code, _reason}} <- receive_response(ref, recv_timeout),
+         {:ok, {:headers, resp_headers}} <- receive_response(ref, recv_timeout) do
+      {:ok, code, resp_headers, %{ref: ref, recv_timeout: recv_timeout}}
+    end
+  end
+
+  defp receive_response(ref, recv_timeout) do
+    receive do
+      {:hackney_response, ^ref, response} -> {:ok, response}
+    after
+      recv_timeout -> {:error, :timeout}
+    end
+  end
 
   defp redirect(url, resp_headers, env, limit) when limit == 0 do
     new_url = absolute_redirect_url(url, resp_headers)
@@ -71,17 +108,18 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
       "#{__MODULE__}: Handling redirect #{url} -> #{new_url}; redirect limit was reached - returning response after final redirect"
     )
 
-    :hackney.request(env.method, new_url, env.headers, env.body, env.req_opts)
+    do_request(env.method, new_url, env.headers, env.body, env.req_opts)
   end
 
   defp redirect(url, resp_headers, env, limit) do
     new_url = absolute_redirect_url(url, resp_headers)
     Logger.debug("#{__MODULE__}: handling redirect #{url} -> #{new_url}; limit = #{limit}")
 
-    res = :hackney.request(env.method, new_url, env.headers, env.body, env.req_opts)
+    res = do_request(env.method, new_url, env.headers, env.body, env.req_opts)
 
     case res do
-      {:ok, code, new_resp_headers, _client} when code in @redirect_statuses ->
+      {:ok, code, new_resp_headers, client} when code in @redirect_statuses ->
+        close(client)
         redirect(new_url, new_resp_headers, env, limit - 1)
 
       {:ok, code, new_resp_headers} when code in @redirect_statuses ->

@@ -131,12 +131,16 @@ defmodule Pleroma.Formatter do
     breaks = Map.get(opts, :breaks, false)
     text = normalize_markdown_quirks(text)
 
-    text
-    |> MDEx.to_html!(
+    MDEx.new(
+      markdown: text,
       extension: [autolink: true, strikethrough: true],
       parse: [smart: false],
       render: [hardbreaks: breaks, unsafe: true]
     )
+    |> MDEx.Document.run()
+    |> MDEx.Document.update_nodes(MDEx.HtmlBlock, &strip_dangerous_raw_html/1)
+    |> MDEx.Document.update_nodes(MDEx.HtmlInline, &strip_dangerous_raw_html/1)
+    |> MDEx.to_html!()
     |> compact_markdown_html(text)
   end
 
@@ -155,18 +159,31 @@ defmodule Pleroma.Formatter do
   end
 
   defp unwrap_raw_html_paragraph(html, markdown) do
-    if raw_html_only?(markdown) do
+    if inline_raw_html_only?(markdown) do
       String.replace(html, ~r/\A<p>(.*)<\/p>\z/s, "\\1")
     else
       html
     end
   end
 
-  defp raw_html_only?(markdown) do
+  defp inline_raw_html_only?(markdown) do
     markdown = String.trim(markdown)
 
-    String.match?(markdown, ~r/\A(?:<!--|<\/?[[:alpha:]][[:alnum:]:-]*(?:\s|>|\/>))/) &&
+    String.match?(
+      markdown,
+      ~r/\A(?:<!--|<\/?(?:a|abbr|acronym|b|bdi|bdo|big|br|cite|code|data|del|dfn|em|i|img|ins|kbd|mark|q|rb|rp|rt|rtc|ruby|s|samp|small|span|strong|sub|sup|time|tt|u|var|wbr)(?:\s|>|\/>))/i
+    ) &&
       String.ends_with?(markdown, ">")
+  end
+
+  defp strip_dangerous_raw_html(%{literal: literal} = node) do
+    literal =
+      literal
+      |> String.replace(~r/<(script|style)\b[^>]*>.*?<\/\1>/is, "")
+      |> String.replace(~r/<(script|style)\b[^>]*>.*\z/is, "")
+      |> String.replace(~r/<\/(script|style)\s*>/i, "")
+
+    %{node | literal: literal}
   end
 
   def html_escape({text, mentions, hashtags}, type) do
