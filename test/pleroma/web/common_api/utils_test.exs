@@ -220,6 +220,15 @@ defmodule Pleroma.Web.CommonAPI.UtilsTest do
       assert result == ~s[<a href="http://example.org/">OwO</a>]
     end
 
+    test "markdown links do not allow injected attributes" do
+      code = ~s|[click](http://example.com/?a=x" onerror="alert(1))|
+      {result, [], []} = Utils.format_input(code, "text/markdown")
+
+      assert result =~ ~s(<a href="http://example.com/?a=x">)
+      refute result =~ ~s|onerror="alert(1)|
+      refute result =~ ~s(<a href="http://example.com/?a=x" onerror=)
+    end
+
     test "rulers" do
       code = ~s[before\n\n-----\n\nafter]
       {result, [], []} = Utils.format_input(code, "text/markdown")

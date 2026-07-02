@@ -124,14 +124,49 @@ defmodule Pleroma.Formatter do
   end
 
   def markdown_to_html(text) do
-    Earmark.as_html!(text, %Earmark.Options{compact_output: true, smartypants: false})
+    markdown_to_html(text, %{})
   end
 
   def markdown_to_html(text, opts) do
-    Earmark.as_html!(
-      text,
-      %Earmark.Options{compact_output: true, smartypants: false} |> Map.merge(opts)
+    breaks = Map.get(opts, :breaks, false)
+    text = normalize_markdown_quirks(text)
+
+    text
+    |> MDEx.to_html!(
+      extension: [autolink: true, strikethrough: true],
+      parse: [smart: false],
+      render: [hardbreaks: breaks, unsafe: true]
     )
+    |> compact_markdown_html(text)
+  end
+
+  defp compact_markdown_html(html, markdown) do
+    html
+    |> String.trim_trailing("\n")
+    |> String.replace(~r/>\n\s*</, "><")
+    |> String.replace(~r/\n<\/code><\/pre>/, "</code></pre>")
+    |> String.replace(~r/(?<!<pre>)<code>/, ~s(<code class="inline">))
+    |> String.replace("<hr />", "<hr/>")
+    |> unwrap_raw_html_paragraph(markdown)
+  end
+
+  defp normalize_markdown_quirks(text) do
+    String.replace(text, ~r/~~([^~\n]+)~~~/, "~~\\1~~\\\\~")
+  end
+
+  defp unwrap_raw_html_paragraph(html, markdown) do
+    if raw_html_only?(markdown) do
+      String.replace(html, ~r/\A<p>(.*)<\/p>\z/s, "\\1")
+    else
+      html
+    end
+  end
+
+  defp raw_html_only?(markdown) do
+    markdown = String.trim(markdown)
+
+    String.match?(markdown, ~r/\A(?:<!--|<\/?[[:alpha:]][[:alnum:]:-]*(?:\s|>|\/>))/) &&
+      String.ends_with?(markdown, ">")
   end
 
   def html_escape({text, mentions, hashtags}, type) do

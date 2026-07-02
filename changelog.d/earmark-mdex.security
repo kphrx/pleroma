@@ -1,0 +1,1 @@
+Replace retired Earmark markdown rendering with MDEx to address stored XSS in link attributes.
