@@ -204,6 +204,7 @@ defmodule Pleroma.Mixfile do
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
       {:ex_machina, "~> 2.8", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:mock, "~> 0.3.9", only: :test},
       {:covertool, "~> 2.0", only: :test},
       {:hackney, "~> 1.20.1", override: true},
