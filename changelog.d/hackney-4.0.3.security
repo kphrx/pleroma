@@ -1,0 +1,1 @@
+Update Hackney and its HTTPoison integration to address SSRF, timeout, and injection vulnerabilities.
