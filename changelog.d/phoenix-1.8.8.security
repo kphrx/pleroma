@@ -1,0 +1,1 @@
+Update Phoenix to address long-poll NDJSON request denial-of-service vulnerabilities.
