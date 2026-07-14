@@ -6,6 +6,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidator do
   use Ecto.Schema
 
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
+  alias Pleroma.Web.ActivityPub.ObjectValidators.AttachmentTypeSniffer
 
   import Ecto.Changeset
 
@@ -61,8 +62,26 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidator do
   end
 
   def fix_media_type(data) do
-    Map.put_new(data, "mediaType", data["mimeType"] || "application/octet-stream")
+    current = data["mediaType"] || data["mimeType"] || "application/octet-stream"
+
+    resolved =
+      if sniffable?(current) do
+        case AttachmentTypeSniffer.sniff_image_type(data["href"]) do
+          {:ok, mime} when is_binary(mime) -> mime
+          _ -> current
+        end
+      else
+        current
+      end
+
+    Map.put(data, "mediaType", resolved)
   end
+
+  # Only sniff when the declared type carries no real information. Everything
+  # else (including unrecognized-but-present types) is left as the remote sent it.
+  defp sniffable?("application/octet-stream"), do: true
+  defp sniffable?(""), do: true
+  defp sniffable?(_), do: false
 
   defp handle_href(href, mediaType, data) do
     [

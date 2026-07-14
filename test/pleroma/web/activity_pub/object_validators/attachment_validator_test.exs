@@ -215,5 +215,226 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidatorTest do
         AttachmentValidator.cast_and_validate(attachment)
         |> Ecto.Changeset.apply_action(:insert)
     end
+
+    test "sniffs image/jpeg for octet-stream attachments whose body is an image" do
+      url = "https://example.com/media/no-extension/original"
+      jpeg = File.read!("test/fixtures/image.jpg")
+
+      Tesla.Mock.mock(fn %{method: :get, url: ^url} ->
+        %Tesla.Env{status: 200, body: jpeg}
+      end)
+
+      attachment = %{
+        "type" => "Document",
+        "mediaType" => "application/octet-stream",
+        "url" => [%{"type" => "Link", "href" => url, "mediaType" => "application/octet-stream"}]
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [%{href: ^url, mediaType: "image/jpeg"}] = attachment.url
+    end
+
+    test "sniffs image/jpeg for attachments with a missing mediaType" do
+      url = "https://example.com/media/missing-type/original"
+      jpeg = File.read!("test/fixtures/image.jpg")
+
+      Tesla.Mock.mock(fn %{method: :get, url: ^url} ->
+        %Tesla.Env{status: 200, body: jpeg}
+      end)
+
+      attachment = %{
+        "type" => "Document",
+        "url" => [%{"type" => "Link", "href" => url}]
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [%{href: ^url, mediaType: "image/jpeg"}] = attachment.url
+    end
+
+    test "leaves non-image octet-stream attachments as octet-stream" do
+      url = "https://example.com/media/some-document"
+
+      Tesla.Mock.mock(fn %{method: :get, url: ^url} ->
+        %Tesla.Env{status: 200, body: "just some plain text, not an image at all"}
+      end)
+
+      attachment = %{
+        "type" => "Document",
+        "mediaType" => "application/octet-stream",
+        "url" => [%{"type" => "Link", "href" => url, "mediaType" => "application/octet-stream"}]
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [%{mediaType: "application/octet-stream"}] = attachment.url
+    end
+
+    test "does not sniff when the remote already provided a real mediaType" do
+      # No Tesla mock is set up: if the validator tried to fetch, Tesla.Mock
+      # would raise and fail the test. A real image type must be kept as-is.
+      attachment = %{
+        "type" => "Document",
+        "mediaType" => "image/png",
+        "url" => [
+          %{"type" => "Link", "href" => "https://example.com/x", "mediaType" => "image/png"}
+        ]
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [%{mediaType: "image/png"}] = attachment.url
+    end
+  end
+
+  describe "fix_media_type fallbacks and sniffing" do
+    test "uses mimeType as a fallback when mediaType is absent (real type, not sniffed)" do
+      # No Tesla mock: if the validator tried to fetch, the test would fail.
+      # A real image type coming from mimeType must be preserved as-is on the
+      # outer attachment and on the synthesised url entry (string url form).
+      attachment = %{
+        "type" => "Document",
+        "mimeType" => "image/png",
+        "url" => "https://example.com/x.png"
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert attachment.mediaType == "image/png"
+      assert [%{mediaType: "image/png"}] = attachment.url
+    end
+
+    test "prefers mediaType over mimeType when both are present" do
+      attachment = %{
+        "type" => "Document",
+        "mediaType" => "image/gif",
+        "mimeType" => "image/png",
+        "url" => "https://example.com/x.gif"
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert attachment.mediaType == "image/gif"
+      assert [%{mediaType: "image/gif"}] = attachment.url
+    end
+
+    test "sniffs when the url entry's mediaType is application/octet-stream and the body is an image" do
+      # The outer attachment mediaType is not sniffed (no top-level href); only
+      # the url entry is. We assert only on the url entry.
+      url = "https://example.com/media/mime-type-octet"
+      jpeg = File.read!("test/fixtures/image.jpg")
+
+      Tesla.Mock.mock(fn %{method: :get, url: ^url} ->
+        %Tesla.Env{status: 200, body: jpeg}
+      end)
+
+      attachment = %{
+        "type" => "Document",
+        "mediaType" => "application/octet-stream",
+        "url" => [%{"type" => "Link", "href" => url, "mediaType" => "application/octet-stream"}]
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [%{mediaType: "image/jpeg"}] = attachment.url
+    end
+
+    test "sniffs when mediaType is the empty string and the body is an image" do
+      url = "https://example.com/media/empty-mediatype"
+      png = File.read!("test/fixtures/image.png")
+
+      Tesla.Mock.mock(fn %{method: :get, url: ^url} ->
+        %Tesla.Env{status: 200, body: png}
+      end)
+
+      attachment = %{
+        "type" => "Document",
+        "mediaType" => "",
+        "url" => [%{"type" => "Link", "href" => url, "mediaType" => ""}]
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [%{mediaType: "image/png"}] = attachment.url
+    end
+
+    test "falls back to the declared type when the sniffer HTTP request fails" do
+      url = "https://example.com/media/sniff-404"
+
+      Tesla.Mock.mock(fn %{method: :get, url: ^url} ->
+        %Tesla.Env{status: 404, body: ""}
+      end)
+
+      attachment = %{
+        "type" => "Document",
+        "mediaType" => "application/octet-stream",
+        "url" => [%{"type" => "Link", "href" => url, "mediaType" => "application/octet-stream"}]
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [%{mediaType: "application/octet-stream"}] = attachment.url
+    end
+
+    test "sniffs each url entry independently" do
+      jpeg_url = "https://example.com/media/a"
+      octet_url = "https://example.com/media/b"
+      jpeg = File.read!("test/fixtures/image.jpg")
+
+      Tesla.Mock.mock(fn
+        %{method: :get, url: ^jpeg_url} ->
+          %Tesla.Env{status: 200, body: jpeg}
+
+        %{method: :get, url: ^octet_url} ->
+          %Tesla.Env{status: 200, body: "definitely not an image"}
+      end)
+
+      attachment = %{
+        "type" => "Document",
+        "mediaType" => "application/octet-stream",
+        "url" => [
+          %{"type" => "Link", "href" => jpeg_url, "mediaType" => "application/octet-stream"},
+          %{"type" => "Link", "href" => octet_url, "mediaType" => "application/octet-stream"}
+        ]
+      }
+
+      {:ok, attachment} =
+        attachment
+        |> AttachmentValidator.cast_and_validate()
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [
+               %{href: ^jpeg_url, mediaType: "image/jpeg"},
+               %{href: ^octet_url, mediaType: "application/octet-stream"}
+             ] = attachment.url
+    end
   end
 end

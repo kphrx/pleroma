@@ -59,7 +59,9 @@ defmodule Pleroma.ReverseProxy do
   * `inline_content_types`:
     * `true` will not alter `content-disposition` (up to the upstream),
     * `false` will add `content-disposition: attachment` to any request,
-    * a list of whitelisted content types
+    * a list of whitelisted content types for which `content-disposition: inline`
+    is always set (overriding any upstream header) so the media can be embedded
+    in pages; the filename is derived from the content type
 
   * `req_headers`, `resp_headers` additional headers.
 
@@ -386,7 +388,27 @@ defmodule Pleroma.ReverseProxy do
 
       List.keystore(headers, "content-disposition", 0, {"content-disposition", disposition})
     else
-      headers
+      if opt == true do
+        headers
+      else
+        name = inline_filename(content_type)
+
+        disposition =
+          if name do
+            "inline; filename=\"#{name}\""
+          else
+            "inline"
+          end
+
+        List.keystore(headers, "content-disposition", 0, {"content-disposition", disposition})
+      end
+    end
+  end
+
+  defp inline_filename(content_type) do
+    case MIME.extensions(content_type) do
+      [ext | _] when ext != "" -> "inline.#{ext}"
+      _ -> nil
     end
   end
 
