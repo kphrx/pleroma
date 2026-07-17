@@ -115,6 +115,7 @@ defmodule Pleroma.ReverseProxyTest do
   describe "max_body" do
     test "length returns error if content-length more than option", %{conn: conn} do
       request_mock(0)
+      expect(ClientMock, :close, fn _ -> :ok end)
 
       assert capture_log(fn ->
                ReverseProxy.call(conn, "/huge-file", max_body_length: 4)
@@ -128,13 +129,30 @@ defmodule Pleroma.ReverseProxyTest do
              end) == ""
     end
 
+    test "closes streamed responses with invalid status", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/invalid-status", _, _, _ ->
+        {:ok, 404, [], %{url: "/invalid-status"}}
+      end)
+      |> expect(:close, fn %{url: "/invalid-status"} -> :ok end)
+
+      ReverseProxy.call(conn, "/invalid-status")
+    end
+
     test "max_body_length returns error if streaming body more than that option", %{conn: conn} do
       stream_mock(3, true)
 
       assert capture_log(fn ->
-               ReverseProxy.call(conn, "/stream-bytes/50", max_body_length: 30)
+               ReverseProxy.call(conn, "/stream-bytes/50", max_body_length: 29)
              end) =~
                "Elixir.Pleroma.ReverseProxy request to /stream-bytes/50 failed while reading/chunking: :body_too_large"
+    end
+
+    test "max_body_length accepts a body exactly at the limit", %{conn: conn} do
+      stream_mock(4)
+
+      conn = ReverseProxy.call(conn, "/stream-bytes/30", max_body_length: 30)
+      assert byte_size(conn.resp_body) == 30
     end
   end
 
@@ -200,7 +218,10 @@ defmodule Pleroma.ReverseProxyTest do
 
     test "204", %{conn: conn} do
       url = "/status/204"
-      expect(ClientMock, :request, fn :get, _url, _, _, _ -> {:ok, 204, [], %{}} end)
+
+      ClientMock
+      |> expect(:request, fn :get, _url, _, _, _ -> {:ok, 204, [], %{}} end)
+      |> expect(:close, fn %{} -> :ok end)
 
       capture_log(fn ->
         conn = ReverseProxy.call(conn, url)

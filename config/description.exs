@@ -3085,8 +3085,15 @@ config :pleroma, :config_description, [
       %{
         key: :max_connections,
         type: :integer,
-        description: "Maximum number of connections in the pool. Default: 250 connections.",
+        description:
+          "Maximum total number of connections in the pool. HTTP/1 origins may use multiple connections within this limit, while HTTP/2 connections are multiplexed. Default: 250 connections.",
         suggestions: [250]
+      },
+      %{
+        key: :max_idle_time,
+        type: :integer,
+        description: "Time before an unused connection is closed. Default: 30000ms.",
+        suggestions: [30_000]
       },
       %{
         key: :connect_timeout,

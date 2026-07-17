@@ -73,5 +73,11 @@ defmodule Pleroma.HTTP.AdapterHelper.GunTest do
 
       assert opts[:proxy] == {~c"example.com", 4321}
     end
+
+    test "uses managed chunks for streamed responses" do
+      opts = Gun.options([stream: true], URI.parse("https://example.com"))
+
+      assert opts[:body_as] == :chunks
+    end
   end
 end
