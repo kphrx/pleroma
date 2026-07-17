@@ -1,0 +1,1 @@
+Fixed Gun HTTP/1 concurrency, authenticated proxy handling, tunnel requests, and streamed connection cleanup.
