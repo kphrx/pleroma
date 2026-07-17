@@ -38,7 +38,16 @@ defmodule Pleroma.HTTP.Adapter.Gun do
     method = Tesla.Adapter.Shared.format_method(env.method)
     {headers, body, send_body} = prepare_body(env.headers, env.body, opts[:send_body])
     request_opts = request_opts(opts[:reply_to], tunnel)
-    stream = open_stream(conn, method, path, headers, body, request_opts, send_body)
+
+    stream =
+      try do
+        open_stream(conn, method, path, headers, body, request_opts, send_body)
+      catch
+        kind, reason ->
+          ConnectionPool.release_conn(conn)
+          :erlang.raise(kind, reason, __STACKTRACE__)
+      end
+
     :ok = ConnectionPool.register_stream(conn, stream)
     :ok = send_stream_body(conn, stream, body, send_body)
     response = read_response(conn, stream, opts)

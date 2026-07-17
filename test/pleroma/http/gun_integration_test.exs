@@ -177,6 +177,28 @@ defmodule Pleroma.HTTP.GunIntegrationTest do
     assert {:ok, %Tesla.Env{status: 200, body: "ok"}} = request(origin.base_url <> "/final")
   end
 
+  test "releases the lease when Gun rejects an invalid request header", %{origin: origin} do
+    adapter_opts = [
+      tls_opts: [verify: :verify_none],
+      connect_timeout: 2_000,
+      timeout: 2_000
+    ]
+
+    client = Tesla.client([ConnectionPool], Tesla.Adapter.Gun)
+
+    assert {:invalid_request_header, "x-test", _message} =
+             catch_error(
+               Tesla.get(client, origin.base_url <> "/final",
+                 headers: [{"x-test", "value\r\nx-injected: true"}],
+                 opts: [adapter: adapter_opts]
+               )
+             )
+
+    assert worker_clients(origin.port) == %{}
+    refute_receive {:origin_request, "/final"}
+    assert {:ok, %Tesla.Env{status: 200, body: "ok"}} = request(origin.base_url <> "/final")
+  end
+
   test "requests through authenticated SOCKS5 with proxy-side DNS", %{
     origin: origin,
     socks_proxy: proxy
@@ -622,12 +644,26 @@ defmodule Pleroma.HTTP.GunIntegrationTest do
   end
 
   defp worker_protocol(port) do
+    case worker_state(port) do
+      nil -> nil
+      state -> state.protocol
+    end
+  end
+
+  defp worker_clients(port) do
+    case worker_state(port) do
+      nil -> nil
+      state -> state.clients
+    end
+  end
+
+  defp worker_state(port) do
     prefix = "https:127.0.0.1:#{port}:"
 
     Pleroma.Gun.ConnectionPool
     |> Registry.select([{{:"$1", :"$2", :_}, [], [{{:"$1", :"$2"}}]}])
     |> Enum.find_value(fn {key, worker} ->
-      if String.starts_with?(key, prefix), do: :sys.get_state(worker).protocol
+      if String.starts_with?(key, prefix), do: :sys.get_state(worker)
     end)
   end
 
