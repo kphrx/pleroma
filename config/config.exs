@@ -966,6 +966,10 @@ config :pleroma, Pleroma.Search.QdrantSearch,
     vectors: %{size: 384, distance: "Cosine"}
   }
 
+config :pleroma, :database_config_blacklist, [
+  {:pleroma, :logger}
+]
+
 config :pleroma, :database_config_whitelist, [
   {:pleroma},
   {:cors_plug},
