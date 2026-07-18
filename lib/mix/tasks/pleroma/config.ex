@@ -307,6 +307,13 @@ defmodule Mix.Tasks.Pleroma.Config do
     if blacklisted_configs in [nil, false] do
       shell_error("No unwanted settings in ConfigDB. No changes made.")
     else
+      blacklisted_groups =
+        blacklisted_configs
+        |> Enum.filter(fn
+          {_group} -> true
+          _ -> false
+        end)
+
       blacklisted_keys =
         blacklisted_configs
         |> Enum.filter(fn
@@ -317,7 +324,7 @@ defmodule Mix.Tasks.Pleroma.Config do
       filtered =
         from(c in ConfigDB)
         |> Repo.all()
-        |> Enum.filter(&blacklisted?(&1, blacklisted_keys))
+        |> Enum.filter(&blacklisted?(&1, blacklisted_groups, blacklisted_keys))
 
       if not Enum.empty?(filtered) do
         shell_info("The following settings will be removed from ConfigDB:\n")
@@ -541,7 +548,8 @@ defmodule Mix.Tasks.Pleroma.Config do
       not Enum.member?(whitelisted_keys, {group, key})
   end
 
-  defp blacklisted?(%{group: group, key: key}, blacklisted_keys) do
-    Enum.member?(blacklisted_keys, {group, key})
+  defp blacklisted?(%{group: group, key: key}, blacklisted_groups, blacklisted_keys) do
+    Enum.member?(blacklisted_groups, {group}) or
+      Enum.member?(blacklisted_keys, {group, key})
   end
 end

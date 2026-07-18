@@ -373,11 +373,13 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
     test "filters blacklisted settings" do
       clear_config(:database_config_whitelist, [{:pleroma}])
       clear_config(:database_config_blacklist, [
-        {:pleroma, :logger}
+        {:pleroma, :logger},
+        {:blacklisted_group}
       ])
 
       insert_config_record(:pleroma, :logger, backends: :console)
       insert_config_record(:web_push_encryption, :vapid_details, a: 1)
+      insert_config_record(:blacklisted_group, :anything, a: 1)
 
       MixTask.run(["filter_blacklisted", "--force"])
 
