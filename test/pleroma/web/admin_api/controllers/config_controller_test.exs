@@ -1245,6 +1245,52 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       refute ConfigDB.get_by_group_and_key(:pleroma, :database_config_whitelist)
     end
 
+    test "doesn't set keys in the blacklist", %{conn: conn} do
+      clear_config(:database_config_blacklist, [{:pleroma, :logger}, {:pleroma, :key2}, {:pleroma, Pleroma.Captcha.NotReal}, {:blacklisted_group}])
+
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/pleroma/admin/config", %{
+        configs: [
+          %{group: ":pleroma", key: ":logger", value: "logconf"},
+          %{group: ":pleroma", key: ":key1", value: "value1"},
+          %{group: ":pleroma", key: ":key2", value: "value2"},
+          %{group: ":not_real", key: ":anything", value: "value3"},
+          %{group: ":blacklisted_group", key: ":anything", value: "value4"}
+        ]
+      })
+
+      assert Application.get_env(:pleroma, :logger) == nil
+      assert Application.get_env(:pleroma, :key1) == "value1"
+      assert Application.get_env(:pleroma, :key2) == nil
+      assert Application.get_env(:pleroma, Pleroma.Captcha.NotReal) == nil
+      assert Application.get_env(:blacklisted_group, :anything) == nil
+    end
+
+    test "doesn't allow updating the database_config_blacklist itself", %{conn: conn} do
+      original_blacklist = Pleroma.Config.get(:database_config_blacklist)
+
+      refute ConfigDB.get_by_group_and_key(:pleroma, :database_config_blacklist)
+
+      %{"configs" => configs} =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/pleroma/admin/config", %{
+          configs: [
+            %{
+              group: ":pleroma",
+              key: ":database_config_blacklist",
+              value: [%{"tuple" => [":pleroma", ":key1"]}]
+            }
+          ]
+        })
+        |> json_response_and_validate_schema(200)
+
+      assert configs == []
+      assert Pleroma.Config.get(:database_config_blacklist) == original_blacklist
+      refute ConfigDB.get_by_group_and_key(:pleroma, :database_config_blacklist)
+    end
+
     test "args for Pleroma.Upload.Filter.Mogrify with custom tuples", %{conn: conn} do
       assert conn
              |> put_req_header("content-type", "application/json")
@@ -1514,6 +1560,31 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       assert response = json_response_and_validate_schema(conn, 200)
 
       assert length(response) == length(Pleroma.Docs.JSON.compiled_descriptions())
+    end
+
+    test "filters by database configuration blacklist and whitelist", %{conn: conn} do
+      clear_config(:database_config_whitelist, [{:pleroma, :instance}, {:pleroma, :activitypub}, {:pleroma, Pleroma.Upload}])
+      clear_config(:database_config_blacklist, [
+        {:pleroma, Pleroma.Upload},
+      ])
+
+      children =
+        conn
+        |> get("/api/pleroma/admin/config/descriptions")
+        |> json_response_and_validate_schema(200)
+
+      assert length(children) == 2
+
+      assert Enum.count(children, fn c -> c["group"] == ":pleroma" end) == 2
+
+      instance = Enum.find(children, fn c -> c["key"] == ":instance" end)
+      assert instance["children"]
+
+      activitypub = Enum.find(children, fn c -> c["key"] == ":activitypub" end)
+      assert activitypub["children"]
+
+      web_endpoint = Enum.find(children, fn c -> c["key"] == "Pleroma.Upload" end)
+      refute web_endpoint["children"]
     end
   end
 end
