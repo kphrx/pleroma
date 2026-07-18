@@ -342,6 +342,7 @@ defmodule Mix.Tasks.Pleroma.Config do
       end
     end
   end
+
   @spec migrate_to_db(Path.t() | nil) :: any()
   def migrate_to_db(file_path \\ nil) do
     with :ok <- Pleroma.Config.DeprecationWarnings.warn() do

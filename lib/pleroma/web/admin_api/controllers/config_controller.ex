@@ -212,7 +212,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
 
         {blacklisted_group, blacklisted_key} ->
           group == inspect(blacklisted_group) and key == inspect(blacklisted_key)
-        end)
+      end)
     else
       true
     end

@@ -1246,7 +1246,12 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
     end
 
     test "doesn't set keys in the blacklist", %{conn: conn} do
-      clear_config(:database_config_blacklist, [{:pleroma, :logger}, {:pleroma, :key2}, {:pleroma, Pleroma.Captcha.NotReal}, {:blacklisted_group}])
+      clear_config(:database_config_blacklist, [
+        {:pleroma, :logger},
+        {:pleroma, :key2},
+        {:pleroma, Pleroma.Captcha.NotReal},
+        {:blacklisted_group}
+      ])
 
       conn
       |> put_req_header("content-type", "application/json")
@@ -1563,9 +1568,14 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
     end
 
     test "filters by database configuration blacklist and whitelist", %{conn: conn} do
-      clear_config(:database_config_whitelist, [{:pleroma, :instance}, {:pleroma, :activitypub}, {:pleroma, Pleroma.Upload}])
+      clear_config(:database_config_whitelist, [
+        {:pleroma, :instance},
+        {:pleroma, :activitypub},
+        {:pleroma, Pleroma.Upload}
+      ])
+
       clear_config(:database_config_blacklist, [
-        {:pleroma, Pleroma.Upload},
+        {:pleroma, Pleroma.Upload}
       ])
 
       children =

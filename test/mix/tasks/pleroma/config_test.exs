@@ -372,10 +372,7 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
 
     test "filters blacklisted settings" do
       clear_config(:database_config_whitelist, [{:pleroma}])
-      clear_config(:database_config_blacklist, [
-        {:pleroma, :logger},
-        {:blacklisted_group}
-      ])
+      clear_config(:database_config_blacklist, [{:pleroma, :logger}, {:blacklisted_group}])
 
       insert_config_record(:pleroma, :logger, backends: :console)
       insert_config_record(:web_push_encryption, :vapid_details, a: 1)
@@ -387,7 +384,7 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
                %ConfigDB{group: :pleroma, key: :instance},
                %ConfigDB{group: :pleroma, key: Pleroma.Captcha},
                %ConfigDB{group: :pleroma2, key: :key2},
-               %ConfigDB{group: :web_push_encryption, key: :vapid_details},
+               %ConfigDB{group: :web_push_encryption, key: :vapid_details}
              ] = config_records()
     end
 
