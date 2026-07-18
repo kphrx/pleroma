@@ -9,7 +9,7 @@ defmodule Pleroma.ApplicationTest do
 
   describe "config :pleroma, :logger, backends: [{:ex_syslogger, :ex_syslogger}]" do
     setup do
-      clear_config([:logger, :backends], [{:ex_syslogger, :ex_syslogger}])
+      clear_config([:logger], backends: [{:ex_syslogger, :ex_syslogger}])
     end
 
     test "is handled" do
@@ -24,7 +24,7 @@ defmodule Pleroma.ApplicationTest do
 
   describe "config :pleroma, :logger, :backends: [:console]" do
     setup do
-      clear_config([:logger, :backends], [:console])
+      clear_config([:logger], backends: [:console])
     end
 
     test "emits a warning" do
