@@ -424,16 +424,16 @@ defmodule Pleroma.Config.DeprecationWarnings do
     formatter = Logger.default_formatter(formatter_config)
     log_level = Keyword.get(config, :level, nil)
 
+    Logger.debug("""
+    Reconfiguring console Logger with deprecated configuration syntax.
+      Handler configuration:
+        log_level: #{inspect(log_level)}
+
+      Formatter:
+        #{inspect(formatter)}
+    """)
+
     if Config.get(:env) != :test do
-      Logger.debug("""
-      Reconfiguring console Logger with deprecated configuration syntax.
-        Handler configuration:
-          log_level: #{inspect(log_level)}
-
-        Formatter:
-          #{inspect(formatter)}
-      """)
-
       if log_level, do: :logger.update_handler_config(:default, :level, log_level)
       :logger.set_handler_config(:default, :formatter, formatter)
     end
