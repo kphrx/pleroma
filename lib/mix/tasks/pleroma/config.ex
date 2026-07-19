@@ -252,40 +252,43 @@ defmodule Mix.Tasks.Pleroma.Config do
     if whitelisted_configs in [nil, false] do
       shell_error("No unwanted settings in ConfigDB. No changes made.")
     else
-      whitelisted_groups =
-        whitelisted_configs
-        |> Enum.filter(fn
-          {_group} -> true
-          _ -> false
-        end)
-        |> Enum.map(fn {group} -> group end)
-
-      whitelisted_keys =
-        whitelisted_configs
-        |> Enum.filter(fn
-          {_group, _key} -> true
-          _ -> false
-        end)
+      {whitelisted_groups, whitelisted_keys} = get_filters(whitelisted_configs)
 
       filtered =
         from(c in ConfigDB)
         |> Repo.all()
         |> Enum.filter(&not_whitelisted?(&1, whitelisted_groups, whitelisted_keys))
 
-      if not Enum.empty?(filtered) do
-        shell_info("The following settings will be removed from ConfigDB:\n")
-        Enum.each(filtered, &dump(&1))
+      do_config_filter(filtered, force)
+    end
+  end
 
-        if force or shell_prompt("Are you sure you want to continue?", "n") in ~w(Yn Y y) do
-          filtered_ids = Enum.map(filtered, fn %{id: id} -> id end)
+  # Removes blacklisted configuration sections
+  def run(["filter_blacklisted" | rest]) do
+    {options, [], []} =
+      OptionParser.parse(
+        rest,
+        strict: [force: :boolean],
+        aliases: [f: :force]
+      )
 
-          Repo.delete_all(from(c in ConfigDB, where: c.id in ^filtered_ids))
-        else
-          shell_error("No changes made.")
-        end
-      else
-        shell_error("No unwanted settings in ConfigDB. No changes made.")
-      end
+    force = Keyword.get(options, :force, false)
+
+    start_pleroma()
+
+    blacklisted_configs = Pleroma.Config.get(:database_config_blacklist)
+
+    if blacklisted_configs in [nil, false] do
+      shell_error("No unwanted settings in ConfigDB. No changes made.")
+    else
+      {blacklisted_groups, blacklisted_keys} = get_filters(blacklisted_configs)
+
+      filtered =
+        from(c in ConfigDB)
+        |> Repo.all()
+        |> Enum.filter(&blacklisted?(&1, blacklisted_groups, blacklisted_keys))
+
+      do_config_filter(filtered, force)
     end
   end
 
@@ -490,8 +493,49 @@ defmodule Mix.Tasks.Pleroma.Config do
     Ecto.Adapters.SQL.query!(Repo, "ALTER SEQUENCE config_id_seq RESTART;")
   end
 
+  defp get_filters(config) do
+    groups =
+      config
+      |> Enum.filter(fn
+        {_group} -> true
+        _ -> false
+      end)
+      |> Enum.map(fn {group} -> group end)
+
+    keys =
+      config
+      |> Enum.filter(fn
+        {_group, _key} -> true
+        _ -> false
+      end)
+
+    {groups, keys}
+  end
+
   defp not_whitelisted?(%{group: group, key: key}, whitelisted_groups, whitelisted_keys) do
     not Enum.member?(whitelisted_groups, group) and
       not Enum.member?(whitelisted_keys, {group, key})
+  end
+
+  defp blacklisted?(%{group: group, key: key}, blacklisted_groups, blacklisted_keys) do
+    Enum.member?(blacklisted_groups, group) or
+      Enum.member?(blacklisted_keys, {group, key})
+  end
+
+  defp do_config_filter(filtered, _) when length(filtered) == 0 do
+    shell_error("No unwanted settings in ConfigDB. No changes made.")
+  end
+
+  defp do_config_filter(filtered, force) do
+    shell_info("The following settings will be removed from ConfigDB:\n")
+    Enum.each(filtered, &dump(&1))
+
+    if force or shell_prompt("Are you sure you want to continue?", "n") in ~w(Yn Y y) do
+      filtered_ids = Enum.map(filtered, fn %{id: id} -> id end)
+
+      Repo.delete_all(from(c in ConfigDB, where: c.id in ^filtered_ids))
+    else
+      shell_error("No changes made.")
+    end
   end
 end

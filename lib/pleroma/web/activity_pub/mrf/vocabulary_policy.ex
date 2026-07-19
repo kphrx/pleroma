@@ -4,8 +4,9 @@
 
 defmodule Pleroma.Web.ActivityPub.MRF.VocabularyPolicy do
   @moduledoc "Filter activities which belong to certain activity vocabularies"
-
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @impl true
   def filter(%{"type" => "Undo", "object" => object} = activity) do

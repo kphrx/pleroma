@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.AntiLinkSpamPolicy do
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.User
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   require Logger
 

@@ -19,8 +19,8 @@ variables:
     - 'printf "%s" "$CI_SCRIPT" | base64 -d > /tmp/ci-script.sh && /bin/sh -xe /tmp/ci-script.sh'
 
 steps:
-  unit-testing-elixir-1.18:
-    image: elixir:1.18-otp-27-alpine
+  unit-testing-elixir-1.19:
+    image: elixir:1.19-otp-28-alpine
     entrypoint: *script_file_entrypoint
     environment:
       MIX_ENV: test
