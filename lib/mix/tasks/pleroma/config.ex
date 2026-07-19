@@ -500,7 +500,7 @@ defmodule Mix.Tasks.Pleroma.Config do
         {_group} -> true
         _ -> false
       end)
-      |>Enum.map(fn {group} -> group end)
+      |> Enum.map(fn {group} -> group end)
 
     keys =
       config

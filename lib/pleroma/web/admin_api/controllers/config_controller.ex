@@ -182,11 +182,11 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
   defp allowed_config?(":pleroma", ":database_config_blacklist", _), do: true
 
   defp allowed_config?(group, key, mode) do
-    configs = 
+    configs =
       case mode do
         :whitelist -> Config.get(:database_config_whitelist)
         :blacklist -> Config.get(:database_config_blacklist)
-    end
+      end
 
     if configs do
       Enum.any?(configs, fn
