@@ -11,8 +11,6 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
   alias Pleroma.Config
   alias Pleroma.Config.DeprecationWarnings
 
-  require Logger
-
   describe "filter exiftool" do
     test "gives warning when still used" do
       clear_config(
