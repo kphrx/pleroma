@@ -907,21 +907,25 @@ defmodule Pleroma.Web.MastodonAPI.TimelineControllerTest do
       {:ok, activity_test1} = CommonAPI.post(user, %{status: "#test #test1"})
       {:ok, activity_none} = CommonAPI.post(user, %{status: "#test #none"})
 
-      any_test = get(conn, "/api/v1/timelines/tag/test?any[]=test1")
+      for hashtag_timeline_mode <- [:enabled, :disabled] do
+        clear_config([:features, :improved_hashtag_timeline], hashtag_timeline_mode)
 
-      [status_none, status_test1, status_test] = json_response_and_validate_schema(any_test, :ok)
+        any_test = get(conn, "/api/v1/timelines/tag/test?any[]=test1")
 
-      assert to_string(activity_test.id) == status_test["id"]
-      assert to_string(activity_test1.id) == status_test1["id"]
-      assert to_string(activity_none.id) == status_none["id"]
+        [status_none, status_test1, status_test] = json_response_and_validate_schema(any_test, :ok)
 
-      restricted_test = get(conn, "/api/v1/timelines/tag/test?all[]=test1&none[]=none")
+        assert to_string(activity_test.id) == status_test["id"]
+        assert to_string(activity_test1.id) == status_test1["id"]
+        assert to_string(activity_none.id) == status_none["id"]
 
-      assert [status_test1] == json_response_and_validate_schema(restricted_test, :ok)
+        restricted_test = get(conn, "/api/v1/timelines/tag/test?all[]=test1&none[]=none")
 
-      all_test = get(conn, "/api/v1/timelines/tag/test?all[]=none")
+        assert [status_test1] == json_response_and_validate_schema(restricted_test, :ok)
 
-      assert [status_none] == json_response_and_validate_schema(all_test, :ok)
+        all_test = get(conn, "/api/v1/timelines/tag/test?all[]=none")
+
+        assert [status_none] == json_response_and_validate_schema(all_test, :ok)
+      end
     end
 
     test "muted emotions", %{conn: conn} do
