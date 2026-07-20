@@ -139,6 +139,8 @@ defmodule Pleroma.Web.Endpoint do
     from: {:pleroma, "priv/static/adminfe/"}
   )
 
+  plug(Pleroma.Web.Plugs.StaticNotFoundPlug)
+
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
   if code_reloading? do
