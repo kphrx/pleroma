@@ -176,6 +176,34 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
       assert ["lain", "lain2"] -- Enum.map(log_entry.data["subjects"], & &1["nickname"]) == []
     end
 
+    test "Creating without a password returns a password reset link", %{conn: conn} do
+      [account1, account2] =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/pleroma/admin/users", %{
+          "users" => [
+            %{
+              "nickname" => "lain",
+              "email" => "lain@example.org"
+            },
+            %{
+              "nickname" => "lain2",
+              "email" => "lain2@example.org",
+              "password" => "dupa.8"
+            }
+          ]
+        })
+        |> json_response_and_validate_schema(200)
+
+      assert account1["type"] == "success"
+      assert %{"password_reset_link" => link} = account1["data"]
+      assert link =~ "/api/v1/pleroma/password_reset/"
+
+      assert account2["type"] == "success"
+      refute Map.has_key?(account2["data"], "password_reset_link")
+    end
+
     test "Cannot create user with existing email", %{conn: conn} do
       user = insert(:user)
 

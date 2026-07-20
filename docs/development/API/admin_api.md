@@ -80,10 +80,24 @@ The `/api/v1/pleroma/admin/*` path is backwards compatible with `/api/pleroma/ad
     {
       `nickname`,
       `email`,
-      `password`
+      `password` (optional)
     }
   ]
-- Response: Array of user objects
+- Response: Array of user objects. When a user is created without a `password`, `data`
+  object contains a `password_reset_link` the user can follow to set their own password.
+
+```json
+[
+  {
+    "data": {
+      "nickname": string,
+      "email": string,
+      "password_reset_link": string (optional)
+    },
+    "type": "success"
+  }
+]
+```
 
 ## `POST /api/v1/pleroma/admin/users/follow`
 
