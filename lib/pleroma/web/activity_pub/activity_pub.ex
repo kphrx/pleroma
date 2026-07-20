@@ -893,14 +893,22 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> Repo.all()
 
     # Note: NO extra ordering should be done on "activities.id desc nulls last" for optimal plan
-    from(
-      [_activity, object] in query,
-      join: hto in "hashtags_objects",
-      on: hto.object_id == object.id,
-      where: hto.hashtag_id in ^hashtag_ids,
-      distinct: [desc: object.id],
-      order_by: [desc: object.id]
-    )
+    query =
+      from(
+        [_activity, object] in query,
+        join: hto in "hashtags_objects",
+        on: hto.object_id == object.id,
+        where: hto.hashtag_id in ^hashtag_ids
+      )
+
+    if query.distinct == [] do
+      from([activity, object] in query,
+        distinct: [desc: activity.id],
+        order_by: [desc: activity.id]
+      )
+    else
+      query
+    end
   end
 
   defp restrict_hashtag_any(query, %{tag: tag}) when is_binary(tag) do

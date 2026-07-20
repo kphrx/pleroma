@@ -912,7 +912,8 @@ defmodule Pleroma.Web.MastodonAPI.TimelineControllerTest do
 
         any_test = get(conn, "/api/v1/timelines/tag/test?any[]=test1")
 
-        [status_none, status_test1, status_test] = json_response_and_validate_schema(any_test, :ok)
+        [status_none, status_test1, status_test] =
+          json_response_and_validate_schema(any_test, :ok)
 
         assert to_string(activity_test.id) == status_test["id"]
         assert to_string(activity_test1.id) == status_test1["id"]
