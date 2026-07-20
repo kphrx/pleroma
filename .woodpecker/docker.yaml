@@ -35,9 +35,7 @@ variables:
       - ALPINE_IMG=docker.io/arm32v7/alpine
       - ALPINE_VER=3.20
     extra_opts: --custom-platform=linux/arm/v7
-  # HACK: Temporary downgrade to 2.2.2, update to newest version when
-  # https://github.com/osscontainertools/kaniko/issues/745 lands in a plugin release
-  kaniko_image: &kaniko_image docker.io/woodpeckerci/plugin-kaniko:2.2.2
+  kaniko_image: &kaniko_image docker.io/woodpeckerci/plugin-kaniko:2.3.2
 
 steps:
   docker-develop-amd64:
