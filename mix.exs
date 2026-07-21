@@ -156,6 +156,7 @@ defmodule Pleroma.Mixfile do
       {:ex_aws_s3, "~> 2.5"},
       {:sweet_xml, "~> 0.7.5"},
       {:mdex, "~> 0.13.2"},
+      {:rustler, "~> 0.32", optional: true},
       {:bbcode_pleroma, "~> 0.2.0"},
       {:nimble_parsec, "~> 1.4", override: true},
       {:pleroma_mfm_parser, "~> 0.2.1"},

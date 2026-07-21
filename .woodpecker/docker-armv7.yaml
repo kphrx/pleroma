@@ -24,9 +24,10 @@ variables:
     <<: *docker_variables
     build_args:
       - ELIXIR_IMG=arm32v7/elixir
-      - ELIXIR_TAG=1.17.3-otp-26-alpine
+      - ELIXIR_TAG=1.17.3-otp-26-alpine@sha256:1671da02865cadad4cdb655c6670a50f0bfc9ead0a3896bd52c673e685f8ad1c
       - ALPINE_IMG=arm32v7/alpine
-      - ALPINE_VER=3.20
+      - ALPINE_VER=3.24.1
+      - MDEX_NATIVE_BUILD=true
     extra_opts: --custom-platform=linux/arm/v7
   armv7_push_settings: &armv7_push_settings
     <<: *armv7_build_settings

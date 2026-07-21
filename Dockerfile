@@ -8,12 +8,16 @@ ARG ALPINE_IMG=alpine
 
 FROM ${ELIXIR_IMG}:${ELIXIR_TAG} AS build
 
+ARG MDEX_NATIVE_BUILD=false
+
 COPY . .
 
 ENV MIX_ENV=prod
+ENV MDEX_NATIVE_BUILD=${MDEX_NATIVE_BUILD}
 ENV VIX_COMPILATION_MODE=PLATFORM_PROVIDED_LIBVIPS
 
 RUN apk add git gcc g++ musl-dev make cmake file-dev vips-dev &&\
+	case "${MDEX_NATIVE_BUILD}" in true|1) apk add cargo ;; esac &&\
 	echo "import Config" > config/prod.secret.exs &&\
 	mix local.hex --force &&\
 	mix local.rebar --force &&\
