@@ -14,16 +14,22 @@ defmodule Pleroma.HTTP.GunIntegrationTest do
 
     origin = start_tls_origin(self())
     connect_proxy = start_connect_proxy(self())
+    forward_proxy = start_forward_proxy(self())
     socks_proxy = start_socks5_proxy(self())
 
     on_exit(fn ->
       Process.sleep(20)
       stop_server(socks_proxy)
+      stop_server(forward_proxy)
       stop_server(connect_proxy)
       stop_server(origin)
     end)
 
-    {:ok, origin: origin, connect_proxy: connect_proxy, socks_proxy: socks_proxy}
+    {:ok,
+     origin: origin,
+     connect_proxy: connect_proxy,
+     forward_proxy: forward_proxy,
+     socks_proxy: socks_proxy}
   end
 
   test "requests HTTPS directly on a non-standard port", %{origin: origin} do
@@ -64,6 +70,28 @@ defmodule Pleroma.HTTP.GunIntegrationTest do
     assert worker_protocol(origin.port) == :http
     assert_receive {:origin_request, "/final"}
     assert {:ok, %Tesla.Env{status: 200, body: "ok"}} = result
+  end
+
+  test "requests HTTP through a forwarding proxy", %{forward_proxy: proxy} do
+    proxy_opts = [proxy: {~c"127.0.0.1", proxy.port}]
+    url = "http://origin.example:8080/final?key=value"
+
+    assert {:ok, %Tesla.Env{status: 200, body: "ok"}} = request(url, proxy_opts)
+
+    assert_receive {:forward_proxy, ^url, "origin.example:8080", nil}
+  end
+
+  test "authenticates HTTP requests to a forwarding proxy", %{forward_proxy: proxy} do
+    proxy_opts = [
+      proxy: {~c"127.0.0.1", proxy.port},
+      proxy_auth: {"alice", "secret"}
+    ]
+
+    url = "http://origin.example/final"
+    assert {:ok, %Tesla.Env{status: 200, body: "ok"}} = request(url, proxy_opts)
+
+    expected = "Basic " <> Base.encode64("alice:secret")
+    assert_receive {:forward_proxy, ^url, "origin.example", ^expected}
   end
 
   test "opens a request-ready authenticated CONNECT tunnel", %{
@@ -212,6 +240,32 @@ defmodule Pleroma.HTTP.GunIntegrationTest do
     assert {:ok, %Tesla.Env{status: 200, body: "ok"}} = request(url, proxy_opts)
 
     assert_receive {:socks5_proxy, "alice", "secret", "localhost", origin_port}
+    assert origin_port == origin.port
+  end
+
+  test "requests through unauthenticated SOCKS5 with an IP proxy host", %{
+    origin: origin,
+    socks_proxy: proxy
+  } do
+    proxy_opts = [proxy: {:socks5, {127, 0, 0, 1}, proxy.port}]
+
+    assert {:ok, %Tesla.Env{status: 200, body: "ok"}} =
+             request(origin.base_url <> "/final", proxy_opts)
+
+    assert_receive {:socks5_proxy, nil, nil, "127.0.0.1", origin_port}
+    assert origin_port == origin.port
+  end
+
+  test "requests through unauthenticated SOCKS5 with a localhost proxy host", %{
+    origin: origin,
+    socks_proxy: proxy
+  } do
+    proxy_opts = [proxy: {:socks5, ~c"localhost", proxy.port}]
+
+    assert {:ok, %Tesla.Env{status: 200, body: "ok"}} =
+             request(origin.base_url <> "/final", proxy_opts)
+
+    assert_receive {:socks5_proxy, nil, nil, "127.0.0.1", origin_port}
     assert origin_port == origin.port
   end
 
@@ -433,6 +487,37 @@ defmodule Pleroma.HTTP.GunIntegrationTest do
     end
   end
 
+  defp start_forward_proxy(parent) do
+    start_tcp_server(fn socket -> serve_forward_proxy(socket, parent) end)
+  end
+
+  defp serve_forward_proxy(socket, parent) do
+    with {:ok, request} <- recv_headers(:gen_tcp, socket) do
+      {headers, _buffered_body} = split_headers(request)
+      target = request_path(headers)
+      host = header(headers, "host")
+      auth = header(headers, "proxy-authorization")
+
+      if String.starts_with?(target, "http://") do
+        send(parent, {:forward_proxy, target, host, auth})
+
+        :gen_tcp.send(
+          socket,
+          "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok"
+        )
+
+        serve_forward_proxy(socket, parent)
+      else
+        :gen_tcp.send(
+          socket,
+          "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+
+        :gen_tcp.close(socket)
+      end
+    end
+  end
+
   defp start_socks5_proxy(parent) do
     start_tcp_server(fn socket -> serve_socks5_proxy(socket, parent) end)
   end
@@ -440,10 +525,7 @@ defmodule Pleroma.HTTP.GunIntegrationTest do
   defp serve_socks5_proxy(socket, parent) do
     with {:ok, <<5, method_count>>} <- :gen_tcp.recv(socket, 2, 2_000),
          {:ok, methods} <- :gen_tcp.recv(socket, method_count, 2_000),
-         true <- :binary.match(methods, <<2>>) != :nomatch,
-         :ok <- :gen_tcp.send(socket, <<5, 2>>),
-         {:ok, username, password} <- recv_socks5_auth(socket),
-         :ok <- :gen_tcp.send(socket, <<1, 0>>),
+         {:ok, username, password} <- negotiate_socks5_auth(socket, methods),
          {:ok, host, port} <- recv_socks5_destination(socket),
          {:ok, upstream} <- tcp_connect(host, port),
          :ok <- :gen_tcp.send(socket, <<5, 0, 0, 1, 0, 0, 0, 0, 0, 0>>) do
@@ -452,6 +534,25 @@ defmodule Pleroma.HTTP.GunIntegrationTest do
     else
       _ ->
         :gen_tcp.close(socket)
+    end
+  end
+
+  defp negotiate_socks5_auth(socket, methods) do
+    cond do
+      :binary.match(methods, <<2>>) != :nomatch ->
+        with :ok <- :gen_tcp.send(socket, <<5, 2>>),
+             {:ok, username, password} <- recv_socks5_auth(socket),
+             :ok <- :gen_tcp.send(socket, <<1, 0>>) do
+          {:ok, username, password}
+        end
+
+      :binary.match(methods, <<0>>) != :nomatch ->
+        with :ok <- :gen_tcp.send(socket, <<5, 0>>) do
+          {:ok, nil, nil}
+        end
+
+      true ->
+        {:error, :unsupported_auth}
     end
   end
 

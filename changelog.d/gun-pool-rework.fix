@@ -1,1 +1,1 @@
-Fixed Gun HTTP/1 concurrency, authenticated proxy handling, tunnel requests, and streamed connection cleanup. Updated Gun and Cowlib for HTTP client security fixes.
+Fixed Gun HTTP/1 concurrency, forwarding and authenticated proxy handling, tunnel requests, and streamed connection cleanup. Updated Gun and Cowlib for HTTP client security fixes.

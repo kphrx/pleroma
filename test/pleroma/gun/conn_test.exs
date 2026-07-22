@@ -88,6 +88,26 @@ defmodule Pleroma.Gun.ConnTest do
     stop_conn(conn)
   end
 
+  test "uses HTTP/1 for a TLS forwarding proxy" do
+    conn = spawn_link(fn -> Process.sleep(:infinity) end)
+
+    expect(Pleroma.GunMock, :open, fn ~c"proxy.example", 8443, opts ->
+      assert opts.transport == :tls
+      assert opts.tls_opts == [verify: :verify_none]
+      assert opts.protocols == [:http]
+      {:ok, conn}
+    end)
+
+    assert {:ok, ^conn, :http, :forward_proxy} =
+             Conn.open(URI.parse("http://origin.example/inbox"),
+               proxy: {~c"proxy.example", 8443},
+               transport: :tls,
+               proxy_tls_opts: [verify: :verify_none]
+             )
+
+    stop_conn(conn)
+  end
+
   test "passes authentication and remote DNS destination to a SOCKS5 proxy" do
     conn = spawn_link(fn -> Process.sleep(:infinity) end)
 
@@ -127,6 +147,21 @@ defmodule Pleroma.Gun.ConnTest do
              Conn.open(URI.parse("https://origin.example/inbox"),
                proxy: {~c"proxy.example", 8080},
                proxy_auth: {"alice", "wrong"}
+             )
+  end
+
+  test "returns the proxy status when CONNECT is forbidden" do
+    conn = spawn_link(fn -> Process.sleep(:infinity) end)
+    stream = make_ref()
+
+    expect(Pleroma.GunMock, :open, fn _, _, _ -> {:ok, conn} end)
+    expect(Pleroma.GunMock, :connect, fn ^conn, _ -> stream end)
+    expect(Pleroma.GunMock, :await, fn ^conn, ^stream -> {:response, :fin, 403, []} end)
+    expect(Pleroma.GunMock, :close, fn ^conn -> Process.exit(conn, :normal) end)
+
+    assert {:error, {:proxy_connect_failed, 403}} =
+             Conn.open(URI.parse("https://origin.example/inbox"),
+               proxy: {~c"proxy.example", 8080}
              )
   end
 

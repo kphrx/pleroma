@@ -34,9 +34,10 @@ defmodule Pleroma.HTTP.Adapter.Gun do
 
   defp request(env, %{conn: conn, tunnel: tunnel} = opts) do
     uri = URI.parse(Tesla.build_url(env))
-    path = Tesla.Adapter.Shared.prepare_path(uri.path, uri.query)
+    path = request_path(uri, tunnel)
     method = Tesla.Adapter.Shared.format_method(env.method)
     {headers, body, send_body} = prepare_body(env.headers, env.body, opts[:send_body])
+    headers = maybe_add_forward_proxy_headers(headers, uri, opts, tunnel)
     request_opts = request_opts(opts[:reply_to], tunnel)
 
     stream =
@@ -76,8 +77,44 @@ defmodule Pleroma.HTTP.Adapter.Gun do
 
   defp request_opts(reply_to, nil), do: %{reply_to: reply_to || self()}
 
+  defp request_opts(reply_to, :forward_proxy), do: %{reply_to: reply_to || self()}
+
   defp request_opts(reply_to, tunnel) do
     %{reply_to: reply_to || self(), tunnel: tunnel}
+  end
+
+  defp request_path(uri, :forward_proxy) do
+    path = Tesla.Adapter.Shared.prepare_path(uri.path, uri.query)
+    "#{uri.scheme}://#{authority(uri)}#{path}"
+  end
+
+  defp request_path(uri, _tunnel) do
+    Tesla.Adapter.Shared.prepare_path(uri.path, uri.query)
+  end
+
+  defp maybe_add_forward_proxy_headers(headers, uri, opts, :forward_proxy) do
+    headers
+    |> put_header_new("host", authority(uri))
+    |> maybe_put_proxy_authorization(opts)
+  end
+
+  defp maybe_add_forward_proxy_headers(headers, _uri, _opts, _tunnel), do: headers
+
+  defp maybe_put_proxy_authorization(headers, %{proxy_auth: {username, password}})
+       when is_binary(username) and is_binary(password) do
+    value = "Basic " <> Base.encode64(username <> ":" <> password)
+    List.keystore(headers, "proxy-authorization", 0, {"proxy-authorization", value})
+  end
+
+  defp maybe_put_proxy_authorization(headers, _opts), do: headers
+
+  defp put_header_new(headers, name, value) do
+    if List.keymember?(headers, name, 0), do: headers, else: [{name, value} | headers]
+  end
+
+  defp authority(%URI{scheme: scheme, host: host, port: port}) do
+    host = if String.contains?(host, ":"), do: "[#{host}]", else: host
+    if port == URI.default_port(scheme), do: host, else: "#{host}:#{port}"
   end
 
   defp prepare_body(headers, %Multipart{} = multipart, _send_body) do

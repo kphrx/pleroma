@@ -208,7 +208,7 @@ defmodule Pleroma.Gun.ConnectionPool do
     call_worker(conn_pid, {:release_stream, stream})
   end
 
-  @spec tunnel_ref(pid()) :: reference() | nil
+  @spec tunnel_ref(pid()) :: reference() | :forward_proxy | nil
   def tunnel_ref(conn_pid) do
     case Registry.select(@registry, [
            {{:_, :_, {:"$1", :"$2"}}, [{:==, :"$1", conn_pid}], [:"$2"]}

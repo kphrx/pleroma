@@ -42,6 +42,21 @@ defmodule Pleroma.Gun.Conn do
     Map.put(opts, :tls_opts, tls_opts)
   end
 
+  defp do_open(%URI{scheme: "http"} = uri, %{proxy: {proxy_host, proxy_port}} = opts) do
+    with open_opts <- opts |> proxy_open_opts() |> Map.put(:protocols, [:http]),
+         {:ok, conn} <- Gun.open(proxy_host, proxy_port, open_opts),
+         {:ok, protocol} <- await_up(conn, opts[:connect_timeout]) do
+      {:ok, conn, protocol, :forward_proxy}
+    else
+      error ->
+        Logger.warning(
+          "Opening forward proxy connection to #{compose_uri_log(uri)} failed with error #{inspect(error)}"
+        )
+
+        error
+    end
+  end
+
   defp do_open(uri, %{proxy: {proxy_host, proxy_port}} = opts) do
     connect_opts =
       uri
@@ -174,11 +189,11 @@ defmodule Pleroma.Gun.Conn do
           error -> error
         end
 
-      {:response, _fin, 403, _headers} ->
-        close_with_error(conn, :unauthorized)
-
       {:response, _fin, 407, _headers} ->
         close_with_error(conn, :proxy_auth_failed)
+
+      {:response, _fin, status, _headers} when is_integer(status) ->
+        close_with_error(conn, {:proxy_connect_failed, status})
 
       error ->
         Gun.close(conn)
