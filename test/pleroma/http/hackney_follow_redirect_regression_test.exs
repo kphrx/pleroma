@@ -19,26 +19,6 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     {:ok, tls_server: tls_server, proxy: proxy}
   end
 
-  test "hackney follow_redirect handles relative redirects behind CONNECT proxy", %{
-    tls_server: tls_server,
-    proxy: proxy
-  } do
-    url = "#{tls_server.base_url}/redirect"
-
-    opts = [
-      pool: :media,
-      proxy: proxy.proxy_url,
-      ssl_options: tls_client_options(tls_server),
-      connect_timeout: 1_000,
-      recv_timeout: 1_000,
-      follow_redirect: true,
-      force_redirect: true,
-      with_body: true
-    ]
-
-    assert {:ok, 200, _headers, "ok"} = :hackney.request(:get, url, [], <<>>, opts)
-  end
-
   test "redirects work via proxy when hackney follow_redirect is disabled", %{
     tls_server: tls_server,
     proxy: proxy
@@ -127,6 +107,46 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     Pleroma.ReverseProxy.Client.Hackney.close(ref)
   end
 
+  test "hackney reverse proxy cancels timed out asynchronous requests", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/delayed"
+
+    opts = [
+      pool: :media,
+      proxy: proxy.proxy_url,
+      ssl_options: tls_client_options(tls_server),
+      connect_timeout: 1_000,
+      recv_timeout: 10,
+      follow_redirect: false
+    ]
+
+    assert {:error, :timeout} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    refute_receive {:hackney_response, _, _}, 150
+  end
+
+  test "hackney reverse proxy normalizes asynchronous connection errors", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/closed"
+
+    opts = [
+      pool: :media,
+      proxy: proxy.proxy_url,
+      ssl_options: tls_client_options(tls_server),
+      connect_timeout: 1_000,
+      recv_timeout: 1_000,
+      follow_redirect: false
+    ]
+
+    assert {:error, :closed} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+  end
+
   defp collect_body(ref, acc \\ "") do
     case Pleroma.ReverseProxy.Client.Hackney.stream_body(ref) do
       :done -> acc
@@ -193,6 +213,13 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
          {:ok, data} <- recv_ssl_headers(ssl_socket),
          {:ok, path} <- parse_path(data) do
       case path do
+        "/closed" ->
+          :ok
+
+        "/delayed" ->
+          Process.sleep(100)
+          send_ssl_response(ssl_socket, 200, "OK", [], "ok")
+
         "/infinite_redirect" ->
           send_ssl_response(ssl_socket, 302, "Found", [{"Location", "/infinite_redirect"}], "")
 

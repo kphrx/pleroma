@@ -60,7 +60,6 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
     case receive_response(ref, recv_timeout) do
       {:ok, data} when is_binary(data) -> {:ok, data, client}
       {:ok, :done} -> :done
-      {:ok, {:error, error}} -> {:error, error}
       {:error, error} -> {:error, error}
     end
   end
@@ -86,18 +85,39 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
       |> Keyword.put(:async, :once)
       |> Keyword.put(:stream_to, self())
 
-    with {:ok, ref} <- :hackney.request(method, url, headers, body, req_opts),
-         {:ok, {:status, code, _reason}} <- receive_response(ref, recv_timeout),
-         {:ok, {:headers, resp_headers}} <- receive_response(ref, recv_timeout) do
-      {:ok, code, resp_headers, %{ref: ref, recv_timeout: recv_timeout}}
+    with {:ok, ref} <- :hackney.request(method, url, headers, body, req_opts) do
+      result =
+        with {:ok, {:status, code, _reason}} <- receive_response(ref, recv_timeout),
+             {:ok, {:headers, resp_headers}} <- receive_response(ref, recv_timeout) do
+          {:ok, code, resp_headers, %{ref: ref, recv_timeout: recv_timeout}}
+        end
+
+      case result do
+        {:ok, _, _, _} = response ->
+          response
+
+        error ->
+          close(ref)
+          flush_responses(ref)
+          error
+      end
     end
   end
 
   defp receive_response(ref, recv_timeout) do
     receive do
+      {:hackney_response, ^ref, {:error, error}} -> {:error, error}
       {:hackney_response, ^ref, response} -> {:ok, response}
     after
       recv_timeout -> {:error, :timeout}
+    end
+  end
+
+  defp flush_responses(ref) do
+    receive do
+      {:hackney_response, ^ref, _response} -> flush_responses(ref)
+    after
+      0 -> :ok
     end
   end
 

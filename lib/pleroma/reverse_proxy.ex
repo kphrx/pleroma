@@ -98,7 +98,13 @@ defmodule Pleroma.ReverseProxy do
   def call(_conn, _url, _opts \\ [])
 
   def call(conn = %{method: method}, url, opts) when method in @methods do
-    client_opts = Keyword.merge(@default_options, Keyword.get(opts, :http, []))
+    client_opts =
+      @default_options
+      |> Keyword.merge(Keyword.get(opts, :http, []))
+      |> Keyword.put_new(
+        :recv_timeout,
+        receive_timeout(opts)
+      )
 
     req_headers = build_req_headers(conn.req_headers, opts)
 
@@ -422,6 +428,13 @@ defmodule Pleroma.ReverseProxy do
   end
 
   defp check_read_duration(_, _), do: {:ok, :no_duration_limit, :no_duration_limit}
+
+  defp receive_timeout(opts) do
+    case Keyword.get(opts, :max_read_duration, @max_read_duration) do
+      timeout when is_integer(timeout) and timeout > 0 -> timeout
+      _ -> :infinity
+    end
+  end
 
   defp increase_read_duration({previous_duration, started})
        when is_integer(previous_duration) and is_integer(started) do

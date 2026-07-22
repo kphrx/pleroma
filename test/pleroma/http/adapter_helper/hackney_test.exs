@@ -24,6 +24,13 @@ defmodule Pleroma.HTTP.AdapterHelper.HackneyTest do
       assert opts[:with_body] == true
     end
 
+    test "does not allow connection options to enable Hackney redirects", %{uri: uri} do
+      opts = Hackney.options([follow_redirect: true, force_redirect: true], uri)
+
+      assert opts[:follow_redirect] == false
+      assert opts[:force_redirect] == false
+    end
+
     test "add proxy and opts from config", %{uri: uri} do
       opts = Hackney.options([proxy: "localhost:8123"], uri)
 

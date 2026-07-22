@@ -28,6 +28,8 @@ defmodule Pleroma.HTTP.AdapterHelper.Hackney do
     |> add_scheme_opts(uri)
     |> maybe_add_with_body()
     |> Pleroma.HTTP.AdapterHelper.maybe_add_proxy(proxy)
+    |> Keyword.put(:follow_redirect, false)
+    |> Keyword.put(:force_redirect, false)
   end
 
   defp add_scheme_opts(opts, _), do: opts

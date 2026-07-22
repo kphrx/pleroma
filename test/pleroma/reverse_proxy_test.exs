@@ -53,6 +53,42 @@ defmodule Pleroma.ReverseProxyTest do
       assert conn.status == 200
       assert Cachex.get(:failed_proxy_url_cache, url) == {:ok, nil}
     end
+
+    test "uses max_read_duration as the default HTTP receive timeout", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/timeout", _, _, opts ->
+        assert opts[:recv_timeout] == 123
+        {:error, :timeout}
+      end)
+
+      capture_log(fn -> ReverseProxy.call(conn, "/timeout", max_read_duration: 123) end)
+    end
+
+    test "preserves an explicit HTTP receive timeout", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/timeout", _, _, opts ->
+        assert opts[:recv_timeout] == 456
+        {:error, :timeout}
+      end)
+
+      capture_log(fn ->
+        ReverseProxy.call(conn, "/timeout", max_read_duration: 123, http: [recv_timeout: 456])
+      end)
+    end
+
+    test "keeps unlimited read durations unlimited", %{conn: conn} do
+      for {max_read_duration, url} <- [{0, "/zero-timeout"}, {:infinity, "/infinite-timeout"}] do
+        ClientMock
+        |> expect(:request, fn :get, ^url, _, _, opts ->
+          assert opts[:recv_timeout] == :infinity
+          {:error, :timeout}
+        end)
+
+        capture_log(fn ->
+          ReverseProxy.call(conn, url, max_read_duration: max_read_duration)
+        end)
+      end
+    end
   end
 
   test "use Pleroma's user agent in the request; don't pass the client's", %{conn: conn} do
