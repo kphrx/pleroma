@@ -129,6 +129,7 @@ defmodule Pleroma.Formatter do
 
   def markdown_to_html(text, opts) do
     breaks = Map.get(opts, :breaks, false)
+    strip_email_autolinks = Map.get(opts, :strip_email_autolinks, false)
     text = normalize_markdown_quirks(text)
 
     MDEx.new(
@@ -138,6 +139,7 @@ defmodule Pleroma.Formatter do
       render: [hardbreaks: breaks, unsafe: true]
     )
     |> MDEx.Document.run()
+    |> maybe_strip_email_autolinks(strip_email_autolinks)
     |> MDEx.Document.update_nodes(MDEx.HtmlBlock, &strip_dangerous_raw_html/1)
     |> MDEx.Document.update_nodes(MDEx.HtmlInline, &strip_dangerous_raw_html/1)
     |> MDEx.to_html!()
@@ -175,6 +177,24 @@ defmodule Pleroma.Formatter do
     ) &&
       String.ends_with?(markdown, ">")
   end
+
+  defp maybe_strip_email_autolinks(document, true) do
+    MDEx.Document.update_nodes(document, MDEx.Link, &strip_email_autolink/1)
+  end
+
+  defp maybe_strip_email_autolinks(document, _), do: document
+
+  defp strip_email_autolink(
+         %MDEx.Link{
+           nodes: [%MDEx.Text{literal: literal, sourcepos: text_sourcepos} = text],
+           url: "mailto:" <> email,
+           sourcepos: sourcepos
+         } = link
+       ) do
+    if email == literal and sourcepos == text_sourcepos, do: text, else: link
+  end
+
+  defp strip_email_autolink(link), do: link
 
   defp strip_dangerous_raw_html(%{literal: literal} = node) do
     literal =

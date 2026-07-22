@@ -125,6 +125,14 @@ defmodule Pleroma.Web.CommonAPI.UtilsTest do
       assert output == expected
     end
 
+    test "MFM keeps bare URLs containing Markdown delimiters intact" do
+      url = "https://example.org/a*b*c"
+
+      {output, [], []} = Utils.format_input(url, "text/x.misskeymarkdown")
+
+      assert output == ~s(<p><a href="#{url}">#{url}</a></p>)
+    end
+
     test "works for bare text/bbcode" do
       text = "[b]hello world[/b]"
       expected = "<strong>hello world</strong>"
