@@ -167,6 +167,9 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
   def features do
     [
       "pleroma_api",
+      if Config.get([Pleroma.Chat, :enabled], true) do
+        "chat"
+      end,
       "mastodon_api",
       "mastodon_api_grouped_notifications",
       "mastodon_api_streaming",

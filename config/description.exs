@@ -2728,6 +2728,19 @@ config :pleroma, :config_description, [
   },
   %{
     group: :pleroma,
+    key: Pleroma.Chat,
+    type: :group,
+    description: "Pleroma Chat settings",
+    children: [
+      %{
+        key: :enabled,
+        type: :boolean,
+        description: "Enables the backend chats API."
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
     key: :http,
     label: "HTTP",
     type: :group,

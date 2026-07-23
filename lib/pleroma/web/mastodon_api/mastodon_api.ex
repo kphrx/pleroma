@@ -385,6 +385,15 @@ defmodule Pleroma.Web.MastodonAPI.MastodonAPI do
       |> cast_params()
       |> Map.update(:include_types, [], fn include_types -> include_types end)
 
+    if "pleroma:chat_mention" in options.include_types and not Pleroma.Chat.enabled?() do
+      options
+      |> Map.update(:include_types, [], fn include_types ->
+        List.delete(include_types, "pleroma:chat_mention")
+      end)
+    else
+      options
+    end
+
     if ("pleroma:report" not in options.include_types and
           User.privileged?(user, :reports_manage_reports)) or
          User.privileged?(user, :reports_manage_reports) do
