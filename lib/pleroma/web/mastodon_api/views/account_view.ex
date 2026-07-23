@@ -393,6 +393,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
     |> Kernel.put_in([:source, :pleroma, :show_role], user.show_role)
     |> Kernel.put_in([:source, :pleroma, :no_rich_text], user.no_rich_text)
     |> Kernel.put_in([:source, :pleroma, :show_birthday], user.show_birthday)
+    |> Kernel.put_in([:source, :pleroma, :accepts_chat_messages], user.accepts_chat_messages)
   end
 
   defp maybe_put_settings(data, _, _, _), do: data

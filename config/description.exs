@@ -2735,7 +2735,7 @@ config :pleroma, :config_description, [
       %{
         key: :enabled,
         type: :boolean,
-        description: "Enables the backend chats API."
+        description: "Enables the chats API."
       }
     ]
   },
