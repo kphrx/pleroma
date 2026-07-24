@@ -18,11 +18,14 @@
     <% end %>
   <% end %>
 
-  <%= for attachment <- @data["attachment"] || [] do %>
-    <%= size = attachment_size_positive(attachment) %>
-    <%= unless attachment_previewable?(attachment) do %>
-      <enclosure url="<%= attachment_href(attachment) %>" type="<%= attachment_type(attachment) %>" length="<%= size || 0 %>" />
+  <%= unless @data["sensitive"] do %>
+    <%= with [attachment | _] <- @data["attachment"] || [] do %>
+      <%= size = attachment_size_positive(attachment) %>
+      <enclosure url="<%= escape(attachment_href(attachment) || "") %>" type="<%= escape(attachment_type(attachment) || "application/octet-stream") %>" length="<%= size || 0 %>" />
     <% end %>
+  <% end %>
+
+  <%= for attachment <- @data["attachment"] || [] do %>
     <%= media_content_xml(attachment, @data["sensitive"]) %>
   <% end %>
 

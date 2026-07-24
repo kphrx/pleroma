@@ -150,6 +150,63 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
       end
     end
 
+    test "does not expose sensitive attachments as enclosures", %{
+      conn: conn,
+      object: object,
+      user: user
+    } do
+      object
+      |> Ecto.Changeset.change(data: Map.put(object.data, "sensitive", true))
+      |> Pleroma.Repo.update!()
+
+      atom_response =
+        conn
+        |> get("/users/#{user.nickname}/feed.atom")
+        |> response(200)
+
+      rss_response =
+        conn
+        |> get("/users/#{user.nickname}/feed.rss")
+        |> response(200)
+
+      refute atom_response =~ "rel=\"enclosure\""
+      refute rss_response =~ "<enclosure "
+    end
+
+    test "uses enclosure fallbacks for user feeds", %{conn: conn, object: object, user: user} do
+      attachment = %{"url" => [%{"href" => "https://example.com/file.bin"}]}
+
+      object
+      |> Ecto.Changeset.change(data: Map.put(object.data, "attachment", [attachment]))
+      |> Pleroma.Repo.update!()
+
+      atom_xml =
+        conn
+        |> get("/users/#{user.nickname}/feed.atom")
+        |> response(200)
+        |> parse()
+
+      assert xpath(atom_xml, ~x"//entry/link[@rel='enclosure']/@href"sl) == [
+               "https://example.com/file.bin"
+             ]
+
+      assert xpath(atom_xml, ~x"//entry/link[@rel='enclosure']/@type"sl) == [
+               "application/octet-stream"
+             ]
+
+      assert xpath(atom_xml, ~x"//entry/link[@rel='enclosure']/@length"sl) == []
+
+      rss_xml =
+        conn
+        |> get("/users/#{user.nickname}/feed.rss")
+        |> response(200)
+        |> parse()
+
+      assert xpath(rss_xml, ~x"//item/enclosure/@url"sl) == ["https://example.com/file.bin"]
+      assert xpath(rss_xml, ~x"//item/enclosure/@type"sl) == ["application/octet-stream"]
+      assert xpath(rss_xml, ~x"//item/enclosure/@length"sl) == ["0"]
+    end
+
     test "returns 404 for a missing feed", %{conn: conn} do
       conn =
         conn

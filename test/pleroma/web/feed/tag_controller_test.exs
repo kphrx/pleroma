@@ -31,8 +31,18 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
           "url" => [
             %{
               "href" =>
-                "https://peertube.moe/static/webseed/df5f464b-be8d-46fb-ad81-2d4c2d1630e3-480.mp4",
+                "https://peertube.moe/video.mp4?first=one&second=two",
               "mediaType" => "video/mp4",
+              "size" => "123",
+              "type" => "Link"
+            }
+          ]
+        },
+        %{
+          "url" => [
+            %{
+              "href" => "https://peertube.moe/notes.pdf",
+              "mediaType" => "application/pdf",
               "type" => "Link"
             }
           ]
@@ -63,6 +73,13 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
            ]
 
     assert xpath(xml, ~x"//feed/entry/author/name/text()"ls) == [user.nickname, user.nickname]
+
+    assert xpath(xml, ~x"//feed/entry/link[@rel='enclosure']/@href"sl) == [
+             "https://peertube.moe/video.mp4?first=one&second=two",
+             "https://peertube.moe/notes.pdf"
+           ]
+
+    assert xpath(xml, ~x"//feed/entry/link[@rel='enclosure']/@length"sl) == ["123"]
 
     conn =
       conn
@@ -97,8 +114,18 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
           "url" => [
             %{
               "href" =>
-                "https://peertube.moe/static/webseed/df5f464b-be8d-46fb-ad81-2d4c2d1630e3-480.mp4",
+                "https://peertube.moe/video.mp4?first=one&second=two",
               "mediaType" => "video/mp4",
+              "size" => "123",
+              "type" => "Link"
+            }
+          ]
+        },
+        %{
+          "url" => [
+            %{
+              "href" => "https://peertube.moe/notes.pdf",
+              "mediaType" => "application/pdf",
               "type" => "Link"
             }
           ]
@@ -147,8 +174,15 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
              FeedView.to_rfc2822(edited_at)
 
     assert xpath(xml, ~x"//channel/item/media:content/@url"sl) == [
-             "https://peertube.moe/static/webseed/df5f464b-be8d-46fb-ad81-2d4c2d1630e3-480.mp4"
+             "https://peertube.moe/video.mp4?first=one&second=two",
+             "https://peertube.moe/notes.pdf"
            ]
+
+    assert xpath(xml, ~x"//channel/item/enclosure/@url"sl) == [
+             "https://peertube.moe/video.mp4?first=one&second=two"
+           ]
+
+    assert xpath(xml, ~x"//channel/item/enclosure/@length"sl) == ["123"]
 
     obj1 = Object.normalize(activity1, fetch: false)
     obj2 = Object.normalize(activity2, fetch: false)

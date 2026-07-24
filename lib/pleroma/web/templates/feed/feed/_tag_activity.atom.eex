@@ -25,9 +25,13 @@
     <category term="<%= tag %>"></category>
   <% end %>
 
-  <%= for attachment <- @data["attachment"] || [] do %>
-    <%= unless attachment_previewable?(attachment) do %>
-      <link rel="enclosure" href="<%= attachment_href(attachment) %>" type="<%= attachment_type(attachment) %>" length="<%= attachment_size(attachment) %>"/>
+  <%= unless @data["sensitive"] do %>
+    <%= for attachment <- @data["attachment"] || [] do %>
+      <%= if size = attachment_size_positive(attachment) do %>
+        <link rel="enclosure" href="<%= escape(attachment_href(attachment) || "") %>" type="<%= escape(attachment_type(attachment) || "application/octet-stream") %>" length="<%= size %>"/>
+      <% else %>
+        <link rel="enclosure" href="<%= escape(attachment_href(attachment) || "") %>" type="<%= escape(attachment_type(attachment) || "application/octet-stream") %>"/>
+      <% end %>
     <% end %>
   <% end %>
 
