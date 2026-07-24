@@ -19,4 +19,28 @@ defmodule Pleroma.Web.Feed.FeedViewTest do
     assert FeedView.atom_content_encoded(data) == expected
     assert FeedView.rss_content_encoded(data) == expected
   end
+
+  test "does not preview or classify sensitive attachments" do
+    attachment = %{
+      "name" => "spoiler",
+      "url" => [%{"href" => "https://example.com/spoiler.png", "mediaType" => "image/png"}]
+    }
+
+    data = %{
+      "attachment" => [attachment],
+      "content" => "content warning",
+      "sensitive" => true
+    }
+
+    assert FeedView.atom_content_encoded(data) == "content warning"
+    assert FeedView.rss_content_encoded(data) == "content warning"
+    assert FeedView.media_content_xml(attachment, true) == ""
+
+    media_content = FeedView.media_content_xml(attachment, false)
+    assert media_content =~ "<media:description type=\"plain\">spoiler</media:description>"
+    refute media_content =~ "media:rating"
+
+    assert FeedView.media_content_xml(Map.delete(attachment, "name"), false) ==
+             ~s(<media:content url="https://example.com/spoiler.png" type="image/png" medium="image"/>\n)
+  end
 end

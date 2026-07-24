@@ -117,10 +117,14 @@ defmodule Pleroma.Web.Feed.FeedView do
       end
 
     attachments_html =
-      (data["attachment"] || [])
-      |> Enum.map(&rss_attachment_preview/1)
-      |> Enum.reject(&(&1 == ""))
-      |> Enum.join("<br/><br/>")
+      if data["sensitive"] do
+        ""
+      else
+        (data["attachment"] || [])
+        |> Enum.map(&rss_attachment_preview/1)
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.join("<br/><br/>")
+      end
 
     [base_content, attachments_html]
     |> Enum.reject(&(&1 == ""))
@@ -223,7 +227,9 @@ defmodule Pleroma.Web.Feed.FeedView do
     attachment["name"] || ""
   end
 
-  def media_content_xml(attachment) do
+  def media_content_xml(_attachment, true), do: ""
+
+  def media_content_xml(attachment, _sensitive) do
     href = escape(attachment_href(attachment) || "")
     type = escape(attachment_type(attachment) || "application/octet-stream")
     medium = escape(attachment_medium(attachment))
@@ -234,20 +240,17 @@ defmodule Pleroma.Web.Feed.FeedView do
         _ -> ""
       end
 
-    description_xml =
-      case attachment_description(attachment) do
-        "" ->
-          ""
+    case attachment_description(attachment) do
+      "" ->
+        ~s(<media:content url="#{href}" type="#{type}"#{file_size_attr} medium="#{medium}"/>\n)
 
-        description ->
-          ~s(\n  <media:description type="plain">#{escape(description)}</media:description>)
-      end
-
-    """
-    <media:content url="#{href}" type="#{type}"#{file_size_attr} medium="#{medium}">
-      <media:rating scheme="urn:simple">nonadult</media:rating>#{description_xml}
-    </media:content>
-    """
+      description ->
+        """
+        <media:content url="#{href}" type="#{type}"#{file_size_attr} medium="#{medium}">
+          <media:description type="plain">#{escape(description)}</media:description>
+        </media:content>
+        """
+    end
   end
 
   defp attachment_url_data(attachment) do

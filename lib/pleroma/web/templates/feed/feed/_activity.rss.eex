@@ -23,7 +23,7 @@
     <%= unless attachment_previewable?(attachment) do %>
       <enclosure url="<%= attachment_href(attachment) %>" type="<%= attachment_type(attachment) %>" length="<%= size || 0 %>" />
     <% end %>
-    <%= media_content_xml(attachment) %>
+    <%= media_content_xml(attachment, @data["sensitive"]) %>
   <% end %>
 
   <%= if @data["inReplyTo"] do %>
