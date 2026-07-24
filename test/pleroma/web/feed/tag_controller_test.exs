@@ -105,8 +105,10 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
         }
       ])
 
+    edited_at = NaiveDateTime.add(object.updated_at, 60)
+
     object
-    |> Ecto.Changeset.change(data: object_data)
+    |> Ecto.Changeset.change(data: object_data, updated_at: edited_at)
     |> Pleroma.Repo.update()
 
     {:ok, activity2} = CommonAPI.post(user, %{status: "42 This is :moominmamma #PleromaArt"})
@@ -140,6 +142,9 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
              FeedView.to_rfc2822(activity2.data["published"]),
              FeedView.to_rfc2822(activity1.data["published"])
            ]
+
+    assert xpath(xml, ~x"//channel/lastBuildDate/text()"s) ==
+             FeedView.to_rfc2822(edited_at)
 
     assert xpath(xml, ~x"//channel/item/media:content/@url"sl) == [
              "https://peertube.moe/static/webseed/df5f464b-be8d-46fb-ad81-2d4c2d1630e3-480.mp4"
@@ -179,6 +184,16 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
     assert xpath(xml, ~x"//channel/item/title/text()"l) == [
              ~c"yeah #PleromaArt"
            ]
+  end
+
+  test "does not fabricate lastBuildDate for an empty RSS feed", %{conn: conn} do
+    response =
+      conn
+      |> put_req_header("accept", "application/rss+xml")
+      |> get(tag_feed_path(conn, :feed, "empty.rss"))
+      |> response(200)
+
+    refute response =~ "<lastBuildDate>"
   end
 
   describe "private instance" do

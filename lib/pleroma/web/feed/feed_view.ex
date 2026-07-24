@@ -38,6 +38,20 @@ defmodule Pleroma.Web.Feed.FeedView do
     end
   end
 
+  def most_recent_update([], :rss), do: nil
+
+  def most_recent_update(activities, :rss) do
+    activities
+    |> Enum.map(fn activity ->
+      case Object.normalize(activity, fetch: false) do
+        %Object{updated_at: updated_at} -> updated_at
+        _ -> activity.updated_at
+      end
+    end)
+    |> Enum.max_by(&NaiveDateTime.to_erl/1)
+    |> to_rfc2822()
+  end
+
   def most_recent_update(activities, user, :atom) do
     (List.first(activities) || user).updated_at
     |> to_rfc3339()

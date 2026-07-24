@@ -12,7 +12,9 @@
     <webfeeds:logo><%= feed_logo() %></webfeeds:logo>
     <webfeeds:icon><%= feed_logo() %></webfeeds:icon>
     <webfeeds:accentColor>2b90d9</webfeeds:accentColor>
-    <lastBuildDate><%= most_recent_update(@activities) || to_rfc2822(NaiveDateTime.utc_now()) %></lastBuildDate>
+    <%= with last_build_date when not is_nil(last_build_date) <- most_recent_update(@activities, :rss) do %>
+      <lastBuildDate><%= last_build_date %></lastBuildDate>
+    <% end %>
     <generator><%= Pleroma.Application.named_version() %></generator>
     <%= for activity <- @activities do %>
     <%= render Phoenix.Controller.view_module(@conn), "_tag_activity.xml", Map.merge(assigns, prepare_activity(activity)) %>
