@@ -109,9 +109,8 @@ defmodule Pleroma.Web.Feed.FeedView do
     base_content =
       case activity_content(data) do
         "" ->
-          data["summary"] || data["type"] ||
-            ""
-            |> escape()
+          (data["summary"] || data["type"] || "")
+          |> escape()
 
         content ->
           content
