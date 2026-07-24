@@ -167,6 +167,8 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
              ~c"yeah #PleromaArt"
            ]
 
+    assert xpath(xml, ~x"//channel/item/guid/@isPermaLink"sl) == ["true", "true"]
+
     assert xpath(xml, ~x"//channel/item/pubDate/text()"sl) == [
              FeedView.to_rfc2822(activity2.data["published"]),
              FeedView.to_rfc2822(activity1.data["published"])
@@ -230,6 +232,37 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
       |> response(200)
 
     refute response =~ "<lastBuildDate>"
+  end
+
+  test "escapes and round-trips RSS item permalinks", %{conn: conn} do
+    user = insert(:user, local: false)
+    permalink = "https://remote.example/post?first=one&second=two"
+
+    note =
+      insert(:note,
+        user: user,
+        object_local: false,
+        data: %{
+          "content" => "remote #rsslink",
+          "external_url" => permalink,
+          "summary" => "",
+          "tag" => ["rsslink"]
+        }
+      )
+
+    insert(:note_activity, user: user, note: note, local: false, object_local: false)
+
+    response =
+      conn
+      |> put_req_header("accept", "application/rss+xml")
+      |> get(tag_feed_path(conn, :feed, "rsslink.rss"))
+      |> response(200)
+
+    assert response =~ "https://remote.example/post?first=one&amp;second=two"
+
+    xml = parse(response)
+    assert xpath(xml, ~x"//channel/item/guid/text()"s) == permalink
+    assert xpath(xml, ~x"//channel/item/link/text()"s) == permalink
   end
 
   describe "private instance" do

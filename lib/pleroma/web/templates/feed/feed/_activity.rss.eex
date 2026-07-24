@@ -1,7 +1,7 @@
 <item>
   <activity:object-type>http://activitystrea.ms/schema/1.0/note</activity:object-type>
   <activity:verb>http://activitystrea.ms/schema/1.0/post</activity:verb>
-  <guid isPermaLink="true"><%= @data["id"] %></guid>
+  <guid isPermaLink="true"><%= escape(@data["id"] || "") %></guid>
   <title><%= activity_title(@data, Keyword.get(@feed_config, :post_title, %{})) %></title>
   <description><%= activity_description(@data) %></description>
   <content:encoded><![CDATA[<%= rss_content_encoded(@data) %>]]></content:encoded>
@@ -10,7 +10,7 @@
     <%= activity_context(@activity) %>
   </ostatus:conversation>
 
-  <link><%= activity_link(@activity, @data) %></link>
+  <link><%= escape(activity_link(@activity, @data) || "") %></link>
 
   <%= for tag <- Pleroma.Object.hashtags(@object) do %>
     <%= if tag && tag != "" do %>

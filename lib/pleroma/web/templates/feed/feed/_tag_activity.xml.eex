@@ -1,6 +1,6 @@
 <item>
-  <guid isPermalink="true"><%= activity_link(@activity, @data) %></guid>
-  <link><%= activity_link(@activity, @data) %></link>
+  <guid isPermaLink="true"><%= escape(activity_link(@activity, @data) || "") %></guid>
+  <link><%= escape(activity_link(@activity, @data) || "") %></link>
   <pubDate><%= to_rfc2822(@data["published"]) %></pubDate>
   <title><%= activity_title(@data, Keyword.get(@feed_config, :post_title, %{})) %></title>
   <description><%= activity_description(@data) %></description>
