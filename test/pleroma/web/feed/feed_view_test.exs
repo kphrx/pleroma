@@ -35,6 +35,7 @@ defmodule Pleroma.Web.Feed.FeedViewTest do
     assert FeedView.atom_content_encoded(data) == "content warning"
     assert FeedView.rss_content_encoded(data) == "content warning"
     assert FeedView.media_content_xml(attachment, true) == ""
+    assert FeedView.media_content_xml(attachment, "true") == ""
 
     media_content = FeedView.media_content_xml(attachment, false)
     assert media_content =~ "<media:description type=\"plain\">spoiler</media:description>"
@@ -42,5 +43,17 @@ defmodule Pleroma.Web.Feed.FeedViewTest do
 
     assert FeedView.media_content_xml(Map.delete(attachment, "name"), false) ==
              ~s(<media:content url="https://example.com/spoiler.png" type="image/png" medium="image"/>\n)
+  end
+
+  test "does not treat a legacy false string as sensitive" do
+    data = %{
+      "attachment" => [
+        %{"url" => [%{"href" => "https://example.com/image.png", "mediaType" => "image/png"}]}
+      ],
+      "content" => "visible",
+      "sensitive" => "false"
+    }
+
+    assert FeedView.atom_content_encoded(data) =~ "<img"
   end
 end

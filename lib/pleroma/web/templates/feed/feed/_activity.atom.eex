@@ -21,7 +21,7 @@
     <category term="<%= tag %>"></category>
   <% end %>
 
-  <%= unless @data["sensitive"] do %>
+  <%= unless sensitive?(@data) do %>
     <%= for attachment <- @data["attachment"] || [] do %>
       <%= if size = attachment_size_positive(attachment) do %>
         <link rel="enclosure" href="<%= escape(attachment_href(attachment) || "") %>" type="<%= escape(attachment_type(attachment) || "application/octet-stream") %>" length="<%= size %>"/>

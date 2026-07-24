@@ -202,9 +202,12 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
         |> response(200)
         |> parse()
 
-      assert xpath(rss_xml, ~x"//item/enclosure/@url"sl) == ["https://example.com/file.bin"]
-      assert xpath(rss_xml, ~x"//item/enclosure/@type"sl) == ["application/octet-stream"]
-      assert xpath(rss_xml, ~x"//item/enclosure/@length"sl) == ["0"]
+      assert xpath(rss_xml, ~x"//item/enclosure/@url"sl) == []
+      assert xpath(rss_xml, ~x"//item/media:content/@url"sl) == ["https://example.com/file.bin"]
+
+      assert xpath(rss_xml, ~x"//item/media:content/@type"sl) == [
+               "application/octet-stream"
+             ]
     end
 
     test "returns 404 for a missing feed", %{conn: conn} do

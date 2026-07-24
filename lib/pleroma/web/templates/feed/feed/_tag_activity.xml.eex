@@ -6,15 +6,14 @@
   <description><%= activity_description(@data) %></description>
   <content:encoded><![CDATA[<%= rss_content_encoded(@data) %>]]></content:encoded>
 
-  <%= unless @data["sensitive"] do %>
-    <%= with [attachment | _] <- @data["attachment"] || [] do %>
-      <%= size = attachment_size_positive(attachment) %>
-      <enclosure url="<%= escape(attachment_href(attachment) || "") %>" type="<%= escape(attachment_type(attachment) || "application/octet-stream") %>" length="<%= size || 0 %>"/>
+  <%= unless sensitive?(@data) do %>
+    <%= with attachment when not is_nil(attachment) <- rss_enclosure_attachment(@data["attachment"]) do %>
+      <enclosure url="<%= escape(attachment_href(attachment) || "") %>" type="<%= escape(attachment_type(attachment) || "application/octet-stream") %>" length="<%= attachment_size_positive(attachment) %>"/>
     <% end %>
   <% end %>
 
   <%= for attachment <- @data["attachment"] || [] do %>
-    <%= media_content_xml(attachment, @data["sensitive"]) %>
+    <%= media_content_xml(attachment, sensitive?(@data)) %>
   <% end %>
 
   <%= for tag <- Pleroma.Object.hashtags(@object) do %>

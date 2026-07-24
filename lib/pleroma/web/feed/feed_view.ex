@@ -131,7 +131,7 @@ defmodule Pleroma.Web.Feed.FeedView do
       end
 
     attachments_html =
-      if data["sensitive"] do
+      if sensitive?(data) do
         ""
       else
         (data["attachment"] || [])
@@ -180,6 +180,8 @@ defmodule Pleroma.Web.Feed.FeedView do
   def activity_content(_), do: ""
 
   def activity_context(activity), do: escape(activity.data["context"])
+
+  def sensitive?(data), do: data["sensitive"] in [true, "true"]
 
   def feed_self_url(conn) do
     conn
@@ -237,15 +239,15 @@ defmodule Pleroma.Web.Feed.FeedView do
     end
   end
 
-  def attachment_previewable?(attachment) do
-    attachment_medium(attachment) in ["image", "video", "audio"]
+  def rss_enclosure_attachment(attachments) do
+    Enum.find(attachments || [], &(not is_nil(attachment_size_positive(&1))))
   end
 
   def attachment_description(attachment) do
     attachment["name"] || ""
   end
 
-  def media_content_xml(_attachment, true), do: ""
+  def media_content_xml(_attachment, sensitive) when sensitive in [true, "true"], do: ""
 
   def media_content_xml(attachment, _sensitive) do
     href = escape(attachment_href(attachment) || "")
