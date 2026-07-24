@@ -73,6 +73,8 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
            ]
 
     assert xpath(xml, ~x"//feed/entry/author/name/text()"ls) == [user.nickname, user.nickname]
+    assert xpath(xml, ~x"//feed/entry/link[@rel='self']/@href"sl) == []
+    assert length(xpath(xml, ~x"//feed/entry/link[@rel='alternate']/@href"sl)) == 2
 
     assert xpath(xml, ~x"//feed/entry/link[@rel='enclosure']/@href"sl) == [
              "https://peertube.moe/video.mp4?first=one&second=two",

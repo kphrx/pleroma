@@ -83,12 +83,12 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
         |> get(user_feed_path(conn, :feed, user.nickname))
         |> response(200)
 
-      activity_titles =
-        resp
-        |> SweetXml.parse()
-        |> SweetXml.xpath(~x"//entry/title/text()"l)
+      xml = SweetXml.parse(resp)
+      activity_titles = SweetXml.xpath(xml, ~x"//entry/title/text()"l)
 
       assert activity_titles == [~c"Won't, didn'...", ~c"2hu", ~c"2hu & as"]
+      assert SweetXml.xpath(xml, ~x"//entry/link[@rel='self']/@href"sl) == []
+      assert length(SweetXml.xpath(xml, ~x"//entry/link[@rel='alternate']/@href"sl)) == 3
       assert resp =~ FeedView.escape(object.data["content"])
       assert resp =~ FeedView.escape(object.data["summary"])
       assert resp =~ FeedView.escape(object.data["context"])

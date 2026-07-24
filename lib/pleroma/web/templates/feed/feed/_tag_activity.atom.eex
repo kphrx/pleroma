@@ -18,8 +18,7 @@
     <summary><%= escape(@data["summary"]) %></summary>
   <% end %>
 
-  <link type="application/atom+xml" href='<%= activity_link(@activity, @data) %>' rel="self"/>
-  <link type="text/html" href='<%= activity_link(@activity, @data) %>' rel="alternate"/>
+  <link type="text/html" href='<%= escape(activity_link(@activity, @data) || "") %>' rel="alternate"/>
 
   <%= for tag <- Pleroma.Object.hashtags(@object) do %>
     <category term="<%= tag %>"></category>
