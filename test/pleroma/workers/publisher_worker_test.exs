@@ -6,8 +6,8 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
   use Pleroma.DataCase, async: false
   use Oban.Testing, repo: Pleroma.Repo
 
+  import Mox
   import Pleroma.Factory
-  import Mock
 
   alias Pleroma.Instances
   alias Pleroma.Object
@@ -15,6 +15,7 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.Federator
+  alias Pleroma.Web.FederatorMock
   alias Pleroma.Workers.PublisherWorker
 
   describe "Oban job priority:" do
@@ -56,49 +57,49 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
     end
 
     test "marks server as unreachable only on final failure", %{activity: activity} do
-      with_mock Pleroma.Web.Federator,
-        perform: fn :publish_one, _params -> {:error, :connection_error} end do
-        # First attempt
-        job = %Oban.Job{
-          args: %{
-            "op" => "publish_one",
-            "params" => %{
-              "inbox" => "https://example.com/inbox",
-              "activity_id" => activity.id
-            }
-          },
-          attempt: 1,
-          max_attempts: 5
-        }
+      expect(FederatorMock, :perform, 2, fn :publish_one, _params ->
+        {:error, :connection_error}
+      end)
 
-        assert {:error, :connection_error} = PublisherWorker.perform(job)
-        assert Instances.reachable?("https://example.com/inbox")
+      # First attempt
+      job = %Oban.Job{
+        args: %{
+          "op" => "publish_one",
+          "params" => %{
+            "inbox" => "https://example.com/inbox",
+            "activity_id" => activity.id
+          }
+        },
+        attempt: 1,
+        max_attempts: 5
+      }
 
-        # Final attempt
-        job = %{job | attempt: 5}
-        assert {:error, :connection_error} = PublisherWorker.perform(job)
-        refute Instances.reachable?("https://example.com/inbox")
-      end
+      assert {:error, :connection_error} = PublisherWorker.perform(job)
+      assert Instances.reachable?("https://example.com/inbox")
+
+      # Final attempt
+      job = %{job | attempt: 5}
+      assert {:error, :connection_error} = PublisherWorker.perform(job)
+      refute Instances.reachable?("https://example.com/inbox")
     end
 
     test "does not mark server as unreachable on successful publish", %{activity: activity} do
-      with_mock Pleroma.Web.Federator,
-        perform: fn :publish_one, _params -> {:ok, %{status: 200}} end do
-        job = %Oban.Job{
-          args: %{
-            "op" => "publish_one",
-            "params" => %{
-              "inbox" => "https://example.com/inbox",
-              "activity_id" => activity.id
-            }
-          },
-          attempt: 1,
-          max_attempts: 5
-        }
+      expect(FederatorMock, :perform, fn :publish_one, _params -> {:ok, %{status: 200}} end)
 
-        assert :ok = PublisherWorker.perform(job)
-        assert Instances.reachable?("https://example.com/inbox")
-      end
+      job = %Oban.Job{
+        args: %{
+          "op" => "publish_one",
+          "params" => %{
+            "inbox" => "https://example.com/inbox",
+            "activity_id" => activity.id
+          }
+        },
+        attempt: 1,
+        max_attempts: 5
+      }
+
+      assert :ok = PublisherWorker.perform(job)
+      assert Instances.reachable?("https://example.com/inbox")
     end
 
     test "does not create atoms from unexpected job params", %{activity: activity} do
@@ -106,24 +107,30 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
 
       assert_raise ArgumentError, fn -> String.to_existing_atom(unknown_key) end
 
-      with_mock Pleroma.Web.Federator,
-        perform: fn :publish_one, _params -> {:ok, %{status: 200}} end do
-        job = %Oban.Job{
-          args: %{
-            "op" => "publish_one",
-            "params" => %{
-              "inbox" => "https://example.com/inbox",
-              "activity_id" => activity.id,
-              unknown_key => "ignored"
-            }
-          },
-          attempt: 1,
-          max_attempts: 5
-        }
+      expect(FederatorMock, :perform, fn :publish_one, params ->
+        assert params == %{
+                 inbox: "https://example.com/inbox",
+                 activity_id: activity.id
+               }
 
-        assert :ok = PublisherWorker.perform(job)
-        assert_raise ArgumentError, fn -> String.to_existing_atom(unknown_key) end
-      end
+        {:ok, %{status: 200}}
+      end)
+
+      job = %Oban.Job{
+        args: %{
+          "op" => "publish_one",
+          "params" => %{
+            "inbox" => "https://example.com/inbox",
+            "activity_id" => activity.id,
+            unknown_key => "ignored"
+          }
+        },
+        attempt: 1,
+        max_attempts: 5
+      }
+
+      assert :ok = PublisherWorker.perform(job)
+      assert_raise ArgumentError, fn -> String.to_existing_atom(unknown_key) end
     end
 
     test "cancels job if server is unreachable", %{activity: activity} do

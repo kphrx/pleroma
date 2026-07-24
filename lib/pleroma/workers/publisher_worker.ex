@@ -4,6 +4,7 @@
 
 defmodule Pleroma.Workers.PublisherWorker do
   alias Pleroma.Activity
+  alias Pleroma.Config
   alias Pleroma.Instances
   alias Pleroma.Web.Federator
 
@@ -19,7 +20,7 @@ defmodule Pleroma.Workers.PublisherWorker do
   @impl true
   def perform(%Job{args: %{"op" => "publish", "activity_id" => activity_id}}) do
     activity = Activity.get_by_id(activity_id)
-    Federator.perform(:publish, activity)
+    federator().perform(:publish, activity)
   end
 
   def perform(%Job{args: %{"op" => "publish_one", "params" => params}} = job) do
@@ -35,7 +36,7 @@ defmodule Pleroma.Workers.PublisherWorker do
     if not Instances.reachable?(params.inbox) do
       {:cancel, :unreachable}
     else
-      case Federator.perform(:publish_one, params) do
+      case federator().perform(:publish_one, params) do
         {:ok, _} ->
           :ok
 
@@ -56,6 +57,8 @@ defmodule Pleroma.Workers.PublisherWorker do
 
   @impl true
   def timeout(_job), do: :timer.seconds(10)
+
+  defp federator, do: Config.get([:pipeline, :federator], Federator)
 
   @base_backoff 15
   @pow 5
