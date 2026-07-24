@@ -30,8 +30,7 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
         %{
           "url" => [
             %{
-              "href" =>
-                "https://peertube.moe/video.mp4?first=one&second=two",
+              "href" => "https://peertube.moe/video.mp4?first=one&second=two",
               "mediaType" => "video/mp4",
               "size" => "123",
               "type" => "Link"
@@ -115,8 +114,7 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
         %{
           "url" => [
             %{
-              "href" =>
-                "https://peertube.moe/video.mp4?first=one&second=two",
+              "href" => "https://peertube.moe/video.mp4?first=one&second=two",
               "mediaType" => "video/mp4",
               "size" => "123",
               "type" => "Link"
