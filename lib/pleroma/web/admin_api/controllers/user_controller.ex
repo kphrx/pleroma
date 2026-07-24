@@ -180,7 +180,7 @@ defmodule Pleroma.Web.AdminAPI.UserController do
           bio: "."
         }
 
-        {User.register_changeset(%User{}, user_data, need_confirmation: false), passwordless?}
+        {User.register_changeset(%User{}, user_data, confirmed: true), passwordless?}
       end)
       |> Enum.reduce(Multi.new(), fn {changeset, passwordless?}, multi ->
         user_operation = {:user, Ecto.UUID.generate()}

@@ -176,6 +176,22 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
       assert ["lain", "lain2"] -- Enum.map(log_entry.data["subjects"], & &1["nickname"]) == []
     end
 
+    test "Admin-created users bypass account confirmation", %{conn: conn} do
+      clear_config([:instance, :account_activation_required], true)
+
+      conn
+      |> put_req_header("accept", "application/json")
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/pleroma/admin/users", %{
+        "users" => [
+          %{"nickname" => "lain", "email" => "lain@example.org", "password" => "test"}
+        ]
+      })
+      |> json_response_and_validate_schema(200)
+
+      assert User.get_by_nickname("lain").is_confirmed
+    end
+
     test "Creating without a password returns a password reset link", %{conn: conn} do
       accounts =
         conn
