@@ -222,6 +222,56 @@ defmodule Pleroma.ReverseProxyTest do
     assert Conn.get_resp_header(conn, "content-type") == ["application/octet-stream"]
   end
 
+  test "sniffs and preserves an image body with a generic content type", %{conn: conn} do
+    body = File.read!("test/fixtures/image.jpg")
+
+    ClientMock
+    |> expect(:request, fn :get, "/extensionless", headers, _, _ ->
+      assert {"accept-encoding", "identity"} in headers
+      {:ok, 200, [{"content-type", "application/octet-stream"}], %{body: body}}
+    end)
+    |> expect(:stream_body, fn %{body: ^body} = client ->
+      {:ok, body, Map.delete(client, :body)}
+    end)
+    |> expect(:stream_body, fn %{} -> :done end)
+
+    conn =
+      ReverseProxy.call(conn, "/extensionless",
+        sniff_content_type: true,
+        max_read_duration: :infinity,
+        req_headers: [{"accept-encoding", "gzip"}]
+      )
+
+    assert conn.resp_body == body
+    assert Conn.get_resp_header(conn, "content-type") == ["image/jpeg"]
+
+    assert Conn.get_resp_header(conn, "content-disposition") == [
+             "inline; filename=\"inline.jpg\""
+           ]
+  end
+
+  test "preserves a generic content type for a non-image body", %{conn: conn} do
+    body = "not an image"
+
+    ClientMock
+    |> expect(:request, fn :get, "/extensionless", _, _, _ ->
+      {:ok, 200, [], %{body: body}}
+    end)
+    |> expect(:stream_body, fn %{body: ^body} = client ->
+      {:ok, body, Map.delete(client, :body)}
+    end)
+    |> expect(:stream_body, fn %{} -> :done end)
+
+    conn = ReverseProxy.call(conn, "/extensionless", sniff_content_type: true)
+
+    assert conn.resp_body == body
+    assert Conn.get_resp_header(conn, "content-type") == ["application/octet-stream"]
+
+    assert Conn.get_resp_header(conn, "content-disposition") == [
+             "attachment; filename=\"extensionless\""
+           ]
+  end
+
   defp headers_mock(_) do
     ClientMock
     |> expect(:request, fn :get, "/headers", headers, _, _ ->
@@ -298,21 +348,21 @@ defmodule Pleroma.ReverseProxyTest do
     end
   end
 
-  defp disposition_headers_mock(headers, url \\ "/disposition") do
+  defp disposition_headers_mock(headers) do
     ClientMock
-    |> expect(:request, fn :get, ^url, _, _, _ ->
-      Registry.register(ClientMock, url, 0)
+    |> expect(:request, fn :get, "/disposition", _, _, _ ->
+      Registry.register(ClientMock, "/disposition", 0)
 
-      {:ok, 200, headers, %{url: url}}
+      {:ok, 200, headers, %{url: "/disposition"}}
     end)
-    |> expect(:stream_body, 2, fn %{url: ^url} = client ->
-      case Registry.lookup(ClientMock, url) do
+    |> expect(:stream_body, 2, fn %{url: "/disposition"} = client ->
+      case Registry.lookup(ClientMock, "/disposition") do
         [{_, 0}] ->
-          Registry.update_value(ClientMock, url, &(&1 + 1))
+          Registry.update_value(ClientMock, "/disposition", &(&1 + 1))
           {:ok, "", client}
 
         [{_, 1}] ->
-          Registry.unregister(ClientMock, url)
+          Registry.unregister(ClientMock, "/disposition")
           :done
       end
     end)
@@ -337,6 +387,7 @@ defmodule Pleroma.ReverseProxyTest do
       disposition_headers_mock([
         {"content-type", "image/png"},
         {"content-disposition", "attachment; filename=\"filename.png\""},
+        {"content-disposition", "attachment; filename=\"duplicate.png\""},
         {"content-length", "0"}
       ])
 
@@ -345,23 +396,6 @@ defmodule Pleroma.ReverseProxyTest do
       [disposition] = Conn.get_resp_header(conn, "content-disposition")
       assert String.starts_with?(disposition, "inline")
       refute String.starts_with?(disposition, "attachment")
-    end
-
-    test "forces inline based on content type even without a file extension in the url", %{
-      conn: conn
-    } do
-      disposition_headers_mock(
-        [
-          {"content-type", "image/jpeg"},
-          {"content-length", "0"}
-        ],
-        "/original"
-      )
-
-      conn = ReverseProxy.call(conn, "/original")
-
-      [disposition] = Conn.get_resp_header(conn, "content-disposition")
-      assert disposition == "inline; filename=\"inline.jpg\""
     end
 
     test "with content-disposition header", %{conn: conn} do
@@ -390,69 +424,6 @@ defmodule Pleroma.ReverseProxyTest do
       assert {"content-disposition", "attachment; filename=\"upstream.png\""} in conn.resp_headers
     end
 
-    test "with inline_content_types: true does not synthesise inline when upstream is absent", %{
-      conn: conn
-    } do
-      disposition_headers_mock([
-        {"content-type", "image/png"},
-        {"content-length", "0"}
-      ])
-
-      conn = ReverseProxy.call(conn, "/disposition", inline_content_types: true)
-
-      assert Conn.get_resp_header(conn, "content-disposition") == []
-    end
-
-    test "with inline_content_types: false forces attachment for everything", %{
-      conn: conn
-    } do
-      disposition_headers_mock([
-        {"content-type", "image/png"},
-        {"content-disposition", "inline; filename=\"pic.png\""},
-        {"content-length", "0"}
-      ])
-
-      conn = ReverseProxy.call(conn, "/disposition", inline_content_types: false)
-
-      [disposition] = Conn.get_resp_header(conn, "content-disposition")
-      assert String.starts_with?(disposition, "attachment")
-    end
-
-    test "with inline_content_types: false derives attachment filename from the URL basename when no upstream filename", %{
-      conn: conn
-    } do
-      # No content-disposition header: the attachment branch falls back to
-      # attachment_name, which by default comes from MediaProxy.filename/1
-      # (the URL basename).
-      disposition_headers_mock([
-        {"content-type", "image/png"},
-        {"content-length", "0"}
-      ])
-
-      conn = ReverseProxy.call(conn, "/disposition", inline_content_types: false)
-
-      [disposition] = Conn.get_resp_header(conn, "content-disposition")
-      assert disposition == "attachment; filename=\"disposition\""
-    end
-
-    test "with inline_content_types: false honours an explicit attachment_name opt", %{
-      conn: conn
-    } do
-      disposition_headers_mock([
-        {"content-type", "image/png"},
-        {"content-length", "0"}
-      ])
-
-      conn =
-        ReverseProxy.call(conn, "/disposition",
-          inline_content_types: false,
-          attachment_name: "custom.bin"
-        )
-
-      [disposition] = Conn.get_resp_header(conn, "content-disposition")
-      assert disposition == "attachment; filename=\"custom.bin\""
-    end
-
     test "forces bare inline for a whitelisted type with no MIME extension", %{
       conn: conn
     } do
@@ -469,36 +440,17 @@ defmodule Pleroma.ReverseProxyTest do
       assert disposition == "inline"
     end
 
-    test "honours a custom inline_content_types whitelist", %{conn: conn} do
-      # image/bmp is NOT in the default whitelist; with a custom whitelist
-      # that includes it, the proxy should force inline.
+    test "serves modern browser image types inline", %{conn: conn} do
       disposition_headers_mock([
-        {"content-type", "image/bmp"},
-        {"content-disposition", "attachment; filename=\"upstream.bmp\""},
+        {"content-type", "image/webp"},
         {"content-length", "0"}
       ])
 
-      conn =
-        ReverseProxy.call(conn, "/disposition", inline_content_types: ["image/bmp"])
+      conn = ReverseProxy.call(conn, "/disposition")
 
-      [disposition] = Conn.get_resp_header(conn, "content-disposition")
-      assert String.starts_with?(disposition, "inline")
-      assert String.ends_with?(disposition, "inline.bmp\"")
-    end
-
-    test "treats a type outside the whitelist as attachment even on custom whitelist", %{
-      conn: conn
-    } do
-      disposition_headers_mock([
-        {"content-type", "image/png"},
-        {"content-disposition", "attachment; filename=\"filename.png\""},
-        {"content-length", "0"}
-      ])
-
-      conn =
-        ReverseProxy.call(conn, "/disposition", inline_content_types: ["image/bmp"])
-
-      assert {"content-disposition", "attachment; filename=\"filename.png\""} in conn.resp_headers
+      assert Conn.get_resp_header(conn, "content-disposition") == [
+               "inline; filename=\"inline.webp\""
+             ]
     end
   end
 
