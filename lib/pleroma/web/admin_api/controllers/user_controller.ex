@@ -10,6 +10,7 @@ defmodule Pleroma.Web.AdminAPI.UserController do
 
   alias Ecto.Multi
   alias Pleroma.ModerationLog
+  alias Pleroma.PasswordResetToken
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.ActivityPub.Pipeline
@@ -151,15 +152,11 @@ defmodule Pleroma.Web.AdminAPI.UserController do
         } = conn,
         _
       ) do
-    # Nicknames of users for which a password reset link will be generated.
-    passwordless_nicknames =
-      users
-      |> Enum.filter(fn user -> Map.get(user, :password) in ["", nil] end)
-      |> Enum.map(& &1.nickname)
-
     multi =
       users
       |> Enum.map(fn %{nickname: nickname, email: email} = attrs ->
+        passwordless? = Map.get(attrs, :password) in ["", nil]
+
         password =
           case Map.get(attrs, :password) do
             password when is_binary(password) and password != "" ->
@@ -178,17 +175,36 @@ defmodule Pleroma.Web.AdminAPI.UserController do
           bio: "."
         }
 
-        User.register_changeset(%User{}, user_data, need_confirmation: false)
+        {User.register_changeset(%User{}, user_data, need_confirmation: false), passwordless?}
       end)
-      |> Enum.reduce(Multi.new(), fn changeset, multi ->
-        Multi.insert(multi, Ecto.UUID.generate(), changeset)
+      |> Enum.reduce(Multi.new(), fn {changeset, passwordless?}, multi ->
+        user_operation = {:user, Ecto.UUID.generate()}
+        multi = Multi.insert(multi, user_operation, changeset)
+
+        if passwordless? do
+          Multi.run(
+            multi,
+            {:password_reset_token, Ecto.UUID.generate()},
+            fn _repo, changes ->
+              changes
+              |> Map.fetch!(user_operation)
+              |> PasswordResetToken.create_token()
+            end
+          )
+        else
+          multi
+        end
       end)
 
     case Pleroma.Repo.transaction(multi) do
-      {:ok, users_map} ->
-        users =
-          users_map
+      {:ok, results} ->
+        {users, password_reset_tokens} =
+          results
           |> Map.values()
+          |> Enum.split_with(&match?(%User{}, &1))
+
+        users =
+          users
           |> Enum.map(fn user ->
             {:ok, user} = User.post_register_action(user)
 
@@ -196,11 +212,8 @@ defmodule Pleroma.Web.AdminAPI.UserController do
           end)
 
         password_reset_links =
-          users
-          |> Enum.filter(fn user -> Enum.member?(passwordless_nicknames, user.nickname) end)
-          |> Map.new(fn user ->
-            {:ok, token} = Pleroma.PasswordResetToken.create_token(user)
-            {user.id, Router.Helpers.reset_password_url(Endpoint, :reset, token.token)}
+          Map.new(password_reset_tokens, fn token ->
+            {token.user_id, Router.Helpers.reset_password_url(Endpoint, :reset, token.token)}
           end)
 
         ModerationLog.insert_log(%{
@@ -214,19 +227,25 @@ defmodule Pleroma.Web.AdminAPI.UserController do
           password_reset_links: password_reset_links
         )
 
-      {:error, id, changeset, _} ->
+      {:error, {:user, _} = id, %Ecto.Changeset{} = changeset, _} ->
         changesets =
-          Enum.map(multi.operations, fn
+          Enum.flat_map(multi.operations, fn
             {^id, {:changeset, _current_changeset, _}} ->
-              changeset
+              [changeset]
 
-            {_, {:changeset, current_changeset, _}} ->
-              current_changeset
+            {{:user, _}, {:changeset, current_changeset, _}} ->
+              [current_changeset]
+
+            _ ->
+              []
           end)
 
         conn
         |> put_status(:conflict)
         |> render("create_errors.json", changesets: changesets)
+
+      {:error, {:password_reset_token, _}, _reason, _} ->
+        raise "Failed to create password reset token"
     end
   end
 

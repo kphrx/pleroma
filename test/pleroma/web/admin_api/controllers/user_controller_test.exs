@@ -208,6 +208,36 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
       refute Map.has_key?(account2["data"], "password_reset_link")
     end
 
+    test "Password reset token failures roll back the user batch", %{conn: conn} do
+      with_mock Pleroma.PasswordResetToken, [:passthrough],
+        create_token: fn user ->
+          if user.nickname == "lain2" do
+            {:error, :forced}
+          else
+            result = passthrough([user])
+            send(self(), {:token_created, user.nickname})
+            result
+          end
+        end do
+        assert_error_sent(500, fn ->
+          conn
+          |> put_req_header("accept", "application/json")
+          |> put_req_header("content-type", "application/json")
+          |> post("/api/pleroma/admin/users", %{
+            "users" => [
+              %{"nickname" => "lain", "email" => "lain@example.org"},
+              %{"nickname" => "lain2", "email" => "lain2@example.org"}
+            ]
+          })
+        end)
+      end
+
+      assert_received {:token_created, "lain"}
+      refute User.get_by_nickname("lain")
+      refute User.get_by_nickname("lain2")
+      assert Repo.aggregate(Pleroma.PasswordResetToken, :count) == 0
+    end
+
     test "Duplicate nicknames in a batch return a conflict", %{conn: conn} do
       conn =
         conn
