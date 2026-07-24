@@ -240,6 +240,21 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
     end
 
     test "Password reset token failures roll back the user batch", %{conn: conn} do
+      idempotency_key = Ecto.UUID.generate()
+
+      request = fn conn ->
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("idempotency-key", idempotency_key)
+        |> post("/api/pleroma/admin/users", %{
+          "users" => [
+            %{"nickname" => "lain", "email" => "lain@example.org"},
+            %{"nickname" => "lain2", "email" => "lain2@example.org"}
+          ]
+        })
+      end
+
       with_mock Pleroma.PasswordResetToken, [:passthrough],
         create_token: fn user ->
           if user.nickname == "lain2" do
@@ -250,23 +265,17 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
             result
           end
         end do
-        assert_error_sent(500, fn ->
-          conn
-          |> put_req_header("accept", "application/json")
-          |> put_req_header("content-type", "application/json")
-          |> post("/api/pleroma/admin/users", %{
-            "users" => [
-              %{"nickname" => "lain", "email" => "lain@example.org"},
-              %{"nickname" => "lain2", "email" => "lain2@example.org"}
-            ]
-          })
-        end)
+        conn = request.(conn)
+
+        assert json_response(conn, 500) == %{"error" => "Something went wrong"}
       end
 
       assert_received {:token_created, "lain"}
       refute User.get_by_nickname("lain")
       refute User.get_by_nickname("lain2")
       assert Repo.aggregate(Pleroma.PasswordResetToken, :count) == 0
+
+      assert [_account1, _account2] = conn |> request.() |> json_response(200)
     end
 
     test "Password reset links are not cached by idempotency key", %{conn: conn} do

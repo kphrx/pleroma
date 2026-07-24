@@ -250,7 +250,10 @@ defmodule Pleroma.Web.AdminAPI.UserController do
         |> render("create_errors.json", changesets: changesets)
 
       {:error, {:password_reset_token, _}, _reason, _} ->
-        raise "Failed to create password reset token"
+        Pleroma.Web.AdminAPI.FallbackController.call(
+          conn,
+          {:password_reset_token_error, :creation_failed}
+        )
     end
   end
 
