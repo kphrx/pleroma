@@ -929,6 +929,33 @@ defmodule Pleroma.Web.MastodonAPI.TimelineControllerTest do
       end
     end
 
+    test "multi-hashtag timeline pagination returns unique statuses", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, activity_one} = CommonAPI.post(user, %{status: "#test #test1"})
+      {:ok, activity_two} = CommonAPI.post(user, %{status: "#test #test1"})
+      {:ok, activity_three} = CommonAPI.post(user, %{status: "#test #test1"})
+
+      for hashtag_timeline_mode <- [:enabled, :disabled] do
+        clear_config([:features, :improved_hashtag_timeline], hashtag_timeline_mode)
+
+        first_page =
+          conn
+          |> get("/api/v1/timelines/tag/test?any[]=test1&limit=2")
+          |> json_response_and_validate_schema(:ok)
+
+        assert Enum.map(first_page, & &1["id"]) ==
+                 Enum.map([activity_three, activity_two], &to_string(&1.id))
+
+        second_page =
+          conn
+          |> get("/api/v1/timelines/tag/test?any[]=test1&limit=2&max_id=#{activity_two.id}")
+          |> json_response_and_validate_schema(:ok)
+
+        assert Enum.map(second_page, & &1["id"]) == [to_string(activity_one.id)]
+      end
+    end
+
     test "muted emotions", %{conn: conn} do
       user = insert(:user)
       token = insert(:oauth_token, user: user, scopes: ["read:statuses"])
