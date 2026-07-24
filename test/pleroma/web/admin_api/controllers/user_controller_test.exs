@@ -238,6 +238,51 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
       assert Repo.aggregate(Pleroma.PasswordResetToken, :count) == 0
     end
 
+    test "Password reset links are not cached by idempotency key", %{conn: conn} do
+      idempotency_key = Ecto.UUID.generate()
+
+      request = fn conn ->
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("idempotency-key", idempotency_key)
+        |> post("/api/pleroma/admin/users", %{
+          "users" => [%{"nickname" => "lain", "email" => "lain@example.org"}]
+        })
+      end
+
+      assert [%{"data" => %{"password_reset_link" => _link}}] =
+               conn |> request.() |> json_response(200)
+
+      second_conn = request.(conn)
+
+      assert [_error] = json_response(second_conn, 409)
+      refute get_resp_header(second_conn, "idempotent-replayed") == ["true"]
+    end
+
+    test "Explicit-password responses remain idempotent", %{conn: conn} do
+      idempotency_key = Ecto.UUID.generate()
+
+      request = fn conn ->
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("idempotency-key", idempotency_key)
+        |> post("/api/pleroma/admin/users", %{
+          "users" => [
+            %{"nickname" => "lain", "email" => "lain@example.org", "password" => "test"}
+          ]
+        })
+      end
+
+      assert [_account] = conn |> request.() |> json_response(200)
+
+      second_conn = request.(conn)
+
+      assert [_account] = json_response(second_conn, 200)
+      assert get_resp_header(second_conn, "idempotent-replayed") == ["true"]
+    end
+
     test "Duplicate nicknames in a batch return a conflict", %{conn: conn} do
       conn =
         conn

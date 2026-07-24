@@ -152,6 +152,13 @@ defmodule Pleroma.Web.AdminAPI.UserController do
         } = conn,
         _
       ) do
+    conn =
+      if Enum.any?(users, fn user -> Map.get(user, :password) in ["", nil] end) do
+        put_private(conn, :skip_idempotency_cache, true)
+      else
+        conn
+      end
+
     multi =
       users
       |> Enum.map(fn %{nickname: nickname, email: email} = attrs ->
