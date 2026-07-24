@@ -86,7 +86,8 @@ defmodule Pleroma.Web.ApiSpec.Admin.UserOperation do
                       type: :string,
                       description:
                         "Optional. When omitted, a `password_reset_link` is returned, " <>
-                          "allowing the user to set their own password."
+                          "allowing the user to set their own password. When provided, " <>
+                          "it must not be empty."
                     }
                   },
                   required: [:nickname, :email]

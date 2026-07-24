@@ -153,7 +153,7 @@ defmodule Pleroma.Web.AdminAPI.UserController do
         _
       ) do
     conn =
-      if Enum.any?(users, fn user -> Map.get(user, :password) in ["", nil] end) do
+      if Enum.any?(users, fn user -> not Map.has_key?(user, :password) end) do
         put_private(conn, :skip_idempotency_cache, true)
       else
         conn
@@ -162,15 +162,13 @@ defmodule Pleroma.Web.AdminAPI.UserController do
     multi =
       users
       |> Enum.map(fn %{nickname: nickname, email: email} = attrs ->
-        passwordless? = Map.get(attrs, :password) in ["", nil]
+        {password, passwordless?} =
+          case Map.fetch(attrs, :password) do
+            {:ok, password} ->
+              {password, false}
 
-        password =
-          case Map.get(attrs, :password) do
-            password when is_binary(password) and password != "" ->
-              password
-
-            _ ->
-              :crypto.strong_rand_bytes(16) |> Base.encode64()
+            :error ->
+              {:crypto.strong_rand_bytes(16) |> Base.encode64(), true}
           end
 
         user_data = %{

@@ -80,7 +80,7 @@ The `/api/v1/pleroma/admin/*` path is backwards compatible with `/api/pleroma/ad
     {
       `nickname`,
       `email`,
-      `password` (optional)
+      `password` (optional; when provided, must not be empty)
     }
   ]
 - Response: Array of user objects. When a user is created without a `password`, `data`
