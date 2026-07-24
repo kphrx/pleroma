@@ -169,7 +169,8 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
         |> get("/users/#{user.nickname}/feed.atom")
         |> response(200)
 
-      assert response =~ "&amp;lt;script&amp;gt;alert(&amp;#39;feed&amp;#39;)&amp;lt;/script&amp;gt;"
+      assert response =~
+               "&amp;lt;script&amp;gt;alert(&amp;#39;feed&amp;#39;)&amp;lt;/script&amp;gt;"
 
       content_values = response |> parse() |> xpath(~x"//entry/content/text()"sl)
 
