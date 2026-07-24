@@ -901,10 +901,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
         where: hto.hashtag_id in ^hashtag_ids
       )
 
-    if query.distinct == [] do
-      from([activity, object] in query,
-        distinct: [desc: activity.id],
-        order_by: [desc: activity.id]
+    if is_nil(query.distinct) do
+      from([_activity, object] in query,
+        distinct: [desc: object.id],
+        order_by: [desc: object.id]
       )
     else
       query
