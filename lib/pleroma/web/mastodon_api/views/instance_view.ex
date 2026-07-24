@@ -167,9 +167,6 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
   def features do
     [
       "pleroma_api",
-      if Config.get([Pleroma.Chat, :enabled], true) do
-        "chat"
-      end,
       "mastodon_api",
       "mastodon_api_grouped_notifications",
       "mastodon_api_streaming",
@@ -205,8 +202,12 @@ defmodule Pleroma.Web.MastodonAPI.InstanceView do
       end,
       "pleroma_emoji_reactions",
       "pleroma_custom_emoji_reactions",
-      "pleroma_chat_messages",
-      "pleroma:pin_chats",
+      if Pleroma.Chat.enabled?() do
+        "pleroma_chat_messages"
+      end,
+      if Pleroma.Chat.enabled?() do
+        "pleroma:pin_chats"
+      end,
       if Config.get([:instance, :show_reactions]) do
         "exposable_reactions"
       end,
