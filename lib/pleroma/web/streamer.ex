@@ -195,6 +195,9 @@ defmodule Pleroma.Web.Streamer do
     recipients = MapSet.new(item.recipients)
     domain_blocks = Pleroma.Web.ActivityPub.MRF.subdomains_regex(user.domain_blocks)
 
+    following_ap_ids =
+      if user.domain_blocks == [], do: [], else: User.get_cached_user_friends_ap_ids(user)
+
     with parent <- Object.normalize(item, fetch: false) || item,
          true <- Enum.all?([blocked_ap_ids, muted_ap_ids], &(item.actor not in &1)),
          true <- item.data["type"] != "Announce" || item.actor not in reblog_muted_ap_ids,
@@ -205,8 +208,12 @@ defmodule Pleroma.Web.Streamer do
          true <- MapSet.disjoint?(recipients, recipient_blocks),
          %{host: item_host} <- URI.parse(item.actor),
          %{host: parent_host} <- URI.parse(parent.data["actor"]),
-         false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
-         false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, parent_host),
+         false <-
+           item.actor not in following_ap_ids and
+             Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
+         false <-
+           parent.data["actor"] not in following_ap_ids and
+             Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, parent_host),
          true <- thread_containment(item, user),
          false <- CommonAPI.thread_muted?(parent, user) do
       false
