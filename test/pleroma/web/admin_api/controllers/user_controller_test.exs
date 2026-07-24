@@ -177,7 +177,7 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
     end
 
     test "Creating without a password returns a password reset link", %{conn: conn} do
-      [account1, account2] =
+      accounts =
         conn
         |> put_req_header("accept", "application/json")
         |> put_req_header("content-type", "application/json")
@@ -195,6 +195,10 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
           ]
         })
         |> json_response_and_validate_schema(200)
+        |> Map.new(fn account -> {account["data"]["nickname"], account} end)
+
+      account1 = accounts["lain"]
+      account2 = accounts["lain2"]
 
       assert account1["type"] == "success"
       assert %{"password_reset_link" => link} = account1["data"]
@@ -202,6 +206,36 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
 
       assert account2["type"] == "success"
       refute Map.has_key?(account2["data"], "password_reset_link")
+    end
+
+    test "Duplicate nicknames in a batch return a conflict", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/pleroma/admin/users", %{
+          "users" => [
+            %{"nickname" => "lain", "email" => "lain1@example.org", "password" => "test"},
+            %{"nickname" => "lain", "email" => "lain2@example.org", "password" => "test"}
+          ]
+        })
+
+      assert [_first, _second] = json_response(conn, 409)
+      refute User.get_by_nickname("lain")
+    end
+
+    test "Blank nicknames return a conflict", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/pleroma/admin/users", %{
+          "users" => [
+            %{"nickname" => "", "email" => "lain@example.org", "password" => "test"}
+          ]
+        })
+
+      assert [%{"error" => "nickname can't be blank"}] = json_response(conn, 409)
     end
 
     test "Cannot create user with existing email", %{conn: conn} do

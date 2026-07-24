@@ -181,7 +181,7 @@ defmodule Pleroma.Web.AdminAPI.UserController do
         User.register_changeset(%User{}, user_data, need_confirmation: false)
       end)
       |> Enum.reduce(Multi.new(), fn changeset, multi ->
-        Multi.insert(multi, "user-" <> changeset.changes.nickname, changeset)
+        Multi.insert(multi, Ecto.UUID.generate(), changeset)
       end)
 
     case Pleroma.Repo.transaction(multi) do
