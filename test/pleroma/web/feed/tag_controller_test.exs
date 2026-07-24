@@ -232,6 +232,49 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
     refute response =~ "<lastBuildDate>"
   end
 
+  test "provides a valid updated timestamp for an empty Atom feed", %{conn: conn} do
+    response =
+      conn
+      |> put_req_header("accept", "application/atom+xml")
+      |> get(tag_feed_path(conn, :feed, "empty.atom"))
+      |> response(200)
+
+    updated = response |> parse() |> xpath(~x"//feed/updated/text()"s)
+    assert {:ok, _datetime, 0} = DateTime.from_iso8601(updated)
+  end
+
+  test "escapes Atom IDs and tag feed self links", %{conn: conn} do
+    user = insert(:user, local: false)
+    object_id = "https://remote.example/object?first=one&second=two"
+
+    note =
+      insert(:note,
+        user: user,
+        object_local: false,
+        data: %{
+          "content" => "remote #atomlink",
+          "external_url" => object_id,
+          "id" => object_id,
+          "summary" => "",
+          "tag" => ["atomlink"]
+        }
+      )
+
+    insert(:note_activity, user: user, note: note, local: false, object_local: false)
+
+    response =
+      conn
+      |> put_req_header("accept", "application/atom+xml")
+      |> get("/tags/atomlink.atom?third=three&fourth=four")
+      |> response(200)
+
+    assert response =~ "https://remote.example/object?first=one&amp;second=two"
+    assert response =~ "third=three&amp;fourth=four"
+
+    xml = parse(response)
+    assert xpath(xml, ~x"//feed/entry/id/text()"s) == object_id
+  end
+
   test "escapes and round-trips RSS item permalinks", %{conn: conn} do
     user = insert(:user, local: false)
     permalink = "https://remote.example/post?first=one&second=two"

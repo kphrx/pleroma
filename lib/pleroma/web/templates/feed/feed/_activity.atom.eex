@@ -1,7 +1,7 @@
 <entry>
   <activity:object-type>http://activitystrea.ms/schema/1.0/note</activity:object-type>
   <activity:verb>http://activitystrea.ms/schema/1.0/post</activity:verb>
-  <id><%= @data["id"] %></id>
+  <id><%= escape(@data["id"] || "") %></id>
   <title><%= activity_title(@data, Keyword.get(@feed_config, :post_title, %{})) %></title>
   <content type="html"><%= escape(atom_content_encoded(@data)) %></content>
   <published><%= to_rfc3339(@data["published"]) %></published>

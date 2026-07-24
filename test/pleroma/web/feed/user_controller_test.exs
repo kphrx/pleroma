@@ -150,6 +150,34 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
       end
     end
 
+    test "keeps fallback summary markup inert in rendered Atom content", %{
+      conn: conn,
+      object: object,
+      user: user
+    } do
+      data =
+        object.data
+        |> Map.put("content", "")
+        |> Map.put("summary", "<script>alert('feed')</script>")
+
+      object
+      |> Ecto.Changeset.change(data: data)
+      |> Pleroma.Repo.update!()
+
+      response =
+        conn
+        |> get("/users/#{user.nickname}/feed.atom")
+        |> response(200)
+
+      assert response =~ "&amp;lt;script&amp;gt;alert(&amp;#39;feed&amp;#39;)&amp;lt;/script&amp;gt;"
+
+      content_values = response |> parse() |> xpath(~x"//entry/content/text()"sl)
+
+      assert Enum.any?(content_values, fn content ->
+               String.starts_with?(content, "&lt;script&gt;alert(&#39;feed&#39;)&lt;/script&gt;")
+             end)
+    end
+
     test "does not expose sensitive attachments as enclosures", %{
       conn: conn,
       object: object,

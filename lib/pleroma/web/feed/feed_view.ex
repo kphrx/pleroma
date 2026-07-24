@@ -43,7 +43,7 @@ defmodule Pleroma.Web.Feed.FeedView do
   def most_recent_update(activities, :rss) do
     activities
     |> Enum.map(fn activity ->
-      case Object.normalize(activity, fetch: false) do
+      case activity.object do
         %Object{updated_at: updated_at} -> updated_at
         _ -> activity.updated_at
       end

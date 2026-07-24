@@ -13,7 +13,7 @@
     <subtitle><%= subtitle %></subtitle>
   <% end %>
   <logo><%= feed_logo() %></logo>
-  <updated><%= most_recent_update(@activities) %></updated>
+  <updated><%= most_recent_update(@activities) || to_rfc3339(NaiveDateTime.utc_now()) %></updated>
   <link rel="self" href="<%= feed_self_url(@conn) %>" type="application/atom+xml"/>
 
   <%= for activity <- @activities do %>
