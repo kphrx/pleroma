@@ -546,6 +546,14 @@ defmodule Pleroma.Web.PleromaAPI.ChatControllerTest do
         account_ids = Enum.map(result, &get_in(&1, ["account", "id"]))
         assert Enum.sort(account_ids) == Enum.sort([user2.id, user3.id])
       end
+
+      test "it returns 404 when chats are disabled", %{conn: conn} do
+        clear_config([Pleroma.Chat, :enabled], false)
+
+        conn
+        |> get(unquote(tested_endpoint))
+        |> json_response_and_validate_schema(404)
+      end
     end
   end
 end

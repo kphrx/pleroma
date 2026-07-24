@@ -287,6 +287,8 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
       user.last_status_at &&
         user.last_status_at |> NaiveDateTime.to_date() |> Date.to_iso8601()
 
+    accepts_chat_messages = Pleroma.Chat.enabled?() and user.accepts_chat_messages
+
     %{
       id: to_string(user.id),
       username: username_from_nickname(user.nickname),
@@ -336,7 +338,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
         relationship: relationship,
         skip_thread_containment: user.skip_thread_containment,
         background_image: image_url(user.background) |> MediaProxy.url(),
-        accepts_chat_messages: user.accepts_chat_messages,
+        accepts_chat_messages: accepts_chat_messages,
         favicon: favicon,
         avatar_description: avatar_description,
         header_description: header_description
@@ -391,6 +393,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountView do
     |> Kernel.put_in([:source, :pleroma, :show_role], user.show_role)
     |> Kernel.put_in([:source, :pleroma, :no_rich_text], user.no_rich_text)
     |> Kernel.put_in([:source, :pleroma, :show_birthday], user.show_birthday)
+    |> Kernel.put_in([:source, :pleroma, :accepts_chat_messages], user.accepts_chat_messages)
   end
 
   defp maybe_put_settings(data, _, _, _), do: data
