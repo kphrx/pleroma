@@ -9,6 +9,13 @@ defmodule Pleroma.Workers.PublisherWorker do
 
   use Oban.Worker, queue: :federator_outgoing, max_attempts: 13
 
+  @publish_one_param_keys %{
+    "activity_id" => :activity_id,
+    "cc" => :cc,
+    "inbox" => :inbox,
+    "unreachable_since" => :unreachable_since
+  }
+
   @impl true
   def perform(%Job{args: %{"op" => "publish", "activity_id" => activity_id}}) do
     activity = Activity.get_by_id(activity_id)
@@ -16,7 +23,13 @@ defmodule Pleroma.Workers.PublisherWorker do
   end
 
   def perform(%Job{args: %{"op" => "publish_one", "params" => params}} = job) do
-    params = Map.new(params, fn {k, v} -> {String.to_atom(k), v} end)
+    params =
+      Enum.reduce(params, %{}, fn {key, value}, acc ->
+        case @publish_one_param_keys do
+          %{^key => atom_key} -> Map.put(acc, atom_key, value)
+          _ -> acc
+        end
+      end)
 
     # Cancel / skip the job if this server believed to be unreachable now
     if not Instances.reachable?(params.inbox) do

@@ -11,6 +11,7 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
 
   alias Pleroma.Instances
   alias Pleroma.Object
+  alias Pleroma.Workers.PublisherWorker
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.CommonAPI
@@ -70,12 +71,12 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
           max_attempts: 5
         }
 
-        assert {:error, :connection_error} = Pleroma.Workers.PublisherWorker.perform(job)
+        assert {:error, :connection_error} = PublisherWorker.perform(job)
         assert Instances.reachable?("https://example.com/inbox")
 
         # Final attempt
         job = %{job | attempt: 5}
-        assert {:error, :connection_error} = Pleroma.Workers.PublisherWorker.perform(job)
+        assert {:error, :connection_error} = PublisherWorker.perform(job)
         refute Instances.reachable?("https://example.com/inbox")
       end
     end
@@ -95,8 +96,33 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
           max_attempts: 5
         }
 
-        assert :ok = Pleroma.Workers.PublisherWorker.perform(job)
+        assert :ok = PublisherWorker.perform(job)
         assert Instances.reachable?("https://example.com/inbox")
+      end
+    end
+
+    test "does not create atoms from unexpected job params", %{activity: activity} do
+      unknown_key = "unknown_#{System.unique_integer([:positive])}"
+
+      assert_raise ArgumentError, fn -> String.to_existing_atom(unknown_key) end
+
+      with_mock Pleroma.Web.Federator,
+        perform: fn :publish_one, _params -> {:ok, %{status: 200}} end do
+        job = %Oban.Job{
+          args: %{
+            "op" => "publish_one",
+            "params" => %{
+              "inbox" => "https://example.com/inbox",
+              "activity_id" => activity.id,
+              unknown_key => "ignored"
+            }
+          },
+          attempt: 1,
+          max_attempts: 5
+        }
+
+        assert :ok = PublisherWorker.perform(job)
+        assert_raise ArgumentError, fn -> String.to_existing_atom(unknown_key) end
       end
     end
 
@@ -117,7 +143,7 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
         max_attempts: 5
       }
 
-      assert {:cancel, :unreachable} = Pleroma.Workers.PublisherWorker.perform(job)
+      assert {:cancel, :unreachable} = PublisherWorker.perform(job)
     end
   end
 end
