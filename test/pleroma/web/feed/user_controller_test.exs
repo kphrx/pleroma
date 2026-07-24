@@ -138,6 +138,18 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
       assert activity_titles == [~c"2hu & as"]
     end
 
+    test "escapes query parameters in feed self links", %{conn: conn, user: user} do
+      for format <- ~w[atom rss] do
+        response =
+          conn
+          |> get("/users/#{user.nickname}/feed.#{format}?first=one&second=two")
+          |> response(200)
+
+        assert response =~ "first=one&amp;second=two"
+        refute response =~ "first=one&second=two"
+      end
+    end
+
     test "returns 404 for a missing feed", %{conn: conn} do
       conn =
         conn

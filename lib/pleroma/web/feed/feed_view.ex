@@ -167,7 +167,11 @@ defmodule Pleroma.Web.Feed.FeedView do
 
   def activity_context(activity), do: escape(activity.data["context"])
 
-  def feed_self_url(conn), do: Phoenix.Controller.current_url(conn)
+  def feed_self_url(conn) do
+    conn
+    |> Phoenix.Controller.current_url()
+    |> escape()
+  end
 
   def activity_link(activity, data) do
     cond do
