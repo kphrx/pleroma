@@ -11,11 +11,11 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
 
   alias Pleroma.Instances
   alias Pleroma.Object
-  alias Pleroma.Workers.PublisherWorker
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.Federator
+  alias Pleroma.Workers.PublisherWorker
 
   describe "Oban job priority:" do
     setup do
