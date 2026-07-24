@@ -15,4 +15,12 @@ defmodule Pleroma.Web.ActivityPub.MRF.Policy do
             }
   @callback history_awareness() :: :auto | :manual
   @optional_callbacks config_description: 0, history_awareness: 0, id_filter: 1
+
+  defmacro __using__(_) do
+    quote do
+      # Otherwise Pleroma.Docs.Generator.list_behaviour_implementations fails
+      # since the Elixir compiler doesn't automatically load the module since v1.19.
+      @compile {:autoload, true}
+    end
+  end
 end

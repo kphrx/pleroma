@@ -1988,14 +1988,26 @@ defmodule Pleroma.UserTest do
   end
 
   describe "caching" do
+    test "set_cache stores friends under the AP ID cache key" do
+      user = insert(:user)
+
+      User.set_cache(user)
+
+      assert {:ok, []} = Cachex.get(:user_cache, "friends_ap_ids:#{user.ap_id}")
+      assert {:ok, nil} = Cachex.get(:user_cache, "friends_ap_ids:#{user.nickname}")
+    end
+
     test "invalidate_cache works" do
       user = insert(:user)
 
       User.set_cache(user)
+      User.get_cached_by_id(user.id)
       User.invalidate_cache(user)
 
       {:ok, nil} = Cachex.get(:user_cache, "ap_id:#{user.ap_id}")
       {:ok, nil} = Cachex.get(:user_cache, "nickname:#{user.nickname}")
+      {:ok, nil} = Cachex.get(:user_cache, "friends_ap_ids:#{user.ap_id}")
+      {:ok, nil} = Cachex.get(:user_cache, "id:#{user.id}")
     end
 
     test "User.delete() plugs any possible zombie objects" do

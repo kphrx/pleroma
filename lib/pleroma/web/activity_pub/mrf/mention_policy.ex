@@ -4,8 +4,9 @@
 
 defmodule Pleroma.Web.ActivityPub.MRF.MentionPolicy do
   @moduledoc "Block activities which mention a user"
-
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @impl true
   def filter(%{"type" => "Create"} = activity) do

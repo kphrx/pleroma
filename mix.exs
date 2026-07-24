@@ -15,6 +15,13 @@ defmodule Pleroma.Mixfile do
       aliases: aliases(),
       deps: deps(),
       test_coverage: [tool: :covertool, summary: true],
+      test_ignore_filters: [
+        "test/credo/check/consistency/file_location.ex",
+        "test/fixtures/config/temp.exported_from_db.secret.exs",
+        "test/fixtures/config/temp.secret.exs",
+        "test/fixtures/modules/good_mrf.ex",
+        "test/fixtures/modules/runtime_module.ex"
+      ],
       # Docs
       name: "Pleroma",
       homepage_url: "https://pleroma.social/",
