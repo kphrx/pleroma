@@ -41,6 +41,7 @@ defmodule Pleroma.Web.PleromaAPI.ChatController do
   )
 
   plug(Pleroma.Web.ApiSpec.CastAndValidate, replace_params: false)
+  plug(:ensure_chats_enabled)
 
   defdelegate open_api_operation(action), to: Pleroma.Web.ApiSpec.ChatOperation
 
@@ -242,6 +243,18 @@ defmodule Pleroma.Web.PleromaAPI.ChatController do
     case get_req_header(conn, "idempotency-key") do
       [key] -> key
       _ -> nil
+    end
+  end
+
+  defp ensure_chats_enabled(conn, _opts) do
+    if Chat.enabled?() do
+      conn
+    else
+      conn
+      |> put_status(:not_found)
+      |> put_view(Pleroma.Web.ErrorView)
+      |> render("404.json")
+      |> halt()
     end
   end
 end

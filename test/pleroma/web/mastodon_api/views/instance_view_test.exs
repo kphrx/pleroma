@@ -114,8 +114,6 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     "quote_posting",
     "pleroma_emoji_reactions",
     "pleroma_custom_emoji_reactions",
-    "pleroma_chat_messages",
-    "pleroma:pin_chats",
     "pleroma:get:main/ostatus",
     "pleroma:group_actors",
     "pleroma:bookmark_folders",
@@ -128,6 +126,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     "gopher",
     "chat",
     "shout",
+    "pleroma_chat_messages",
+    "pleroma:pin_chats",
     "relay",
     "safe_dm_mentions",
     "exposable_reactions",
@@ -139,6 +139,7 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
     [:media_proxy, :enabled],
     [:gopher, :enabled],
     [:shout, :enabled],
+    [Pleroma.Chat, :enabled],
     [:instance, :allow_relay],
     [:instance, :safe_dm_mentions],
     [:instance, :show_reactions],
@@ -440,6 +441,32 @@ defmodule Pleroma.Web.MastodonAPI.InstanceViewTest do
       features = @features ++ @configurable_features
 
       assert Enum.sort(InstanceView.features()) == Enum.sort(features)
+    end
+  end
+
+  describe "chat features" do
+    test "advertises Shout without Chats" do
+      clear_config([:shout, :enabled], true)
+      clear_config([Pleroma.Chat, :enabled], false)
+
+      features = InstanceView.features()
+
+      assert "chat" in features
+      assert "shout" in features
+      refute "pleroma_chat_messages" in features
+      refute "pleroma:pin_chats" in features
+    end
+
+    test "advertises Chats without Shout" do
+      clear_config([:shout, :enabled], false)
+      clear_config([Pleroma.Chat, :enabled], true)
+
+      features = InstanceView.features()
+
+      refute "chat" in features
+      refute "shout" in features
+      assert "pleroma_chat_messages" in features
+      assert "pleroma:pin_chats" in features
     end
   end
 

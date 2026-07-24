@@ -68,7 +68,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
     capabilities =
       if is_boolean(user.accepts_chat_messages) do
         %{
-          "acceptsChatMessages" => user.accepts_chat_messages
+          "acceptsChatMessages" => Pleroma.Chat.enabled?() and user.accepts_chat_messages
         }
       else
         %{}

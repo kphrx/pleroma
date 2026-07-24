@@ -296,15 +296,17 @@ defmodule Pleroma.Web.Streamer do
 
   defp do_stream(topic, {user, %MessageReference{} = cm_ref})
        when topic in ["user", "user:pleroma_chat"] do
-    topic = "#{topic}:#{user.id}"
+    if Pleroma.Chat.enabled?() do
+      topic = "#{topic}:#{user.id}"
 
-    text = StreamerView.render("chat_update.json", %{chat_message_reference: cm_ref}, topic)
+      text = StreamerView.render("chat_update.json", %{chat_message_reference: cm_ref}, topic)
 
-    Registry.dispatch(@registry, topic, fn list ->
-      Enum.each(list, fn {pid, _auth} ->
-        send(pid, {:text, text})
+      Registry.dispatch(@registry, topic, fn list ->
+        Enum.each(list, fn {pid, _auth} ->
+          send(pid, {:text, text})
+        end)
       end)
-    end)
+    end
   end
 
   defp do_stream("user", %Activity{} = item) do
