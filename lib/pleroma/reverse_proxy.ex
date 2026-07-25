@@ -121,12 +121,8 @@ defmodule Pleroma.ReverseProxy do
       end
 
     with {:ok, nil} <- @cachex.get(:failed_proxy_url_cache, url),
-         {:ok, code, headers, client} <- request(method, url, req_headers, client_opts),
-         :ok <-
-           header_length_constraint(
-             headers,
-             Keyword.get(opts, :max_body_length, @max_body_length)
-           ) do
+         {:ok, code, headers, client} <-
+           request_with_constraints(method, url, req_headers, client_opts, opts) do
       response(conn, client, url, code, headers, opts)
     else
       {:ok, true} ->
@@ -181,7 +177,8 @@ defmodule Pleroma.ReverseProxy do
       {:ok, code, headers} when code in @valid_resp_codes ->
         {:ok, code, downcase_headers(headers)}
 
-      {:ok, code, _, _} ->
+      {:ok, code, _, client} ->
+        client().close(client)
         {:error, {:invalid_http_response, code}}
 
       {:ok, code, _} ->
@@ -189,6 +186,26 @@ defmodule Pleroma.ReverseProxy do
 
       {:error, error} ->
         {:error, error}
+    end
+  end
+
+  defp request_with_constraints(method, url, headers, client_opts, opts) do
+    case request(method, url, headers, client_opts) do
+      {:ok, _code, headers, client} = response ->
+        case header_length_constraint(
+               headers,
+               Keyword.get(opts, :max_body_length, @max_body_length)
+             ) do
+          :ok ->
+            response
+
+          error ->
+            client().close(client)
+            error
+        end
+
+      response ->
+        response
     end
   end
 
@@ -530,7 +547,7 @@ defmodule Pleroma.ReverseProxy do
 
   defp header_length_constraint(_, _), do: :ok
 
-  defp body_size_constraint(size, limit) when is_integer(limit) and limit > 0 and size >= limit do
+  defp body_size_constraint(size, limit) when is_integer(limit) and limit > 0 and size > limit do
     {:error, :body_too_large}
   end
 
