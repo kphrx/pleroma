@@ -98,7 +98,9 @@ defmodule Pleroma.Gun.ConnectionPool.Worker do
 
     {ref, state} = pop_in(state.client_monitors[client_pid])
 
-    Process.demonitor(ref, [:flush])
+    # A client that is already gone has no monitor left. Tolerate it rather than
+    # crashing the worker, which would take the shared connection down with it.
+    if ref, do: Process.demonitor(ref, [:flush])
 
     timer =
       if used_by == [] do
