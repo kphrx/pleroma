@@ -17,6 +17,7 @@ defmodule Pleroma.ReverseProxy do
   @max_read_duration :timer.seconds(30)
   @max_body_length :infinity
   @failed_request_ttl :timer.seconds(60)
+  @sniff_bytes 8 * 1024
   @methods ~w(GET HEAD)
 
   @allowed_mime_types Pleroma.Config.get([Pleroma.Upload, :allowed_mime_types], [])
@@ -59,7 +60,12 @@ defmodule Pleroma.ReverseProxy do
   * `inline_content_types`:
     * `true` will not alter `content-disposition` (up to the upstream),
     * `false` will add `content-disposition: attachment` to any request,
-    * a list of whitelisted content types
+    * a list of whitelisted content types for which `content-disposition: inline`
+    is always set (overriding any upstream header) so the media can be embedded
+    in pages; the filename is derived from the content type
+
+  * `sniff_content_type` (default `false`): detects an image MIME type from the first
+  response chunk when the upstream type is missing or `application/octet-stream`.
 
   * `req_headers`, `resp_headers` additional headers.
 
@@ -69,11 +75,15 @@ defmodule Pleroma.ReverseProxy do
   @default_options [pool: :media]
 
   @inline_content_types [
+    "image/apng",
+    "image/avif",
+    "image/bmp",
     "image/gif",
     "image/jpeg",
     "image/jpg",
     "image/png",
     "image/svg+xml",
+    "image/webp",
     "audio/mpeg",
     "audio/mp3",
     "video/webm",
@@ -92,6 +102,7 @@ defmodule Pleroma.ReverseProxy do
           | {:req_headers, [{String.t(), String.t()}]}
           | {:resp_headers, [{String.t(), String.t()}]}
           | {:inline_content_types, boolean() | list(String.t())}
+          | {:sniff_content_type, boolean()}
           | {:redirect_on_failure, boolean()}
 
   @spec call(Plug.Conn.t(), String.t(), list(option())) :: Plug.Conn.t()
@@ -184,12 +195,14 @@ defmodule Pleroma.ReverseProxy do
   defp response(conn, client, url, status, headers, opts) do
     Logger.debug("#{__MODULE__} #{status} #{url} #{inspect(headers)}")
 
+    {headers, client, prefetched} = maybe_prefetch_for_content_type(headers, client, opts)
+
     result =
       conn
       |> put_resp_headers(build_resp_headers(headers, opts))
       |> streaming_compat
       |> send_chunked(status)
-      |> chunk_reply(client, opts)
+      |> chunk_reply(client, opts, prefetched)
 
     case result do
       {:ok, conn} ->
@@ -209,18 +222,28 @@ defmodule Pleroma.ReverseProxy do
     end
   end
 
-  defp chunk_reply(conn, client, opts) do
+  defp chunk_reply(conn, client, opts, :none) do
     chunk_reply(conn, client, opts, 0, 0)
   end
 
-  defp chunk_reply(conn, client, opts, sent_so_far, duration) do
-    with {:ok, duration} <-
-           check_read_duration(
-             duration,
-             Keyword.get(opts, :max_read_duration, @max_read_duration)
+  defp chunk_reply(conn, _client, _opts, :done), do: {:ok, conn}
+  defp chunk_reply(conn, _client, _opts, {:error, error}), do: {:error, error, conn}
+
+  defp chunk_reply(conn, client, opts, {:ok, data, duration}) do
+    with :ok <-
+           body_size_constraint(
+             byte_size(data),
+             Keyword.get(opts, :max_body_length, @max_body_length)
            ),
-         {:ok, data, client} <- client().stream_body(client),
-         {:ok, duration} <- increase_read_duration(duration),
+         {:ok, conn} <- chunk(conn, data) do
+      chunk_reply(conn, client, opts, byte_size(data), duration)
+    else
+      {:error, error} -> {:error, error, conn}
+    end
+  end
+
+  defp chunk_reply(conn, client, opts, sent_so_far, duration) do
+    with {:ok, data, client, duration} <- read_chunk(client, duration, opts),
          sent_so_far = sent_so_far + byte_size(data),
          :ok <-
            body_size_constraint(
@@ -233,6 +256,66 @@ defmodule Pleroma.ReverseProxy do
       :done -> {:ok, conn}
       {:error, error} -> {:error, error, conn}
     end
+  end
+
+  defp read_chunk(client, duration, opts) do
+    with {:ok, timer} <-
+           check_read_duration(
+             duration,
+             Keyword.get(opts, :max_read_duration, @max_read_duration)
+           ),
+         {:ok, data, client} <- client().stream_body(client),
+         {:ok, duration} <- increase_read_duration(timer) do
+      {:ok, data, client, duration}
+    end
+  end
+
+  defp maybe_prefetch_for_content_type(headers, client, opts) do
+    if Keyword.get(opts, :sniff_content_type, false) and generic_content_type?(headers) do
+      case read_chunk(client, 0, opts) do
+        {:ok, data, client, duration} ->
+          {maybe_put_image_content_type(headers, data), client, {:ok, data, duration}}
+
+        :done ->
+          {headers, client, :done}
+
+        {:error, error} ->
+          {headers, client, {:error, error}}
+      end
+    else
+      {headers, client, :none}
+    end
+  end
+
+  defp generic_content_type?(headers) do
+    headers
+    |> get_content_type()
+    |> String.trim()
+    |> String.downcase()
+    |> then(&(&1 in ["", "application/octet-stream"]))
+  end
+
+  defp maybe_put_image_content_type(headers, data) do
+    with false <- data == "",
+         {:ok, %{mime_type: "image/" <> _ = content_type}} <-
+           Majic.perform({:bytes, binary_part(data, 0, min(byte_size(data), @sniff_bytes))},
+             pool: Pleroma.MajicPool
+           ) do
+      [
+        {"content-type", content_type}
+        | Enum.reject(headers, fn {key, _} -> key == "content-type" end)
+      ]
+    else
+      _ -> headers
+    end
+  rescue
+    error ->
+      Logger.debug("#{__MODULE__}: content-type sniffing failed: #{Exception.message(error)}")
+      headers
+  catch
+    kind, reason ->
+      Logger.debug("#{__MODULE__}: content-type sniffing failed: #{kind}: #{inspect(reason)}")
+      headers
   end
 
   defp head_response(conn, url, code, headers, opts) do
@@ -281,17 +364,34 @@ defmodule Pleroma.ReverseProxy do
     |> Enum.filter(fn {k, _} -> k in @keep_req_headers end)
     |> build_req_range_or_encoding_header(opts)
     |> build_req_user_agent_header(opts)
-    |> Keyword.merge(Keyword.get(opts, :req_headers, []))
+    |> merge_headers(Keyword.get(opts, :req_headers, []))
+    |> maybe_force_identity_encoding(opts)
+  end
+
+  defp merge_headers(headers, extra_headers) do
+    Enum.reduce(extra_headers, headers, fn {key, value}, headers ->
+      List.keystore(headers, String.downcase(key), 0, {String.downcase(key), value})
+    end)
+  end
+
+  defp maybe_force_identity_encoding(headers, opts) do
+    if Keyword.get(opts, :sniff_content_type, false) do
+      List.keystore(headers, "accept-encoding", 0, {"accept-encoding", "identity"})
+    else
+      headers
+    end
   end
 
   # Disable content-encoding if any @range_headers are requested (see #1823).
   defp build_req_range_or_encoding_header(headers, _opts) do
     range? = Enum.any?(headers, fn {header, _} -> Enum.member?(@range_headers, header) end)
 
-    if range? && List.keymember?(headers, "accept-encoding", 0) do
-      List.keydelete(headers, "accept-encoding", 0)
-    else
-      headers
+    cond do
+      range? && List.keymember?(headers, "accept-encoding", 0) ->
+        List.keydelete(headers, "accept-encoding", 0)
+
+      true ->
+        headers
     end
   end
 
@@ -384,9 +484,33 @@ defmodule Pleroma.ReverseProxy do
 
       disposition = "attachment; filename=\"#{name}\""
 
-      List.keystore(headers, "content-disposition", 0, {"content-disposition", disposition})
+      replace_header(headers, "content-disposition", disposition)
     else
-      headers
+      if opt == true do
+        headers
+      else
+        name = inline_filename(content_type)
+
+        disposition =
+          if name do
+            "inline; filename=\"#{name}\""
+          else
+            "inline"
+          end
+
+        replace_header(headers, "content-disposition", disposition)
+      end
+    end
+  end
+
+  defp replace_header(headers, key, value) do
+    [{key, value} | Enum.reject(headers, fn {header, _} -> header == key end)]
+  end
+
+  defp inline_filename(content_type) do
+    case MIME.extensions(content_type) do
+      [ext | _] when ext != "" -> "inline.#{ext}"
+      _ -> nil
     end
   end
 
@@ -421,7 +545,9 @@ defmodule Pleroma.ReverseProxy do
     end
   end
 
-  defp check_read_duration(_, _), do: {:ok, :no_duration_limit, :no_duration_limit}
+  defp check_read_duration(_, _), do: {:ok, :no_duration_limit}
+
+  defp increase_read_duration(:no_duration_limit), do: {:ok, :no_duration_limit}
 
   defp increase_read_duration({previous_duration, started})
        when is_integer(previous_duration) and is_integer(started) do
