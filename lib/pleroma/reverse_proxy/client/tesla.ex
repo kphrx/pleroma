@@ -42,13 +42,14 @@ defmodule Pleroma.ReverseProxy.Client.Tesla do
     end
   end
 
+  # Reaching the end of the body does not release the ref: callers must always
+  # call close/1, exactly once, whatever the outcome. Releasing here as well
+  # would remove the client twice and crash the pool worker on the missing
+  # monitor.
   @impl true
   @spec stream_body(map()) ::
           {:ok, binary(), map()} | {:error, atom() | String.t()} | :done | no_return()
-  def stream_body(%{pid: pid, fin: true}) do
-    ConnectionPool.release_conn(pid)
-    :done
-  end
+  def stream_body(%{fin: true}), do: :done
 
   def stream_body(client) do
     case read_chunk!(client) do

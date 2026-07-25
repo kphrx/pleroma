@@ -147,6 +147,87 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
              Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
   end
 
+  # A pooled connection serving a bodyless response is checked back in by hackney
+  # at header time, so stopping that ref afterwards would evict a connection
+  # another request may already hold. These go direct rather than through the
+  # CONNECT proxy, because a proxy tunnel is never pooled.
+  test "hackney reverse proxy marks a pooled bodyless response as already released",
+       %{tls_server: tls_server} do
+    url = "#{tls_server.base_url}/no_content"
+
+    assert {:ok, 204, _headers, client} =
+             Pleroma.ReverseProxy.Client.Hackney.request(
+               :get,
+               url,
+               [],
+               "",
+               direct_opts(tls_server)
+             )
+
+    assert %{released: true} = client
+    assert :done = Pleroma.ReverseProxy.Client.Hackney.stream_body(client)
+    assert :ok = Pleroma.ReverseProxy.Client.Hackney.close(client)
+  end
+
+  test "hackney reverse proxy still owns a response that carries a body",
+       %{tls_server: tls_server} do
+    url = "#{tls_server.base_url}/final"
+
+    assert {:ok, 200, _headers, client} =
+             Pleroma.ReverseProxy.Client.Hackney.request(
+               :get,
+               url,
+               [],
+               "",
+               direct_opts(tls_server)
+             )
+
+    refute Map.has_key?(client, :released)
+    assert "ok" == collect_body(client)
+    Pleroma.ReverseProxy.Client.Hackney.close(client)
+  end
+
+  # An unpooled connection is never checked in and parks forever with no idle
+  # timeout, so it stays ours to stop even when the response has no body.
+  test "hackney reverse proxy still owns a bodyless response over a proxy tunnel", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/no_content"
+
+    opts = Keyword.put(direct_opts(tls_server), :proxy, proxy.proxy_url)
+
+    assert {:ok, 204, _headers, client} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    refute Map.has_key?(client, :released)
+    Pleroma.ReverseProxy.Client.Hackney.close(client)
+  end
+
+  test "hackney reverse proxy still owns a bodyless response when pooling is off", %{
+    tls_server: tls_server
+  } do
+    url = "#{tls_server.base_url}/no_content"
+
+    opts = Keyword.put(direct_opts(tls_server), :pool, false)
+
+    assert {:ok, 204, _headers, client} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    refute Map.has_key?(client, :released)
+    Pleroma.ReverseProxy.Client.Hackney.close(client)
+  end
+
+  defp direct_opts(tls_server) do
+    [
+      pool: :media,
+      ssl_options: tls_client_options(tls_server),
+      connect_timeout: 1_000,
+      recv_timeout: 1_000,
+      follow_redirect: false
+    ]
+  end
+
   defp collect_body(ref, acc \\ "") do
     case Pleroma.ReverseProxy.Client.Hackney.stream_body(ref) do
       :done -> acc
@@ -215,6 +296,9 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
       case path do
         "/closed" ->
           :ok
+
+        "/no_content" ->
+          send_ssl_response(ssl_socket, 204, "No Content", [], "")
 
         "/delayed" ->
           Process.sleep(100)

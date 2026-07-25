@@ -1,0 +1,1 @@
+Release the reverse proxy HTTP client on every outcome, fixing a memory leak where abandoned Hackney connection processes retained the whole response body

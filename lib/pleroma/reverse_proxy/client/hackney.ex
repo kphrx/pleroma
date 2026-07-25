@@ -54,6 +54,8 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
   end
 
   @impl true
+  def stream_body(%{released: true}), do: :done
+
   def stream_body(%{ref: ref, recv_timeout: recv_timeout} = client) do
     _ = :hackney.stream_next(ref)
 
@@ -73,6 +75,8 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
   end
 
   @impl true
+  def close(%{released: true}), do: :ok
+
   def close(%{ref: ref}), do: :hackney.close(ref)
 
   def close(ref), do: :hackney.close(ref)
@@ -89,7 +93,7 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
       result =
         with {:ok, {:status, code, _reason}} <- receive_response(ref, recv_timeout),
              {:ok, {:headers, resp_headers}} <- receive_response(ref, recv_timeout) do
-          {:ok, code, resp_headers, %{ref: ref, recv_timeout: recv_timeout}}
+          {:ok, code, resp_headers, build_client(ref, recv_timeout, method, code, opts)}
         end
 
       case result do
@@ -103,6 +107,43 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
       end
     end
   end
+
+  # A response that cannot carry a body (204, 304, or a reply to HEAD) is
+  # complete as soon as the headers are parsed. Hackney queues `done` for us and,
+  # if the connection is pooled, checks it straight back in, so the ref stops
+  # being ours at that point: pulling the stream or stopping the connection
+  # afterwards would disturb whichever request checks it out next. Mark it so
+  # `stream_body/1` and `close/1` leave it alone.
+  #
+  # This relies on hackney never running its own redirect handling for us --
+  # `request/5` forces `follow_redirect: false` -- otherwise a redirect status
+  # would be checked back in too and would need the same treatment.
+  defp build_client(ref, recv_timeout, method, code, opts) do
+    client = %{ref: ref, recv_timeout: recv_timeout}
+
+    if released?(method, code) and pooled?(opts) do
+      flush_responses(ref)
+      Map.put(client, :released, true)
+    else
+      client
+    end
+  end
+
+  defp released?(method, _code) when method in [:head, :HEAD, "head", "HEAD"], do: true
+  defp released?(_method, code) when code in [204, 304], do: true
+  defp released?(_method, _code), do: false
+
+  # Mirrors hackney's own pooling decision: :hackney.use_pool/1, plus the fact
+  # that a proxy tunnel always bypasses the pool. An unpooled connection is never
+  # checked in, and parks in `connected` with no idle timeout, so it leaks
+  # forever unless we stop it ourselves.
+  defp pooled?(opts) do
+    is_nil(Keyword.get(opts, :proxy)) and use_pool?(Keyword.get(opts, :pool))
+  end
+
+  defp use_pool?(false), do: false
+  defp use_pool?(nil), do: Application.get_env(:hackney, :use_default_pool, true)
+  defp use_pool?(_pool_name), do: true
 
   defp receive_response(ref, recv_timeout) do
     receive do

@@ -118,7 +118,8 @@ defmodule Pleroma.ReverseProxy do
     with {:ok, nil} <- @cachex.get(:failed_proxy_url_cache, url),
          {:ok, code, headers, client} <- request(method, url, req_headers, client_opts),
          :ok <-
-           header_length_constraint(
+           enforce_header_length(
+             client,
              headers,
              Keyword.get(opts, :max_body_length, @max_body_length)
            ) do
@@ -176,7 +177,8 @@ defmodule Pleroma.ReverseProxy do
       {:ok, code, headers} when code in @valid_resp_codes ->
         {:ok, code, downcase_headers(headers)}
 
-      {:ok, code, _, _} ->
+      {:ok, code, _, client} ->
+        client().close(client)
         {:error, {:invalid_http_response, code}}
 
       {:ok, code, _} ->
@@ -197,12 +199,16 @@ defmodule Pleroma.ReverseProxy do
       |> send_chunked(status)
       |> chunk_reply(client, opts)
 
+    # Release the ref on every outcome, including a fully streamed body. The
+    # connection process behind it is not tied to this request and keeps the
+    # response body's binaries alive until it is explicitly closed.
+    client().close(client)
+
     case result do
       {:ok, conn} ->
         halt(conn)
 
       {:error, :closed, conn} ->
-        client().close(client)
         halt(conn)
 
       {:error, error, conn} ->
@@ -210,7 +216,6 @@ defmodule Pleroma.ReverseProxy do
           "#{__MODULE__} request to #{url} failed while reading/chunking: #{inspect(error)}"
         )
 
-        client().close(client)
         halt(conn)
     end
   end
@@ -393,6 +398,19 @@ defmodule Pleroma.ReverseProxy do
       List.keystore(headers, "content-disposition", 0, {"content-disposition", disposition})
     else
       headers
+    end
+  end
+
+  # Rejecting on content-length happens after the upstream response was already
+  # accepted, so the ref is live and has to be released before we bail out.
+  defp enforce_header_length(client, headers, limit) do
+    case header_length_constraint(headers, limit) do
+      :ok ->
+        :ok
+
+      {:error, _} = error ->
+        client().close(client)
+        error
     end
   end
 
