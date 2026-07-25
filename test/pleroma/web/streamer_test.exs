@@ -475,6 +475,20 @@ defmodule Pleroma.Web.StreamerTest do
       assert Streamer.filtered_by_user?(user, favorite_activity)
     end
 
+    test "it does not filter followed users on blocked domains", %{user: user} do
+      followed =
+        insert(:user, %{ap_id: "https://hecking-lewd-place.com/user/friend"})
+
+      {:ok, user} = User.block_domain(user, "hecking-lewd-place.com")
+      {:ok, activity} = CommonAPI.post(followed, %{status: "still a friend"})
+
+      assert Streamer.filtered_by_user?(user, activity)
+
+      {:ok, user, _followed} = User.follow(user, followed)
+
+      refute Streamer.filtered_by_user?(user, activity)
+    end
+
     test "it sends follow activities to the 'user:notification' stream", %{
       user: user,
       token: oauth_token

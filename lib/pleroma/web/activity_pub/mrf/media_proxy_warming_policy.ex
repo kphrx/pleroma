@@ -6,6 +6,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicy do
   @moduledoc "Preloads any attachments in the MediaProxy cache by prefetching them"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
 
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.HTTP
   alias Pleroma.Web.MediaProxy
 

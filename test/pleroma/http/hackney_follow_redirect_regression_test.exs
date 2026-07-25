@@ -184,7 +184,10 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
 
     refute Map.has_key?(client, :released)
     assert "ok" == collect_body(client)
-    Pleroma.ReverseProxy.Client.Hackney.close(client)
+
+    # Streaming to the end must stop the conn: hackney only parks it, and this
+    # one has no idle timeout and no live owner monitor to reap it.
+    refute Process.alive?(client.ref)
   end
 
   # An unpooled connection is never checked in and parks forever with no idle

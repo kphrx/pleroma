@@ -907,21 +907,53 @@ defmodule Pleroma.Web.MastodonAPI.TimelineControllerTest do
       {:ok, activity_test1} = CommonAPI.post(user, %{status: "#test #test1"})
       {:ok, activity_none} = CommonAPI.post(user, %{status: "#test #none"})
 
-      any_test = get(conn, "/api/v1/timelines/tag/test?any[]=test1")
+      for hashtag_timeline_mode <- [:enabled, :disabled] do
+        clear_config([:features, :improved_hashtag_timeline], hashtag_timeline_mode)
 
-      [status_none, status_test1, status_test] = json_response_and_validate_schema(any_test, :ok)
+        any_test = get(conn, "/api/v1/timelines/tag/test?any[]=test1")
 
-      assert to_string(activity_test.id) == status_test["id"]
-      assert to_string(activity_test1.id) == status_test1["id"]
-      assert to_string(activity_none.id) == status_none["id"]
+        [status_none, status_test1, status_test] =
+          json_response_and_validate_schema(any_test, :ok)
 
-      restricted_test = get(conn, "/api/v1/timelines/tag/test?all[]=test1&none[]=none")
+        assert to_string(activity_test.id) == status_test["id"]
+        assert to_string(activity_test1.id) == status_test1["id"]
+        assert to_string(activity_none.id) == status_none["id"]
 
-      assert [status_test1] == json_response_and_validate_schema(restricted_test, :ok)
+        restricted_test = get(conn, "/api/v1/timelines/tag/test?all[]=test1&none[]=none")
 
-      all_test = get(conn, "/api/v1/timelines/tag/test?all[]=none")
+        assert [status_test1] == json_response_and_validate_schema(restricted_test, :ok)
 
-      assert [status_none] == json_response_and_validate_schema(all_test, :ok)
+        all_test = get(conn, "/api/v1/timelines/tag/test?all[]=none")
+
+        assert [status_none] == json_response_and_validate_schema(all_test, :ok)
+      end
+    end
+
+    test "multi-hashtag timeline pagination returns unique statuses", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, activity_one} = CommonAPI.post(user, %{status: "#test #test1"})
+      {:ok, activity_two} = CommonAPI.post(user, %{status: "#test #test1"})
+      {:ok, activity_three} = CommonAPI.post(user, %{status: "#test #test1"})
+
+      for hashtag_timeline_mode <- [:enabled, :disabled] do
+        clear_config([:features, :improved_hashtag_timeline], hashtag_timeline_mode)
+
+        first_page =
+          conn
+          |> get("/api/v1/timelines/tag/test?any[]=test1&limit=2")
+          |> json_response_and_validate_schema(:ok)
+
+        assert Enum.map(first_page, & &1["id"]) ==
+                 Enum.map([activity_three, activity_two], &to_string(&1.id))
+
+        second_page =
+          conn
+          |> get("/api/v1/timelines/tag/test?any[]=test1&limit=2&max_id=#{activity_two.id}")
+          |> json_response_and_validate_schema(:ok)
+
+        assert Enum.map(second_page, & &1["id"]) == [to_string(activity_one.id)]
+      end
     end
 
     test "muted emotions", %{conn: conn} do

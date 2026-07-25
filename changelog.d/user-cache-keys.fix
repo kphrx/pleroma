@@ -1,0 +1,1 @@
+Fix inconsistent User cache keys and invalidate numeric ID aliases.

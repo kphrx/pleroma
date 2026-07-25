@@ -24,10 +24,11 @@ steps:
     entrypoint: *script_file_entrypoint
     environment:
       MIX_ENV: test
+      VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
       DB_HOST: postgres
       DB_PORT: 5432
     commands:
-      - apk add --no-cache build-base cmake exiftool ffmpeg file-dev git openssl
+      - apk add --no-cache build-base cmake exiftool ffmpeg vips-dev file-dev git openssl
       - adduser -D -h /home/testuser testuser
       - mkdir -p /home/testuser/.mix /home/testuser/.hex
       - chown -R testuser:testuser . /home/testuser

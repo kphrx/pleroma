@@ -6,6 +6,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.NoEmptyPolicy do
   @moduledoc "Filter local activities which have no content"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
 
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.Web.Endpoint
 
   @impl true

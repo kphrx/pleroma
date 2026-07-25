@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.StealEmojiPolicy do
+  @moduledoc "Detect new emojis by their shortcode and steals them"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   require Logger
 
   alias Pleroma.Config
 
-  @moduledoc "Detect new emojis by their shortcode and steals them"
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp accept_host?(host), do: host in Config.get([:mrf_steal_emoji, :hosts], [])
 

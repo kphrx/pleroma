@@ -1,45 +1,34 @@
 <item>
   <activity:object-type>http://activitystrea.ms/schema/1.0/note</activity:object-type>
   <activity:verb>http://activitystrea.ms/schema/1.0/post</activity:verb>
-  <guid><%= @data["id"] %></guid>
+  <guid isPermaLink="true"><%= escape(@data["id"] || "") %></guid>
   <title><%= activity_title(@data, Keyword.get(@feed_config, :post_title, %{})) %></title>
   <description><%= activity_description(@data) %></description>
+  <content:encoded><![CDATA[<%= rss_content_encoded(@data) %>]]></content:encoded>
   <pubDate><%= to_rfc2822(@data["published"]) %></pubDate>
   <ostatus:conversation ref="<%= activity_context(@activity) %>">
     <%= activity_context(@activity) %>
   </ostatus:conversation>
 
-  <%= if @activity.local do %>
-    <link><%= @data["id"] %></link>
-  <% else %>
-    <link><%= @data["external_url"] %></link>
-  <% end %>
-
-  <link rel="ostatus:conversation"><%= activity_context(@activity) %></link>
+  <link><%= escape(activity_link(@activity, @data) || "") %></link>
 
   <%= for tag <- Pleroma.Object.hashtags(@object) do %>
-    <category term="<%= tag %>"></category>
+    <%= if tag && tag != "" do %>
+      <category><%= tag %></category>
+    <% end %>
+  <% end %>
+
+  <%= unless sensitive?(@data) do %>
+    <%= with attachment when not is_nil(attachment) <- rss_enclosure_attachment(@data["attachment"]) do %>
+      <enclosure url="<%= escape(attachment_href(attachment) || "") %>" type="<%= escape(attachment_type(attachment) || "application/octet-stream") %>" length="<%= attachment_size_positive(attachment) %>" />
+    <% end %>
   <% end %>
 
   <%= for attachment <- @data["attachment"] || [] do %>
-    <enclosure url="<%= attachment_href(attachment) %>" type="<%= attachment_type(attachment) %>" />
+    <%= media_content_xml(attachment, sensitive?(@data)) %>
   <% end %>
 
   <%= if @data["inReplyTo"] do %>
     <thr:in-reply-to ref='<%= @data["inReplyTo"] %>' href='<%= get_href(@data["inReplyTo"]) %>'/>
-  <% end %>
-
-  <%= for id <- @activity.recipients do %>
-    <%= if id == Pleroma.Constants.as_public() do %>
-      <link rel="mentioned" ostatus:object-type="http://activitystrea.ms/schema/1.0/collection">http://activityschema.org/collection/public</link>
-    <% else %>
-      <%= unless Regex.match?(~r/^#{Pleroma.Web.Endpoint.url()}.+followers$/, id) do %>
-        <link rel="mentioned" ostatus:object-type="http://activitystrea.ms/schema/1.0/person"><%= id %></link>
-      <% end %>
-    <% end %>
-  <% end %>
-
-  <%= for {emoji, file} <- @data["emoji"] || %{} do %>
-    <link name="<%= emoji %>" rel="emoji"><%= file %></link>
   <% end %>
 </item>

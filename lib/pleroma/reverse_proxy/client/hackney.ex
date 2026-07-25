@@ -60,9 +60,20 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
     _ = :hackney.stream_next(ref)
 
     case receive_response(ref, recv_timeout) do
-      {:ok, data} when is_binary(data) -> {:ok, data, client}
-      {:ok, :done} -> :done
-      {:error, error} -> {:error, error}
+      {:ok, data} when is_binary(data) ->
+        {:ok, data, client}
+
+      # Reaching the end of the body does not free the connection: Hackney parks
+      # a finished conn instead of stopping it, and an unpooled one has neither
+      # an idle timeout nor a live owner monitor to reap it, so it would sit
+      # there forever pinning every binary it read. Release it here, mirroring
+      # what the gun client does, so callers only close what they abandon.
+      {:ok, :done} ->
+        close(client)
+        :done
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 

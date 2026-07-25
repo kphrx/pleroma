@@ -3,8 +3,6 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.TagPolicy do
-  alias Pleroma.User
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
   @moduledoc """
      Apply policies based on user tags
 
@@ -18,6 +16,11 @@ defmodule Pleroma.Web.ActivityPub.MRF.TagPolicy do
      - `mrf_tag:disable-remote-subscription`: Reject non-local follow requests
      - `mrf_tag:disable-any-subscription`: Reject any follow requests
   """
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  alias Pleroma.User
+
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   require Pleroma.Constants
 

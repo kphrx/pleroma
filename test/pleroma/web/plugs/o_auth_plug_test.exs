@@ -44,6 +44,18 @@ defmodule Pleroma.Web.Plugs.OAuthPlugTest do
     assert conn.assigns[:user] == opts[:user]
   end
 
+  test "with a valid token, it does not preload the duplicate user association", %{
+    conn: conn,
+    token: token
+  } do
+    conn =
+      conn
+      |> put_req_header("authorization", "bearer #{token.token}")
+      |> OAuthPlug.call(%{})
+
+    assert %Ecto.Association.NotLoaded{} = conn.assigns.token.user
+  end
+
   test "with valid token (downcase) in url parameters, it assigns the user", opts do
     conn =
       :get

@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.ForceMentionsInContent do
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   require Pleroma.Constants
 
   alias Pleroma.Formatter
   alias Pleroma.Object
   alias Pleroma.User
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @impl true
   def history_awareness, do: :auto

@@ -71,7 +71,10 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyControllerTest do
 
     test "it performs ReverseProxy.call with valid signature", %{conn: conn, url: url} do
       with_mock Pleroma.ReverseProxy,
-        call: fn _conn, _url, _opts -> %Conn{status: :success} end do
+        call: fn _conn, _url, opts ->
+          assert opts[:sniff_content_type]
+          %Conn{status: :success}
+        end do
         assert %Conn{status: :success} = get(conn, url)
       end
     end

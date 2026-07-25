@@ -1,0 +1,1 @@
+Avoid creating atoms from serialized PublisherWorker parameters.

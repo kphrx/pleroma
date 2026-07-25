@@ -5,9 +5,12 @@
 defmodule Pleroma.Web.PleromaAPI.AccountControllerTest do
   use Pleroma.Web.ConnCase
 
+  alias Pleroma.Activity
   alias Pleroma.Config
+  alias Pleroma.Repo
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
+  alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.CommonAPI
 
   import Pleroma.Factory
@@ -105,6 +108,71 @@ defmodule Pleroma.Web.PleromaAPI.AccountControllerTest do
       assert length(response) == 1
     end
 
+    test "orders statuses by favorite date", %{
+      conn: conn,
+      user: user
+    } do
+      other_user = insert(:user)
+
+      {:ok, first_post} = CommonAPI.post(other_user, %{status: "first post"})
+      {:ok, second_post} = CommonAPI.post(other_user, %{status: "second post"})
+      {:ok, third_post} = CommonAPI.post(other_user, %{status: "third post"})
+
+      {:ok, _} = CommonAPI.favorite(third_post.id, user)
+      {:ok, _} = CommonAPI.favorite(first_post.id, user)
+      {:ok, _} = CommonAPI.favorite(second_post.id, user)
+
+      response =
+        conn
+        |> get("/api/v1/pleroma/accounts/#{user.id}/favourites")
+        |> json_response_and_validate_schema(:ok)
+
+      assert Enum.map(response, & &1["id"]) == [second_post.id, first_post.id, third_post.id]
+    end
+
+    test "returns a status once when duplicate favorite activities exist", %{
+      conn: conn,
+      user: user
+    } do
+      older_activity = insert(:note_activity)
+      {:ok, _} = CommonAPI.favorite(older_activity.id, user)
+
+      activity = insert(:note_activity)
+      {:ok, favorite} = CommonAPI.favorite(activity.id, user)
+
+      duplicate =
+        Repo.insert!(%Activity{
+          actor: favorite.actor,
+          data: Map.put(favorite.data, "id", Utils.generate_activity_id()),
+          local: favorite.local,
+          recipients: favorite.recipients
+        })
+
+      conn = get(conn, "/api/v1/pleroma/accounts/#{user.id}/favourites?limit=1")
+      response = json_response_and_validate_schema(conn, :ok)
+
+      assert Enum.map(response, & &1["id"]) == [activity.id]
+      assert [link_header] = get_resp_header(conn, "link")
+      assert link_header =~ "max_id=#{duplicate.id}"
+      assert link_header =~ "min_id=#{duplicate.id}"
+
+      response =
+        conn
+        |> get("/api/v1/pleroma/accounts/#{user.id}/favourites?max_id=#{duplicate.id}&limit=1")
+        |> json_response_and_validate_schema(:ok)
+
+      assert Enum.map(response, & &1["id"]) == [older_activity.id]
+
+      {:ok, _} = CommonAPI.unfavorite(activity.id, user)
+
+      response =
+        conn
+        |> get("/api/v1/pleroma/accounts/#{user.id}/favourites")
+        |> json_response_and_validate_schema(:ok)
+
+      assert Enum.map(response, & &1["id"]) == [older_activity.id]
+    end
+
     test "returns favorited DM only when user is logged in and he is one of recipients", %{
       current_user: current_user,
       user: user
@@ -164,23 +232,67 @@ defmodule Pleroma.Web.PleromaAPI.AccountControllerTest do
     } do
       activities = insert_list(10, :note_activity)
 
-      Enum.each(activities, fn activity ->
-        CommonAPI.favorite(activity.id, user)
-      end)
+      favorite_pairs =
+        Enum.map(activities, fn activity ->
+          {:ok, favorite} = CommonAPI.favorite(activity.id, user)
+          {favorite, activity}
+        end)
+        |> Enum.sort_by(fn {favorite, _activity} -> FlakeId.from_string(favorite.id) end)
 
-      third_activity = Enum.at(activities, 2)
-      seventh_activity = Enum.at(activities, 6)
+      {third_favorite, _} = Enum.at(favorite_pairs, 2)
+      {seventh_favorite, _} = Enum.at(favorite_pairs, 6)
+
+      expected_ids =
+        favorite_pairs
+        |> Enum.slice(3, 3)
+        |> Enum.reverse()
+        |> Enum.map(fn {_favorite, activity} -> activity.id end)
 
       response =
         conn
         |> get(
-          "/api/v1/pleroma/accounts/#{user.id}/favourites?since_id=#{third_activity.id}&max_id=#{seventh_activity.id}"
+          "/api/v1/pleroma/accounts/#{user.id}/favourites?since_id=#{third_favorite.id}&max_id=#{seventh_favorite.id}"
         )
         |> json_response_and_validate_schema(:ok)
 
-      assert length(response) == 3
-      refute third_activity in response
-      refute seventh_activity in response
+      assert Enum.map(response, & &1["id"]) == expected_ids
+    end
+
+    test "paginates favorites using min_id and limit", %{
+      conn: conn,
+      user: user
+    } do
+      activities = insert_list(10, :note_activity)
+
+      favorite_pairs =
+        Enum.map(activities, fn activity ->
+          {:ok, favorite} = CommonAPI.favorite(activity.id, user)
+          {favorite, activity}
+        end)
+        |> Enum.sort_by(fn {favorite, _activity} -> FlakeId.from_string(favorite.id) end)
+
+      {third_favorite, _} = Enum.at(favorite_pairs, 2)
+      {fourth_favorite, _} = Enum.at(favorite_pairs, 3)
+      {fifth_favorite, _} = Enum.at(favorite_pairs, 4)
+
+      expected_ids =
+        favorite_pairs
+        |> Enum.slice(3, 2)
+        |> Enum.reverse()
+        |> Enum.map(fn {_favorite, activity} -> activity.id end)
+
+      conn =
+        get(
+          conn,
+          "/api/v1/pleroma/accounts/#{user.id}/favourites?min_id=#{third_favorite.id}&limit=2"
+        )
+
+      response = json_response_and_validate_schema(conn, :ok)
+
+      assert Enum.map(response, & &1["id"]) == expected_ids
+      assert [link_header] = get_resp_header(conn, "link")
+      assert link_header =~ "max_id=#{fourth_favorite.id}"
+      assert link_header =~ "min_id=#{fifth_favorite.id}"
     end
 
     test "limits favorites using limit parameter", %{

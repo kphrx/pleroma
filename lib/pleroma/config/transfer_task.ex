@@ -51,7 +51,7 @@ defmodule Pleroma.Config.TransferTask do
 
       started_applications = Application.started_applications()
 
-      reject = [nil, :postgrex]
+      reject = [nil, :postgrex, :logger]
 
       reject =
         if restart_pleroma? do

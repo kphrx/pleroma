@@ -6,6 +6,7 @@ defmodule Pleroma.ReverseProxy.Client.Tesla do
   @behaviour Pleroma.ReverseProxy.Client
 
   alias Pleroma.Gun.ConnectionPool
+  alias Pleroma.HTTP.AdapterHelper
 
   @type headers() :: [{String.t(), String.t()}]
   @type status() :: pos_integer()
@@ -19,6 +20,13 @@ defmodule Pleroma.ReverseProxy.Client.Tesla do
   @impl true
   def request(method, url, headers, body, opts \\ []) do
     check_adapter()
+
+    # MediaProxyController inserts MediaProxy proxy configuration into the ReverseProxy call.
+    # This config can be unformatted and in String representation, while this works for Hackney,
+    # it does not work for Tesla and the proxy needs to be reformatted.
+    # Gun AdapterHelper doesn't do it, since it does not overwrite proxy config.
+    proxy = AdapterHelper.format_proxy(opts[:proxy])
+    opts = if proxy, do: Keyword.put(opts, :proxy, proxy), else: opts
 
     opts = Keyword.put(opts, :body_as, :chunks)
 
@@ -42,14 +50,13 @@ defmodule Pleroma.ReverseProxy.Client.Tesla do
     end
   end
 
-  # Reaching the end of the body does not release the ref: callers must always
-  # call close/1, exactly once, whatever the outcome. Releasing here as well
-  # would remove the client twice and crash the pool worker on the missing
-  # monitor.
   @impl true
   @spec stream_body(map()) ::
           {:ok, binary(), map()} | {:error, atom() | String.t()} | :done | no_return()
-  def stream_body(%{fin: true}), do: :done
+  def stream_body(%{pid: pid, stream: stream, fin: true}) do
+    ConnectionPool.release_stream(pid, stream)
+    :done
+  end
 
   def stream_body(client) do
     case read_chunk!(client) do
@@ -71,6 +78,10 @@ defmodule Pleroma.ReverseProxy.Client.Tesla do
 
   @impl true
   @spec close(map) :: :ok | no_return()
+  def close(%{pid: pid, stream: stream}) do
+    ConnectionPool.cancel_stream(pid, stream)
+  end
+
   def close(%{pid: pid}) do
     ConnectionPool.release_conn(pid)
   end

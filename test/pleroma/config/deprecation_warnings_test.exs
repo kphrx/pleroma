@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Config.DeprecationWarningsTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   use Pleroma.Tests.Helpers
 
   import ExUnit.CaptureLog
@@ -387,5 +387,63 @@ defmodule Pleroma.Config.DeprecationWarningsTest do
              DeprecationWarnings.check_old_chat_shoutbox()
            end) =~
              "Your config is using the old namespace for the Shoutbox configuration."
+  end
+
+  describe "check_deprecated_logger_config" do
+    setup do
+      initial_console = Application.get_env(:logger, :console, nil)
+      initial_backends = Application.get_env(:logger, :backends, nil)
+
+      # NOTE: The Logger does not get reconfigured when running in the test env,
+      # the added and on_exit removed settings below should have no effect besides
+      # triggering the deprecation warnings
+      Application.put_env(:logger, :console, level: :all)
+      Application.put_env(:logger, :backends, [:console])
+
+      on_exit(fn ->
+        if initial_console do
+          Application.put_env(:logger, :console, initial_console)
+        else
+          Application.delete_env(:logger, :console)
+        end
+
+        if initial_backends do
+          Application.put_env(:logger, :backends, initial_backends)
+        else
+          Application.delete_env(:logger, :backends)
+        end
+      end)
+    end
+
+    test "warns on deprecated syntax" do
+      log =
+        capture_log(fn ->
+          Pleroma.Config.DeprecationWarnings.check_deprecated_logger_config()
+        end)
+
+      assert log =~
+               """
+               !!!DEPRECATION WARNING!!!
+               Your configuration is using deprecated syntax for configuring backends of Elixir's logger.
+               `config :logger, backends: [...]` is deprecated syntax due to changes in Elixir.
+               Please update your configuration at your earliest convenience to use:
+                 `config :pleroma, :logger, backends: [...]`
+
+               Note: `:console` is no longer considered a backend and is used by default, you can disable it using:
+                 `config :logger, :default_handler: false`
+               """
+
+      assert log =~
+               """
+               !!!DEPRECATION WARNING!!!
+               Your configuration is using deprecated syntax for configuring logging to console.
+               `config :logger, :console` is deprecated syntax due to changes in Elixir.
+               Please update your configuration at your earliest convenience to use
+                 `config :logger, default_handler` and `config :logger, :default_formatter`.
+
+               Note: `:default_handler` is used only for the `level` setting. All other configurations go under
+               `:default_formatter`. For more info visit: https://hexdocs.pm/logger/Logger.html#module-backends-and-backwards-compatibility
+               """
+    end
   end
 end

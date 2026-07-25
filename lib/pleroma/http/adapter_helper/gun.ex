@@ -48,10 +48,10 @@ defmodule Pleroma.HTTP.AdapterHelper.Gun do
     Keyword.put(opts, :timeout, recv_timeout)
   end
 
-  # Gun uses [body_as: :stream]
+  # Keep the pool lease until the caller consumes or cancels the body.
   defp maybe_stream(opts) do
     case Keyword.pop(opts, :stream, nil) do
-      {true, opts} -> Keyword.put(opts, :body_as, :stream)
+      {true, opts} -> Keyword.put(opts, :body_as, :chunks)
       {_, opts} -> opts
     end
   end

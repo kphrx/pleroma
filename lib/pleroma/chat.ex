@@ -108,4 +108,6 @@ defmodule Pleroma.Chat do
     |> cast(%{pinned: false}, [:pinned])
     |> Repo.update()
   end
+
+  def enabled?, do: Pleroma.Config.get([__MODULE__, :enabled], true)
 end

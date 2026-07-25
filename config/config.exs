@@ -133,13 +133,17 @@ config :pleroma, Pleroma.Web.Endpoint,
   ]
 
 # Configures Elixir's Logger
-config :logger, backends: [:console]
+# Primary config
+config :logger, level: :debug
 
-config :logger, :console,
-  level: :debug,
+# Console config
+config :logger, :default_handler, level: :debug
+
+config :logger, :default_formatter,
   format: "\n$time $metadata[$level] $message\n",
   metadata: [:actor, :path, :type, :user]
 
+# Syslog config
 config :logger, :ex_syslogger,
   level: :debug,
   ident: "pleroma",
@@ -962,6 +966,10 @@ config :pleroma, Pleroma.Search.QdrantSearch,
     vectors: %{size: 384, distance: "Cosine"}
   }
 
+config :pleroma, :database_config_blacklist, [
+  {:pleroma, :logger}
+]
+
 config :pleroma, :database_config_whitelist, [
   {:pleroma},
   {:cors_plug},
@@ -970,6 +978,8 @@ config :pleroma, :database_config_whitelist, [
   {:prometheus, Pleroma.Web.Endpoint.MetricsExporter},
   {:web_push_encryption, :vapid_details}
 ]
+
+config :pleroma, Pleroma.Chat, enabled: true
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

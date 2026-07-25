@@ -106,12 +106,12 @@ defmodule Pleroma.ReverseProxyTest do
     end
   end
 
-  # The connection behind a client ref is not tied to the lifetime of this
-  # request. Hackney 4 in particular parks a non-pooled `hackney_conn` process
-  # in the `closed` state forever when nobody stops it, pinning every refc
-  # binary it read, so abandoning a ref leaks the whole response body.
+  # ReverseProxy releases exactly what it abandons. A body it streamed to the end
+  # is the client's to release, mirroring how the gun client frees its stream on
+  # :done -- see Pleroma.ReverseProxy.Client.Hackney.stream_body/1 for why an
+  # abandoned Hackney ref never gets reaped on its own.
   describe "client ref release" do
-    test "closes the client after the body is fully streamed", %{conn: conn} do
+    test "leaves a fully streamed body for the client to release", %{conn: conn} do
       ClientMock
       |> expect(:request, fn :get, "/release", _, _, _ ->
         {:ok, 200, [{"content-type", "image/png"}], %{url: "/release"}}
@@ -121,11 +121,10 @@ defmodule Pleroma.ReverseProxyTest do
       conn = ReverseProxy.call(conn, "/release")
 
       assert conn.halted
-      assert_received {:closed, %{url: "/release"}}
       refute_received {:closed, _}
     end
 
-    test "closes the client when content-length exceeds max_body_length", %{conn: conn} do
+    test "releases the client when content-length exceeds max_body_length", %{conn: conn} do
       ClientMock
       |> expect(:request, fn :get, "/release-huge", _, _, _ ->
         {:ok, 200, [{"content-length", "102227307"}], %{url: "/release-huge"}}
@@ -139,7 +138,7 @@ defmodule Pleroma.ReverseProxyTest do
       refute_received {:closed, _}
     end
 
-    test "closes the client when the upstream status is not proxiable", %{conn: conn} do
+    test "releases the client when the upstream status is not proxiable", %{conn: conn} do
       ClientMock
       |> expect(:request, fn :get, "/release-418", _, _, _ ->
         {:ok, 418, [], %{url: "/release-418"}}
@@ -152,23 +151,7 @@ defmodule Pleroma.ReverseProxyTest do
       refute_received {:closed, _}
     end
 
-    # The hackney client answers HEAD with a ref too, so this path must release
-    # it as well; only the ref-less 3-tuple reply has nothing to close.
-    test "closes the client when a HEAD response comes back with a ref", %{conn: conn} do
-      ClientMock
-      |> expect(:request, fn :head, "/release-head", _, _, _ ->
-        {:ok, 200, [{"content-type", "image/png"}], %{url: "/release-head"}}
-      end)
-      |> expect(:stream_body, fn _ -> :done end)
-
-      conn = ReverseProxy.call(Map.put(conn, :method, "HEAD"), "/release-head")
-
-      assert conn.halted
-      assert_received {:closed, %{url: "/release-head"}}
-      refute_received {:closed, _}
-    end
-
-    test "has nothing to close when the reply carries no ref", %{conn: conn} do
+    test "has nothing to release when the reply carries no ref", %{conn: conn} do
       ClientMock
       |> expect(:request, fn :head, "/release-headless", _, _, _ ->
         {:ok, 200, [{"content-type", "image/png"}]}
@@ -237,6 +220,7 @@ defmodule Pleroma.ReverseProxyTest do
   describe "max_body" do
     test "length returns error if content-length more than option", %{conn: conn} do
       request_mock(0)
+      expect(ClientMock, :close, fn _ -> :ok end)
 
       assert capture_log(fn ->
                ReverseProxy.call(conn, "/huge-file", max_body_length: 4)
@@ -250,16 +234,33 @@ defmodule Pleroma.ReverseProxyTest do
              end) == ""
     end
 
+    test "closes streamed responses with invalid status", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/invalid-status", _, _, _ ->
+        {:ok, 404, [], %{url: "/invalid-status"}}
+      end)
+      |> expect(:close, fn %{url: "/invalid-status"} -> :ok end)
+
+      ReverseProxy.call(conn, "/invalid-status")
+    end
+
     test "max_body_length returns error if streaming body more than that option", %{conn: conn} do
       stream_mock(3)
 
       assert capture_log(fn ->
-               ReverseProxy.call(conn, "/stream-bytes/50", max_body_length: 30)
+               ReverseProxy.call(conn, "/stream-bytes/50", max_body_length: 29)
              end) =~
                "Elixir.Pleroma.ReverseProxy request to /stream-bytes/50 failed while reading/chunking: :body_too_large"
 
       assert_received {:closed, %{url: "/stream-bytes/50"}}
       refute_received {:closed, _}
+    end
+
+    test "max_body_length accepts a body exactly at the limit", %{conn: conn} do
+      stream_mock(4)
+
+      conn = ReverseProxy.call(conn, "/stream-bytes/30", max_body_length: 30)
+      assert byte_size(conn.resp_body) == 30
     end
   end
 
@@ -325,7 +326,10 @@ defmodule Pleroma.ReverseProxyTest do
 
     test "204", %{conn: conn} do
       url = "/status/204"
-      expect(ClientMock, :request, fn :get, _url, _, _, _ -> {:ok, 204, [], %{}} end)
+
+      ClientMock
+      |> expect(:request, fn :get, _url, _, _, _ -> {:ok, 204, [], %{}} end)
+      |> expect(:close, fn %{} -> :ok end)
 
       capture_log(fn ->
         conn = ReverseProxy.call(conn, url)
@@ -345,6 +349,56 @@ defmodule Pleroma.ReverseProxyTest do
     assert conn.state == :chunked
     assert byte_size(conn.resp_body) == 200
     assert Conn.get_resp_header(conn, "content-type") == ["application/octet-stream"]
+  end
+
+  test "sniffs and preserves an image body with a generic content type", %{conn: conn} do
+    body = File.read!("test/fixtures/image.jpg")
+
+    ClientMock
+    |> expect(:request, fn :get, "/extensionless", headers, _, _ ->
+      assert {"accept-encoding", "identity"} in headers
+      {:ok, 200, [{"content-type", "application/octet-stream"}], %{body: body}}
+    end)
+    |> expect(:stream_body, fn %{body: ^body} = client ->
+      {:ok, body, Map.delete(client, :body)}
+    end)
+    |> expect(:stream_body, fn %{} -> :done end)
+
+    conn =
+      ReverseProxy.call(conn, "/extensionless",
+        sniff_content_type: true,
+        max_read_duration: :infinity,
+        req_headers: [{"accept-encoding", "gzip"}]
+      )
+
+    assert conn.resp_body == body
+    assert Conn.get_resp_header(conn, "content-type") == ["image/jpeg"]
+
+    assert Conn.get_resp_header(conn, "content-disposition") == [
+             "inline; filename=\"inline.jpg\""
+           ]
+  end
+
+  test "preserves a generic content type for a non-image body", %{conn: conn} do
+    body = "not an image"
+
+    ClientMock
+    |> expect(:request, fn :get, "/extensionless", _, _, _ ->
+      {:ok, 200, [], %{body: body}}
+    end)
+    |> expect(:stream_body, fn %{body: ^body} = client ->
+      {:ok, body, Map.delete(client, :body)}
+    end)
+    |> expect(:stream_body, fn %{} -> :done end)
+
+    conn = ReverseProxy.call(conn, "/extensionless", sniff_content_type: true)
+
+    assert conn.resp_body == body
+    assert Conn.get_resp_header(conn, "content-type") == ["application/octet-stream"]
+
+    assert Conn.get_resp_header(conn, "content-disposition") == [
+             "attachment; filename=\"extensionless\""
+           ]
   end
 
   defp headers_mock(_) do
@@ -453,6 +507,24 @@ defmodule Pleroma.ReverseProxyTest do
       conn = ReverseProxy.call(conn, "/disposition")
 
       assert {"content-type", "image/gif"} in conn.resp_headers
+      assert {"content-disposition", "inline; filename=\"inline.gif\""} in conn.resp_headers
+    end
+
+    test "forces inline for inline content types overriding upstream attachment", %{
+      conn: conn
+    } do
+      disposition_headers_mock([
+        {"content-type", "image/png"},
+        {"content-disposition", "attachment; filename=\"filename.png\""},
+        {"content-disposition", "attachment; filename=\"duplicate.png\""},
+        {"content-length", "0"}
+      ])
+
+      conn = ReverseProxy.call(conn, "/disposition")
+
+      [disposition] = Conn.get_resp_header(conn, "content-disposition")
+      assert String.starts_with?(disposition, "inline")
+      refute String.starts_with?(disposition, "attachment")
     end
 
     test "with content-disposition header", %{conn: conn} do
@@ -464,6 +536,50 @@ defmodule Pleroma.ReverseProxyTest do
       conn = ReverseProxy.call(conn, "/disposition")
 
       assert {"content-disposition", "attachment; filename=\"filename.jpg\""} in conn.resp_headers
+    end
+
+    test "with inline_content_types: true leaves upstream headers untouched", %{
+      conn: conn
+    } do
+      # opt == true: the proxy must not synthesise or rewrite content-disposition.
+      disposition_headers_mock([
+        {"content-type", "image/png"},
+        {"content-disposition", "attachment; filename=\"upstream.png\""},
+        {"content-length", "0"}
+      ])
+
+      conn = ReverseProxy.call(conn, "/disposition", inline_content_types: true)
+
+      assert {"content-disposition", "attachment; filename=\"upstream.png\""} in conn.resp_headers
+    end
+
+    test "forces bare inline for a whitelisted type with no MIME extension", %{
+      conn: conn
+    } do
+      # image/x-foo-bar has no entry in MIME's database, so inline_filename/1
+      # returns nil and the disposition should be the bare token "inline".
+      disposition_headers_mock([
+        {"content-type", "image/x-foo-bar"},
+        {"content-length", "0"}
+      ])
+
+      conn = ReverseProxy.call(conn, "/disposition", inline_content_types: ["image/x-foo-bar"])
+
+      [disposition] = Conn.get_resp_header(conn, "content-disposition")
+      assert disposition == "inline"
+    end
+
+    test "serves modern browser image types inline", %{conn: conn} do
+      disposition_headers_mock([
+        {"content-type", "image/webp"},
+        {"content-length", "0"}
+      ])
+
+      conn = ReverseProxy.call(conn, "/disposition")
+
+      assert Conn.get_resp_header(conn, "content-disposition") == [
+               "inline; filename=\"inline.webp\""
+             ]
     end
   end
 

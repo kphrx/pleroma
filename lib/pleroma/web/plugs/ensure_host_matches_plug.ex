@@ -4,6 +4,7 @@
 
 defmodule Pleroma.Web.Plugs.EnsureHostMatchesPlug do
   @moduledoc "Ensures Host header matches instance"
+  @behaviour Plug
 
   alias Pleroma.Web.Endpoint
 
