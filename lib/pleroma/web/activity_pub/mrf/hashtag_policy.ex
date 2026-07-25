@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.HashtagPolicy do
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   require Pleroma.Constants
 
   alias Pleroma.Config
@@ -14,7 +16,7 @@ defmodule Pleroma.Web.ActivityPub.MRF.HashtagPolicy do
   Note: This MRF Policy is always enabled, if you want to disable it you have to set empty lists.
   """
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @impl true
   def history_awareness, do: :manual

@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.HellthreadPolicy do
+  @moduledoc "Block activities with too much mentions (configurable)"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.User
 
   require Pleroma.Constants
 
-  @moduledoc "Block activities with too much mentions (configurable)"
-
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp delist_activity(activity, threshold) when threshold > 0 do
     follower_collection = User.get_cached_by_ap_id(activity["actor"]).follower_address

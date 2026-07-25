@@ -10,3 +10,6 @@ The other way to do it, for example, with Tor you would most likely add somethin
 ```
 config :pleroma, :http, proxy_url: {:socks5, :localhost, 9050}
 ```
+
+The Gun HTTP adapter supports SOCKS5. SOCKS4 proxies require another HTTP adapter.
+For regular HTTP proxies, Gun forwards plain HTTP requests directly and uses CONNECT tunnels for HTTPS requests.
