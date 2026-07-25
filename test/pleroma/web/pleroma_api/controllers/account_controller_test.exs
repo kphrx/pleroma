@@ -5,9 +5,12 @@
 defmodule Pleroma.Web.PleromaAPI.AccountControllerTest do
   use Pleroma.Web.ConnCase
 
+  alias Pleroma.Activity
   alias Pleroma.Config
+  alias Pleroma.Repo
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
+  alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.CommonAPI
 
   import Pleroma.Factory
@@ -125,6 +128,49 @@ defmodule Pleroma.Web.PleromaAPI.AccountControllerTest do
         |> json_response_and_validate_schema(:ok)
 
       assert Enum.map(response, & &1["id"]) == [second_post.id, first_post.id, third_post.id]
+    end
+
+    test "returns a status once when duplicate favorite activities exist", %{
+      conn: conn,
+      user: user
+    } do
+      older_activity = insert(:note_activity)
+      {:ok, _} = CommonAPI.favorite(older_activity.id, user)
+
+      activity = insert(:note_activity)
+      {:ok, favorite} = CommonAPI.favorite(activity.id, user)
+
+      duplicate =
+        Repo.insert!(%Activity{
+          actor: favorite.actor,
+          data: Map.put(favorite.data, "id", Utils.generate_activity_id()),
+          local: favorite.local,
+          recipients: favorite.recipients
+        })
+
+      conn = get(conn, "/api/v1/pleroma/accounts/#{user.id}/favourites?limit=1")
+      response = json_response_and_validate_schema(conn, :ok)
+
+      assert Enum.map(response, & &1["id"]) == [activity.id]
+      assert [link_header] = get_resp_header(conn, "link")
+      assert link_header =~ "max_id=#{duplicate.id}"
+      assert link_header =~ "min_id=#{duplicate.id}"
+
+      response =
+        conn
+        |> get("/api/v1/pleroma/accounts/#{user.id}/favourites?max_id=#{duplicate.id}&limit=1")
+        |> json_response_and_validate_schema(:ok)
+
+      assert Enum.map(response, & &1["id"]) == [older_activity.id]
+
+      {:ok, _} = CommonAPI.unfavorite(activity.id, user)
+
+      response =
+        conn
+        |> get("/api/v1/pleroma/accounts/#{user.id}/favourites")
+        |> json_response_and_validate_schema(:ok)
+
+      assert Enum.map(response, & &1["id"]) == [older_activity.id]
     end
 
     test "returns favorited DM only when user is logged in and he is one of recipients", %{

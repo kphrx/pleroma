@@ -1025,6 +1025,20 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp restrict_assigned_account(query, _), do: query
 
   defp restrict_favorited_by(query, %{favorited_by: ap_id}) do
+    newer_favorite =
+      from(newer_favorite in Activity,
+        where: newer_favorite.actor == ^ap_id,
+        where: newer_favorite.id > parent_as(:favorited_activity).id,
+        where: fragment("?->>'type' = ?", newer_favorite.data, "Like"),
+        where:
+          fragment(
+            "associated_object_id(?) = associated_object_id(?)",
+            newer_favorite.data,
+            parent_as(:favorited_activity).data
+          ),
+        select: 1
+      )
+
     from(
       [activity, object: object] in query,
       join: favorited_activity in Activity,
@@ -1033,6 +1047,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
         favorited_activity.actor == ^ap_id and
           fragment("?->>'type' = ?", favorited_activity.data, "Like") and
           fragment("associated_object_id(?) = (?)->>'id'", favorited_activity.data, object.data),
+      where: fragment("(?)->'likes' \\? (?)", object.data, ^ap_id),
+      where: not exists(subquery(newer_favorite)),
       select: %Activity{activity | pagination_id: favorited_activity.id}
     )
   end
