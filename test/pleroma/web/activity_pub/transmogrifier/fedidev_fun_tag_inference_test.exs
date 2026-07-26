@@ -62,4 +62,51 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.FedidevFunTagInferenceTest do
              _ -> false
            end)
   end
+
+  test "normalizes a list-typed tag type" do
+    data =
+      File.read!("test/fixtures/fedidev.fun/tag_hashtag_missing_type.json") |> Jason.decode!()
+
+    data = put_in(data, ["object", "tag", Access.at(0), "type"], ["Hashtag"])
+    ensure_remote_actor!(data["actor"])
+
+    assert {:ok, activity} = Transmogrifier.handle_incoming(data)
+    object = Object.normalize(activity.data["object"], fetch: false)
+
+    assert "test" in Object.hashtags(object)
+  end
+
+  test "ignores a list-typed Hashtag without a string name" do
+    data =
+      File.read!("test/fixtures/fedidev.fun/tag_hashtag_missing_type.json") |> Jason.decode!()
+
+    data = put_in(data, ["object", "tag", Access.at(0), "type"], ["Hashtag"])
+    data = put_in(data, ["object", "tag", Access.at(0), "name"], nil)
+    ensure_remote_actor!(data["actor"])
+
+    assert {:ok, activity} = Transmogrifier.handle_incoming(data)
+    object = Object.normalize(activity.data["object"], fetch: false)
+
+    assert Object.hashtags(object) == []
+  end
+
+  test "infers a Link before deriving quoteUrl" do
+    data =
+      File.read!("test/fixtures/fedidev.fun/tag_hashtag_missing_type.json") |> Jason.decode!()
+
+    data =
+      put_in(data, ["object", "tag"], [
+        %{
+          "href" => "https://fedidev.fun/assets/note1.jsonap",
+          "mediaType" => "application/activity+json"
+        }
+      ])
+
+    ensure_remote_actor!(data["actor"])
+
+    assert {:ok, activity} = Transmogrifier.handle_incoming(data)
+    object = Object.normalize(activity.data["object"], fetch: false)
+
+    assert object.data["quoteUrl"] == "https://fedidev.fun/assets/note1.jsonap"
+  end
 end

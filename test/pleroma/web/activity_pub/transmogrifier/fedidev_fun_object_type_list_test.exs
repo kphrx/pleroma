@@ -50,4 +50,15 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.FedidevFunObjectTypeListTest do
     {_activity, object} = ingest_fixture!("test/fixtures/fedidev.fun/object_type_list.json")
     assert object.data["type"] == "Note"
   end
+
+  test "selects a supported type after an extension type" do
+    data = File.read!("test/fixtures/fedidev.fun/object_type_list.json") |> Jason.decode!()
+    data = put_in(data, ["object", "type"], ["https://example.com/ns#CustomType", "Note"])
+    ensure_remote_actor!(data["actor"])
+
+    assert {:ok, activity} = Transmogrifier.handle_incoming(data)
+    object = Object.normalize(activity.data["object"], fetch: false)
+
+    assert object.data["type"] == "Note"
+  end
 end

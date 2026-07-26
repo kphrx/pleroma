@@ -19,6 +19,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.ActivityPub.ObjectValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
+  alias Pleroma.Web.ActivityPub.ObjectValidators.TagValidator
   alias Pleroma.Web.ActivityPub.Pipeline
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.ActivityPub.Visibility
@@ -27,6 +28,9 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   import Pleroma.Web.Utils.Guards, only: [not_empty_string: 1]
 
   require Pleroma.Constants
+
+  @supported_types Pleroma.Constants.activity_types() ++
+                     Pleroma.Constants.object_types() ++ Pleroma.Constants.actor_types()
 
   @doc """
   Modifies an incoming AP object (mastodon format) to our internal format.
@@ -301,58 +305,66 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   def fix_attachments(%{"attachment" => attachment} = object) when is_list(attachment) do
     attachments =
-      Enum.map(attachment, fn data ->
-        url =
-          cond do
-            is_list(data["url"]) -> List.first(data["url"])
-            is_map(data["url"]) -> data["url"]
-            true -> nil
-          end
+      Enum.map(attachment, fn
+        data when is_map(data) ->
+          url =
+            cond do
+              is_list(data["url"]) -> List.first(data["url"])
+              is_map(data["url"]) -> data["url"]
+              true -> nil
+            end
 
-        media_type =
-          cond do
-            is_map(url) && is_bitstring(url["mediaType"]) &&
-                url["mediaType"] =~ Pleroma.Constants.mime_regex() ->
-              url["mediaType"]
+          url_data = if is_map(url), do: url, else: %{}
 
-            is_bitstring(data["mediaType"]) && data["mediaType"] =~ Pleroma.Constants.mime_regex() ->
-              data["mediaType"]
+          media_type =
+            cond do
+              is_bitstring(url_data["mediaType"]) &&
+                  url_data["mediaType"] =~ Pleroma.Constants.mime_regex() ->
+                url_data["mediaType"]
 
-            is_bitstring(data["mimeType"]) && data["mimeType"] =~ Pleroma.Constants.mime_regex() ->
-              data["mimeType"]
+              is_bitstring(data["mediaType"]) &&
+                  data["mediaType"] =~ Pleroma.Constants.mime_regex() ->
+                data["mediaType"]
 
-            true ->
-              nil
-          end
+              is_bitstring(data["mimeType"]) && data["mimeType"] =~ Pleroma.Constants.mime_regex() ->
+                data["mimeType"]
 
-        href =
-          cond do
-            is_map(url) && is_binary(url["href"]) -> url["href"]
-            is_binary(data["url"]) -> data["url"]
-            is_binary(data["href"]) -> data["href"]
-            true -> nil
-          end
+              true ->
+                nil
+            end
 
-        if href && valid_http_url?(href) do
-          attachment_url =
+          href =
+            cond do
+              is_binary(url) -> url
+              is_binary(url_data["href"]) -> url_data["href"]
+              is_binary(data["url"]) -> data["url"]
+              is_binary(data["href"]) -> data["href"]
+              true -> nil
+            end
+
+          if href && valid_http_url?(href) do
+            attachment_url =
+              %{
+                "href" => href,
+                "type" => Map.get(url_data, "type", "Link")
+              }
+              |> Maps.put_if_present("mediaType", media_type)
+              |> Maps.put_if_present("width", url_data["width"] || data["width"])
+              |> Maps.put_if_present("height", url_data["height"] || data["height"])
+
             %{
-              "href" => href,
-              "type" => Map.get(url || %{}, "type", "Link")
+              "url" => [attachment_url],
+              "type" => data["type"] || "Document"
             }
             |> Maps.put_if_present("mediaType", media_type)
-            |> Maps.put_if_present("width", (url || %{})["width"] || data["width"])
-            |> Maps.put_if_present("height", (url || %{})["height"] || data["height"])
+            |> Maps.put_if_present("name", data["name"])
+            |> Maps.put_if_present("blurhash", data["blurhash"])
+          else
+            nil
+          end
 
-          %{
-            "url" => [attachment_url],
-            "type" => data["type"] || "Document"
-          }
-          |> Maps.put_if_present("mediaType", media_type)
-          |> Maps.put_if_present("name", data["name"])
-          |> Maps.put_if_present("blurhash", data["blurhash"])
-        else
+        _ ->
           nil
-        end
       end)
       |> Enum.filter(& &1)
 
@@ -404,14 +416,23 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
 
   defp emoji_icon_url(_), do: nil
 
+  defp valid_emoji_icon_url(icon) do
+    case emoji_icon_url(icon) do
+      url when is_binary(url) -> if valid_http_url?(url), do: url
+      _ -> nil
+    end
+  end
+
   def fix_emoji(%{"tag" => tags} = object) when is_list(tags) do
     emoji =
       tags
-      |> Enum.filter(fn data -> is_map(data) and data["type"] == "Emoji" and data["icon"] end)
+      |> Enum.filter(fn data ->
+        is_map(data) and data["type"] == "Emoji" and is_binary(data["name"]) and data["icon"]
+      end)
       |> Enum.reduce(%{}, fn data, mapping ->
         name = String.trim(data["name"], ":")
 
-        case emoji_icon_url(data["icon"]) do
+        case valid_emoji_icon_url(data["icon"]) do
           url when is_binary(url) -> Map.put(mapping, name, url)
           _ -> mapping
         end
@@ -420,10 +441,11 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     Map.put(object, "emoji", emoji)
   end
 
-  def fix_emoji(%{"tag" => %{"type" => "Emoji"} = tag} = object) do
-    name = String.trim(tag["name"], ":")
+  def fix_emoji(%{"tag" => %{"type" => "Emoji", "name" => name} = tag} = object)
+      when is_binary(name) do
+    name = String.trim(name, ":")
 
-    with url when is_binary(url) <- emoji_icon_url(tag["icon"]) do
+    with url when is_binary(url) <- valid_emoji_icon_url(tag["icon"]) do
       Map.put(object, "emoji", %{name => url})
     else
       _ -> object
@@ -435,7 +457,9 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   def fix_tag(%{"tag" => tag} = object) when is_list(tag) do
     tags =
       tag
-      |> Enum.filter(fn data -> data["type"] == "Hashtag" and data["name"] end)
+      |> Enum.filter(fn data ->
+        is_map(data) and data["type"] == "Hashtag" and is_binary(data["name"])
+      end)
       |> Enum.map(fn
         %{"name" => "#" <> hashtag} -> String.downcase(hashtag)
         %{"name" => hashtag} -> String.downcase(hashtag)
@@ -502,10 +526,32 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
     |> handle_incoming_normalized(options)
   end
 
-  defp fix_type_as_string(%{"type" => [type | _]} = data) when is_binary(type),
-    do: Map.put(data, "type", type)
+  defp fix_type_as_string(data) do
+    data
+    |> normalize_type()
+    |> normalize_tag_types()
+  end
 
-  defp fix_type_as_string(data), do: data
+  defp normalize_type(%{"type" => types} = data) when is_list(types) do
+    type = Enum.find(types, &(&1 in @supported_types)) || Enum.find(types, &is_binary/1)
+
+    if type, do: Map.put(data, "type", type), else: data
+  end
+
+  defp normalize_type(data), do: data
+
+  defp normalize_tag_types(%{"tag" => tags} = data) when is_list(tags) do
+    Map.put(data, "tag", Enum.map(tags, &normalize_tag_type/1))
+  end
+
+  defp normalize_tag_types(%{"tag" => tag} = data) when is_map(tag) do
+    Map.put(data, "tag", normalize_tag_type(tag))
+  end
+
+  defp normalize_tag_types(data), do: data
+
+  defp normalize_tag_type(tag) when is_map(tag), do: TagValidator.normalize(tag)
+  defp normalize_tag_type(tag), do: tag
 
   # Flag objects are placed ahead of the ID check because Mastodon 2.8 and earlier send them
   # with nil ID.

@@ -12,6 +12,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
   require Pleroma.Constants
 
   @primary_key false
+  @tag_types ~w[Mention Hashtag Emoji Link]
+
   embedded_schema do
     # Common
     field(:type, :string)
@@ -49,7 +51,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
     |> validate_required([:type, :href])
   end
 
-  def changeset(struct, %{"type" => "Hashtag", "name" => name} = data) do
+  def changeset(struct, %{"type" => "Hashtag", "name" => name} = data) when is_binary(name) do
     name = String.downcase(name)
     data = Map.put(data, "name", name)
 
@@ -58,7 +60,13 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
     |> validate_required([:type, :name])
   end
 
-  def changeset(struct, %{"type" => "Emoji"} = data) do
+  def changeset(struct, %{"type" => "Hashtag"} = data) do
+    struct
+    |> cast(data, [])
+    |> Map.put(:action, :ignore)
+  end
+
+  def changeset(struct, %{"type" => "Emoji", "name" => name} = data) when is_binary(name) do
     data =
       data
       |> Map.put("name", String.trim(data["name"], ":"))
@@ -84,11 +92,21 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
     end
   end
 
+  def changeset(struct, %{"type" => "Emoji"} = data) do
+    struct
+    |> cast(data, [])
+    |> Map.put(:action, :ignore)
+  end
+
   def changeset(struct, %{"type" => "Link"} = data) do
     struct
     |> cast(data, [:type, :name, :mediaType, :href])
     |> validate_inclusion(:mediaType, Pleroma.Constants.activity_json_mime_types())
     |> validate_required([:type, :href, :mediaType])
+  end
+
+  def changeset(struct, %{"type" => types} = data) when is_list(types) do
+    changeset(struct, infer_type(data))
   end
 
   def changeset(struct, %{"type" => _} = data) do
@@ -98,7 +116,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
   end
 
   def changeset(struct, data) when is_map(data) do
-    data = infer_type(data)
+    data = normalize(data)
 
     if Map.has_key?(data, "type") do
       changeset(struct, data)
@@ -107,6 +125,14 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.TagValidator do
       |> cast(data, [])
       |> Map.put(:action, :ignore)
     end
+  end
+
+  def normalize(data) when is_map(data), do: infer_type(data)
+
+  defp infer_type(%{"type" => types} = data) when is_list(types) do
+    type = Enum.find(types, &(&1 in @tag_types)) || Enum.find(types, &is_binary/1)
+
+    if type, do: Map.put(data, "type", type), else: Map.delete(data, "type")
   end
 
   defp infer_type(%{"type" => _} = data), do: data

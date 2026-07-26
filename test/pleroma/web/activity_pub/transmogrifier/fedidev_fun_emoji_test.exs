@@ -36,14 +36,20 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.FedidevFunEmojiTest do
     end
   end
 
-  defp ingest_fixture!(rel_path) do
-    data = rel_path |> File.read!() |> Jason.decode!()
+  defp ingest_data!(data) do
     ensure_remote_actor!(data["actor"])
 
     assert {:ok, activity} = Transmogrifier.handle_incoming(data)
     object = Object.normalize(activity.data["object"], fetch: false)
 
     {activity, object}
+  end
+
+  defp ingest_fixture!(rel_path) do
+    rel_path
+    |> File.read!()
+    |> Jason.decode!()
+    |> ingest_data!()
   end
 
   test "ingests Emoji tag with string icon" do
@@ -61,5 +67,37 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.FedidevFunEmojiTest do
   test "ignores Emoji tag missing icon" do
     {_activity, object} = ingest_fixture!("test/fixtures/fedidev.fun/emoji_missing_icon.json")
     assert object.data["emoji"] == %{}
+  end
+
+  test "ignores Emoji tag missing a string name" do
+    data = File.read!("test/fixtures/fedidev.fun/emoji_icon_string.json") |> Jason.decode!()
+    data = put_in(data, ["object", "tag", Access.at(0), "name"], nil)
+
+    {_activity, object} = ingest_data!(data)
+
+    assert object.data["emoji"] == %{}
+  end
+
+  test "ignores Emoji tag with a non-http icon" do
+    data = File.read!("test/fixtures/fedidev.fun/emoji_icon_string.json") |> Jason.decode!()
+    data = put_in(data, ["object", "tag", Access.at(0), "icon"], "file:///tmp/cow.png")
+
+    {_activity, object} = ingest_data!(data)
+
+    assert object.data["emoji"] == %{}
+  end
+
+  test "normalizes a list-typed Emoji tag before building the emoji map" do
+    data = File.read!("test/fixtures/fedidev.fun/emoji_icon_string.json") |> Jason.decode!()
+
+    data =
+      put_in(data, ["object", "tag", Access.at(0), "type"], [
+        "https://example.com/ns#CustomTag",
+        "Emoji"
+      ])
+
+    {_activity, object} = ingest_data!(data)
+
+    assert object.data["emoji"]["cow"] == "https://fedidev.fun/static/cow.png"
   end
 end

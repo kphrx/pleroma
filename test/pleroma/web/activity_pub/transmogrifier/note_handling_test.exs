@@ -671,13 +671,21 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
     test "returns object with emoji when object contains list tags" do
       assert Transmogrifier.fix_emoji(%{
                "tag" => [
-                 %{"type" => "Emoji", "name" => ":bib:", "icon" => %{"url" => "/test"}},
+                 %{
+                   "type" => "Emoji",
+                   "name" => ":bib:",
+                   "icon" => %{"url" => "https://example.com/test"}
+                 },
                  %{"type" => "Hashtag"}
                ]
              }) == %{
-               "emoji" => %{"bib" => "/test"},
+               "emoji" => %{"bib" => "https://example.com/test"},
                "tag" => [
-                 %{"icon" => %{"url" => "/test"}, "name" => ":bib:", "type" => "Emoji"},
+                 %{
+                   "icon" => %{"url" => "https://example.com/test"},
+                   "name" => ":bib:",
+                   "type" => "Emoji"
+                 },
                  %{"type" => "Hashtag"}
                ]
              }
@@ -685,10 +693,28 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.NoteHandlingTest do
 
     test "returns object with emoji when object contains map tag" do
       assert Transmogrifier.fix_emoji(%{
-               "tag" => %{"type" => "Emoji", "name" => ":bib:", "icon" => %{"url" => "/test"}}
+               "tag" => %{
+                 "type" => "Emoji",
+                 "name" => ":bib:",
+                 "icon" => %{"url" => "https://example.com/test"}
+               }
              }) == %{
-               "emoji" => %{"bib" => "/test"},
-               "tag" => %{"icon" => %{"url" => "/test"}, "name" => ":bib:", "type" => "Emoji"}
+               "emoji" => %{"bib" => "https://example.com/test"},
+               "tag" => %{
+                 "icon" => %{"url" => "https://example.com/test"},
+                 "name" => ":bib:",
+                 "type" => "Emoji"
+               }
+             }
+    end
+  end
+
+  describe "fix_tag/1" do
+    test "ignores malformed Hashtag names and tag entries" do
+      tag = %{"type" => "Hashtag", "name" => 123}
+
+      assert Transmogrifier.fix_tag(%{"tag" => [tag, "malformed"]}) == %{
+               "tag" => [tag, "malformed"]
              }
     end
   end

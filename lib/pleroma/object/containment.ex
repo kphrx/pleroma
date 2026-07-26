@@ -79,9 +79,11 @@ defmodule Pleroma.Object.Containment do
 
   def contain_origin(id, %{"actor" => _actor} = params) do
     id_uri = URI.parse(id)
-    actor_uri = URI.parse(get_actor(params))
 
-    compare_uris(actor_uri, id_uri)
+    case get_actor(params) do
+      actor when is_binary(actor) -> compare_uris(URI.parse(actor), id_uri)
+      _ -> :error
+    end
   end
 
   def contain_origin(id, %{"attributedTo" => actor} = params),

@@ -36,14 +36,20 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.FedidevFunAttachmentsTest do
     end
   end
 
-  defp ingest_fixture!(rel_path) do
-    data = rel_path |> File.read!() |> Jason.decode!()
+  defp ingest_data!(data) do
     ensure_remote_actor!(data["actor"])
 
     assert {:ok, activity} = Transmogrifier.handle_incoming(data)
     object = Object.normalize(activity.data["object"], fetch: false)
 
     {activity, object}
+  end
+
+  defp ingest_fixture!(rel_path) do
+    rel_path
+    |> File.read!()
+    |> Jason.decode!()
+    |> ingest_data!()
   end
 
   test "drops non-http(s) attachment href" do
@@ -65,5 +71,28 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.FedidevFunAttachmentsTest do
     [%{"href" => href} | _] = attachment["url"]
 
     assert href == "https://fedidev.fun/images/007.png"
+  end
+
+  test "drops malformed attachment list entries" do
+    data = File.read!("test/fixtures/fedidev.fun/attachment_url_list.json") |> Jason.decode!()
+    data = update_in(data, ["object", "attachment"], &["malformed" | List.wrap(&1)])
+
+    {_activity, object} = ingest_data!(data)
+
+    assert length(object.data["attachment"]) == 1
+  end
+
+  test "accepts a URI string in an attachment url list" do
+    data = File.read!("test/fixtures/fedidev.fun/attachment_url_list.json") |> Jason.decode!()
+
+    data =
+      put_in(data, ["object", "attachment", "url"], [
+        "https://fedidev.fun/images/007.png"
+      ])
+
+    {_activity, object} = ingest_data!(data)
+
+    assert [%{"url" => [%{"href" => "https://fedidev.fun/images/007.png"}]}] =
+             object.data["attachment"]
   end
 end
