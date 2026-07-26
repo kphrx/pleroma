@@ -1,0 +1,1 @@
+Reject unsupported or ambiguous inbox signatures instead of queueing a doomed failed-signature retry, allowing clients to fall back to legacy HTTP Signatures.
