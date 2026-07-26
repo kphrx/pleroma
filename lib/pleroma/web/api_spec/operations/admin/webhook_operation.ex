@@ -57,7 +57,7 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
             type: :object,
             required: [:url, :events],
             properties: %{
-              url: %Schema{type: :string, format: :uri},
+              url: %Schema{type: :string, format: :uri, maxLength: 255},
               events: event_type(min_items: 1),
               enabled: %Schema{type: :boolean}
             },
@@ -84,7 +84,7 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
             description: "POST body for updating a webhook",
             type: :object,
             properties: %{
-              url: %Schema{type: :string, format: :uri},
+              url: %Schema{type: :string, format: :uri, maxLength: 255},
               events: event_type(min_items: 1),
               enabled: %Schema{type: :boolean}
             },
@@ -161,7 +161,7 @@ defmodule Pleroma.Web.ApiSpec.Admin.WebhookOperation do
       type: :object,
       properties: %{
         id: %Schema{type: :string},
-        url: %Schema{type: :string, format: :uri},
+        url: %Schema{type: :string, format: :uri, maxLength: 255},
         events: event_type(),
         secret: %Schema{type: :string},
         enabled: %Schema{type: :boolean},

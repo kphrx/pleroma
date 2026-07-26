@@ -1,5 +1,5 @@
 # Pleroma: A lightweight social networking server
-# Copyright © 2017-2024 Pleroma Authors <https://pleroma.social/>
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.MastodonAPI.Admin.AccountView do
@@ -24,16 +24,15 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountView do
       created_at: Utils.to_masto_date(user.inserted_at),
       email: user.email,
       ip: nil,
-      role: role(user),
-      confirmed: user.is_confirmed,
-      sensitized: nil,
-      suspended: nil,
-      silenced: nil,
-      disabled: !user.is_active,
-      approved: user.is_approved,
+      ips: [],
       locale: nil,
       invite_request: user.registration_reason,
-      ips: nil,
+      role: role(user),
+      confirmed: user.is_confirmed,
+      approved: user.is_approved,
+      disabled: !user.is_active,
+      silenced: nil,
+      suspended: nil,
       account: account
     }
   end

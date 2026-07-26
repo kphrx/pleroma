@@ -109,6 +109,13 @@ defmodule Pleroma.Web.ApiSpec do
               "Webhooks"
             ]
           },
+          %{
+            "name" => "Administration (Mastodon API)",
+            "tags" => [
+              "User administration (Mastodon API)",
+              "Report management (Mastodon API)"
+            ]
+          },
           %{"name" => "Applications", "tags" => ["Applications", "Push subscriptions"]},
           %{
             "name" => "Current account",

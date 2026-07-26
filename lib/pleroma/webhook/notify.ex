@@ -74,7 +74,18 @@ defmodule Pleroma.Webhook.Notify do
       {"X-Hub-Signature", "sha256=#{signature(body, secret)}"}
     ]
 
-    Pleroma.HTTP.post(url, body, headers)
+    ConcurrentLimiter.limit(__MODULE__, fn ->
+      case Pleroma.HTTP.post(url, body, headers) do
+        {:ok, %Tesla.Env{status: status}} when status in 200..299 ->
+          :ok
+
+        {:ok, %Tesla.Env{status: status}} ->
+          {:error, {:http_status, status}}
+
+        {:error, _reason} = error ->
+          error
+      end
+    end)
   end
 
   defp signature(body, secret) do

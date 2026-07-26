@@ -33,6 +33,15 @@ defmodule Pleroma.WebhookTest do
     assert {:error, _changeset} = Webhook.update(webhook, %{events: [:"status.created"]})
   end
 
+  test "rejects URLs longer than the database column" do
+    url = "https://example.com/" <> String.duplicate("a", 256)
+
+    assert {:error, changeset} =
+             Webhook.create(%{url: url, events: [:"report.created"]})
+
+    assert %{url: ["should be at most 255 character(s)"]} = errors_on(changeset)
+  end
+
   test "rejects empty events for non-internal webhooks" do
     assert {:error, changeset} = Webhook.create(%{url: "https://example.com/webhook", events: []})
     assert %{events: ["can't be blank"]} = errors_on(changeset)

@@ -2,6 +2,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.RemoteReportPolicy do
   @moduledoc "Drop remote reports if they don't contain enough information."
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
 
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.Config
 
   @impl true

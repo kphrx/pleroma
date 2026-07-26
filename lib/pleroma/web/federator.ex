@@ -89,7 +89,8 @@ defmodule Pleroma.Web.Federator do
 
   # Job Worker Callbacks
 
-  @spec perform(atom(), any()) :: {:ok, any()} | {:error, any()}
+  @impl true
+  @spec perform(atom(), any()) :: :ok | {:ok, any()} | {:error, any()}
   def perform(:publish_one, params) do
     Publisher.prepare_one(params)
     |> Publisher.publish_one()

@@ -4,6 +4,8 @@
 
 defmodule Pleroma.Web.RichMedia.Helpers do
   alias Pleroma.Config
+  alias Pleroma.Gun.ConnectionPool
+  alias Pleroma.ReverseProxy.Client.Tesla, as: TeslaClient
 
   require Logger
 
@@ -19,12 +21,30 @@ defmodule Pleroma.Web.RichMedia.Helpers do
   end
 
   defp stream(url) do
-    with {_, {:ok, %Tesla.Env{status: 200, body: stream_body, headers: headers}}} <-
-           {:get, Pleroma.HTTP.get(url, req_headers(), http_options())},
-         {_, :ok} <- {:content_type, check_content_type(headers)},
-         {_, :ok} <- {:content_length, check_content_length(headers)},
-         {:read_stream, {:ok, body}} <- {:read_stream, read_stream(stream_body)} do
-      {:ok, body}
+    case Pleroma.HTTP.get(url, req_headers(), http_options()) do
+      {:ok, %Tesla.Env{status: 200, body: stream_body, headers: headers}} ->
+        result =
+          try do
+            with {_, :ok} <- {:content_type, check_content_type(headers)},
+                 {_, :ok} <- {:content_length, check_content_length(headers)},
+                 {:read_stream, {:ok, body}} <- {:read_stream, read_stream(stream_body)} do
+              {:ok, body}
+            end
+          rescue
+            exception ->
+              cleanup_stream(stream_body, :error)
+              reraise exception, __STACKTRACE__
+          end
+
+        cleanup_stream(stream_body, result)
+        result
+
+      {:ok, %Tesla.Env{body: stream_body}} = response ->
+        cleanup_stream(stream_body, :rejected)
+        {:get, response}
+
+      response ->
+        {:get, response}
     end
   end
 
@@ -95,6 +115,10 @@ defmodule Pleroma.Web.RichMedia.Helpers do
     end
   end
 
+  defp read_stream(%{pid: pid, stream: stream, opts: opts}) do
+    read_chunks(pid, stream, opts, "", 0, Keyword.get(http_options(), :max_body))
+  end
+
   defp read_stream(stream) do
     max_body = Keyword.get(http_options(), :max_body)
 
@@ -116,6 +140,33 @@ defmodule Pleroma.Web.RichMedia.Helpers do
       _ -> :error
     end
   end
+
+  defp read_chunks(pid, stream, opts, acc, total_bytes, max_body) do
+    case Tesla.Adapter.Gun.read_chunk(pid, stream, opts) do
+      {fin, chunk} when fin in [:fin, :nofin] ->
+        total_bytes = total_bytes + byte_size(chunk)
+
+        cond do
+          total_bytes > max_body ->
+            :error
+
+          fin == :fin ->
+            {:ok, acc <> chunk}
+
+          true ->
+            read_chunks(pid, stream, opts, acc <> chunk, total_bytes, max_body)
+        end
+
+      {:error, _reason} ->
+        :error
+    end
+  end
+
+  defp cleanup_stream(%{pid: pid, stream: stream}, {:ok, _body}),
+    do: ConnectionPool.release_stream(pid, stream)
+
+  defp cleanup_stream(%{pid: _pid} = client, _result), do: TeslaClient.close(client)
+  defp cleanup_stream(_stream, _result), do: :ok
 
   defp http_options do
     [

@@ -43,6 +43,7 @@ defmodule Pleroma.Application do
     # every time the application is restarted, so we disable module
     # conflicts at runtime
     Code.compiler_options(ignore_module_conflict: true)
+    configure_logger()
     Pleroma.Telemetry.Logger.attach()
     Config.Holder.save_default()
     Pleroma.HTML.compile_scrubbers()
@@ -80,12 +81,15 @@ defmodule Pleroma.Application do
       [
         Pleroma.PromEx,
         Pleroma.LDAP,
-        Pleroma.Repo,
-        Config.TransferTask,
-        Pleroma.Emoji,
-        Pleroma.Web.Plugs.RateLimiter.Supervisor,
-        {Task.Supervisor, name: Pleroma.TaskSupervisor}
+        Pleroma.Repo
       ] ++
+        search_children() ++
+        [
+          Config.TransferTask,
+          Pleroma.Emoji,
+          Pleroma.Web.Plugs.RateLimiter.Supervisor,
+          {Task.Supervisor, name: Pleroma.TaskSupervisor}
+        ] ++
         cachex_children() ++
         http_children(adapter) ++
         [
@@ -112,6 +116,44 @@ defmodule Pleroma.Application do
     opts = [strategy: :one_for_one, name: Pleroma.Supervisor, max_restarts: max_restarts]
     Supervisor.start_link(children, opts)
   end
+
+  def configure_logger do
+    Config.get([:logger, :backends], [])
+    |> Enum.each(fn backend ->
+      case backend_to_logger(backend) do
+        {:ok, logger} ->
+          add_logger(logger)
+
+        {:error, :console_backend} ->
+          Logger.warning(":console is no longer considered a backend and is enabled by default")
+      end
+    end)
+  end
+
+  defp add_logger(backend) do
+    case LoggerBackends.add(backend) do
+      {:ok, _} ->
+        Logger.debug("Successfully added logger backend: #{inspect(backend)}")
+
+      {:error, :already_present} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.error("Failed to add logger backend #{inspect(backend)}: #{inspect(reason)}")
+    end
+  end
+
+  defp backend_to_logger(:console), do: {:error, :console_backend}
+
+  defp backend_to_logger({:ex_syslogger = backend, name}) do
+    Logger.warning(
+      "Configuration {:#{backend}, :#{name}} is incorrect. Use {ExSyslogger, :#{name}} instead!"
+    )
+
+    {:ok, {ExSyslogger, name}}
+  end
+
+  defp backend_to_logger(backend), do: {:ok, backend}
 
   def load_custom_modules do
     dir = Config.get([:modules, :runtime_dir])
@@ -157,6 +199,16 @@ defmodule Pleroma.Application do
       build_cachex("host_meta", default_ttl: :timer.minutes(120), limit: 5_000),
       build_cachex("translations", default_ttl: :timer.hours(24), limit: 5_000)
     ]
+  end
+
+  defp search_children do
+    case Config.get([Pleroma.Search, :module]) do
+      Pleroma.Search.ParadeDB ->
+        [Pleroma.Search.ParadeDB.Repo]
+
+      _ ->
+        []
+    end
   end
 
   defp emoji_packs_expiration,

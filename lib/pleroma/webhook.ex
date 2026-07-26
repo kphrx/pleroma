@@ -36,6 +36,7 @@ defmodule Pleroma.Webhook do
     webhook
     |> cast(params, [:url, :events, :enabled, :internal])
     |> validate_required([:url, :events])
+    |> validate_length(:url, max: 255)
     |> validate_events_present()
     |> unique_constraint(:url)
     |> put_secret()
@@ -44,6 +45,7 @@ defmodule Pleroma.Webhook do
   def update_changeset(%__MODULE__{} = webhook, params \\ %{}) do
     webhook
     |> cast(params, [:url, :events, :enabled, :internal])
+    |> validate_length(:url, max: 255)
     |> validate_events_present()
     |> unique_constraint(:url)
   end

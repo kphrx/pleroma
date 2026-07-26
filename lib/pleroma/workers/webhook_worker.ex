@@ -4,6 +4,9 @@
 
 defmodule Pleroma.Workers.WebhookWorker do
   alias Pleroma.Activity
+  alias Pleroma.User
+  alias Pleroma.Webhook
+  alias Pleroma.Webhook.Notify
 
   use Oban.Worker, queue: :background
 
@@ -16,10 +19,13 @@ defmodule Pleroma.Workers.WebhookWorker do
           "activity_id" => report_id
         }
       }) do
-    webhook = Pleroma.Webhook.get(webhook_id)
-    report = Activity.get_by_id(report_id)
-
-    Pleroma.Webhook.Notify.report_created(webhook, report)
+    with %Webhook{enabled: true} = webhook <- Webhook.get(webhook_id),
+         %Activity{} = report <- Activity.get_by_id(report_id) do
+      Notify.report_created(webhook, report)
+    else
+      %Webhook{enabled: false} -> {:cancel, :disabled}
+      nil -> {:cancel, :not_found}
+    end
   end
 
   def perform(%Job{
@@ -30,10 +36,13 @@ defmodule Pleroma.Workers.WebhookWorker do
           "user_id" => user_id
         }
       }) do
-    webhook = Pleroma.Webhook.get(webhook_id)
-    user = Pleroma.User.get_by_id(user_id)
-
-    Pleroma.Webhook.Notify.account_created(webhook, user)
+    with %Webhook{enabled: true} = webhook <- Webhook.get(webhook_id),
+         %User{} = user <- User.get_by_id(user_id) do
+      Notify.account_created(webhook, user)
+    else
+      %Webhook{enabled: false} -> {:cancel, :disabled}
+      nil -> {:cancel, :not_found}
+    end
   end
 
   @impl true

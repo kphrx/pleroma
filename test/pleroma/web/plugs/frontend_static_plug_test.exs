@@ -122,9 +122,13 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
 
       clear_config([:frontends, :pickable], ["#{name}/#{ref}"])
       path = "#{@dir}/frontends/#{name}/#{ref}"
+      path2 = "#{@dir}/frontends/#{name}/#{ref}/packs/html"
 
       Pleroma.Backports.mkdir_p!(path)
       File.write!("#{path}/index.html", "from frontend plug")
+
+      Pleroma.Backports.mkdir_p!(path2)
+      File.write!("#{path2}/custom.html", "from frontend plug")
 
       index =
         conn
@@ -132,6 +136,13 @@ defmodule Pleroma.Web.Plugs.FrontendStaticPlugTest do
         |> get("/")
 
       assert html_response(index, 200) == "from frontend plug"
+
+      custom =
+        conn
+        |> put_req_cookie("preferred_frontend", "#{name}/#{ref}")
+        |> get("/packs/html/custom.html")
+
+      assert html_response(custom, 200) == "from frontend plug"
     end
 
     test "only returns content from pickable frontends", %{conn: conn} do

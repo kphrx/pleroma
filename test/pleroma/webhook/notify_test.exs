@@ -72,4 +72,54 @@ defmodule Pleroma.Webhook.NotifyTest do
 
     Notify.report_created(webhook, activity)
   end
+
+  test "returns an error for unsuccessful responses" do
+    user = insert(:user)
+
+    {:ok, webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"account.created"]})
+
+    Tesla.Mock.mock(fn %{url: "https://example.com/webhook"} ->
+      %Tesla.Env{status: 503, body: ""}
+    end)
+
+    assert {:error, {:http_status, 503}} = Notify.account_created(webhook, user)
+  end
+
+  test "accepts any successful response" do
+    user = insert(:user)
+
+    {:ok, webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"account.created"]})
+
+    Tesla.Mock.mock(fn %{url: "https://example.com/webhook"} ->
+      %Tesla.Env{status: 204, body: ""}
+    end)
+
+    assert :ok = Notify.account_created(webhook, user)
+  end
+
+  test "cancels queued deliveries when the webhook was deleted" do
+    user = insert(:user)
+
+    {:ok, webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"account.created"]})
+
+    [job] = Notify.trigger_webhooks(user, :"account.created")
+    Webhook.delete(webhook)
+
+    assert {:cancel, :not_found} = Pleroma.Workers.WebhookWorker.perform(job)
+  end
+
+  test "cancels queued deliveries when the webhook was disabled" do
+    user = insert(:user)
+
+    {:ok, webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"account.created"]})
+
+    [job] = Notify.trigger_webhooks(user, :"account.created")
+    Webhook.set_enabled(webhook, false)
+
+    assert {:cancel, :disabled} = Pleroma.Workers.WebhookWorker.perform(job)
+  end
 end

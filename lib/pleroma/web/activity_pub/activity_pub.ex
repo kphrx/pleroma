@@ -540,8 +540,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     #   and extra sorting on "activities.id DESC NULLS LAST" would worse the query plan
     opts = Map.put(opts, :skip_extra_order, true)
 
-    Pagination.fetch_paginated(query, opts, pagination)
+    Pagination.fetch_paginated(query, opts, pagination, pagination_binding(opts))
   end
+
+  defp pagination_binding(%{favorited_by: _}), do: :favorited_activity
+  defp pagination_binding(_), do: nil
 
   def fetch_activities(recipients, opts \\ %{}, pagination \\ :keyset) do
     list_memberships = Pleroma.List.memberships(opts[:user])
@@ -789,6 +792,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_since(query, %{since_id: ""}), do: query
 
+  defp restrict_since(query, %{favorited_by: _, since_id: _}), do: query
+
   defp restrict_since(query, %{since_id: since_id}) do
     from(activity in query, where: activity.id > ^since_id)
   end
@@ -896,14 +901,22 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> Repo.all()
 
     # Note: NO extra ordering should be done on "activities.id desc nulls last" for optimal plan
-    from(
-      [_activity, object] in query,
-      join: hto in "hashtags_objects",
-      on: hto.object_id == object.id,
-      where: hto.hashtag_id in ^hashtag_ids,
-      distinct: [desc: object.id],
-      order_by: [desc: object.id]
-    )
+    query =
+      from(
+        [_activity, object] in query,
+        join: hto in "hashtags_objects",
+        on: hto.object_id == object.id,
+        where: hto.hashtag_id in ^hashtag_ids
+      )
+
+    if is_nil(query.distinct) do
+      from([_activity, object] in query,
+        distinct: [desc: object.id],
+        order_by: [desc: object.id]
+      )
+    else
+      query
+    end
   end
 
   defp restrict_hashtag_any(query, %{tag: tag}) when is_binary(tag) do
@@ -1006,6 +1019,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_state(query, _), do: query
 
+  defp restrict_report_target(query, %{report_target_id: actor_id}) do
+    from(activity in query,
+      where: fragment("?->'object'->>0 = ?", activity.data, ^actor_id)
+    )
+  end
+
+  defp restrict_report_target(query, _), do: query
+
   defp restrict_assigned_account(query, %{assigned_account: assigned_account}) do
     from(activity in query,
       where: fragment("?->>'assigned_account' = ?", activity.data, ^assigned_account)
@@ -1015,9 +1036,31 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp restrict_assigned_account(query, _), do: query
 
   defp restrict_favorited_by(query, %{favorited_by: ap_id}) do
+    newer_favorite =
+      from(newer_favorite in Activity,
+        where: newer_favorite.actor == ^ap_id,
+        where: newer_favorite.id > parent_as(:favorited_activity).id,
+        where: fragment("?->>'type' = ?", newer_favorite.data, "Like"),
+        where:
+          fragment(
+            "associated_object_id(?) = associated_object_id(?)",
+            newer_favorite.data,
+            parent_as(:favorited_activity).data
+          ),
+        select: 1
+      )
+
     from(
-      [_activity, object] in query,
-      where: fragment("(?)->'likes' \\? (?)", object.data, ^ap_id)
+      [activity, object: object] in query,
+      join: favorited_activity in Activity,
+      as: :favorited_activity,
+      on:
+        favorited_activity.actor == ^ap_id and
+          fragment("?->>'type' = ?", favorited_activity.data, "Like") and
+          fragment("associated_object_id(?) = (?)->>'id'", favorited_activity.data, object.data),
+      where: fragment("(?)->'likes' \\? (?)", object.data, ^ap_id),
+      where: not exists(subquery(newer_favorite)),
+      select: %Activity{activity | pagination_id: favorited_activity.id}
     )
   end
 
@@ -1482,6 +1525,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> restrict_actor(opts)
       |> restrict_type(opts)
       |> restrict_state(opts)
+      |> restrict_report_target(opts)
       |> restrict_assigned_account(opts)
       |> restrict_favorited_by(opts)
       |> restrict_blocked(restrict_blocked_opts)
