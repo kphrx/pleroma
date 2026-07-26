@@ -14,7 +14,10 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
   alias Pleroma.Search.ParadeDB
   alias Pleroma.Web.CommonAPI
 
-  @image System.get_env("PARADEDB_TEST_IMAGE", "paradedb/paradedb:latest")
+  @image System.get_env(
+           "PARADEDB_TEST_IMAGE",
+           "paradedb/paradedb:0.24.3-pg15@sha256:997d62f6c2605becb7c45878af3f8c8c698f355006b675b3ce212d4eb2d14f2e"
+         )
   @db_user "postgres"
   @db_password "postgres"
   @db_name "paradedb"
@@ -26,6 +29,13 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
   end
 
   setup_all do
+    case System.get_env("PARADEDB_TEST_URL") do
+      nil -> setup_docker_paradedb()
+      url -> setup_external_paradedb(url)
+    end
+  end
+
+  defp setup_docker_paradedb do
     with :ok <- ensure_docker_available() do
       container = "pleroma-paradedb-it-#{System.unique_integer([:positive])}"
 
@@ -58,48 +68,66 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
         |> wait_for_port!(@docker_startup_timeout_ms)
 
       wait_for_pg_ready!(container, @docker_startup_timeout_ms)
-      wait_for_tcp_ready!(host_port, @docker_startup_timeout_ms)
 
       url = "postgres://#{@db_user}:#{@db_password}@127.0.0.1:#{host_port}/#{@db_name}"
-
-      prev_env = System.get_env("PARADEDB_DATABASE_URL")
-      System.put_env("PARADEDB_DATABASE_URL", url)
-
-      on_exit(fn ->
-        if is_nil(prev_env) do
-          System.delete_env("PARADEDB_DATABASE_URL")
-        else
-          System.put_env("PARADEDB_DATABASE_URL", prev_env)
-        end
-      end)
-
-      {:ok, _pid} = start_supervised({Pleroma.Search.ParadeDB.Repo, pool_size: 5})
-
-      previous_table = Pleroma.Config.get([Pleroma.Search.ParadeDB, :table], nil)
-      table = "pleroma_search_documents_it_#{System.unique_integer([:positive])}"
-      Pleroma.Config.put([Pleroma.Search.ParadeDB, :table], table)
-
-      on_exit(fn ->
-        if is_nil(previous_table) do
-          Pleroma.Config.delete([Pleroma.Search.ParadeDB, :table])
-        else
-          Pleroma.Config.put([Pleroma.Search.ParadeDB, :table], previous_table)
-        end
-      end)
-
-      {:ok,
-       %{
-         container: container,
-         container_id: container_id,
-         url: url,
-         table: table
-       }}
+      setup_repo(url, %{container: container, container_id: container_id})
     end
   end
 
-  test "indexes and searches against real ParadeDB" do
+  defp setup_external_paradedb(url) do
+    uri = URI.parse(url)
+    wait_for_tcp_ready!(uri.host, uri.port || 5432, @docker_startup_timeout_ms)
+    setup_repo(url, %{})
+  end
+
+  defp setup_repo(url, context) do
+    prev_env = System.get_env("PARADEDB_DATABASE_URL")
+    System.put_env("PARADEDB_DATABASE_URL", url)
+
+    on_exit(fn ->
+      if is_nil(prev_env) do
+        System.delete_env("PARADEDB_DATABASE_URL")
+      else
+        System.put_env("PARADEDB_DATABASE_URL", prev_env)
+      end
+    end)
+
+    {:ok, _pid} = start_supervised({Pleroma.Search.ParadeDB.Repo, pool_size: 5})
+    wait_for_repo_ready!(@docker_startup_timeout_ms)
+
+    previous_table = Pleroma.Config.get([Pleroma.Search.ParadeDB, :table], nil)
+    suffix = Ecto.UUID.generate() |> String.replace("-", "")
+    table = "pleroma_search_documents_it_#{suffix}"
+    Pleroma.Config.put([Pleroma.Search.ParadeDB, :table], table)
+
+    on_exit(fn ->
+      if is_nil(previous_table) do
+        Pleroma.Config.delete([Pleroma.Search.ParadeDB, :table])
+      else
+        Pleroma.Config.put([Pleroma.Search.ParadeDB, :table], previous_table)
+      end
+    end)
+
+    {:ok, Map.merge(context, %{url: url, table: table})}
+  end
+
+  test "indexes and searches against real ParadeDB", %{table: table} do
+    on_exit(fn ->
+      _ =
+        Ecto.Adapters.SQL.query(
+          Pleroma.Search.ParadeDB.Repo,
+          "DROP TABLE IF EXISTS #{table}"
+        )
+    end)
+
     :ok = ParadeDB.drop_index()
     assert :ok = ParadeDB.create_index()
+
+    assert {:ok, %{rows: [["0.24.3"]]}} =
+             Ecto.Adapters.SQL.query(
+               Pleroma.Search.ParadeDB.Repo,
+               "SELECT extversion FROM pg_extension WHERE extname = 'pg_search'"
+             )
 
     user = insert(:user)
 
@@ -118,6 +146,23 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
     a2 = Activity.get_by_id_with_object(a2.id)
     private = Activity.get_by_id_with_object(private.id)
 
+    a1 = %{
+      a1
+      | object: %{
+          a1.object
+          | data:
+              Map.merge(a1.object.data, %{
+                "summary" => "paradedb subject phrase",
+                "attachment" => [
+                  %{
+                    "name" => "remote-image.jpg",
+                    "summary" => "paradedb attachment description"
+                  }
+                ]
+              })
+        }
+    }
+
     assert :ok = ParadeDB.add_to_index(a1)
     assert :ok = ParadeDB.add_to_index(a2)
     assert :ok = ParadeDB.add_to_index(private)
@@ -129,6 +174,9 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
     assert a2.id in ids
     refute private.id in ids
     assert List.first(ids) == a2.id
+
+    assert Enum.any?(ParadeDB.search(nil, "subject phrase"), &(&1.id == a1.id))
+    assert Enum.any?(ParadeDB.search(nil, "attachment description"), &(&1.id == a1.id))
 
     previous_fuzzy_distance = Pleroma.Config.get([Pleroma.Search.ParadeDB, :fuzzy_distance], 0)
     Pleroma.Config.put([Pleroma.Search.ParadeDB, :fuzzy_distance], 1)
@@ -226,11 +274,11 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
     wait.(wait)
   end
 
-  defp wait_for_tcp_ready!(port, timeout_ms) do
+  defp wait_for_tcp_ready!(host, port, timeout_ms) do
     deadline = System.monotonic_time(:millisecond) + timeout_ms
 
     wait = fn wait ->
-      case :gen_tcp.connect(~c"127.0.0.1", port, [:binary, active: false], 500) do
+      case :gen_tcp.connect(String.to_charlist(host), port, [:binary, active: false], 500) do
         {:ok, socket} ->
           :gen_tcp.close(socket)
           :ok
@@ -238,6 +286,27 @@ defmodule Pleroma.Search.ParadeDBIntegrationTest do
         {:error, _} ->
           if System.monotonic_time(:millisecond) > deadline do
             raise "Timed out waiting for TCP port #{port} to accept connections"
+          else
+            :timer.sleep(250)
+            wait.(wait)
+          end
+      end
+    end
+
+    wait.(wait)
+  end
+
+  defp wait_for_repo_ready!(timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+
+    wait = fn wait ->
+      case Ecto.Adapters.SQL.query(Pleroma.Search.ParadeDB.Repo, "SELECT 1") do
+        {:ok, _} ->
+          :ok
+
+        _ ->
+          if System.monotonic_time(:millisecond) > deadline do
+            raise "Timed out waiting for ParadeDB Repo"
           else
             :timer.sleep(250)
             wait.(wait)
