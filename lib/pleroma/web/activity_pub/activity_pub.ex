@@ -1016,6 +1016,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_state(query, _), do: query
 
+  defp restrict_report_target(query, %{report_target_id: actor_id}) do
+    from(activity in query,
+      where: fragment("?->'object'->>0 = ?", activity.data, ^actor_id)
+    )
+  end
+
+  defp restrict_report_target(query, _), do: query
+
   defp restrict_assigned_account(query, %{assigned_account: assigned_account}) do
     from(activity in query,
       where: fragment("?->>'assigned_account' = ?", activity.data, ^assigned_account)
@@ -1514,6 +1522,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> restrict_actor(opts)
       |> restrict_type(opts)
       |> restrict_state(opts)
+      |> restrict_report_target(opts)
       |> restrict_assigned_account(opts)
       |> restrict_favorited_by(opts)
       |> restrict_blocked(restrict_blocked_opts)

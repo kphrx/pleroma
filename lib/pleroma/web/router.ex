@@ -137,6 +137,12 @@ defmodule Pleroma.Web.Router do
     plug(Pleroma.Web.Plugs.EnsurePrivilegedPlug, :users_manage_activation_state)
   end
 
+  pipeline :require_privileged_role_account_actions do
+    plug(:admin_api)
+    plug(Pleroma.Web.Plugs.EnsurePrivilegedPlug, :users_manage_activation_state)
+    plug(Pleroma.Web.Plugs.EnsurePrivilegedPlug, :reports_manage_reports)
+  end
+
   pipeline :require_privileged_role_users_manage_invites do
     plug(:admin_api)
     plug(Pleroma.Web.Plugs.EnsurePrivilegedPlug, :users_manage_invites)
@@ -422,6 +428,60 @@ defmodule Pleroma.Web.Router do
     delete("/statuses/:id", StatusController, :delete)
 
     delete("/chats/:id/messages/:message_id", ChatController, :delete_message)
+  end
+
+  # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
+  scope "/api/v1/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through([:require_privileged_role_users_read])
+
+    get("/accounts", AccountController, :index)
+    get("/accounts/:id", AccountController, :show)
+  end
+
+  # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
+  scope "/api/v1/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through(:require_privileged_role_users_delete)
+
+    delete("/accounts/:id", AccountController, :delete)
+  end
+
+  # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
+  scope "/api/v1/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through([:require_privileged_role_users_manage_activation_state])
+
+    post("/accounts/:id/enable", AccountController, :enable)
+  end
+
+  scope "/api/v1/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through([:require_privileged_role_account_actions])
+
+    post("/accounts/:id/action", AccountController, :account_action)
+  end
+
+  # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
+  scope "/api/v1/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through([:require_privileged_role_users_manage_invites])
+    post("/accounts/:id/approve", AccountController, :approve)
+    post("/accounts/:id/reject", AccountController, :reject)
+  end
+
+  # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
+  scope "/api/v1/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through([:require_privileged_role_reports_manage_reports])
+
+    get("/reports", ReportController, :index)
+    get("/reports/:id", ReportController, :show)
+    post("/reports/:id/resolve", ReportController, :resolve)
+    post("/reports/:id/reopen", ReportController, :reopen)
+    post("/reports/:id/assign_to_self", ReportController, :assign_to_self)
+    post("/reports/:id/unassign", ReportController, :unassign)
+  end
+
+  # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
+  scope "/api/v2/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through([:require_privileged_role_users_read])
+
+    get("/accounts", AccountController, :index2)
   end
 
   # AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
