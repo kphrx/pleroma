@@ -87,6 +87,14 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
       config = ConfigDB.get_by_params(%{group: ":pleroma", key: ":first_setting"})
       assert config.value == [key: "value", key2: [Repo]]
     end
+
+    test "static search settings remain in the config file" do
+      MixTask.migrate_to_db("test/fixtures/config/static_search.config")
+
+      refute ConfigDB.get_by_group_and_key(:pleroma, Pleroma.Search)
+      refute ConfigDB.get_by_group_and_key(:pleroma, Pleroma.Search.ParadeDB)
+      refute ConfigDB.get_by_group_and_key(:pleroma, Pleroma.Search.ParadeDB.Repo)
+    end
   end
 
   describe "with deletion of temp file" do
