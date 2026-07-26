@@ -1,0 +1,30 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/tag-hashtag-missing-type",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:41:00Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-tag-hashtag-missing-type",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:41:00Z",
+    "content": "hashtag without type",
+    "tag": [
+      {
+        "name": "#Test"
+      }
+    ]
+  }
+}
+

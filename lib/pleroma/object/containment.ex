@@ -15,21 +15,33 @@ defmodule Pleroma.Object.Containment do
     actor
   end
 
+  def get_actor(%{"actor" => nil, "attributedTo" => actor}) when not is_nil(actor) do
+    get_actor(%{"actor" => actor})
+  end
+
+  def get_actor(%{"actor" => nil}), do: nil
+
+  def get_actor(%{"actor" => []}), do: nil
+
   def get_actor(%{"actor" => actor}) when is_list(actor) do
-    if is_binary(Enum.at(actor, 0)) do
-      Enum.at(actor, 0)
-    else
-      Enum.find(actor, fn %{"type" => type} -> type in ["Person", "Service", "Application"] end)
-      |> Map.get("id")
+    case actor do
+      [first | _] when is_binary(first) ->
+        first
+
+      _ ->
+        Enum.find_value(actor, fn
+          %{"type" => type, "id" => id}
+          when type in ["Person", "Service", "Application"] and is_binary(id) ->
+            id
+
+          _ ->
+            nil
+        end)
     end
   end
 
   def get_actor(%{"actor" => %{"id" => id}}) when is_bitstring(id) do
     id
-  end
-
-  def get_actor(%{"actor" => nil, "attributedTo" => actor}) when not is_nil(actor) do
-    get_actor(%{"actor" => actor})
   end
 
   def get_object(%{"object" => id}) when is_binary(id) do
@@ -67,9 +79,11 @@ defmodule Pleroma.Object.Containment do
 
   def contain_origin(id, %{"actor" => _actor} = params) do
     id_uri = URI.parse(id)
-    actor_uri = URI.parse(get_actor(params))
 
-    compare_uris(actor_uri, id_uri)
+    case get_actor(params) do
+      actor when is_binary(actor) -> compare_uris(URI.parse(actor), id_uri)
+      _ -> :error
+    end
   end
 
   def contain_origin(id, %{"attributedTo" => actor} = params),
