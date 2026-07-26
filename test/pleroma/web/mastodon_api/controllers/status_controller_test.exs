@@ -2428,6 +2428,118 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
     end
   end
 
+  describe "cards" do
+    setup do
+      clear_config([:rich_media, :enabled], true)
+      Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
+
+      Pleroma.StaticStubbedConfigMock
+      |> stub(:get, fn
+        [:rich_media, :enabled] -> true
+        path -> Pleroma.Test.StaticConfig.get(path)
+      end)
+
+      oauth_access(["read:statuses"])
+    end
+
+    test "returns rich-media card", %{conn: conn, user: user} do
+      Tesla.Mock.mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "https://example.com/ogp"})
+      ObanHelpers.perform_all()
+
+      card_data = %{
+        "image" => "http://ia.media-imdb.com/images/rock.jpg",
+        "provider_name" => "example.com",
+        "provider_url" => "https://example.com",
+        "title" => "The Rock",
+        "type" => "link",
+        "url" => "https://example.com/ogp",
+        "description" =>
+          "Directed by Michael Bay. With Sean Connery, Nicolas Cage, Ed Harris, John Spencer.",
+        "pleroma" => %{
+          "opengraph" => %{
+            "image" => "http://ia.media-imdb.com/images/rock.jpg",
+            "title" => "The Rock",
+            "type" => "video.movie",
+            "url" => "https://example.com/ogp",
+            "description" =>
+              "Directed by Michael Bay. With Sean Connery, Nicolas Cage, Ed Harris, John Spencer."
+          }
+        },
+        "author_name" => "",
+        "author_url" => "",
+        "authors" => [],
+        "blurhash" => nil,
+        "embed_url" => "",
+        "height" => 0,
+        "html" => "",
+        "image_description" => "",
+        "language" => nil,
+        "published_at" => nil,
+        "width" => 0
+      }
+
+      response =
+        conn
+        |> get("/api/v1/statuses/#{activity.id}")
+        |> json_response_and_validate_schema(200)
+
+      assert response["card"] == card_data
+
+      # works with private posts
+      {:ok, activity} =
+        CommonAPI.post(user, %{status: "https://example.com/ogp", visibility: "direct"})
+
+      response_two =
+        conn
+        |> get("/api/v1/statuses/#{activity.id}")
+        |> json_response_and_validate_schema(200)
+
+      assert response_two["card"] == card_data
+    end
+
+    test "replaces missing description with an empty string", %{conn: conn, user: user} do
+      Tesla.Mock.mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "https://example.com/ogp-missing-data"})
+      ObanHelpers.perform_all()
+
+      response =
+        conn
+        |> get("/api/v1/statuses/#{activity.id}")
+        |> json_response_and_validate_schema(:ok)
+
+      assert response["card"] == %{
+               "type" => "link",
+               "title" => "Pleroma",
+               "description" => "",
+               "image" => nil,
+               "provider_name" => "example.com",
+               "provider_url" => "https://example.com",
+               "url" => "https://example.com/ogp-missing-data",
+               "pleroma" => %{
+                 "opengraph" => %{
+                   "title" => "Pleroma",
+                   "type" => "website",
+                   "url" => "https://example.com/ogp-missing-data"
+                 }
+               },
+               "author_name" => "",
+               "author_url" => "",
+               "authors" => [],
+               "blurhash" => nil,
+               "embed_url" => "",
+               "height" => 0,
+               "html" => "",
+               "image_description" => "",
+               "language" => nil,
+               "published_at" => nil,
+               "width" => 0
+             }
+    end
+  end
+
   test "bookmarks" do
     bookmarks_uri = "/api/v1/bookmarks"
 

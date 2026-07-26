@@ -587,14 +587,25 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     video_url = proxied_url(rich_media["video"], page_url_data)
 
     %{
-      type: "link",
-      provider_name: page_url_data.host,
-      provider_url: page_url_data.scheme <> "://" <> page_url_data.host,
+      type: card_type(rich_media["type"]),
+      provider_name: rich_media["provider_name"] || page_url_data.host,
+      provider_url:
+        rich_media["provider_url"] || page_url_data.scheme <> "://" <> page_url_data.host,
       url: page_url,
       image: image_url,
       image_description: rich_media["image:alt"] || "",
       title: rich_media["title"] || "",
       description: rich_media["description"] || "",
+      language: nil,
+      authors: [],
+      author_name: rich_media["author_name"] || "",
+      author_url: rich_media["author_url"] || "",
+      html: rich_media["html"] || "",
+      width: card_dimension(rich_media["width"]),
+      height: card_dimension(rich_media["height"]),
+      embed_url: rich_media["embed_url"] || "",
+      blurhash: nil,
+      published_at: nil,
       pleroma: %{
         opengraph:
           rich_media
@@ -698,6 +709,20 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       }) do
     %{content: content, detected_source_language: detected_source_language, provider: provider}
   end
+
+  defp card_type(type) when type in ["link", "photo", "video", "rich"], do: type
+  defp card_type(_), do: "link"
+
+  defp card_dimension(value) when is_integer(value) and value >= 0, do: value
+
+  defp card_dimension(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {dimension, ""} when dimension >= 0 -> dimension
+      _ -> 0
+    end
+  end
+
+  defp card_dimension(_), do: 0
 
   def get_reply_to(activity, %{replied_to_activities: replied_to_activities}) do
     object = Object.normalize(activity, fetch: false)
