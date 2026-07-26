@@ -1,0 +1,31 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/attachment-payto-link",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:43:00Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-attachment-payto-link",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:43:00Z",
+    "content": "Payment Link",
+    "attachment": {
+      "type": "Link",
+      "name": "Donate",
+      "href": "payto://iban/DE75512108001245126199",
+      "rel": "payment"
+    }
+  }
+}
+
