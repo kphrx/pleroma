@@ -1,0 +1,1 @@
+Fix preferred frontend not working due to InstanceStatic plug prematurely returning HTTP 404

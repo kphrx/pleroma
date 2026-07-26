@@ -1,6 +1,7 @@
 when:
   - event: pull_request
     path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**" ]
+    evaluate: 'CI_COMMIT_SOURCE_BRANCH != "weblate"'
   - event: push
     branch: ${CI_REPO_DEFAULT_BRANCH}
     path: [ "**/*.ex", "**/*.eex", "**/*.exs", "mix.lock", ".woodpecker/**" ]
@@ -18,15 +19,16 @@ variables:
     - 'printf "%s" "$CI_SCRIPT" | base64 -d > /tmp/ci-script.sh && /bin/sh -xe /tmp/ci-script.sh'
 
 steps:
-  unit-testing-elixir-1.18:
-    image: elixir:1.18-otp-27-alpine
+  unit-testing-elixir-1.19:
+    image: elixir:1.19-otp-28-alpine
     entrypoint: *script_file_entrypoint
     environment:
       MIX_ENV: test
+      VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
       DB_HOST: postgres
       DB_PORT: 5432
     commands:
-      - apk add --no-cache build-base cmake exiftool ffmpeg file-dev git openssl
+      - apk add --no-cache build-base cmake exiftool ffmpeg vips-dev file-dev git openssl
       - adduser -D -h /home/testuser testuser
       - mkdir -p /home/testuser/.mix /home/testuser/.hex
       - chown -R testuser:testuser . /home/testuser

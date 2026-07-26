@@ -1,0 +1,1 @@
+Echo Mastodon-style `Sec-WebSocket-Protocol` tokens in streaming WebSocket handshakes.

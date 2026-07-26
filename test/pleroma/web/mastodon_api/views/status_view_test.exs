@@ -668,6 +668,23 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
       assert expected == StatusView.render("attachment.json", %{attachment: object})
       assert_schema(expected, "Attachment", api_spec)
     end
+
+    test "uses the ActivityStreams image type when the MIME type is generic" do
+      object = %{
+        "type" => "Image",
+        "url" => [
+          %{
+            "mediaType" => "application/octet-stream",
+            "href" => "https://example.com/extensionless"
+          }
+        ]
+      }
+
+      attachment = StatusView.render("attachment.json", %{attachment: object})
+
+      assert attachment.type == "image"
+      assert attachment.pleroma.mime_type == "application/octet-stream"
+    end
   end
 
   test "put the url advertised in the Activity in to the url attribute" do

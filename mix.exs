@@ -15,6 +15,13 @@ defmodule Pleroma.Mixfile do
       aliases: aliases(),
       deps: deps(),
       test_coverage: [tool: :covertool, summary: true],
+      test_ignore_filters: [
+        "test/credo/check/consistency/file_location.ex",
+        "test/fixtures/config/temp.exported_from_db.secret.exs",
+        "test/fixtures/config/temp.secret.exs",
+        "test/fixtures/modules/good_mrf.ex",
+        "test/fixtures/modules/runtime_module.ex"
+      ],
       # Docs
       name: "Pleroma",
       homepage_url: "https://pleroma.social/",
@@ -147,8 +154,8 @@ defmodule Pleroma.Mixfile do
       {:cachex, "~> 3.6"},
       {:tesla, "~> 1.15"},
       {:castore, "~> 1.0"},
-      {:cowlib, "~> 2.15"},
-      {:gun, "~> 2.2"},
+      {:cowlib, "~> 2.17.1"},
+      {:gun, "~> 2.4.1"},
       {:finch, "~> 0.20"},
       {:jason, "~> 1.4"},
       {:mogrify, "~> 0.9.3", override: true},

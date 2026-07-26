@@ -4,9 +4,11 @@
 
 defmodule Pleroma.Web.ActivityPub.MRF.NormalizeMarkup do
   @moduledoc "Scrub configured hypertext markup"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.HTML
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @impl true
   def history_awareness, do: :auto

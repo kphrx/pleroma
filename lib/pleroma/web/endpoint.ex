@@ -9,8 +9,8 @@ defmodule Pleroma.Web.Endpoint do
 
   alias Pleroma.Config
 
-  socket("/api/v1/streaming", Pleroma.Web.MastodonAPI.WebsocketHandler,
-    longpoll: false,
+  plug(Pleroma.Web.MastodonAPI.WebsocketPlug,
+    path: "/api/v1/streaming",
     websocket: [
       path: "/",
       compress: false,
@@ -139,6 +139,8 @@ defmodule Pleroma.Web.Endpoint do
     from: {:pleroma, "priv/static/adminfe/"}
   )
 
+  plug(Pleroma.Web.Plugs.StaticNotFoundPlug)
+
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
   if code_reloading? do
@@ -169,8 +171,7 @@ defmodule Pleroma.Web.Endpoint do
       else: "pleroma_key"
 
   extra =
-    Config.get([__MODULE__, :extra_cookie_attrs])
-    |> Enum.join(";")
+    Enum.join(Config.get([__MODULE__, :extra_cookie_attrs]), ";")
 
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
