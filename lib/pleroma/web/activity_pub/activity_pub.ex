@@ -30,6 +30,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   import Ecto.Query
   import Pleroma.Web.ActivityPub.Utils
   import Pleroma.Web.ActivityPub.Visibility
+  import Pleroma.Webhook.Notify, only: [trigger_webhooks: 2]
 
   require Logger
   require Pleroma.Constants
@@ -415,7 +416,9 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     with flag_data <- make_flag_data(params, additional),
          {:ok, activity} <- insert(flag_data, local),
          _ <- notify_and_stream(activity),
-         :ok <- maybe_federate(activity) do
+         _ <- trigger_webhooks(activity, :"report.created"),
+         :ok <-
+           maybe_federate(activity) do
       User.all_users_with_privilege(:reports_manage_reports)
       |> Enum.filter(fn user -> user.ap_id != actor end)
       |> Enum.filter(fn user -> not is_nil(user.email) end)
