@@ -89,7 +89,7 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
     end
 
     test "static search settings remain in the config file" do
-      MixTask.migrate_to_db("test/fixtures/config/static_search.secret.exs")
+      MixTask.migrate_to_db("test/fixtures/config/static_search.config")
 
       refute ConfigDB.get_by_group_and_key(:pleroma, Pleroma.Search)
       refute ConfigDB.get_by_group_and_key(:pleroma, Pleroma.Search.ParadeDB)
