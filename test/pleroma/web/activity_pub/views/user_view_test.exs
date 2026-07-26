@@ -220,5 +220,13 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
                "acceptsChatMessages"
              )
     end
+
+    test "it returns false if chat is disabled" do
+      clear_config([Pleroma.Chat, :enabled], false)
+      user = insert(:user, accepts_chat_messages: true)
+
+      assert %{"capabilities" => %{"acceptsChatMessages" => false}} =
+               UserView.render("user.json", user: user)
+    end
   end
 end

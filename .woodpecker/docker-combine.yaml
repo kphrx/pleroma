@@ -27,7 +27,7 @@ steps:
     settings: &docker_settings
       registry: "git.pleroma.social"
       image: "pleroma/pleroma"
-      architectures: [amd64, arm64]
+      architectures: [amd64, arm64, armv7]
       tags:
         - latest
         - develop

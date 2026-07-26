@@ -2728,6 +2728,19 @@ config :pleroma, :config_description, [
   },
   %{
     group: :pleroma,
+    key: Pleroma.Chat,
+    type: :group,
+    description: "Pleroma Chat settings",
+    children: [
+      %{
+        key: :enabled,
+        type: :boolean,
+        description: "Enables the chats API."
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
     key: :http,
     label: "HTTP",
     type: :group,
@@ -2910,7 +2923,7 @@ config :pleroma, :config_description, [
     key: Pleroma.Web.Plugs.RemoteIp,
     type: :group,
     description: """
-    `Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://git.pleroma.social/pleroma/remote_ip) but with runtime configuration.
+    `Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://hex.pm/packages/remote_ip) but with runtime configuration.
     **If your instance is not behind at least one reverse proxy, you should not enable this plug.**
     """,
     children: [
@@ -2925,6 +2938,12 @@ config :pleroma, :config_description, [
         description: """
           A list of strings naming the HTTP headers to use when deriving the true client IP. Default: `["x-forwarded-for"]`.
         """
+      },
+      %{
+        key: :clients,
+        type: {:list, :string},
+        description:
+          "A list of client IPs or subnets in CIDR notation. These will not be treated as proxies or reserved ranges. Defaults to `[]`. IPv4 entries without a bitmask will be assumed to be /32 and IPv6 /128."
       },
       %{
         key: :proxies,
@@ -3079,8 +3098,15 @@ config :pleroma, :config_description, [
       %{
         key: :max_connections,
         type: :integer,
-        description: "Maximum number of connections in the pool. Default: 250 connections.",
+        description:
+          "Maximum total number of connections in the pool. HTTP/1 origins may use multiple connections within this limit, while HTTP/2 connections are multiplexed. Default: 250 connections.",
         suggestions: [250]
+      },
+      %{
+        key: :max_idle_time,
+        type: :integer,
+        description: "Time before an unused connection is closed. Default: 30000ms.",
+        suggestions: [30_000]
       },
       %{
         key: :connect_timeout,

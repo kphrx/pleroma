@@ -12,6 +12,7 @@ matrix:
   platform:
     - linux/amd64
     - linux/arm64
+    - linux/arm
 
 # This is needed for the when clauses below.
 labels:
@@ -26,11 +27,19 @@ variables:
       from_secret: pleroma-ci-user
     password:
       from_secret: pleroma-ci-password
-  kaniko_image: &kaniko_image woodpeckerci/plugin-kaniko:2.3.1
+  armv7_docker_variables: &armv7_docker_variables
+    <<: *docker_variables
+    build_args:
+      - ELIXIR_IMG=docker.io/arm32v7/elixir
+      - ELIXIR_TAG=1.17.3-otp-26-alpine
+      - ALPINE_IMG=docker.io/arm32v7/alpine
+      - ALPINE_VER=3.20
+    extra_opts: --custom-platform=linux/arm/v7
+  kaniko_image: &kaniko_image docker.io/woodpeckerci/plugin-kaniko:2.3.2
 
 steps:
   docker-develop-amd64:
-    image: woodpeckerci/plugin-kaniko:2.3.1
+    image: *kaniko_image
     when:
       - evaluate: 'platform == "linux/amd64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
     settings:
@@ -41,7 +50,7 @@ steps:
         - ${CI_COMMIT_SHA:0:8}-amd64
 
   docker-develop-arm64:
-    image: woodpeckerci/plugin-kaniko:2.3.1
+    image: *kaniko_image
     when:
       - evaluate: 'platform == "linux/arm64" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
     settings:
@@ -50,6 +59,17 @@ steps:
         - latest-arm64
         - develop-arm64
         - ${CI_COMMIT_SHA:0:8}-arm64
+
+  docker-develop-armv7:
+    image: *kaniko_image
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_COMMIT_BRANCH == "${CI_REPO_DEFAULT_BRANCH}"'
+    settings:
+      <<: *armv7_docker_variables
+      tags:
+        - latest-armv7
+        - develop-armv7
+        - ${CI_COMMIT_SHA:0:8}-armv7
 
   docker-stable-amd64:
     image: *kaniko_image
@@ -61,6 +81,18 @@ steps:
         - latest-amd64
         - stable-amd64
         - ${CI_COMMIT_SHA:0:8}-amd64
+
+  # FE workflow runs only on linux/amd64
+  docker-stable-e2e-amd64:
+    image: *kaniko_image
+    when:
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "tag"'
+      - evaluate: 'platform == "linux/amd64" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable"'
+    settings:
+      <<: *docker_variables
+      dockerfile: Dockerfile-e2e
+      tags:
+        - stable-e2e
 
   docker-stable-tag-amd64:
     image: *kaniko_image
@@ -94,3 +126,25 @@ steps:
       tags:
         - <<: *arm64_tags
         - ${CI_COMMIT_TAG}-arm64
+
+  docker-stable-armv7:
+    image: *kaniko_image
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG == ""'
+    settings:
+      <<: *armv7_docker_variables
+      tags: &armv7_tags
+        - latest-armv7
+        - stable-armv7
+        - ${CI_COMMIT_SHA:0:8}-armv7
+
+  docker-stable-tag-armv7:
+    image: *kaniko_image
+    when:
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "tag"'
+      - evaluate: 'platform == "linux/arm" && CI_PIPELINE_EVENT == "manual" && CI_COMMIT_BRANCH == "stable" && CI_COMMIT_TAG != ""'
+    settings:
+      <<: *armv7_docker_variables
+      tags:
+        - <<: *armv7_tags
+        - ${CI_COMMIT_TAG}-armv7

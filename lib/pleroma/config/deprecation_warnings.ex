@@ -20,6 +20,8 @@ defmodule Pleroma.Config.DeprecationWarnings do
      "\n* `config :pleroma, :instance, mrf_transparency_exclusions` is now `config :pleroma, :mrf, transparency_exclusions`"}
   ]
 
+  @logger_formatter_config_knobs [:colors, :format, :metadata, :truncate, :utc_log]
+
   def check_exiftool_filter do
     filters = Config.get([Pleroma.Upload]) |> Keyword.get(:filters, [])
 
@@ -218,7 +220,8 @@ defmodule Pleroma.Config.DeprecationWarnings do
       check_quarantined_instances_tuples(),
       check_transparency_exclusions_tuples(),
       check_simple_policy_tuples(),
-      check_exiftool_filter()
+      check_exiftool_filter(),
+      check_deprecated_logger_config()
     ]
     |> Enum.reduce(:ok, fn
       :ok, :ok -> :ok
@@ -414,5 +417,73 @@ defmodule Pleroma.Config.DeprecationWarnings do
     else
       :ok
     end
+  end
+
+  defp merge_deprecated_logger_config(config) do
+    formatter_config = Enum.filter(config, fn {k, _} -> k in @logger_formatter_config_knobs end)
+    formatter = Logger.default_formatter(formatter_config)
+    log_level = Keyword.get(config, :level, nil)
+
+    Logger.debug("""
+    Reconfiguring console Logger with deprecated configuration syntax.
+      Handler configuration:
+        log_level: #{inspect(log_level)}
+
+      Formatter:
+        #{inspect(formatter)}
+    """)
+
+    if Config.get(:env) != :test do
+      if log_level, do: :logger.update_handler_config(:default, :level, log_level)
+      :logger.set_handler_config(:default, :formatter, formatter)
+    end
+  end
+
+  @spec check_deprecated_logger_config() :: :ok | :error
+  def check_deprecated_logger_config do
+    backends_config = Application.get_env(:logger, :backends)
+    console_config = Application.get_env(:logger, :console)
+
+    # NOTE: No need to merge the old backends config since it still works.
+    # And new configuration will just add new Logger backends.
+    backend =
+      if backends_config do
+        Logger.warning("""
+        !!!DEPRECATION WARNING!!!
+        Your configuration is using deprecated syntax for configuring backends of Elixir's logger.
+        `config :logger, backends: [...]` is deprecated syntax due to changes in Elixir.
+        Please update your configuration at your earliest convenience to use:
+          `config :pleroma, :logger, backends: [...]`
+
+        Note: `:console` is no longer considered a backend and is used by default, you can disable it using:
+          `config :logger, :default_handler: false`
+        """)
+
+        true
+      else
+        false
+      end
+
+    console =
+      if console_config do
+        Logger.warning("""
+        !!!DEPRECATION WARNING!!!
+        Your configuration is using deprecated syntax for configuring logging to console.
+        `config :logger, :console` is deprecated syntax due to changes in Elixir.
+        Please update your configuration at your earliest convenience to use
+          `config :logger, default_handler` and `config :logger, :default_formatter`.
+
+        Note: `:default_handler` is used only for the `level` setting. All other configurations go under
+        `:default_formatter`. For more info visit: https://hexdocs.pm/logger/Logger.html#module-backends-and-backwards-compatibility
+        """)
+
+        merge_deprecated_logger_config(console_config)
+
+        true
+      else
+        false
+      end
+
+    if backend or console, do: :error, else: :ok
   end
 end

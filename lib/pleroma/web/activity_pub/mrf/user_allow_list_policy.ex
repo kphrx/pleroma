@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.UserAllowListPolicy do
-  alias Pleroma.Config
-
   @moduledoc "Accept-list of users from specified instances"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  alias Pleroma.Config
+
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp filter_by_list(activity, []), do: {:ok, activity}
 
