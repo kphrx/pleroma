@@ -221,9 +221,12 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     Pleroma.ReverseProxy.Client.Hackney.close(client)
   end
 
+  # proxy: false so a proxy in the build environment cannot turn these into
+  # tunnelled requests, which are never pooled and would defeat the point.
   defp direct_opts(tls_server) do
     [
       pool: :media,
+      proxy: false,
       ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,

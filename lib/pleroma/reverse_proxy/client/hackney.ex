@@ -149,8 +149,13 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
   # checked in, and parks in `connected` with no idle timeout, so it leaks
   # forever unless we stop it ourselves.
   defp pooled?(opts) do
-    is_nil(Keyword.get(opts, :proxy)) and use_pool?(Keyword.get(opts, :pool))
+    no_proxy?(Keyword.get(opts, :proxy)) and use_pool?(Keyword.get(opts, :pool))
   end
+
+  # Hackney reads `false` as "no proxy", same as an absent option.
+  defp no_proxy?(nil), do: true
+  defp no_proxy?(false), do: true
+  defp no_proxy?(_proxy), do: false
 
   defp use_pool?(false), do: false
   defp use_pool?(nil), do: Application.get_env(:hackney, :use_default_pool, true)

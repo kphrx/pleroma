@@ -25,7 +25,7 @@ defmodule Pleroma.HTTP.HackneyMaxBodyRegressionTest do
   defp request(url, extra_opts) do
     adapter_opts =
       HackneyAdapterHelper.options(
-        [pool: :media, no_proxy_env: true] ++ extra_opts,
+        [pool: :media, proxy: false] ++ extra_opts,
         URI.parse(url)
       )
 
@@ -71,7 +71,7 @@ defmodule Pleroma.HTTP.HackneyMaxBodyRegressionTest do
 
     adapter_opts =
       HackneyAdapterHelper.options(
-        [pool: :media, no_proxy_env: true, max_body: 1024],
+        [pool: :media, proxy: false, max_body: 1024],
         URI.parse(url)
       )
 
