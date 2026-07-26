@@ -14,7 +14,8 @@ defmodule Mix.Pleroma do
     :swoosh,
     :timex,
     :fast_html,
-    :oban
+    :oban,
+    :logger_backends
   ]
   @cachex_children ["object", "user", "scrubber", "web_resp"]
   @doc "Common functions to be reused in mix tasks"
@@ -25,7 +26,11 @@ defmodule Mix.Pleroma do
     Application.put_env(:phoenix, :serve_endpoints, false, persistent: true)
 
     unless System.get_env("DEBUG") do
-      Logger.remove_backend(:console)
+      try do
+        Logger.remove_backend(:console)
+      catch
+        :exit, _ -> :ok
+      end
     end
 
     adapter = Application.get_env(:tesla, :adapter)

@@ -3,9 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.ForceBotUnlistedPolicy do
-  alias Pleroma.User
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
   @moduledoc "Remove bot posts from federated timeline"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  alias Pleroma.User
+
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   require Pleroma.Constants
 
@@ -22,7 +25,7 @@ defmodule Pleroma.Web.ActivityPub.MRF.ForceBotUnlistedPolicy do
           "cc" => cc,
           "actor" => actor,
           "object" => object
-        } = message
+        } = activity
       ) do
     user = User.get_cached_by_ap_id(actor)
     isbot = check_if_bot(user)
@@ -36,20 +39,20 @@ defmodule Pleroma.Web.ActivityPub.MRF.ForceBotUnlistedPolicy do
         |> Map.put("to", to)
         |> Map.put("cc", cc)
 
-      message =
-        message
+      activity =
+        activity
         |> Map.put("to", to)
         |> Map.put("cc", cc)
         |> Map.put("object", object)
 
-      {:ok, message}
+      {:ok, activity}
     else
-      {:ok, message}
+      {:ok, activity}
     end
   end
 
   @impl true
-  def filter(message), do: {:ok, message}
+  def filter(activity), do: {:ok, activity}
 
   @impl true
   def describe, do: {:ok, %{}}

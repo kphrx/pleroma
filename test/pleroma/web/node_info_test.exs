@@ -24,6 +24,19 @@ defmodule Pleroma.Web.NodeInfoTest do
       |> get(href)
       |> json_response(200)
     end)
+
+    accept_types = [
+      "application/activity+json",
+      "application/json",
+      "application/jrd+json"
+    ]
+
+    for type <- accept_types do
+      conn
+      |> put_req_header("accept", type)
+      |> get("/.well-known/nodeinfo")
+      |> json_response(200)
+    end
   end
 
   test "nodeinfo shows staff accounts", %{conn: conn} do
@@ -147,6 +160,7 @@ defmodule Pleroma.Web.NodeInfoTest do
     default_features = [
       "pleroma_api",
       "mastodon_api",
+      "mastodon_api_grouped_notifications",
       "mastodon_api_streaming",
       "polls",
       "pleroma_explicit_addressing",

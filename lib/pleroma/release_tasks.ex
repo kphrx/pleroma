@@ -5,7 +5,10 @@
 defmodule Pleroma.ReleaseTasks do
   @repo Pleroma.Repo
 
-  def run(args) do
+  # TODO: Kept for some backwards compatibility with buggy pleroma_ctl,
+  # if a mismatch between pleroma_ctl and Pleroma accidentaly happens.
+  # Remove in the future.
+  def run(args) when is_binary(args) do
     [task | args] = String.split(args)
 
     case task do
@@ -16,17 +19,38 @@ defmodule Pleroma.ReleaseTasks do
     end
   end
 
+  # HACK: Script arguments need to be received as a list, otherwise (quoted) arguments with
+  # whitespace will be broken. Previously the broken string form above was used,
+  # escaping in the shell does not help.
+  def run(args) when is_list(args) do
+    [task | args] = args
+
+    case task do
+      "migrate" -> migrate(args)
+      "create" -> create()
+      "rollback" -> rollback(args)
+      task -> mix_task(task, args)
+    end
+  end
+
+  def find_module(task) do
+    module_name =
+      task
+      |> String.split(".")
+      |> Enum.map(&String.capitalize/1)
+      |> then(fn x -> [Mix, Tasks, Pleroma] ++ x end)
+      |> Module.concat()
+
+    case Code.ensure_loaded(module_name) do
+      {:module, _} -> module_name
+      _ -> nil
+    end
+  end
+
   defp mix_task(task, args) do
     Application.load(:pleroma)
-    {:ok, modules} = :application.get_key(:pleroma, :modules)
 
-    module =
-      Enum.find(modules, fn module ->
-        module = Module.split(module)
-
-        match?(["Mix", "Tasks", "Pleroma" | _], module) and
-          String.downcase(List.last(module)) == task
-      end)
+    module = find_module(task)
 
     if module do
       module.run(args)

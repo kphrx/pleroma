@@ -145,6 +145,9 @@ See [Admin-API](admin_api.md)
 
 ## `/api/v1/pleroma/accounts/:id/subscribe`
 ### Subscribe to receive notifications for all statuses posted by a user
+
+Deprecated. `notify` parameter in `POST /api/v1/accounts/:id/follow` should be used instead.
+
 * Method `POST`
 * Authentication: required
 * Params:
@@ -171,6 +174,9 @@ See [Admin-API](admin_api.md)
 
 ## `/api/v1/pleroma/accounts/:id/unsubscribe`
 ### Unsubscribe to stop receiving notifications from user statuses
+
+Deprecated. `notify` parameter in `POST /api/v1/accounts/:id/follow` should be used instead.
+
 * Method `POST`
 * Authentication: required
 * Params:
@@ -665,6 +671,7 @@ Audio scrobbling in Pleroma is **deprecated**.
        "artist": "Some Artist",
        "album": "Some Album",
        "length": 180000,
+       "external_link": "https://www.last.fm/music/Some+Artist/_/Some+Title",
        "created_at": "2019-09-28T12:40:45.000Z"
    }
 ]
@@ -677,11 +684,13 @@ Audio scrobbling in Pleroma is **deprecated**.
 ### Creates a new Listen activity for an account
 * Method `POST`
 * Authentication: required
+* OAuth scope: `write:scrobbles`
 * Params:
   * `title`: the title of the media playing
   * `album`: the album of the media playing [optional]
   * `artist`: the artist of the media playing [optional]
   * `length`: the length of the media playing [optional]
+  * `external_link`: a URL referencing the media playing [optional]
 * Response: the newly created media metadata entity representing the Listen activity
 
 # Emoji Reactions

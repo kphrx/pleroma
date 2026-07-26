@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.UserViewTest do
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
   import Pleroma.Factory
 
   alias Pleroma.User
@@ -68,6 +68,23 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
     result = UserView.render("user.json", %{user: user})
     assert result["icon"]["url"] == "https://someurl"
     assert result["image"]["url"] == "https://somebanner"
+
+    refute result["icon"]["name"]
+    refute result["image"]["name"]
+  end
+
+  test "Avatar has a description if the user set one" do
+    user =
+      insert(:user,
+        avatar: %{
+          "url" => [%{"href" => "https://someurl"}],
+          "name" => "a drawing of pleroma-tan using pleroma groups"
+        }
+      )
+
+    result = UserView.render("user.json", %{user: user})
+
+    assert result["icon"]["name"] == "a drawing of pleroma-tan using pleroma groups"
   end
 
   test "renders an invisible user with the invisible property set to true" do
@@ -138,7 +155,7 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
     test "sets totalItems to zero when followers are hidden" do
       user = insert(:user)
       other_user = insert(:user)
-      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, _other_user, _activity} = CommonAPI.follow(user, other_user)
       assert %{"totalItems" => 1} = UserView.render("followers.json", %{user: user})
       user = Map.merge(user, %{hide_followers_count: true, hide_followers: true})
       refute UserView.render("followers.json", %{user: user}) |> Map.has_key?("totalItems")
@@ -147,10 +164,22 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
     test "sets correct totalItems when followers are hidden but the follower counter is not" do
       user = insert(:user)
       other_user = insert(:user)
-      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
+      {:ok, user, _other_user, _activity} = CommonAPI.follow(user, other_user)
       assert %{"totalItems" => 1} = UserView.render("followers.json", %{user: user})
       user = Map.merge(user, %{hide_followers_count: false, hide_followers: true})
       assert %{"totalItems" => 1} = UserView.render("followers.json", %{user: user})
+    end
+
+    test "does not hide follower items based on `hide_follows`" do
+      user = insert(:user)
+      follower = insert(:user)
+      {:ok, user, _follower, _activity} = CommonAPI.follow(user, follower)
+
+      user = Map.merge(user, %{hide_followers: false, hide_follows: true})
+      follower_ap_id = follower.ap_id
+
+      assert %{"first" => %{"orderedItems" => [^follower_ap_id]}} =
+               UserView.render("followers.json", %{user: user})
     end
   end
 
@@ -158,7 +187,7 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
     test "sets totalItems to zero when follows are hidden" do
       user = insert(:user)
       other_user = insert(:user)
-      {:ok, user, _other_user, _activity} = CommonAPI.follow(user, other_user)
+      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
       assert %{"totalItems" => 1} = UserView.render("following.json", %{user: user})
       user = Map.merge(user, %{hide_follows_count: true, hide_follows: true})
       assert %{"totalItems" => 0} = UserView.render("following.json", %{user: user})
@@ -167,7 +196,7 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
     test "sets correct totalItems when follows are hidden but the follow counter is not" do
       user = insert(:user)
       other_user = insert(:user)
-      {:ok, user, _other_user, _activity} = CommonAPI.follow(user, other_user)
+      {:ok, _other_user, user, _activity} = CommonAPI.follow(other_user, user)
       assert %{"totalItems" => 1} = UserView.render("following.json", %{user: user})
       user = Map.merge(user, %{hide_follows_count: false, hide_follows: true})
       assert %{"totalItems" => 1} = UserView.render("following.json", %{user: user})
@@ -190,6 +219,14 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
                UserView.render("user.json", user: nil_user)["capabilities"],
                "acceptsChatMessages"
              )
+    end
+
+    test "it returns false if chat is disabled" do
+      clear_config([Pleroma.Chat, :enabled], false)
+      user = insert(:user, accepts_chat_messages: true)
+
+      assert %{"capabilities" => %{"acceptsChatMessages" => false}} =
+               UserView.render("user.json", user: user)
     end
   end
 end

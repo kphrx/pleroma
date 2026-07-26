@@ -9,11 +9,11 @@ defmodule Pleroma.Gun.ConnectionPool.Reclaimer do
 
   def start_monitor do
     pid =
-      case GenServer.start_link(__MODULE__, [], name: {:via, Registry, {registry(), "reclaimer"}}) do
+      case GenServer.start(__MODULE__, [], name: __MODULE__) do
         {:ok, pid} ->
           pid
 
-        {:error, {:already_registered, pid}} ->
+        {:error, {:already_started, pid}} ->
           pid
       end
 
@@ -41,16 +41,15 @@ defmodule Pleroma.Gun.ConnectionPool.Reclaimer do
       reclaim_max: reclaim_max
     })
 
-    # :ets.fun2ms(
-    # fn {_, {worker_pid, {_, used_by, crf, last_reference}}} when used_by == [] ->
-    #   {worker_pid, crf, last_reference} end)
-    unused_conns =
+    workers =
       Registry.select(
         registry(),
         [
-          {{:_, :"$1", {:_, :"$2", :"$3", :"$4"}}, [{:==, :"$2", []}], [{{:"$1", :"$3", :"$4"}}]}
+          {{:_, :"$1", {:_, :_}}, [], [:"$1"]}
         ]
       )
+
+    unused_conns = Enum.flat_map(workers, &reclaim_info/1)
 
     case unused_conns do
       [] ->
@@ -65,25 +64,43 @@ defmodule Pleroma.Gun.ConnectionPool.Reclaimer do
         {:stop, :no_unused_conns, nil}
 
       unused_conns ->
-        reclaimed =
+        reclaimed_count =
           unused_conns
-          |> Enum.sort(fn {_pid1, crf1, last_reference1}, {_pid2, crf2, last_reference2} ->
-            crf1 <= crf2 and last_reference1 <= last_reference2
-          end)
-          |> Enum.take(reclaim_max)
+          |> Enum.sort_by(fn {_pid, crf, last_reference} -> {crf, last_reference} end)
+          |> Enum.reduce_while(0, fn
+            _worker, count when count == reclaim_max ->
+              {:halt, count}
 
-        reclaimed
-        |> Enum.each(fn {pid, _, _} ->
-          DynamicSupervisor.terminate_child(Pleroma.Gun.ConnectionPool.WorkerSupervisor, pid)
-        end)
+            {worker_pid, _crf, _last_reference}, count ->
+              if reclaim(worker_pid), do: {:cont, count + 1}, else: {:cont, count}
+          end)
 
         :telemetry.execute(
           [:pleroma, :connection_pool, :reclaim, :stop],
-          %{reclaimed_count: Enum.count(reclaimed)},
+          %{reclaimed_count: reclaimed_count},
           %{max_connections: max_connections}
         )
 
         {:stop, :normal, nil}
+    end
+  end
+
+  defp reclaim_info(worker_pid) do
+    try do
+      case GenServer.call(worker_pid, :reclaim_info) do
+        {:idle, crf, last_reference} -> [{worker_pid, crf, last_reference}]
+        :in_use -> []
+      end
+    catch
+      :exit, _ -> []
+    end
+  end
+
+  defp reclaim(worker_pid) do
+    try do
+      GenServer.call(worker_pid, :reclaim) == :reclaimed
+    catch
+      :exit, _ -> false
     end
   end
 end

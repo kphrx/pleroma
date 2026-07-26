@@ -29,7 +29,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateHandlingTest do
       assert {:ok, _update, []} = ObjectValidator.validate(valid_update, [])
     end
 
-    test "returns an error if the object can't be updated by the actor", %{
+    test "returns an error if the object can't be updated by the actor (different domain)", %{
       valid_update: valid_update
     } do
       other_user = insert(:user, local: false)
@@ -41,26 +41,71 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateHandlingTest do
       assert {:error, _cng} = ObjectValidator.validate(update, [])
     end
 
-    test "validates as long as the object is same-origin with the actor", %{
+    test "returns an error if the object can't be updated by the actor (same domain)", %{
+      user: user,
       valid_update: valid_update
     } do
-      other_user = insert(:user)
+      user_ap_id = user.ap_id
+      user_domain = URI.parse(user_ap_id).host
+      other_user = insert(:user, local: false, domain: user_domain)
 
       update =
         valid_update
         |> Map.put("actor", other_user.ap_id)
 
-      assert {:ok, _update, []} = ObjectValidator.validate(update, [])
+      assert {:error, _cng} = ObjectValidator.validate(update, [])
     end
 
-    test "validates if the object is not of an Actor type" do
-      note = insert(:note)
+    test "validates if the object is not of an Actor type", %{user: user} do
+      note = insert(:note, user: user)
       updated_note = note.data |> Map.put("content", "edited content")
-      other_user = insert(:user)
 
-      {:ok, update, _} = Builder.update(other_user, updated_note)
+      {:ok, update, _} = Builder.update(user, updated_note)
 
       assert {:ok, _update, _} = ObjectValidator.validate(update, [])
+    end
+
+    test "returns an error if the remote update target is unknown" do
+      remote_user = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+
+      update = %{
+        "type" => "Update",
+        "actor" => remote_user.ap_id,
+        "id" => "https://example.com/activities/update-unknown-object",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => %{
+          "type" => "Note",
+          "id" => "https://example.com/objects/unknown",
+          "actor" => remote_user.ap_id,
+          "content" => "edited content",
+          "published" => "2024-07-25T13:33:31Z",
+          "updated" => "2024-07-25T13:34:31Z",
+          "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+          "cc" => []
+        }
+      }
+
+      assert {:error, %Ecto.Changeset{} = cng} = ObjectValidator.validate(update, local: false)
+      refute cng.valid?
+      assert Keyword.has_key?(cng.errors, :object)
+    end
+
+    test "returns an error if the remote update target IRI is unknown" do
+      remote_user = insert(:user, local: false, ap_id: "https://example.com/users/alice")
+
+      update = %{
+        "type" => "Update",
+        "actor" => remote_user.ap_id,
+        "id" => "https://example.com/activities/update-unknown-object-iri",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => [],
+        "object" => "https://example.com/objects/unknown-iri"
+      }
+
+      assert {:error, %Ecto.Changeset{} = cng} = ObjectValidator.validate(update, local: false)
+      refute cng.valid?
+      assert Keyword.has_key?(cng.errors, :object)
     end
   end
 
@@ -132,8 +177,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UpdateHandlingTest do
     setup do
       user = insert(:user)
       {:ok, activity} = Pleroma.Web.CommonAPI.post(user, %{status: "mew mew :dinosaur:"})
-      {:ok, edit} = Pleroma.Web.CommonAPI.update(user, activity, %{status: "edited :blank:"})
-      {:ok, external_rep} = Pleroma.Web.ActivityPub.Transmogrifier.prepare_outgoing(edit.data)
+      {:ok, edit} = Pleroma.Web.CommonAPI.update(activity, user, %{status: "edited :blank:"})
+      {:ok, external_rep} = Pleroma.Web.ActivityPub.Transmogrifier.prepare_activity(edit.data)
       %{external_rep: external_rep}
     end
 

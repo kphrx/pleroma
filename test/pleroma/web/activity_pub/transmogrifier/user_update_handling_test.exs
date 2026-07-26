@@ -50,6 +50,25 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.UserUpdateHandlingTest do
     assert user.bio == "<p>Some bio</p>"
   end
 
+  test "it selects an actor type after an extension type" do
+    user = insert(:user, local: false)
+    update_data = File.read!("test/fixtures/mastodon-update.json") |> Jason.decode!()
+
+    object =
+      update_data["object"]
+      |> Map.put("actor", user.ap_id)
+      |> Map.put("id", user.ap_id)
+      |> Map.put("type", ["https://example.com/ns#CustomActor", "Person"])
+
+    update_data =
+      update_data
+      |> Map.put("actor", user.ap_id)
+      |> Map.put("object", object)
+
+    assert {:ok, %Activity{local: false}} = Transmogrifier.handle_incoming(update_data)
+    assert User.get_cached_by_ap_id(user.ap_id).name == "gargle"
+  end
+
   test "it works with alsoKnownAs" do
     %{ap_id: actor} = insert(:user, local: false)
 
@@ -119,8 +138,8 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.UserUpdateHandlingTest do
     user = User.get_cached_by_ap_id(user.ap_id)
 
     assert user.fields == [
-             %{"name" => "foo", "value" => "updated"},
-             %{"name" => "foo1", "value" => "updated"}
+             %{"name" => "foo", "value" => "bar"},
+             %{"name" => "foo11", "value" => "bar11"}
            ]
 
     update_data =

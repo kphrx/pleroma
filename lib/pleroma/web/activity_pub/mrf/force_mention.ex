@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.ForceMention do
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
   require Pleroma.Constants
 
   alias Pleroma.Config
   alias Pleroma.Object
   alias Pleroma.User
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp get_author(url) do
     with %Object{data: %{"actor" => actor}} <- Object.normalize(url, fetch: false),
@@ -52,7 +53,7 @@ defmodule Pleroma.Web.ActivityPub.MRF.ForceMention do
   end
 
   @impl true
-  def filter(object), do: {:ok, object}
+  def filter(activity), do: {:ok, activity}
 
   @impl true
   def describe, do: {:ok, %{}}

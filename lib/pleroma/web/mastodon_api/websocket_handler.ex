@@ -22,7 +22,7 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
   # This only prepares the connection and is not in the process yet
   @impl Phoenix.Socket.Transport
   def connect(%{params: params} = transport_info) do
-    with access_token <- Map.get(params, "access_token"),
+    with access_token <- find_access_token(transport_info),
          {:ok, user, oauth_token} <- authenticate_request(access_token),
          {:ok, topic} <-
            Streamer.get_topic(params["stream"], user, oauth_token, params) do
@@ -67,9 +67,10 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
 
   @impl Phoenix.Socket.Transport
   def handle_in({text, [opcode: :text]}, state) do
-    with {:ok, %{} = event} <- Jason.decode(text) do
-      handle_client_event(event, state)
-    else
+    case Jason.decode(text) do
+      {:ok, %{} = event} ->
+        handle_client_event(event, state)
+
       _ ->
         Logger.error("#{__MODULE__} received non-JSON event: #{inspect(text)}")
         {:ok, state}
@@ -85,11 +86,11 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
   def handle_info({:render_with_user, view, template, item, topic}, state) do
     user = %User{} = User.get_cached_by_ap_id(state.user.ap_id)
 
-    unless Streamer.filtered_by_user?(user, item) do
+    if Streamer.filtered_by_user?(user, item) do
+      {:ok, state}
+    else
       message = view.render(template, item, user, topic)
       {:push, {:text, message}, %{state | user: user}}
-    else
-      {:ok, state}
     end
   end
 
@@ -104,7 +105,7 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
   end
 
   def handle_info(:close, state) do
-    {:stop, {:closed, 'connection closed by server'}, state}
+    {:stop, {:closed, ~c"connection closed by server"}, state}
   end
 
   def handle_info(msg, state) do
@@ -244,4 +245,21 @@ defmodule Pleroma.Web.MastodonAPI.WebsocketHandler do
   def handle_error(conn, _reason) do
     Plug.Conn.send_resp(conn, 404, "Not Found")
   end
+
+  defp find_access_token(%{connect_info: %{sec_websocket_headers: sec_headers}} = transport_info) do
+    find_sec_websocket_protocol(sec_headers) || find_access_token_from_params(transport_info)
+  end
+
+  defp find_access_token(transport_info), do: find_access_token_from_params(transport_info)
+
+  defp find_sec_websocket_protocol(sec_headers) do
+    Enum.find_value(sec_headers, fn
+      {"sec-websocket-protocol", protocols} -> protocols |> Plug.Conn.Utils.list() |> List.first()
+      _ -> nil
+    end)
+  end
+
+  defp find_access_token_from_params(%{params: %{"access_token" => token}}), do: token
+
+  defp find_access_token_from_params(_), do: nil
 end

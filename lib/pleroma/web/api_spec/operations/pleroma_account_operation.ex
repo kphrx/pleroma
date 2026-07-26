@@ -64,30 +64,13 @@ defmodule Pleroma.Web.ApiSpec.PleromaAccountOperation do
     }
   end
 
-  def endorsements_operation do
-    %Operation{
-      tags: ["Retrieve account information"],
-      summary: "Endorsements",
-      description: "Returns endorsed accounts",
-      operationId: "PleromaAPI.AccountController.endorsements",
-      parameters: [with_relationships_param(), id_param()],
-      responses: %{
-        200 =>
-          Operation.response(
-            "Array of Accounts",
-            "application/json",
-            AccountOperation.array_of_accounts()
-          ),
-        404 => Operation.response("Not Found", "application/json", ApiError)
-      }
-    }
-  end
-
   def subscribe_operation do
     %Operation{
+      deprecated: true,
       tags: ["Account actions"],
       summary: "Subscribe",
-      description: "Receive notifications for all statuses posted by the account.",
+      description:
+        "Receive notifications for all statuses posted by the account. Deprecated, use `notify: true` in follow operation instead.",
       operationId: "PleromaAPI.AccountController.subscribe",
       parameters: [id_param()],
       security: [%{"oAuth" => ["follow", "write:follows"]}],
@@ -100,9 +83,11 @@ defmodule Pleroma.Web.ApiSpec.PleromaAccountOperation do
 
   def unsubscribe_operation do
     %Operation{
+      deprecated: true,
       tags: ["Account actions"],
       summary: "Unsubscribe",
-      description: "Stop receiving notifications for all statuses posted by the account.",
+      description:
+        "Stop receiving notifications for all statuses posted by the account.  Deprecated, use `notify: false` in follow operation instead.",
       operationId: "PleromaAPI.AccountController.unsubscribe",
       parameters: [id_param()],
       security: [%{"oAuth" => ["follow", "write:follows"]}],

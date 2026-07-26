@@ -147,14 +147,22 @@ defmodule Pleroma.FollowingRelationship do
     |> Repo.aggregate(:count, :id)
   end
 
-  def get_follow_requests(%User{id: id}) do
+  def get_follow_requests_query(%User{id: id}) do
     __MODULE__
-    |> join(:inner, [r], f in assoc(r, :follower))
+    |> join(:inner, [r], f in assoc(r, :follower), as: :follower)
     |> where([r], r.state == ^:follow_pending)
     |> where([r], r.following_id == ^id)
-    |> where([r, f], f.is_active == true)
-    |> select([r, f], f)
-    |> Repo.all()
+    |> where([r, follower: f], f.is_active == true)
+    |> select([r, follower: f], f)
+  end
+
+  def get_outgoing_follow_requests_query(%User{id: id}) do
+    __MODULE__
+    |> join(:inner, [r], f in assoc(r, :following), as: :following)
+    |> where([r], r.state == ^:follow_pending)
+    |> where([r], r.follower_id == ^id)
+    |> where([r, following: f], f.is_active == true)
+    |> select([r, following: f], f)
   end
 
   def following?(%User{id: follower_id}, %User{id: followed_id}) do
@@ -199,8 +207,8 @@ defmodule Pleroma.FollowingRelationship do
     |> preload([:follower])
     |> Repo.all()
     |> Enum.map(fn following_relationship ->
-      Pleroma.Web.CommonAPI.follow(following_relationship.follower, target)
-      Pleroma.Web.CommonAPI.unfollow(following_relationship.follower, origin)
+      Pleroma.Web.CommonAPI.follow(target, following_relationship.follower)
+      Pleroma.Web.CommonAPI.unfollow(origin, following_relationship.follower)
     end)
     |> case do
       [] ->

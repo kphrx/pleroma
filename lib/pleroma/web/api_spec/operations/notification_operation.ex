@@ -4,7 +4,6 @@
 
 defmodule Pleroma.Web.ApiSpec.NotificationOperation do
   alias OpenApiSpex.Operation
-  alias OpenApiSpex.Operation
   alias OpenApiSpex.Schema
   alias Pleroma.Web.ApiSpec.Schemas.Account
   alias Pleroma.Web.ApiSpec.Schemas.ApiError
@@ -91,6 +90,79 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
     }
   end
 
+  def grouped_index_operation do
+    %Operation{
+      tags: ["Notifications"],
+      summary: "Retrieve grouped notifications",
+      description: "Notifications concerning the user, grouped by supported notification types.",
+      operationId: "NotificationController.grouped_index",
+      security: [%{"oAuth" => ["read:notifications"]}],
+      parameters: grouped_notification_params() ++ pagination_params(),
+      responses: %{
+        200 => Operation.response("Grouped notifications", "application/json", grouped_result()),
+        404 => Operation.response("Error", "application/json", ApiError)
+      }
+    }
+  end
+
+  def show_group_operation do
+    %Operation{
+      tags: ["Notifications"],
+      summary: "Retrieve a notification group",
+      operationId: "NotificationController.show_group",
+      security: [%{"oAuth" => ["read:notifications"]}],
+      parameters: [group_key_param()],
+      responses: %{
+        200 => Operation.response("Grouped notifications", "application/json", grouped_result()),
+        404 => Operation.response("Error", "application/json", ApiError)
+      }
+    }
+  end
+
+  def group_accounts_operation do
+    %Operation{
+      tags: ["Notifications"],
+      summary: "Retrieve notification group accounts",
+      operationId: "NotificationController.group_accounts",
+      security: [%{"oAuth" => ["read:notifications"]}],
+      parameters: [group_key_param()],
+      responses: %{
+        200 =>
+          Operation.response("Accounts", "application/json", %Schema{
+            type: :array,
+            items: Account
+          })
+      }
+    }
+  end
+
+  def unread_count_operation do
+    %Operation{
+      tags: ["Notifications"],
+      summary: "Retrieve unread grouped notification count",
+      operationId: "NotificationController.unread_count",
+      security: [%{"oAuth" => ["read:notifications"]}],
+      parameters:
+        grouped_notification_params() ++
+          [
+            Operation.parameter(
+              :limit,
+              :query,
+              %Schema{type: :integer},
+              "Maximum number of notifications to count"
+            )
+          ],
+      responses: %{
+        200 =>
+          Operation.response("Unread notification group count", "application/json", %Schema{
+            type: :object,
+            properties: %{count: %Schema{type: :integer}}
+          }),
+        404 => Operation.response("Error", "application/json", ApiError)
+      }
+    }
+  end
+
   def clear_operation do
     %Operation{
       tags: ["Notifications"],
@@ -109,6 +181,18 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
       description: "Clear a single notification from the server.",
       operationId: "NotificationController.dismiss",
       parameters: [id_param()],
+      security: [%{"oAuth" => ["write:notifications"]}],
+      responses: %{200 => empty_object_response()}
+    }
+  end
+
+  def dismiss_group_operation do
+    %Operation{
+      tags: ["Notifications"],
+      summary: "Dismiss a notification group",
+      description: "Clear all notifications in a notification group from the server.",
+      operationId: "NotificationController.dismiss_group",
+      parameters: [group_key_param()],
       security: [%{"oAuth" => ["write:notifications"]}],
       responses: %{200 => empty_object_response()}
     }
@@ -158,6 +242,10 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
       type: :object,
       properties: %{
         id: %Schema{type: :string},
+        group_key: %Schema{
+          type: :string,
+          description: "Group key shared by similar notifications"
+        },
         type: notification_type(),
         created_at: %Schema{type: :string, format: :"date-time"},
         account: %Schema{
@@ -180,6 +268,7 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
       },
       example: %{
         "id" => "34975861",
+        "group_key" => "ungrouped-34975861",
         "type" => "mention",
         "created_at" => "2019-11-23T07:49:02.064Z",
         "account" => Account.schema().example,
@@ -187,6 +276,73 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
         "pleroma" => %{"is_seen" => false, "is_muted" => false}
       }
     }
+  end
+
+  defp grouped_result do
+    %Schema{
+      title: "GroupedNotificationsResults",
+      type: :object,
+      properties: %{
+        accounts: %Schema{type: :array, items: Account},
+        statuses: %Schema{type: :array, items: Status},
+        notification_groups: %Schema{type: :array, items: notification_group()}
+      },
+      required: [:accounts, :statuses, :notification_groups]
+    }
+  end
+
+  defp notification_group do
+    %Schema{
+      title: "NotificationGroup",
+      type: :object,
+      properties: %{
+        group_key: %Schema{type: :string},
+        notifications_count: %Schema{type: :integer},
+        type: notification_type(),
+        most_recent_notification_id: %Schema{type: :string},
+        page_min_id: %Schema{type: :string, nullable: true},
+        page_max_id: %Schema{type: :string, nullable: true},
+        latest_page_notification_at: %Schema{type: :string, format: :"date-time", nullable: true},
+        sample_account_ids: %Schema{type: :array, items: %Schema{type: :string}},
+        status_id: %Schema{type: :string, nullable: true}
+      },
+      required: [
+        :group_key,
+        :notifications_count,
+        :type,
+        :most_recent_notification_id,
+        :sample_account_ids
+      ]
+    }
+  end
+
+  defp grouped_notification_params do
+    [
+      Operation.parameter(
+        :exclude_types,
+        :query,
+        %Schema{type: :array, items: notification_type()},
+        "Array of types to exclude"
+      ),
+      Operation.parameter(
+        :account_id,
+        :query,
+        %Schema{type: :string},
+        "Return only notifications received from this account"
+      ),
+      Operation.parameter(
+        :types,
+        :query,
+        %Schema{type: :array, items: notification_type()},
+        "Include the notifications for activities with the given types"
+      ),
+      Operation.parameter(
+        :grouped_types,
+        :query,
+        %Schema{type: :array, items: notification_type()},
+        "Notification types that may be grouped"
+      )
+    ]
   end
 
   defp notification_type do
@@ -203,7 +359,10 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
         "move",
         "follow_request",
         "poll",
-        "status"
+        "status",
+        "update",
+        "admin.sign_up",
+        "admin.report"
       ],
       description: """
       The type of event that resulted in the notification.
@@ -218,6 +377,9 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
       - `pleroma:chat_mention` - Someone mentioned you in a chat message
       - `pleroma:report` - Someone was reported
       - `status` - Someone you are subscribed to created a status
+      - `update` - A status you boosted has been edited
+      - `admin.sign_up` - Someone signed up (optionally sent to admins)
+      - `admin.report` - A new report has been filed
       """
     }
   end
@@ -225,6 +387,13 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
   defp id_param do
     Operation.parameter(:id, :path, :string, "Notification ID",
       example: "123",
+      required: true
+    )
+  end
+
+  defp group_key_param do
+    Operation.parameter(:group_key, :path, :string, "Notification group key",
+      example: "favourite-123",
       required: true
     )
   end

@@ -3,14 +3,22 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.DropPolicy do
-  require Logger
   @moduledoc "Drop and log everything received"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
 
+  require Logger
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   @impl true
-  def filter(object) do
-    Logger.debug("REJECTING #{inspect(object)}")
-    {:reject, object}
+  def filter(activity) do
+    Logger.debug("REJECTING #{inspect(activity)}")
+    {:reject, activity}
+  end
+
+  @impl true
+  def id_filter(id) do
+    Logger.debug("REJECTING #{id}")
+    false
   end
 
   @impl true

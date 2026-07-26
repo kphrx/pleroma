@@ -3,17 +3,18 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.PublisherTest do
+  use Oban.Testing, repo: Pleroma.Repo
   use Pleroma.Web.ConnCase
 
-  import ExUnit.CaptureLog
   import Pleroma.Factory
   import Tesla.Mock
-  import Mock
 
   alias Pleroma.Activity
-  alias Pleroma.Instances
   alias Pleroma.Object
+  alias Pleroma.Tests.ObanHelpers
+  alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Publisher
+  alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.CommonAPI
 
   @as_public "https://www.w3.org/ns/activitystreams#Public"
@@ -137,6 +138,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
     test "publish to url with with different ports" do
       inbox80 = "http://42.site/users/nick1/inbox"
       inbox42 = "http://42.site:42/users/nick1/inbox"
+      activity = insert(:note_activity)
 
       mock(fn
         %{method: :post, url: "http://42.site:42/users/nick1/inbox"} ->
@@ -146,144 +148,28 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
           {:ok, %Tesla.Env{status: 200, body: "port 80"}}
       end)
 
-      actor = insert(:user)
+      _actor = insert(:user)
 
       assert {:ok, %{body: "port 42"}} =
-               Publisher.publish_one(%{
+               Publisher.prepare_one(%{
                  inbox: inbox42,
-                 json: "{}",
-                 actor: actor,
-                 id: 1,
+                 activity_id: activity.id,
                  unreachable_since: true
                })
+               |> Publisher.publish_one()
 
       assert {:ok, %{body: "port 80"}} =
-               Publisher.publish_one(%{
+               Publisher.prepare_one(%{
                  inbox: inbox80,
-                 json: "{}",
-                 actor: actor,
-                 id: 1,
+                 activity_id: activity.id,
                  unreachable_since: true
                })
-    end
-
-    test_with_mock "calls `Instances.set_reachable` on successful federation if `unreachable_since` is not specified",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-
-      assert {:ok, _} = Publisher.publish_one(%{inbox: inbox, json: "{}", actor: actor, id: 1})
-      assert called(Instances.set_reachable(inbox))
-    end
-
-    test_with_mock "calls `Instances.set_reachable` on successful federation if `unreachable_since` is set",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-
-      assert {:ok, _} =
-               Publisher.publish_one(%{
-                 inbox: inbox,
-                 json: "{}",
-                 actor: actor,
-                 id: 1,
-                 unreachable_since: NaiveDateTime.utc_now()
-               })
-
-      assert called(Instances.set_reachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_reachable` on successful federation if `unreachable_since` is nil",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-
-      assert {:ok, _} =
-               Publisher.publish_one(%{
-                 inbox: inbox,
-                 json: "{}",
-                 actor: actor,
-                 id: 1,
-                 unreachable_since: nil
-               })
-
-      refute called(Instances.set_reachable(inbox))
-    end
-
-    @tag capture_log: true
-    test_with_mock "calls `Instances.set_unreachable` on target inbox on non-2xx HTTP response code",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      actor = insert(:user)
-      inbox = "http://404.site/users/nick1/inbox"
-
-      assert {:discard, _} =
-               Publisher.publish_one(%{inbox: inbox, json: "{}", actor: actor, id: 1})
-
-      assert called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "it calls `Instances.set_unreachable` on target inbox on request error of any kind",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      actor = insert(:user)
-      inbox = "http://connrefused.site/users/nick1/inbox"
-
-      assert capture_log(fn ->
-               assert {:error, _} =
-                        Publisher.publish_one(%{inbox: inbox, json: "{}", actor: actor, id: 1})
-             end) =~ "connrefused"
-
-      assert called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_unreachable` if target is reachable",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      actor = insert(:user)
-      inbox = "http://200.site/users/nick1/inbox"
-
-      assert {:ok, _} = Publisher.publish_one(%{inbox: inbox, json: "{}", actor: actor, id: 1})
-
-      refute called(Instances.set_unreachable(inbox))
-    end
-
-    test_with_mock "does NOT call `Instances.set_unreachable` if target instance has non-nil `unreachable_since`",
-                   Instances,
-                   [:passthrough],
-                   [] do
-      actor = insert(:user)
-      inbox = "http://connrefused.site/users/nick1/inbox"
-
-      assert capture_log(fn ->
-               assert {:error, _} =
-                        Publisher.publish_one(%{
-                          inbox: inbox,
-                          json: "{}",
-                          actor: actor,
-                          id: 1,
-                          unreachable_since: NaiveDateTime.utc_now()
-                        })
-             end) =~ "connrefused"
-
-      refute called(Instances.set_unreachable(inbox))
+               |> Publisher.publish_one()
     end
   end
 
   describe "publish/2" do
-    test_with_mock "doesn't publish a non-public activity to quarantined instances.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "doesn't publish a non-public activity to quarantined instances." do
       Config.put([:instance, :quarantined_instances], [{"domain.com", "some reason"}])
 
       follower =
@@ -307,19 +193,18 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
       assert res == :ok
 
-      assert not called(
-               Publisher.enqueue_one(%{
-                 inbox: "https://domain.com/users/nick1/inbox",
-                 actor_id: actor.id,
-                 id: note_activity.data["id"]
-               })
-             )
+      refute_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "params" => %{
+            inbox: "https://domain.com/users/nick1/inbox",
+            activity_id: note_activity.id
+          }
+        }
+      )
     end
 
-    test_with_mock "Publishes a non-public activity to non-quarantined instances.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "Publishes a non-public activity to non-quarantined instances." do
       Config.put([:instance, :quarantined_instances], [{"somedomain.com", "some reason"}])
 
       follower =
@@ -343,22 +228,19 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
       assert res == :ok
 
-      assert called(
-               Publisher.enqueue_one(
-                 %{
-                   inbox: "https://domain.com/users/nick1/inbox",
-                   actor_id: actor.id,
-                   id: note_activity.data["id"]
-                 },
-                 priority: 1
-               )
-             )
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "params" => %{
+            inbox: "https://domain.com/users/nick1/inbox",
+            activity_id: note_activity.id
+          }
+        },
+        priority: 1
+      )
     end
 
-    test_with_mock "Publishes to directly addressed actors with higher priority.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "Publishes to directly addressed actors with higher priority." do
       note_activity = insert(:direct_note_activity)
 
       actor = Pleroma.User.get_by_ap_id(note_activity.data["actor"])
@@ -367,22 +249,58 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
 
       assert res == :ok
 
-      assert called(
-               Publisher.enqueue_one(
-                 %{
-                   inbox: :_,
-                   actor_id: actor.id,
-                   id: note_activity.data["id"]
-                 },
-                 priority: 0
-               )
-             )
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "op" => "publish_one",
+          "params" => %{"activity_id" => note_activity.id}
+        },
+        priority: 0
+      )
     end
 
-    test_with_mock "publishes an activity with BCC to all relevant peers.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "Publishes with the new actor if prepare_activity changes the actor." do
+      mock(fn
+        %{method: :post, url: "https://domain.com/users/nick1/inbox", body: body} ->
+          {:ok, %Tesla.Env{status: 200, body: body}}
+      end)
+
+      other_user =
+        insert(:user, %{
+          local: false,
+          inbox: "https://domain.com/users/nick1/inbox"
+        })
+
+      actor = insert(:user)
+      replaced_actor = insert(:user)
+
+      note_activity =
+        insert(:note_activity,
+          user: actor,
+          data_attrs: %{"to" => [other_user.ap_id]}
+        )
+
+      Pleroma.Web.ActivityPub.TransmogrifierMock
+      |> Mox.expect(:prepare_activity, fn data ->
+        {:ok, Map.put(data, "actor", replaced_actor.ap_id)}
+      end)
+
+      prepared =
+        Publisher.prepare_one(%{
+          inbox: "https://domain.com/users/nick1/inbox",
+          activity_id: note_activity.id,
+          cc: ["https://domain.com/users/nick2/inbox"]
+        })
+
+      {:ok, decoded} = Jason.decode(prepared.json)
+      assert decoded["actor"] == replaced_actor.ap_id
+
+      {:ok, published} = Publisher.publish_one(prepared)
+      sent_activity = Jason.decode!(published.body)
+      assert sent_activity["actor"] == replaced_actor.ap_id
+    end
+
+    test "publishes an activity with BCC to all relevant peers." do
       follower =
         insert(:user, %{
           local: false,
@@ -403,19 +321,45 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       res = Publisher.publish(actor, note_activity)
       assert res == :ok
 
-      assert called(
-               Publisher.enqueue_one(%{
-                 inbox: "https://domain.com/users/nick1/inbox",
-                 actor_id: actor.id,
-                 id: note_activity.data["id"]
-               })
-             )
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "params" => %{
+            inbox: "https://domain.com/users/nick1/inbox",
+            activity_id: note_activity.id
+          }
+        }
+      )
     end
 
-    test_with_mock "publishes a delete activity to peers who signed fetch requests to the create acitvity/object.",
-                   Pleroma.Web.ActivityPub.Publisher,
-                   [:passthrough],
-                   [] do
+    test "activity with BCC is published to a list member." do
+      actor = insert(:user)
+      {:ok, list} = Pleroma.List.create(%{title: "list"}, actor)
+      list_member = insert(:user, %{local: false})
+
+      Pleroma.List.follow(list, list_member)
+
+      note_activity =
+        insert(:note_activity,
+          # recipients: [follower.ap_id],
+          data_attrs: %{"bcc" => [list.ap_id]}
+        )
+
+      res = Publisher.publish(actor, note_activity)
+      assert res == :ok
+
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "params" => %{
+            inbox: list_member.inbox,
+            activity_id: note_activity.id
+          }
+        }
+      )
+    end
+
+    test "publishes a delete activity to peers who signed fetch requests to the create acitvity/object." do
       fetcher =
         insert(:user,
           local: false,
@@ -453,27 +397,209 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       res = Publisher.publish(actor, delete)
       assert res == :ok
 
-      assert called(
-               Publisher.enqueue_one(
-                 %{
-                   inbox: "https://domain.com/users/nick1/inbox",
-                   actor_id: actor.id,
-                   id: delete.data["id"]
-                 },
-                 priority: 1
-               )
-             )
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "params" => %{
+            inbox: "https://domain.com/users/nick1/inbox",
+            activity_id: delete.id
+          }
+        },
+        priority: 1
+      )
 
-      assert called(
-               Publisher.enqueue_one(
-                 %{
-                   inbox: "https://domain2.com/users/nick1/inbox",
-                   actor_id: actor.id,
-                   id: delete.data["id"]
-                 },
-                 priority: 1
-               )
-             )
+      assert_enqueued(
+        worker: "Pleroma.Workers.PublisherWorker",
+        args: %{
+          "params" => %{
+            inbox: "https://domain2.com/users/nick1/inbox",
+            activity_id: delete.id
+          }
+        },
+        priority: 1
+      )
+    end
+  end
+
+  test "cc in prepared json for a follow request is an empty list" do
+    user = insert(:user)
+    remote_user = insert(:user, local: false)
+
+    {:ok, _, _, activity} = CommonAPI.follow(remote_user, user)
+
+    assert_enqueued(
+      worker: "Pleroma.Workers.PublisherWorker",
+      args: %{
+        "activity_id" => activity.id,
+        "op" => "publish"
+      }
+    )
+
+    ObanHelpers.perform_all()
+
+    expected_params =
+      %{
+        "activity_id" => activity.id,
+        "inbox" => remote_user.inbox,
+        "unreachable_since" => nil
+      }
+
+    assert_enqueued(
+      worker: "Pleroma.Workers.PublisherWorker",
+      args: %{
+        "op" => "publish_one",
+        "params" => expected_params
+      }
+    )
+
+    # params need to be atom keys for Publisher.prepare_one.
+    # this is done in the Oban job.
+    expected_params = Map.new(expected_params, fn {k, v} -> {String.to_atom(k), v} end)
+
+    %{json: json} = Publisher.prepare_one(expected_params)
+
+    {:ok, decoded} = Jason.decode(json)
+
+    assert decoded["cc"] == []
+  end
+
+  test "unlisted activities retain public address in cc" do
+    user = insert(:user)
+
+    # simulate unlistd activity by only having
+    # public address in cc
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public],
+          "to" => [user.follower_address]
+        }
+      )
+
+    assert @as_public in activity.data["cc"]
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert @as_public in decoded["cc"]
+
+    # maybe we also have another inbox in cc
+    # during Publishing
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => [@as_public],
+          "to" => [user.follower_address]
+        }
+      )
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: ["https://remote.instance/users/someone_else/inbox"]
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert decoded["cc"] == [@as_public, "https://remote.instance/users/someone_else/inbox"]
+  end
+
+  test "public address in cc parameter is preserved" do
+    user = insert(:user)
+
+    cc_with_public = [@as_public, "https://example.org/users/other"]
+
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => cc_with_public,
+          "to" => [user.follower_address]
+        }
+      )
+
+    assert @as_public in activity.data["cc"]
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: cc_with_public
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert cc_with_public == decoded["cc"]
+  end
+
+  test "cc parameter is preserved" do
+    user = insert(:user)
+
+    activity =
+      insert(:note_activity,
+        user: user,
+        data_attrs: %{
+          "cc" => ["https://example.com/specific/user"],
+          "to" => [user.follower_address]
+        }
+      )
+
+    prepared =
+      Publisher.prepare_one(%{
+        inbox: "https://remote.instance/users/someone/inbox",
+        activity_id: activity.id,
+        cc: ["https://example.com/specific/user"]
+      })
+
+    {:ok, decoded} = Jason.decode(prepared.json)
+
+    assert decoded["cc"] == ["https://example.com/specific/user"]
+  end
+
+  describe "prepare_one/1 with reporter anonymization" do
+    test "signs with the anonymized actor keys when Transmogrifier changes actor" do
+      Pleroma.SignatureMock
+      |> Mox.stub(:signed_date, fn -> Pleroma.Signature.signed_date() end)
+      |> Mox.expect(:sign, fn %Pleroma.User{} = user, _headers ->
+        send(self(), {:signed_as, user.ap_id})
+        "TESTSIG"
+      end)
+
+      placeholder = insert(:user)
+      reporter = insert(:user)
+      target_account = insert(:user)
+
+      clear_config([:activitypub, :anonymize_reporter], true)
+      clear_config([:activitypub, :anonymize_reporter_local_nickname], placeholder.nickname)
+
+      {:ok, reported} = CommonAPI.post(target_account, %{status: "content"})
+      context = Utils.generate_context_id()
+
+      {:ok, activity} =
+        ActivityPub.flag(%{
+          actor: reporter,
+          context: context,
+          account: target_account,
+          statuses: [reported],
+          content: "reason"
+        })
+
+      _prepared =
+        Publisher.prepare_one(%{
+          inbox: "http://remote.example/users/alice/inbox",
+          activity_id: activity.id
+        })
+
+      assert_received {:signed_as, ap_id}
+      assert ap_id == placeholder.ap_id
     end
   end
 end

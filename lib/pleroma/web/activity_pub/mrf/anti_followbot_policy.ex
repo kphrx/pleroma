@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.AntiFollowbotPolicy do
+  @moduledoc "Prevent followbots from following with a bit of heuristic"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
   alias Pleroma.User
 
-  @moduledoc "Prevent followbots from following with a bit of heuristic"
-
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   # XXX: this should become User.normalize_by_ap_id() or similar, really.
   defp normalize_by_ap_id(%{"id" => id}), do: User.get_cached_by_ap_id(id)
@@ -63,20 +63,20 @@ defmodule Pleroma.Web.ActivityPub.MRF.AntiFollowbotPolicy do
   end
 
   @impl true
-  def filter(%{"type" => "Follow", "actor" => actor_id} = message) do
+  def filter(%{"type" => "Follow", "actor" => actor_id} = activity) do
     %User{} = actor = normalize_by_ap_id(actor_id)
 
     score = determine_if_followbot(actor)
 
-    if score < 0.8 || bot_allowed?(message, actor) do
-      {:ok, message}
+    if score < 0.8 || bot_allowed?(activity, actor) do
+      {:ok, activity}
     else
       {:reject, "[AntiFollowbotPolicy] Scored #{actor_id} as #{score}"}
     end
   end
 
   @impl true
-  def filter(message), do: {:ok, message}
+  def filter(activity), do: {:ok, activity}
 
   @impl true
   def describe, do: {:ok, %{}}

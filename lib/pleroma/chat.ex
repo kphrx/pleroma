@@ -25,6 +25,8 @@ defmodule Pleroma.Chat do
     belongs_to(:user, User, type: FlakeId.Ecto.CompatType)
     field(:recipient, :string)
 
+    field(:pinned, :boolean)
+
     timestamps()
   end
 
@@ -94,4 +96,18 @@ defmodule Pleroma.Chat do
       order_by: [desc: c.updated_at]
     )
   end
+
+  def pin(%__MODULE__{} = chat) do
+    chat
+    |> cast(%{pinned: true}, [:pinned])
+    |> Repo.update()
+  end
+
+  def unpin(%__MODULE__{} = chat) do
+    chat
+    |> cast(%{pinned: false}, [:pinned])
+    |> Repo.update()
+  end
+
+  def enabled?, do: Pleroma.Config.get([__MODULE__, :enabled], true)
 end

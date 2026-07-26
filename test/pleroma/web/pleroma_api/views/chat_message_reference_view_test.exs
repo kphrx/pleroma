@@ -4,11 +4,12 @@
 
 defmodule Pleroma.Web.PleromaAPI.ChatMessageReferenceViewTest do
   alias Pleroma.NullCache
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
 
   alias Pleroma.Chat
   alias Pleroma.Chat.MessageReference
   alias Pleroma.Object
+  alias Pleroma.Tests.ObanHelpers
   alias Pleroma.UnstubbedConfigMock, as: ConfigMock
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.CommonAPI
@@ -16,6 +17,11 @@ defmodule Pleroma.Web.PleromaAPI.ChatMessageReferenceViewTest do
 
   import Mox
   import Pleroma.Factory
+
+  setup do
+    Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
+    :ok
+  end
 
   setup do: clear_config([:rich_media, :enabled], true)
 
@@ -69,6 +75,8 @@ defmodule Pleroma.Web.PleromaAPI.ChatMessageReferenceViewTest do
       CommonAPI.post_chat_message(recipient, user, "gkgkgk https://example.com/ogp",
         media_id: upload.id
       )
+
+    ObanHelpers.perform_all()
 
     object = Object.normalize(activity, fetch: false)
 

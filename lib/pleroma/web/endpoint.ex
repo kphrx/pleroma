@@ -9,11 +9,12 @@ defmodule Pleroma.Web.Endpoint do
 
   alias Pleroma.Config
 
-  socket("/api/v1/streaming", Pleroma.Web.MastodonAPI.WebsocketHandler,
-    longpoll: false,
+  plug(Pleroma.Web.MastodonAPI.WebsocketPlug,
+    path: "/api/v1/streaming",
     websocket: [
       path: "/",
       compress: false,
+      connect_info: [:sec_websocket_headers],
       error_handler: {Pleroma.Web.MastodonAPI.WebsocketHandler, :handle_error, []},
       fullsweep_after: 20
     ]
@@ -45,8 +46,10 @@ defmodule Pleroma.Web.Endpoint do
   plug(Pleroma.Web.Plugs.HTTPSecurityPlug)
   plug(Pleroma.Web.Plugs.UploadedMedia)
 
-  @static_cache_control "public, max-age=1209600"
+  @static_cache_control "public, max-age=1209600, immutable"
   @static_cache_disabled "public, no-cache"
+  # cache for a day
+  @favicon_cache_control "public, max=age=86400, immutable"
 
   # InstanceStatic needs to be before Plug.Static to be able to override shipped-static files
   # If you're adding new paths to `only:` you'll need to configure them in InstanceStatic as well
@@ -60,6 +63,15 @@ defmodule Pleroma.Web.Endpoint do
     cache_control_for_etags: @static_cache_control,
     headers: %{
       "cache-control" => @static_cache_control
+    }
+  )
+
+  plug(Pleroma.Web.Plugs.FaviconPlug,
+    at: "/",
+    only: ["favicon.png"],
+    cache_control_for_etags: @favicon_cache_control,
+    headers: %{
+      "cache-control" => @favicon_cache_control
     }
   )
 
@@ -127,6 +139,8 @@ defmodule Pleroma.Web.Endpoint do
     from: {:pleroma, "priv/static/adminfe/"}
   )
 
+  plug(Pleroma.Web.Plugs.StaticNotFoundPlug)
+
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
   if code_reloading? do
@@ -157,8 +171,7 @@ defmodule Pleroma.Web.Endpoint do
       else: "pleroma_key"
 
   extra =
-    Config.get([__MODULE__, :extra_cookie_attrs])
-    |> Enum.join(";")
+    Enum.join(Config.get([__MODULE__, :extra_cookie_attrs]), ";")
 
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.

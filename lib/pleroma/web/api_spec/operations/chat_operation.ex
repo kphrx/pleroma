@@ -31,7 +31,8 @@ defmodule Pleroma.Web.ApiSpec.ChatOperation do
             "The updated chat",
             "application/json",
             Chat
-          )
+          ),
+        404 => Operation.response("Not Found", "application/json", ApiError)
       },
       security: [
         %{
@@ -56,7 +57,8 @@ defmodule Pleroma.Web.ApiSpec.ChatOperation do
             "The read ChatMessage",
             "application/json",
             ChatMessage
-          )
+          ),
+        404 => Operation.response("Not Found", "application/json", ApiError)
       },
       security: [
         %{
@@ -87,7 +89,8 @@ defmodule Pleroma.Web.ApiSpec.ChatOperation do
             "The existing chat",
             "application/json",
             Chat
-          )
+          ),
+        404 => Operation.response("Not Found", "application/json", ApiError)
       },
       security: [
         %{
@@ -118,7 +121,8 @@ defmodule Pleroma.Web.ApiSpec.ChatOperation do
             "The created or existing chat",
             "application/json",
             Chat
-          )
+          ),
+        404 => Operation.response("Not Found", "application/json", ApiError)
       },
       security: [
         %{
@@ -142,10 +146,12 @@ defmodule Pleroma.Web.ApiSpec.ChatOperation do
           :query,
           BooleanLike.schema(),
           "Include chats from muted users"
-        )
+        ),
+        Operation.parameter(:pinned, :query, BooleanLike.schema(), "Include only pinned chats")
       ],
       responses: %{
-        200 => Operation.response("The chats of the user", "application/json", chats_response())
+        200 => Operation.response("The chats of the user", "application/json", chats_response()),
+        404 => Operation.response("Not Found", "application/json", ApiError)
       },
       security: [
         %{
@@ -166,11 +172,13 @@ defmodule Pleroma.Web.ApiSpec.ChatOperation do
           :query,
           BooleanLike.schema(),
           "Include chats from muted users"
-        )
+        ),
+        Operation.parameter(:pinned, :query, BooleanLike.schema(), "Include only pinned chats")
         | pagination_params()
       ],
       responses: %{
-        200 => Operation.response("The chats of the user", "application/json", chats_response())
+        200 => Operation.response("The chats of the user", "application/json", chats_response()),
+        404 => Operation.response("Not Found", "application/json", ApiError)
       },
       security: [
         %{
@@ -222,6 +230,7 @@ defmodule Pleroma.Web.ApiSpec.ChatOperation do
             ChatMessage
           ),
         400 => Operation.response("Bad Request", "application/json", ApiError),
+        404 => Operation.response("Not Found", "application/json", ApiError),
         422 => Operation.response("MRF Rejection", "application/json", ApiError)
       },
       security: [
@@ -247,7 +256,48 @@ defmodule Pleroma.Web.ApiSpec.ChatOperation do
             "The deleted ChatMessage",
             "application/json",
             ChatMessage
-          )
+          ),
+        404 => Operation.response("Not Found", "application/json", ApiError)
+      },
+      security: [
+        %{
+          "oAuth" => ["write:chats"]
+        }
+      ]
+    }
+  end
+
+  def pin_operation do
+    %Operation{
+      tags: ["Chats"],
+      summary: "Pin a chat",
+      operationId: "ChatController.pin",
+      parameters: [
+        Operation.parameter(:id, :path, :string, "The id of the chat", required: true)
+      ],
+      responses: %{
+        200 => Operation.response("The existing chat", "application/json", Chat),
+        404 => Operation.response("Not Found", "application/json", ApiError)
+      },
+      security: [
+        %{
+          "oAuth" => ["write:chats"]
+        }
+      ]
+    }
+  end
+
+  def unpin_operation do
+    %Operation{
+      tags: ["Chats"],
+      summary: "Unpin a chat",
+      operationId: "ChatController.unpin",
+      parameters: [
+        Operation.parameter(:id, :path, :string, "The id of the chat", required: true)
+      ],
+      responses: %{
+        200 => Operation.response("The existing chat", "application/json", Chat),
+        404 => Operation.response("Not Found", "application/json", ApiError)
       },
       security: [
         %{

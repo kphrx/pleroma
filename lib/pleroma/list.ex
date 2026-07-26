@@ -9,6 +9,7 @@ defmodule Pleroma.List do
   import Ecto.Changeset
 
   alias Pleroma.Activity
+  alias Pleroma.Emoji
   alias Pleroma.Repo
   alias Pleroma.User
 
@@ -17,14 +18,54 @@ defmodule Pleroma.List do
     field(:title, :string)
     field(:following, {:array, :string}, default: [])
     field(:ap_id, :string)
+    field(:exclusive, :boolean, default: false)
+    field(:emoji, :string)
 
     timestamps()
   end
 
-  def title_changeset(list, attrs \\ %{}) do
+  def update_changeset(list, attrs \\ %{}) do
     list
-    |> cast(attrs, [:title])
+    |> cast(attrs, [:title, :exclusive, :emoji])
     |> validate_required([:title])
+    |> fix_emoji()
+    |> validate_emoji()
+  end
+
+  defp fix_emoji(changeset) do
+    with {:emoji_field, emoji} when is_binary(emoji) <-
+           {:emoji_field, get_field(changeset, :emoji)},
+         {:fixed_emoji, emoji} <-
+           {:fixed_emoji,
+            emoji
+            |> Emoji.fully_qualify_emoji()
+            |> Emoji.maybe_quote()} do
+      put_change(changeset, :emoji, emoji)
+    else
+      {:emoji_field, _} -> changeset
+    end
+  end
+
+  defp validate_emoji(changeset) do
+    validate_change(changeset, :emoji, fn
+      :emoji, nil ->
+        []
+
+      :emoji, emoji ->
+        if Emoji.unicode?(emoji) or valid_local_custom_emoji?(emoji) do
+          []
+        else
+          [emoji: "Invalid emoji"]
+        end
+    end)
+  end
+
+  defp valid_local_custom_emoji?(emoji) do
+    with %{file: _path} <- Emoji.get(emoji) do
+      true
+    else
+      _ -> false
+    end
   end
 
   def follow_changeset(list, attrs \\ %{}) do
@@ -91,14 +132,14 @@ defmodule Pleroma.List do
     |> Repo.all()
   end
 
-  def rename(%Pleroma.List{} = list, title) do
+  def update(%Pleroma.List{} = list, params) do
     list
-    |> title_changeset(%{title: title})
+    |> update_changeset(params)
     |> Repo.update()
   end
 
-  def create(title, %User{} = creator) do
-    changeset = title_changeset(%Pleroma.List{user_id: creator.id}, %{title: title})
+  def create(params, %User{} = creator) do
+    changeset = update_changeset(%Pleroma.List{user_id: creator.id}, params)
 
     if changeset.valid? do
       Repo.transaction(fn ->
@@ -149,4 +190,14 @@ defmodule Pleroma.List do
   end
 
   def member?(_, _), do: false
+
+  def get_exclusive_list_members(%User{id: user_id}) do
+    Pleroma.List
+    |> where([l], l.user_id == ^user_id)
+    |> where([l], l.exclusive == true)
+    |> select([l], l.following)
+    |> Repo.all()
+    |> List.flatten()
+    |> Enum.uniq()
+  end
 end

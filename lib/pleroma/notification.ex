@@ -35,6 +35,7 @@ defmodule Pleroma.Notification do
     # remember to add a migration to add it to the `notifications_type` enum
     # as well.
     field(:type, :string)
+    field(:group_key, :string)
     belongs_to(:user, User, type: FlakeId.Ecto.CompatType)
     belongs_to(:activity, Activity, type: FlakeId.Ecto.CompatType)
 
@@ -49,7 +50,7 @@ defmodule Pleroma.Notification do
         |> type_from_activity()
 
       notification
-      |> changeset(%{type: type})
+      |> changeset(%{type: type, group_key: grouped_notification_key(type, activity)})
       |> Repo.update()
     end
   end
@@ -61,6 +62,99 @@ defmodule Pleroma.Notification do
     )
     |> Repo.aggregate(:count, :id)
   end
+
+  @groupable_notification_types ~w{favourite follow reblog}
+  @group_bucket_seconds 12 * 60 * 60
+
+  def groupable_notification_types, do: @groupable_notification_types
+
+  def group_notifications(notifications, grouped_types \\ nil) do
+    grouped_types = normalize_grouped_types(grouped_types)
+
+    {group_keys, grouped_notifications} =
+      Enum.reduce(notifications, {[], %{}}, fn notification,
+                                               {group_keys, grouped_notifications} ->
+        group_key = group_key(notification, grouped_types)
+
+        if Map.has_key?(grouped_notifications, group_key) do
+          {group_keys, Map.update!(grouped_notifications, group_key, &[notification | &1])}
+        else
+          {[group_key | group_keys], Map.put(grouped_notifications, group_key, [notification])}
+        end
+      end)
+
+    group_keys
+    |> Enum.reverse()
+    |> Enum.map(fn group_key ->
+      grouped_notifications
+      |> Map.fetch!(group_key)
+      |> Enum.reverse()
+    end)
+  end
+
+  def group_key(notification, grouped_types \\ nil)
+
+  def group_key(%Notification{} = notification, nil) do
+    group_key(notification, @groupable_notification_types)
+  end
+
+  def group_key(%Notification{type: type, group_key: group_key} = notification, grouped_types) do
+    grouped_types = normalize_grouped_types(grouped_types)
+
+    if type in @groupable_notification_types and type in grouped_types and is_binary(group_key) do
+      group_key
+    else
+      ungrouped_group_key(notification)
+    end
+  end
+
+  def normalize_grouped_types(nil), do: @groupable_notification_types
+  def normalize_grouped_types(types) when is_list(types), do: types
+  def normalize_grouped_types(type), do: [type]
+
+  defp ungrouped_group_key(%Notification{id: id}), do: "ungrouped-#{id}"
+
+  defp grouped_notification_key(type, activity) when type in @groupable_notification_types do
+    with target_id when is_binary(target_id) <- group_target_id(type, activity) do
+      # Mastodon uses Redis to reuse a recent bucket for rolling 12h windows. Pleroma keeps keys
+      # deterministic and self-contained; clients must treat group_key as opaque either way.
+      "#{type}-#{target_id}-#{group_time_bucket(activity)}"
+    end
+  end
+
+  defp grouped_notification_key(_type, _activity), do: nil
+
+  defp group_time_bucket(%Activity{inserted_at: inserted_at}) when not is_nil(inserted_at) do
+    inserted_at
+    |> NaiveDateTime.to_erl()
+    |> :calendar.datetime_to_gregorian_seconds()
+    |> div(@group_bucket_seconds)
+  end
+
+  defp group_time_bucket(_),
+    do: group_time_bucket(%Activity{inserted_at: NaiveDateTime.utc_now()})
+
+  defp group_target_id(type, activity) when type in ["favourite", "reblog"] do
+    with object_id when is_binary(object_id) <- object_id_for(activity),
+         %Activity{id: id} <- Activity.get_create_by_object_ap_id(object_id) do
+      to_string(id)
+    else
+      _ -> nil
+    end
+  end
+
+  defp group_target_id("follow", %{data: %{"object" => ap_id}}) do
+    case User.get_cached_by_ap_id(ap_id) do
+      %User{id: id} -> to_string(id)
+      _ -> nil
+    end
+  end
+
+  defp group_target_id(_, _), do: nil
+
+  defp object_id_for(%{data: %{"object" => %{"id" => id}}}) when is_binary(id), do: id
+  defp object_id_for(%{data: %{"object" => id}}) when is_binary(id), do: id
+  defp object_id_for(_), do: nil
 
   @notification_types ~w{
     favourite
@@ -74,11 +168,12 @@ defmodule Pleroma.Notification do
     reblog
     poll
     status
+    update
   }
 
   def changeset(%Notification{} = notification, attrs) do
     notification
-    |> cast(attrs, [:seen, :type])
+    |> cast(attrs, [:seen, :type, :group_key])
     |> validate_inclusion(:type, @notification_types)
   end
 
@@ -281,10 +376,15 @@ defmodule Pleroma.Notification do
         select: n.id
       )
 
-    Multi.new()
-    |> Multi.update_all(:ids, query, set: [seen: true, updated_at: NaiveDateTime.utc_now()])
-    |> Marker.multi_set_last_read_id(user, "notifications")
-    |> Repo.transaction()
+    {:ok, %{marker: marker}} =
+      Multi.new()
+      |> Multi.update_all(:ids, query, set: [seen: true, updated_at: NaiveDateTime.utc_now()])
+      |> Marker.multi_set_last_read_id(user, "notifications")
+      |> Repo.transaction()
+
+    Streamer.stream(["user", "user:notification"], marker)
+
+    {:ok, %{marker: marker}}
   end
 
   @spec read_one(User.t(), String.t()) ::
@@ -452,7 +552,8 @@ defmodule Pleroma.Notification do
           user_id: user.id,
           activity: activity,
           seen: mark_as_read?(activity, user),
-          type: type
+          type: type,
+          group_key: grouped_notification_key(type, activity)
         })
         |> Marker.multi_set_last_read_id(user, "notifications")
         |> Repo.transaction()
@@ -525,9 +626,7 @@ defmodule Pleroma.Notification do
         %Activity{data: %{"type" => "Create"}} = activity,
         local_only
       ) do
-    notification_enabled_ap_ids =
-      []
-      |> Utils.maybe_notify_subscribers(activity)
+    notification_enabled_ap_ids = Utils.get_notified_subscribers(activity)
 
     potential_receivers =
       User.get_users_from_set(notification_enabled_ap_ids, local_only: local_only)
@@ -734,7 +833,7 @@ defmodule Pleroma.Notification do
 
   def mark_as_read?(activity, target_user) do
     user = Activity.user_actor(activity)
-    User.mutes_user?(target_user, user) || CommonAPI.thread_muted?(target_user, activity)
+    User.mutes_user?(target_user, user) || CommonAPI.thread_muted?(activity, target_user)
   end
 
   def for_user_and_activity(user, activity) do
@@ -757,8 +856,9 @@ defmodule Pleroma.Notification do
     |> Repo.update_all(set: [seen: true])
   end
 
-  @spec send(list(Notification.t())) :: :ok
-  def send(notifications) do
+  @doc "Streams a list of notifications over websockets and web push"
+  @spec stream(list(Notification.t())) :: :ok
+  def stream(notifications) do
     Enum.each(notifications, fn notification ->
       Streamer.stream(["user", "user:notification"], notification)
       Push.send(notification)

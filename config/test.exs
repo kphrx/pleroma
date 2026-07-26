@@ -15,9 +15,11 @@ config :pleroma, Pleroma.Captcha,
   method: Pleroma.Captcha.Mock
 
 # Print only warnings and errors during test
-config :logger, :console,
-  level: :warning,
-  format: "\n[$level] $message\n"
+config :logger, :default_handler, level: :warning
+
+config :logger, :default_formatter,
+  format: "\n[$level] $message\n",
+  colors: [enabled: false]
 
 config :pleroma, :auth, oauth_consumer_strategies: []
 
@@ -38,7 +40,10 @@ config :pleroma, :instance,
   external_user_synchronization: false,
   static_dir: "test/instance_static/"
 
-config :pleroma, :activitypub, sign_object_fetches: false, follow_handshake_timeout: 0
+config :pleroma, :activitypub,
+  sign_object_fetches: false,
+  follow_handshake_timeout: 0,
+  client_api_enabled: true
 
 # Configure your database
 config :pleroma, Pleroma.Repo,
@@ -49,7 +54,8 @@ config :pleroma, Pleroma.Repo,
   hostname: System.get_env("DB_HOST") || "localhost",
   port: System.get_env("DB_PORT") || "5432",
   pool: Ecto.Adapters.SQL.Sandbox,
-  pool_size: System.schedulers_online() * 2
+  pool_size: System.schedulers_online() * 2,
+  log: false
 
 config :pleroma, :dangerzone, override_repo_pool_size: true
 
@@ -98,7 +104,6 @@ config :pleroma, :http, send_user_agent: false
 
 rum_enabled = System.get_env("RUM_ENABLED") == "true"
 config :pleroma, :database, rum_enabled: rum_enabled
-IO.puts("RUM enabled: #{rum_enabled}")
 
 config :joken, default_signer: "yU8uHKq+yyAkZ11Hx//jcdacWc8yQ1bxAAGrplzB0Zwwjkp35v0RK9SO8WTPr6QZ"
 
@@ -143,6 +148,7 @@ config :pleroma, Pleroma.Search.Meilisearch, url: "http://127.0.0.1:7700/", priv
 config :phoenix, :plug_init_mode, :runtime
 
 config :pleroma, :config_impl, Pleroma.UnstubbedConfigMock
+config :pleroma, :datetime_impl, Pleroma.DateTimeMock
 
 config :pleroma, Pleroma.PromEx, disabled: true
 
@@ -151,14 +157,24 @@ config :pleroma, Pleroma.User.Backup, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Uploaders.S3, ex_aws_impl: Pleroma.Uploaders.S3.ExAwsMock
 config :pleroma, Pleroma.Uploaders.S3, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Upload, config_impl: Pleroma.UnstubbedConfigMock
+config :pleroma, Pleroma.Language.LanguageDetector, config_impl: Pleroma.StaticStubbedConfigMock
 config :pleroma, Pleroma.ScheduledActivity, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Web.RichMedia.Helpers, config_impl: Pleroma.StaticStubbedConfigMock
 config :pleroma, Pleroma.Uploaders.IPFS, config_impl: Pleroma.UnstubbedConfigMock
 config :pleroma, Pleroma.Web.Plugs.HTTPSecurityPlug, config_impl: Pleroma.StaticStubbedConfigMock
 config :pleroma, Pleroma.Web.Plugs.HTTPSignaturePlug, config_impl: Pleroma.StaticStubbedConfigMock
 
-config :pleroma, Pleroma.Web.Plugs.HTTPSignaturePlug,
-  http_signatures_impl: Pleroma.StubbedHTTPSignaturesMock
+config :pleroma, Pleroma.Upload.Filter.AnonymizeFilename,
+  config_impl: Pleroma.StaticStubbedConfigMock
+
+config :pleroma, Pleroma.Upload.Filter.Mogrify, config_impl: Pleroma.StaticStubbedConfigMock
+config :pleroma, Pleroma.Upload.Filter.Mogrify, mogrify_impl: Pleroma.MogrifyMock
+
+config :pleroma, Pleroma.Signature, http_signatures_impl: Pleroma.StubbedHTTPSignaturesMock
+config :pleroma, Pleroma.Web.ActivityPub.Publisher, signature_impl: Pleroma.SignatureMock
+
+config :pleroma, Pleroma.Web.ActivityPub.Publisher,
+  transmogrifier_impl: Pleroma.Web.ActivityPub.TransmogrifierMock
 
 peer_module =
   if String.to_integer(System.otp_release()) >= 25 do
@@ -177,16 +193,24 @@ config :pleroma, Pleroma.Application,
   streamer_registry: false,
   test_http_pools: true
 
+config :pleroma, Pleroma.Web.Streamer, sync_streaming: true
+
 config :pleroma, Pleroma.Uploaders.Uploader, timeout: 1_000
 
 config :pleroma, Pleroma.Emoji.Loader, test_emoji: true
 
-config :pleroma, Pleroma.Web.RichMedia.Backfill, provider: Pleroma.Web.RichMedia.Backfill
+config :pleroma, Pleroma.Web.RichMedia.Backfill,
+  stream_out: Pleroma.Web.ActivityPub.ActivityPubMock
+
+config :pleroma, Pleroma.Web.Plugs.HTTPSecurityPlug, enable: false
+
+config :pleroma, Pleroma.User.Backup, tempdir: "test/tmp"
 
 if File.exists?("./config/test.secret.exs") do
   import_config "test.secret.exs"
-else
-  IO.puts(
-    "You may want to create test.secret.exs to declare custom database connection parameters."
-  )
 end
+
+# Avoid noisy shutdown logs from os_mon during tests.
+config :os_mon,
+  start_cpu_sup: false,
+  start_memsup: false

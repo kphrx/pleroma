@@ -149,6 +149,9 @@ defmodule Pleroma.UploadTest do
 
     test "copies the file to the configured folder with deduping" do
       File.cp!("test/fixtures/image.jpg", "test/fixtures/image_tmp.jpg")
+      expected_filename = "e30397b58d226d6583ab5b8b3c5defb0c682bda5c31ef07a9f57c1c4986e3781.jpg"
+
+      expected_path = Pleroma.Upload.Filter.Dedupe.shard_path(expected_filename)
 
       file = %Plug.Upload{
         content_type: "image/jpeg",
@@ -159,8 +162,7 @@ defmodule Pleroma.UploadTest do
       {:ok, data} = Upload.store(file, filters: [Pleroma.Upload.Filter.Dedupe])
 
       assert List.first(data["url"])["href"] ==
-               Pleroma.Upload.base_url() <>
-                 "e30397b58d226d6583ab5b8b3c5defb0c682bda5c31ef07a9f57c1c4986e3781.jpg"
+               Path.join([Pleroma.Upload.base_url(), expected_path])
     end
 
     test "copies the file to the configured folder without deduping" do
@@ -225,20 +227,35 @@ defmodule Pleroma.UploadTest do
       assert Path.basename(attachment_url["href"]) == "an%E2%80%A6%20image.jpg"
     end
 
-    test "escapes reserved uri characters" do
+    test "escapes disallowed reserved characters in uri path" do
       File.cp!("test/fixtures/image.jpg", "test/fixtures/image_tmp.jpg")
 
       file = %Plug.Upload{
         content_type: "image/jpeg",
         path: Path.absname("test/fixtures/image_tmp.jpg"),
-        filename: ":?#[]@!$&\\'()*+,;=.jpg"
+        filename: ":?#[]@!$&'()*+,;=.jpg"
       }
 
       {:ok, data} = Upload.store(file)
       [attachment_url | _] = data["url"]
 
       assert Path.basename(attachment_url["href"]) ==
-               "%3A%3F%23%5B%5D%40%21%24%26%5C%27%28%29%2A%2B%2C%3B%3D.jpg"
+               ":%3F%23%5B%5D@!$&'()*+,;=.jpg"
+    end
+
+    test "double %-encodes filename" do
+      File.cp!("test/fixtures/image.jpg", "test/fixtures/image_tmp.jpg")
+
+      file = %Plug.Upload{
+        content_type: "image/jpeg",
+        path: Path.absname("test/fixtures/image_tmp.jpg"),
+        filename: "file with %20.jpg"
+      }
+
+      {:ok, data} = Upload.store(file)
+      [attachment_url | _] = data["url"]
+
+      assert Path.basename(attachment_url["href"]) == "file%20with%20%2520.jpg"
     end
   end
 
@@ -263,6 +280,25 @@ defmodule Pleroma.UploadTest do
       assert %{"url" => [%{"href" => url}]} = data
 
       refute String.starts_with?(url, base_url <> "/media/")
+    end
+  end
+
+  describe "Setting a link_name for uploaded media" do
+    setup do: clear_config([Pleroma.Upload, :link_name], true)
+
+    test "encodes name parameter in query" do
+      File.cp!("test/fixtures/image.jpg", "test/fixtures/image_tmp.jpg")
+
+      file = %Plug.Upload{
+        content_type: "image/jpeg",
+        path: Path.absname("test/fixtures/image_tmp.jpg"),
+        filename: "test file.jpg"
+      }
+
+      {:ok, data} = Upload.store(file)
+      [attachment_url | _] = data["url"]
+
+      assert Path.basename(attachment_url["href"]) == "test%20file.jpg?name=test+file.jpg"
     end
   end
 end

@@ -13,7 +13,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
   import Pleroma.Factory
 
   setup do
-    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Config)
+    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Test.StaticConfig)
     :ok
   end
 
@@ -148,7 +148,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
     %{user: user, conn: conn} = oauth_access(["read:notifications"])
     blocker = insert(:user)
 
-    {:ok, _} = CommonAPI.block(blocker, user)
+    {:ok, _} = CommonAPI.block(user, blocker)
     {:ok, activity} = CommonAPI.post(blocker, %{status: "hi @#{user.nickname}"})
 
     {:ok, [_notification]} = Notification.create_notifications(activity)
@@ -316,6 +316,9 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
       user = insert(:user)
       %{user: other_user, conn: conn} = oauth_access(["read:notifications"])
 
+      {:ok, _, _, %{data: %{"state" => "accept"}}} = CommonAPI.follow(other_user, user)
+      {:ok, _, _, %{data: %{"state" => "accept"}}} = CommonAPI.follow(user, other_user)
+
       {:ok, public_activity} = CommonAPI.post(other_user, %{status: ".", visibility: "public"})
 
       {:ok, direct_activity} =
@@ -326,10 +329,10 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
 
       {:ok, private_activity} = CommonAPI.post(other_user, %{status: ".", visibility: "private"})
 
-      {:ok, _} = CommonAPI.favorite(user, public_activity.id)
-      {:ok, _} = CommonAPI.favorite(user, direct_activity.id)
-      {:ok, _} = CommonAPI.favorite(user, unlisted_activity.id)
-      {:ok, _} = CommonAPI.favorite(user, private_activity.id)
+      {:ok, _} = CommonAPI.favorite(public_activity.id, user)
+      {:ok, _} = CommonAPI.favorite(direct_activity.id, user)
+      {:ok, _} = CommonAPI.favorite(unlisted_activity.id, user)
+      {:ok, _} = CommonAPI.favorite(private_activity.id, user)
 
       activity_ids =
         conn
@@ -414,7 +417,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
           in_reply_to_status_id: activity.id
         })
 
-      {:ok, _favorite} = CommonAPI.favorite(user, reply.id)
+      {:ok, _favorite} = CommonAPI.favorite(reply.id, user)
 
       activity_ids =
         conn
@@ -432,9 +435,9 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
 
     {:ok, mention_activity} = CommonAPI.post(other_user, %{status: "hey @#{user.nickname}"})
     {:ok, create_activity} = CommonAPI.post(user, %{status: "hey"})
-    {:ok, favorite_activity} = CommonAPI.favorite(other_user, create_activity.id)
+    {:ok, favorite_activity} = CommonAPI.favorite(create_activity.id, other_user)
     {:ok, reblog_activity} = CommonAPI.repeat(create_activity.id, other_user)
-    {:ok, _, _, follow_activity} = CommonAPI.follow(other_user, user)
+    {:ok, _, _, follow_activity} = CommonAPI.follow(user, other_user)
 
     mention_notification_id = get_notification_id_by_activity(mention_activity)
     favorite_notification_id = get_notification_id_by_activity(favorite_activity)
@@ -470,9 +473,9 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
 
     {:ok, mention_activity} = CommonAPI.post(other_user, %{status: "hey @#{user.nickname}"})
     {:ok, create_activity} = CommonAPI.post(user, %{status: "hey"})
-    {:ok, favorite_activity} = CommonAPI.favorite(other_user, create_activity.id)
+    {:ok, favorite_activity} = CommonAPI.favorite(create_activity.id, other_user)
     {:ok, reblog_activity} = CommonAPI.repeat(create_activity.id, other_user)
-    {:ok, _, _, follow_activity} = CommonAPI.follow(other_user, user)
+    {:ok, _, _, follow_activity} = CommonAPI.follow(user, other_user)
 
     mention_notification_id = get_notification_id_by_activity(mention_activity)
     favorite_notification_id = get_notification_id_by_activity(favorite_activity)
@@ -517,9 +520,9 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
 
     {:ok, _activity} = CommonAPI.post(other_user, %{status: "hey @#{user.nickname}"})
     {:ok, create_activity} = CommonAPI.post(user, %{status: "hey"})
-    {:ok, _activity} = CommonAPI.favorite(other_user, create_activity.id)
+    {:ok, _activity} = CommonAPI.favorite(create_activity.id, other_user)
     {:ok, _activity} = CommonAPI.repeat(create_activity.id, other_user)
-    {:ok, _, _, follow_activity} = CommonAPI.follow(other_user, user)
+    {:ok, _, _, follow_activity} = CommonAPI.follow(user, other_user)
 
     follow_notification_id = get_notification_id_by_activity(follow_activity)
 
@@ -574,11 +577,303 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
     assert [%{"id" => ^notification4_id}, %{"id" => ^notification3_id}] = result
   end
 
+  describe "GET /api/v2/notifications" do
+    test "groups favourite notifications for the same status" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user1 = insert(:user)
+      other_user2 = insert(:user)
+
+      {:ok, status} = CommonAPI.post(user, %{status: "hello"})
+      {:ok, _} = CommonAPI.favorite(status.id, other_user1)
+      {:ok, _} = CommonAPI.favorite(status.id, other_user2)
+
+      notifications = Repo.all(Notification)
+      notification_ids = Enum.map(notifications, &to_string(&1.id))
+      assert [persisted_group_key] = notifications |> Enum.map(& &1.group_key) |> Enum.uniq()
+      assert is_binary(persisted_group_key)
+
+      result =
+        conn
+        |> get("/api/v2/notifications")
+        |> json_response_and_validate_schema(200)
+
+      assert [%{"id" => account_id1}, %{"id" => account_id2}] = result["accounts"]
+      assert account_id1 in [other_user1.id, other_user2.id]
+      assert account_id2 in [other_user1.id, other_user2.id]
+      assert [%{"id" => status_id}] = result["statuses"]
+      assert status_id == status.id
+
+      assert [group] = result["notification_groups"]
+      assert group["type"] == "favourite"
+      assert group["notifications_count"] == 2
+      assert group["status_id"] == status.id
+      assert group["most_recent_notification_id"] in notification_ids
+      assert group["page_min_id"] in notification_ids
+      assert group["page_max_id"] in notification_ids
+      assert group["latest_page_notification_at"]
+      assert Enum.sort(group["sample_account_ids"]) == Enum.sort([other_user1.id, other_user2.id])
+      group_key = group["group_key"]
+      assert group_key == persisted_group_key
+
+      assert [%{"group_key" => ^group_key}, %{"group_key" => ^group_key}] =
+               conn
+               |> get("/api/v1/notifications")
+               |> json_response_and_validate_schema(200)
+
+      assert %{"notification_groups" => [shown_group]} =
+               conn
+               |> get("/api/v2/notifications/#{group_key}")
+               |> json_response_and_validate_schema(200)
+
+      assert shown_group["group_key"] == group_key
+      assert shown_group["notifications_count"] == 2
+      refute Map.has_key?(shown_group, "page_min_id")
+      refute Map.has_key?(shown_group, "page_max_id")
+      refute Map.has_key?(shown_group, "latest_page_notification_at")
+    end
+
+    test "round-trips ungrouped group keys when grouped_types excludes a type" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user = insert(:user)
+
+      {:ok, status} = CommonAPI.post(user, %{status: "hello"})
+      {:ok, _} = CommonAPI.favorite(status.id, other_user)
+
+      %{"notification_groups" => [%{"group_key" => "ungrouped-" <> _ = group_key}]} =
+        conn
+        |> get("/api/v2/notifications?grouped_types[]=reblog")
+        |> json_response_and_validate_schema(200)
+
+      assert %{
+               "notification_groups" => [%{"group_key" => ^group_key, "notifications_count" => 1}]
+             } =
+               conn
+               |> get("/api/v2/notifications/#{group_key}")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "keeps legacy notifications without persisted group keys ungrouped" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user1 = insert(:user)
+      other_user2 = insert(:user)
+
+      {:ok, status} = CommonAPI.post(user, %{status: "hello"})
+      {:ok, favorite1} = CommonAPI.favorite(status.id, other_user1)
+      {:ok, favorite2} = CommonAPI.favorite(status.id, other_user2)
+
+      notification_ids =
+        [favorite1, favorite2]
+        |> Enum.map(&get_notification_id_by_activity/1)
+
+      Repo.update_all(Notification, set: [group_key: nil])
+
+      expected_group_keys = Enum.map(notification_ids, &"ungrouped-#{&1}")
+
+      assert [%{"group_key" => group_key1}, %{"group_key" => group_key2}] =
+               conn
+               |> get("/api/v1/notifications")
+               |> json_response_and_validate_schema(200)
+
+      assert Enum.sort([group_key1, group_key2]) == Enum.sort(expected_group_keys)
+
+      %{"notification_groups" => groups} =
+        conn
+        |> get("/api/v2/notifications")
+        |> json_response_and_validate_schema(200)
+
+      assert Enum.sort(Enum.map(groups, & &1["group_key"])) == Enum.sort(expected_group_keys)
+      assert Enum.all?(groups, &(&1["notifications_count"] == 1))
+
+      group_key = List.first(expected_group_keys)
+
+      assert %{
+               "notification_groups" => [%{"group_key" => ^group_key, "notifications_count" => 1}]
+             } =
+               conn
+               |> get("/api/v2/notifications/#{group_key}")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "paginates notification groups instead of raw notifications" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user1 = insert(:user)
+      other_user2 = insert(:user)
+      other_user3 = insert(:user)
+
+      {:ok, older_status} = CommonAPI.post(user, %{status: "older"})
+      {:ok, _} = CommonAPI.favorite(older_status.id, other_user3)
+
+      {:ok, newer_status} = CommonAPI.post(user, %{status: "newer"})
+      {:ok, _} = CommonAPI.favorite(newer_status.id, other_user1)
+      {:ok, _} = CommonAPI.favorite(newer_status.id, other_user2)
+      older_status_id = older_status.id
+      newer_status_id = newer_status.id
+
+      %{"notification_groups" => groups} =
+        conn
+        |> get("/api/v2/notifications?limit=2")
+        |> json_response_and_validate_schema(200)
+
+      assert [
+               %{"status_id" => ^newer_status_id, "notifications_count" => 2},
+               %{"status_id" => ^older_status_id, "notifications_count" => 1}
+             ] = groups
+    end
+
+    test "uses group-level cursors when paginating notification groups" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user1 = insert(:user)
+      other_user2 = insert(:user)
+      other_user3 = insert(:user)
+
+      {:ok, older_status} = CommonAPI.post(user, %{status: "older"})
+      {:ok, _} = CommonAPI.favorite(older_status.id, other_user3)
+
+      {:ok, newer_status} = CommonAPI.post(user, %{status: "newer"})
+      {:ok, _} = CommonAPI.favorite(newer_status.id, other_user1)
+      {:ok, _} = CommonAPI.favorite(newer_status.id, other_user2)
+      older_status_id = older_status.id
+      newer_status_id = newer_status.id
+
+      assert %{
+               "notification_groups" => [
+                 %{
+                   "status_id" => ^newer_status_id,
+                   "notifications_count" => 2,
+                   "most_recent_notification_id" => cursor
+                 }
+               ]
+             } =
+               conn
+               |> get("/api/v2/notifications?limit=1")
+               |> json_response_and_validate_schema(200)
+
+      assert %{
+               "notification_groups" => [
+                 %{"status_id" => ^older_status_id, "notifications_count" => 1}
+               ]
+             } =
+               conn
+               |> get("/api/v2/notifications?limit=1&max_id=#{cursor}")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "returns total notification count for a partially represented group" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user1 = insert(:user)
+      other_user2 = insert(:user)
+      other_user3 = insert(:user)
+
+      {:ok, grouped_status} = CommonAPI.post(user, %{status: "grouped"})
+      {:ok, _} = CommonAPI.favorite(grouped_status.id, other_user1)
+
+      {:ok, other_status} = CommonAPI.post(user, %{status: "other"})
+      {:ok, _} = CommonAPI.favorite(other_status.id, other_user3)
+      {:ok, _} = CommonAPI.favorite(grouped_status.id, other_user2)
+      grouped_status_id = grouped_status.id
+
+      assert %{
+               "notification_groups" => [
+                 %{"status_id" => ^grouped_status_id, "notifications_count" => 2}
+               ]
+             } =
+               conn
+               |> get("/api/v2/notifications?limit=1")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "counts unread notification groups" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user1 = insert(:user)
+      other_user2 = insert(:user)
+      mentioner = insert(:user)
+
+      {:ok, status} = CommonAPI.post(user, %{status: "hello"})
+      {:ok, _} = CommonAPI.favorite(status.id, other_user1)
+      {:ok, _} = CommonAPI.favorite(status.id, other_user2)
+      {:ok, _} = CommonAPI.post(mentioner, %{status: "hi @#{user.nickname}"})
+
+      assert %{"count" => 2} =
+               conn
+               |> get("/api/v2/notifications/unread_count")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "counts unread notification groups newer than the notification marker" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user = insert(:user)
+      mentioner = insert(:user)
+
+      {:ok, status} = CommonAPI.post(user, %{status: "older"})
+      {:ok, favorite_activity} = CommonAPI.favorite(status.id, other_user)
+      marker_id = get_notification_id_by_activity(favorite_activity)
+
+      {:ok, _} = CommonAPI.post(mentioner, %{status: "newer @#{user.nickname}"})
+
+      {:ok, _} =
+        Pleroma.Marker.upsert(user, %{"notifications" => %{"last_read_id" => marker_id}})
+
+      assert %{"count" => 1} =
+               conn
+               |> get("/api/v2/notifications/unread_count")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "does not preserve stale cursor params in grouped notification link headers" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+      other_user = insert(:user)
+
+      {:ok, activity1} = CommonAPI.post(other_user, %{status: "one @#{user.nickname}"})
+      {:ok, _activity2} = CommonAPI.post(other_user, %{status: "two @#{user.nickname}"})
+      {:ok, activity3} = CommonAPI.post(other_user, %{status: "three @#{user.nickname}"})
+
+      notification1_id = get_notification_id_by_activity(activity1)
+      notification3_id = get_notification_id_by_activity(activity3)
+
+      conn = get(conn, "/api/v2/notifications?since_id=#{notification1_id}&limit=1")
+
+      assert [link_header] = get_resp_header(conn, "link")
+      assert link_header =~ ~r/max_id=#{notification3_id}/
+      refute link_header =~ "since_id="
+    end
+
+    test "lists accounts from a notification group" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications"])
+
+      {other_users, %{"group_key" => group_key, "sample_account_ids" => sample_account_ids}} =
+        create_favourite_notification_group(user, conn)
+
+      assert length(sample_account_ids) == 8
+
+      account_ids =
+        conn
+        |> get("/api/v2/notifications/#{group_key}/accounts")
+        |> json_response_and_validate_schema(200)
+        |> Enum.map(& &1["id"])
+
+      assert Enum.sort(account_ids) == Enum.sort(Enum.map(other_users, & &1.id))
+    end
+
+    test "dismisses a notification group" do
+      %{user: user, conn: conn} = oauth_access(["read:notifications", "write:notifications"])
+
+      {_other_users, %{"group_key" => group_key}} =
+        create_favourite_notification_group(user, conn)
+
+      assert %{} =
+               conn
+               |> post("/api/v2/notifications/#{group_key}/dismiss")
+               |> json_response_and_validate_schema(200)
+
+      assert [] = Notification.for_user(user)
+    end
+  end
+
   test "doesn't see notifications after muting user with notifications" do
     %{user: user, conn: conn} = oauth_access(["read:notifications"])
     user2 = insert(:user)
 
-    {:ok, _, _, _} = CommonAPI.follow(user, user2)
+    {:ok, _, _, _} = CommonAPI.follow(user2, user)
     {:ok, _} = CommonAPI.post(user2, %{status: "hey @#{user.nickname}"})
 
     ret_conn = get(conn, "/api/v1/notifications")
@@ -596,7 +891,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
     %{user: user, conn: conn} = oauth_access(["read:notifications"])
     user2 = insert(:user)
 
-    {:ok, _, _, _} = CommonAPI.follow(user, user2)
+    {:ok, _, _, _} = CommonAPI.follow(user2, user)
     {:ok, _} = CommonAPI.post(user2, %{status: "hey @#{user.nickname}"})
 
     ret_conn = get(conn, "/api/v1/notifications")
@@ -614,7 +909,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
     %{user: user, conn: conn} = oauth_access(["read:notifications"])
     user2 = insert(:user)
 
-    {:ok, _, _, _} = CommonAPI.follow(user, user2)
+    {:ok, _, _, _} = CommonAPI.follow(user2, user)
     {:ok, _} = CommonAPI.post(user2, %{status: "hey @#{user.nickname}"})
 
     ret_conn = get(conn, "/api/v1/notifications")
@@ -703,6 +998,29 @@ defmodule Pleroma.Web.MastodonAPI.NotificationControllerTest do
     |> Repo.get_by(activity_id: id)
     |> Map.get(:id)
     |> to_string()
+  end
+
+  defp create_favourite_notification_group(user, conn) do
+    other_users = insert_list(9, :user)
+
+    {:ok, status} = CommonAPI.post(user, %{status: "hello"})
+
+    Enum.each(other_users, fn other_user ->
+      {:ok, _} = CommonAPI.favorite(status.id, other_user)
+    end)
+
+    %{
+      "notification_groups" => [
+        %{
+          "notifications_count" => 9
+        } = group
+      ]
+    } =
+      conn
+      |> get("/api/v2/notifications")
+      |> json_response_and_validate_schema(200)
+
+    {other_users, group}
   end
 
   defp params_to_query(%{} = params) do

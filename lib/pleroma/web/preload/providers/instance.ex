@@ -5,9 +5,9 @@
 defmodule Pleroma.Web.Preload.Providers.Instance do
   alias Pleroma.Web.MastodonAPI.InstanceView
   alias Pleroma.Web.Nodeinfo.Nodeinfo
+  alias Pleroma.Web.PleromaAPI.UtilView
   alias Pleroma.Web.Plugs.InstanceStatic
   alias Pleroma.Web.Preload.Providers.Provider
-  alias Pleroma.Web.TwitterAPI.UtilView
 
   @behaviour Provider
   @instance_url "/api/v1/instance"

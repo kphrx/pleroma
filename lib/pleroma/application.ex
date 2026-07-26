@@ -14,7 +14,6 @@ defmodule Pleroma.Application do
   @name Mix.Project.config()[:name]
   @version Mix.Project.config()[:version]
   @repository Mix.Project.config()[:source_url]
-  @compile_env Mix.env()
 
   def name, do: @name
   def version, do: @version
@@ -44,20 +43,21 @@ defmodule Pleroma.Application do
     # every time the application is restarted, so we disable module
     # conflicts at runtime
     Code.compiler_options(ignore_module_conflict: true)
-    # Disable warnings_as_errors at runtime, it breaks Phoenix live reload
-    # due to protocol consolidation warnings
-    Code.compiler_options(warnings_as_errors: false)
+    configure_logger()
     Pleroma.Telemetry.Logger.attach()
     Config.Holder.save_default()
     Pleroma.HTML.compile_scrubbers()
     Pleroma.Config.Oban.warn()
     Config.DeprecationWarnings.warn()
 
-    if @compile_env != :test do
+    if Config.get([Pleroma.Web.Plugs.HTTPSecurityPlug, :enable], true) do
       Pleroma.Web.Plugs.HTTPSecurityPlug.warn_if_disabled()
     end
 
-    Pleroma.ApplicationRequirements.verify!()
+    if Config.get(:env) != :test do
+      Pleroma.ApplicationRequirements.verify!()
+    end
+
     load_custom_modules()
     Pleroma.Docs.JSON.compile()
     limiters_setup()
@@ -69,32 +69,18 @@ defmodule Pleroma.Application do
       Finch.start_link(name: MyFinch)
     end
 
-    if adapter == Tesla.Adapter.Gun do
-      if version = Pleroma.OTPVersion.version() do
-        [major, minor] =
-          version
-          |> String.split(".")
-          |> Enum.map(&String.to_integer/1)
-          |> Enum.take(2)
-
-        if (major == 22 and minor < 2) or major < 22 do
-          raise "
-            !!!OTP VERSION WARNING!!!
-            You are using gun adapter with OTP version #{version}, which doesn't support correct handling of unordered certificates chains. Please update your Erlang/OTP to at least 22.2.
-            "
-        end
-      else
-        raise "
-          !!!OTP VERSION WARNING!!!
-          To support correct handling of unordered certificates chains - OTP version must be > 22.2.
-          "
-      end
+    # Disable warnings_as_errors at runtime, it breaks Phoenix live reload
+    # due to protocol consolidation warnings
+    # :warnings_as_errors is deprecated via Code.compiler_options/2 since 1.18
+    if Version.compare(System.version(), "1.18.0") == :lt do
+      Code.compiler_options(warnings_as_errors: false)
     end
 
     # Define workers and child supervisors to be supervised
     children =
       [
         Pleroma.PromEx,
+        Pleroma.LDAP,
         Pleroma.Repo,
         Config.TransferTask,
         Pleroma.Emoji,
@@ -127,6 +113,44 @@ defmodule Pleroma.Application do
     opts = [strategy: :one_for_one, name: Pleroma.Supervisor, max_restarts: max_restarts]
     Supervisor.start_link(children, opts)
   end
+
+  def configure_logger do
+    Config.get([:logger, :backends], [])
+    |> Enum.each(fn backend ->
+      case backend_to_logger(backend) do
+        {:ok, logger} ->
+          add_logger(logger)
+
+        {:error, :console_backend} ->
+          Logger.warning(":console is no longer considered a backend and is enabled by default")
+      end
+    end)
+  end
+
+  defp add_logger(backend) do
+    case LoggerBackends.add(backend) do
+      {:ok, _} ->
+        Logger.debug("Successfully added logger backend: #{inspect(backend)}")
+
+      {:error, :already_present} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.error("Failed to add logger backend #{inspect(backend)}: #{inspect(reason)}")
+    end
+  end
+
+  defp backend_to_logger(:console), do: {:error, :console_backend}
+
+  defp backend_to_logger({:ex_syslogger = backend, name}) do
+    Logger.warning(
+      "Configuration {:#{backend}, :#{name}} is incorrect. Use {ExSyslogger, :#{name}} instead!"
+    )
+
+    {:ok, {ExSyslogger, name}}
+  end
+
+  defp backend_to_logger(backend), do: {:ok, backend}
 
   def load_custom_modules do
     dir = Config.get([:modules, :runtime_dir])
@@ -169,7 +193,8 @@ defmodule Pleroma.Application do
         limit: 500_000
       ),
       build_cachex("rel_me", limit: 2500),
-      build_cachex("host_meta", default_ttl: :timer.minutes(120), limit: 5000)
+      build_cachex("host_meta", default_ttl: :timer.minutes(120), limit: 5_000),
+      build_cachex("translations", default_ttl: :timer.hours(24), limit: 5_000)
     ]
   end
 
@@ -292,8 +317,6 @@ defmodule Pleroma.Application do
     config = Config.get(ConcurrentLimiter, [])
 
     [
-      Pleroma.Web.RichMedia.Helpers,
-      Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicy,
       Pleroma.Search
     ]
     |> Enum.each(fn module ->

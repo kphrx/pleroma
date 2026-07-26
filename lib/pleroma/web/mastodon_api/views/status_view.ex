@@ -28,9 +28,13 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   # This is a naive way to do this, just spawning a process per activity
   # to fetch the preview. However it should be fine considering
   # pagination is restricted to 40 activities at a time
-  defp fetch_rich_media_for_activities(activities) do
+  # Force disable Websockets streaming for backfill jobs,
+  # otherwise old posts can show up on timelines.
+  defp fetch_rich_media_for_activities(activities, opts) do
+    opts = Map.put(opts, :stream, false)
+
     Enum.each(activities, fn activity ->
-      spawn(fn -> Card.get_by_activity(activity) end)
+      Card.get_by_activity(activity, opts)
     end)
   end
 
@@ -113,7 +117,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     activities = Enum.filter(opts.activities, & &1)
 
     # Start prefetching rich media before doing anything else
-    fetch_rich_media_for_activities(activities)
+    fetch_rich_media_for_activities(activities, opts)
+
     replied_to_activities = get_replied_to_activities(activities)
     quoted_activities = get_quoted_activities(activities)
 
@@ -227,7 +232,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       mentions: mentions,
       tags: reblogged[:tags] || [],
       application: build_application(object.data["generator"]),
-      language: nil,
+      language: get_language(object),
       emojis: [],
       pleroma: %{
         local: activity.local,
@@ -240,7 +245,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   def render("show.json", %{activity: %{data: %{"object" => _object}} = activity} = opts) do
     object = Object.normalize(activity, fetch: false)
 
-    user = CommonAPI.get_user(activity.data["actor"])
+    user = CommonAPI.get_user(object.data["actor"])
     user_follower_address = user.follower_address
 
     like_count = object.data["like_count"] || 0
@@ -293,7 +298,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       cond do
         is_nil(opts[:for]) -> false
         is_boolean(activity.thread_muted?) -> activity.thread_muted?
-        true -> CommonAPI.thread_muted?(opts[:for], activity)
+        true -> CommonAPI.thread_muted?(activity, opts[:for])
       end
 
     attachment_data = object.data["attachment"] || []
@@ -361,8 +366,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
 
     summary = object.data["summary"] || ""
 
+    # Force disable Websockets streaming for backfill jobs which the below call will create,
+    # otherwise old posts can show up on timelines.
     card =
-      case Card.get_by_activity(activity) do
+      case Card.get_by_activity(activity, Map.put(opts, :stream, false)) do
         %Card{} = result -> render("card.json", result)
         _ -> nil
       end
@@ -445,8 +452,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       mentions: mentions,
       tags: build_tags(tags),
       application: build_application(object.data["generator"]),
-      language: nil,
+      language: get_language(object),
       emojis: build_emojis(object.data["emoji"]),
+      quotes_count: object.data["quotesCount"] || 0,
       pleroma: %{
         local: activity.local,
         conversation_id: get_context_id(activity),
@@ -465,7 +473,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
         parent_visible: visible_for_user?(reply_to, opts[:for]),
         pinned_at: pinned_at,
         quotes_count: object.data["quotesCount"] || 0,
-        bookmark_folder: bookmark_folder
+        bookmark_folder: bookmark_folder,
+        list_id: get_list_id(object, client_posted_this_activity)
       }
     }
   end
@@ -608,7 +617,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   def render("attachment.json", %{attachment: attachment}) do
     [attachment_url | _] = attachment["url"]
     media_type = attachment_url["mediaType"] || attachment_url["mimeType"] || "image"
-    href = attachment_url["href"] |> MediaProxy.url()
+    href_remote = attachment_url["href"]
+    href = href_remote |> MediaProxy.url()
     href_preview = attachment_url["href"] |> MediaProxy.preview_url()
     meta = render("attachment_meta.json", %{attachment: attachment})
 
@@ -617,6 +627,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
         String.contains?(media_type, "image") -> "image"
         String.contains?(media_type, "video") -> "video"
         String.contains?(media_type, "audio") -> "audio"
+        attachment["type"] == "Image" -> "image"
         true -> "unknown"
       end
 
@@ -647,7 +658,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     %{
       id: attachment_id,
       url: href,
-      remote_url: href,
+      remote_url: href_remote,
       preview_url: href_preview,
       text_url: href,
       type: type,
@@ -685,6 +696,14 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       ancestors: render("index.json", for: user, activities: ancestors, as: :activity),
       descendants: render("index.json", for: user, activities: descendants, as: :activity)
     }
+  end
+
+  def render("translation.json", %{
+        content: content,
+        detected_source_language: detected_source_language,
+        provider: provider
+      }) do
+    %{content: content, detected_source_language: detected_source_language, provider: provider}
   end
 
   def get_reply_to(activity, %{replied_to_activities: replied_to_activities}) do
@@ -810,19 +829,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
 
   defp build_application(_), do: nil
 
-  # Workaround for Elixir issue #10771
-  # Avoid applying URI.merge unless necessary
-  # TODO: revert to always attempting URI.merge(image_url_data, page_url_data)
-  # when Elixir 1.12 is the minimum supported version
-  @spec build_image_url(struct() | nil, struct()) :: String.t() | nil
-  defp build_image_url(
-         %URI{scheme: image_scheme, host: image_host} = image_url_data,
-         %URI{} = _page_url_data
-       )
-       when not is_nil(image_scheme) and not is_nil(image_host) do
-    image_url_data |> to_string
-  end
-
+  @spec build_image_url(URI.t(), URI.t()) :: String.t()
   defp build_image_url(%URI{} = image_url_data, %URI{} = page_url_data) do
     URI.merge(page_url_data, image_url_data) |> to_string
   end
@@ -847,11 +854,25 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     Utils.get_content_type(nil)
   end
 
+  defp get_language(%{data: %{"language" => "und"}}), do: nil
+
+  defp get_language(object), do: object.data["language"]
+
   defp proxied_url(url, page_url_data) do
     if is_binary(url) do
       build_image_url(URI.parse(url), page_url_data) |> MediaProxy.url()
     else
       nil
+    end
+  end
+
+  defp get_list_id(object, client_posted_this_activity) do
+    with true <- client_posted_this_activity,
+         %{data: %{"listMessage" => list_ap_id}} when is_binary(list_ap_id) <- object,
+         %{id: list_id} <- Pleroma.List.get_by_ap_id(list_ap_id) do
+      list_id
+    else
+      _ -> nil
     end
   end
 end

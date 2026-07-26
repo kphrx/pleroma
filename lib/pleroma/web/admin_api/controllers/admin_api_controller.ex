@@ -13,6 +13,7 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIController do
   alias Pleroma.ModerationLog
   alias Pleroma.Stats
   alias Pleroma.User
+  alias Pleroma.User.Backup
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.AdminAPI
   alias Pleroma.Web.AdminAPI.AccountView
@@ -239,6 +240,10 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIController do
     render_error(conn, :not_found, "No such permission_group")
   end
 
+  def right_delete(%{assigns: %{user: %{nickname: nickname}}} = conn, %{"nickname" => nickname}) do
+    render_error(conn, :forbidden, "You can't revoke your own admin status.")
+  end
+
   def right_delete(
         %{assigns: %{user: admin}} = conn,
         %{
@@ -262,10 +267,6 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIController do
     })
 
     json(conn, fields)
-  end
-
-  def right_delete(%{assigns: %{user: %{nickname: nickname}}} = conn, %{"nickname" => nickname}) do
-    render_error(conn, :forbidden, "You can't revoke your own admin status.")
   end
 
   @doc "Get a password reset token (base64 string) for given nickname"
@@ -334,13 +335,13 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIController do
 
       if params["password"] do
         User.force_password_reset_async(user)
-      end
 
-      ModerationLog.insert_log(%{
-        actor: admin,
-        subject: [user],
-        action: "force_password_reset"
-      })
+        ModerationLog.insert_log(%{
+          actor: admin,
+          subject: [user],
+          action: "force_password_reset"
+        })
+      end
 
       json(conn, %{status: "success"})
     else
@@ -429,7 +430,9 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIController do
 
   def create_backup(%{assigns: %{user: admin}} = conn, %{"nickname" => nickname}) do
     with %User{} = user <- User.get_by_nickname(nickname),
-         {:ok, _} <- Pleroma.User.Backup.create(user, admin.id) do
+         %Backup{} = backup <- Backup.new(user),
+         {:ok, inserted_backup} <- Pleroma.Repo.insert(backup),
+         {:ok, %Oban.Job{}} <- Backup.schedule_backup(inserted_backup) do
       ModerationLog.insert_log(%{actor: admin, subject: user, action: "create_backup"})
 
       json(conn, "")

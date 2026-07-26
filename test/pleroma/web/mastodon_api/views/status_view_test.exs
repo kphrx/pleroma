@@ -54,7 +54,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
                count: 2,
                me: false,
                name: "dinosaur",
-               url: "http://localhost:4001/emoji/dino walking.gif",
+               url: "http://localhost:4001/emoji/dino%20walking.gif",
                account_ids: [other_user.id, user.id]
              },
              %{name: "🍵", count: 1, me: false, url: nil, account_ids: [third_user.id]}
@@ -70,7 +70,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
                count: 2,
                me: true,
                name: "dinosaur",
-               url: "http://localhost:4001/emoji/dino walking.gif",
+               url: "http://localhost:4001/emoji/dino%20walking.gif",
                account_ids: [other_user.id, user.id]
              },
              %{name: "🍵", count: 1, me: false, url: nil, account_ids: [third_user.id]}
@@ -201,7 +201,6 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     assert_schema(status, "Status", Pleroma.Web.ApiSpec.spec())
   end
 
-  @tag capture_log: true
   test "returns a temporary ap_id based user for activities missing db users" do
     user = insert(:user)
 
@@ -343,8 +342,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
         parent_visible: false,
         pinned_at: nil,
         quotes_count: 0,
-        bookmark_folder: nil
-      }
+        bookmark_folder: nil,
+        list_id: nil
+      },
+      quotes_count: 0
     }
 
     assert status == expected
@@ -389,7 +390,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
     assert status.pleroma.thread_muted == false
 
-    {:ok, activity} = CommonAPI.add_mute(user, activity)
+    {:ok, activity} = CommonAPI.add_mute(activity, user)
 
     status = StatusView.render("show.json", %{activity: activity, for: user})
 
@@ -436,8 +437,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     post = insert(:note_activity)
     user = insert(:user)
 
-    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quote_id: post.id})
-    {:ok, quoted_quote_post} = CommonAPI.post(user, %{status: "yo", quote_id: quote_post.id})
+    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quoted_status_id: post.id})
+
+    {:ok, quoted_quote_post} =
+      CommonAPI.post(user, %{status: "yo", quoted_status_id: quote_post.id})
 
     status = StatusView.render("show.json", %{activity: quoted_quote_post})
 
@@ -467,7 +470,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
     # Create a public post quoting the private post
     quote_private =
-      insert(:note_activity, note: insert(:note, data: %{"quoteUrl" => private_object.data["id"]}))
+      insert(:note_activity,
+        note: insert(:note, data: %{"quoteUrl" => private_object.data["id"]})
+      )
 
     status = StatusView.render("show.json", %{activity: quote_private})
 
@@ -478,7 +483,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
     # After following the user, the quote is rendered
     follower = insert(:user)
-    CommonAPI.follow(follower, user)
+    CommonAPI.follow(user, follower)
 
     status = StatusView.render("show.json", %{activity: quote_private, for: follower})
     assert status.pleroma.quote.id == to_string(private.id)
@@ -506,7 +511,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     post = insert(:note_activity)
     user = insert(:user)
 
-    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quote_id: post.id})
+    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quoted_status_id: post.id})
     {:ok, repost} = CommonAPI.repeat(quote_post.id, user)
 
     [status] = StatusView.render("index.json", %{activities: [repost], as: :activity})
@@ -662,6 +667,23 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
       assert expected == StatusView.render("attachment.json", %{attachment: object})
       assert_schema(expected, "Attachment", api_spec)
+    end
+
+    test "uses the ActivityStreams image type when the MIME type is generic" do
+      object = %{
+        "type" => "Image",
+        "url" => [
+          %{
+            "mediaType" => "application/octet-stream",
+            "href" => "https://example.com/extensionless"
+          }
+        ]
+      }
+
+      attachment = StatusView.render("attachment.json", %{attachment: object})
+
+      assert attachment.type == "image"
+      assert attachment.pleroma.mime_type == "application/octet-stream"
     end
   end
 
@@ -904,13 +926,18 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
   test "visibility/list" do
     user = insert(:user)
 
-    {:ok, list} = Pleroma.List.create("foo", user)
+    {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
 
     {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
 
     status = StatusView.render("show.json", activity: activity)
 
     assert status.visibility == "list"
+    assert status.pleroma.list_id == nil
+
+    status = StatusView.render("show.json", activity: activity, for: user)
+
+    assert status.pleroma.list_id == list.id
   end
 
   test "has a field for parent visibility" do
@@ -937,11 +964,31 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     status = StatusView.render("show.json", activity: post)
     refute status.edited_at
 
-    {:ok, _} = CommonAPI.update(poster, post, %{status: "mew mew"})
+    {:ok, _} = CommonAPI.update(post, poster, %{status: "mew mew"})
     edited = Pleroma.Activity.normalize(post)
 
     status = StatusView.render("show.json", activity: edited)
     assert status.edited_at
+  end
+
+  test "it shows post language" do
+    user = insert(:user)
+
+    {:ok, post} = CommonAPI.post(user, %{status: "Szczęść Boże", language: "pl"})
+
+    status = StatusView.render("show.json", activity: post)
+
+    assert status.language == "pl"
+  end
+
+  test "doesn't show post language if it's 'und'" do
+    user = insert(:user)
+
+    {:ok, post} = CommonAPI.post(user, %{status: "sdifjogijodfg", language: "und"})
+
+    status = StatusView.render("show.json", activity: post)
+
+    assert status.language == nil
   end
 
   test "with a source object" do

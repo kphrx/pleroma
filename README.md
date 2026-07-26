@@ -1,4 +1,4 @@
-<img src="https://git.pleroma.social/pleroma/pleroma/uploads/8cec84f5a084d887339f57deeb8a293e/pleroma-banner-vector-nopad-notext.svg" width="300px" />
+<img src="https://git.pleroma.social/attachments/06a95f5a-7cac-42ad-8b1d-1483f1739f38" width="300px" />
 
 ## About 
 
@@ -19,8 +19,6 @@ If you are running Linux (glibc or musl) on x86/arm, the recommended way to inst
 If your platform is not supported, or you just want to be able to edit the source code easily, you may install Pleroma from source.
 
 - [Alpine Linux](https://docs-develop.pleroma.social/backend/installation/alpine_linux_en/)
-- [Arch Linux](https://docs-develop.pleroma.social/backend/installation/arch_linux_en/)
-- [CentOS 7](https://docs-develop.pleroma.social/backend/installation/centos7_en/)
 - [Debian-based](https://docs-develop.pleroma.social/backend/installation/debian_based_en/)
 - [Debian-based (jp)](https://docs-develop.pleroma.social/backend/installation/debian_based_jp/)
 - [FreeBSD](https://docs-develop.pleroma.social/backend/installation/freebsd_en/)

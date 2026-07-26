@@ -17,9 +17,10 @@ defmodule Pleroma.NotificationTest do
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.MastodonAPI.NotificationView
+  alias Pleroma.Web.Streamer
 
   setup do
-    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Config)
+    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Test.StaticConfig)
     :ok
   end
 
@@ -165,7 +166,7 @@ defmodule Pleroma.NotificationTest do
       {:ok, _activity_two} = CommonAPI.repeat(activity_one.id, repeated_user)
 
       {:ok, _edit_activity} =
-        CommonAPI.update(user, activity_one, %{
+        CommonAPI.update(activity_one, user, %{
           status: "hey @#{other_user.nickname}! mew mew"
         })
 
@@ -180,8 +181,8 @@ defmodule Pleroma.NotificationTest do
     question = insert(:question, user: user1)
     activity = insert(:question_activity, question: question)
 
-    {:ok, _, _} = CommonAPI.vote(user2, question, [0])
-    {:ok, _, _} = CommonAPI.vote(user3, question, [1])
+    {:ok, _, _} = CommonAPI.vote(question, user2, [0])
+    {:ok, _, _} = CommonAPI.vote(question, user3, [1])
 
     {:ok, notifications} = Notification.create_poll_notifications(activity)
 
@@ -209,7 +210,7 @@ defmodule Pleroma.NotificationTest do
           notification_settings: %Pleroma.User.NotificationSetting{block_from_strangers: true}
         )
 
-      CommonAPI.follow(follower, followed)
+      CommonAPI.follow(followed, follower)
       {:ok, activity} = CommonAPI.post(follower, %{status: "hey @#{followed.nickname}"})
       refute Notification.create_notification(activity, followed)
     end
@@ -222,7 +223,7 @@ defmodule Pleroma.NotificationTest do
           notification_settings: %Pleroma.User.NotificationSetting{block_from_strangers: true}
         )
 
-      CommonAPI.follow(receiver, poster)
+      CommonAPI.follow(poster, receiver)
       {:ok, activity} = CommonAPI.post(poster, %{status: "hey @#{receiver.nickname}"})
       assert Notification.create_notification(activity, receiver)
     end
@@ -238,7 +239,7 @@ defmodule Pleroma.NotificationTest do
       user = insert(:user)
       subscriber = insert(:user)
 
-      {:ok, _, _, _} = CommonAPI.follow(subscriber, user)
+      {:ok, _, _, _} = CommonAPI.follow(user, subscriber)
       User.subscribe(subscriber, user)
       {:ok, status} = CommonAPI.post(user, %{status: "Akariiiin"})
       {:ok, [_notif]} = Notification.create_notifications(status)
@@ -295,7 +296,7 @@ defmodule Pleroma.NotificationTest do
       insert(:filter, user: user, phrase: "tesla", hide: true)
 
       {:ok, activity_one} = CommonAPI.post(user, %{status: "wow tesla"})
-      {:ok, activity_two} = CommonAPI.favorite(other_user, activity_one.id)
+      {:ok, activity_two} = CommonAPI.favorite(activity_one.id, other_user)
 
       {:ok, [notification]} = Notification.create_notifications(activity_two)
 
@@ -309,7 +310,7 @@ defmodule Pleroma.NotificationTest do
       user = insert(:user)
       followed_user = insert(:user, is_locked: false)
 
-      {:ok, _, _, _activity} = CommonAPI.follow(user, followed_user)
+      {:ok, _, _, _activity} = CommonAPI.follow(followed_user, user)
       assert FollowingRelationship.following?(user, followed_user)
       assert [notification] = Notification.for_user(followed_user)
 
@@ -324,7 +325,7 @@ defmodule Pleroma.NotificationTest do
       user = insert(:user)
       followed_user = insert(:user, is_locked: true)
 
-      {:ok, _, _, _activity} = CommonAPI.follow(user, followed_user)
+      {:ok, _, _, _activity} = CommonAPI.follow(followed_user, user)
       refute FollowingRelationship.following?(user, followed_user)
       assert [notification] = Notification.for_user(followed_user)
 
@@ -339,19 +340,22 @@ defmodule Pleroma.NotificationTest do
         |> Repo.preload(:activity)
 
       assert %{type: "follow"} =
-               NotificationView.render("show.json", notification: notification, for: followed_user)
+               NotificationView.render("show.json",
+                 notification: notification,
+                 for: followed_user
+               )
     end
 
     test "it doesn't create a notification for follow-unfollow-follow chains" do
       user = insert(:user)
       followed_user = insert(:user, is_locked: false)
 
-      {:ok, _, _, _activity} = CommonAPI.follow(user, followed_user)
+      {:ok, _, _, _activity} = CommonAPI.follow(followed_user, user)
       assert FollowingRelationship.following?(user, followed_user)
       assert [notification] = Notification.for_user(followed_user)
 
-      CommonAPI.unfollow(user, followed_user)
-      {:ok, _, _, _activity_dupe} = CommonAPI.follow(user, followed_user)
+      CommonAPI.unfollow(followed_user, user)
+      {:ok, _, _, _activity_dupe} = CommonAPI.follow(followed_user, user)
 
       notification_id = notification.id
       assert [%{id: ^notification_id}] = Notification.for_user(followed_user)
@@ -360,7 +364,7 @@ defmodule Pleroma.NotificationTest do
     test "dismisses the notification on follow request rejection" do
       user = insert(:user, is_locked: true)
       follower = insert(:user)
-      {:ok, _, _, _follow_activity} = CommonAPI.follow(follower, user)
+      {:ok, _, _, _follow_activity} = CommonAPI.follow(user, follower)
       assert [_notification] = Notification.for_user(user)
       {:ok, _follower} = CommonAPI.reject_follow_request(follower, user)
       assert [] = Notification.for_user(user)
@@ -443,8 +447,7 @@ defmodule Pleroma.NotificationTest do
 
   describe "set_read_up_to()" do
     test "it sets all notifications as read up to a specified notification ID" do
-      user = insert(:user)
-      other_user = insert(:user)
+      [user, other_user] = insert_pair(:user)
 
       {:ok, _activity} =
         CommonAPI.post(user, %{
@@ -482,6 +485,37 @@ defmodule Pleroma.NotificationTest do
                )
 
       assert m.last_read_id == to_string(n2.id)
+    end
+
+    @tag needs_streamer: true
+    test "it sends updated marker to the 'user' and the 'user:notification' stream" do
+      %{user: user, token: oauth_token} = oauth_access(["read"])
+      other_user = insert(:user)
+
+      {:ok, _activity} =
+        CommonAPI.post(other_user, %{
+          status: "hi @#{user.nickname}!"
+        })
+
+      [%{id: notification_id}] = Notification.for_user(user)
+
+      notification_id = to_string(notification_id)
+
+      task =
+        Task.async(fn ->
+          {:ok, _topic} =
+            Streamer.get_topic_and_add_socket("user:notification", user, oauth_token)
+
+          assert_receive {:text, event}, 4_000
+
+          assert %{"event" => "marker", "payload" => payload} = Jason.decode!(event)
+
+          assert %{"notifications" => %{"last_read_id" => ^notification_id}} =
+                   Jason.decode!(payload)
+        end)
+
+      Notification.set_read_up_to(user, notification_id)
+      Task.await(task)
     end
   end
 
@@ -614,7 +648,7 @@ defmodule Pleroma.NotificationTest do
           status: "hey @#{other_user.nickname}!"
         })
 
-      {:ok, activity_two} = CommonAPI.favorite(third_user, activity_one.id)
+      {:ok, activity_two} = CommonAPI.favorite(activity_one.id, third_user)
 
       enabled_receivers = Notification.get_notified_from_activity(activity_two)
 
@@ -690,7 +724,7 @@ defmodule Pleroma.NotificationTest do
 
       {:ok, activity} = CommonAPI.post(user, %{status: "hey @#{other_user.nickname}!"})
 
-      {:ok, _} = CommonAPI.add_mute(other_user, activity)
+      {:ok, _} = CommonAPI.add_mute(activity, other_user)
 
       {:ok, same_context_activity} =
         CommonAPI.post(user, %{
@@ -745,7 +779,7 @@ defmodule Pleroma.NotificationTest do
       {:ok, _activity_two} = CommonAPI.repeat(activity_one.id, repeated_user)
 
       {:ok, edit_activity} =
-        CommonAPI.update(user, activity_one, %{
+        CommonAPI.update(activity_one, user, %{
           status: "hey @#{other_user.nickname}! mew mew"
         })
 
@@ -765,7 +799,7 @@ defmodule Pleroma.NotificationTest do
 
       assert Enum.empty?(Notification.for_user(user))
 
-      {:ok, _} = CommonAPI.favorite(other_user, activity.id)
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user)
 
       assert length(Notification.for_user(user)) == 1
 
@@ -782,7 +816,7 @@ defmodule Pleroma.NotificationTest do
 
       assert Enum.empty?(Notification.for_user(user))
 
-      {:ok, _} = CommonAPI.favorite(other_user, activity.id)
+      {:ok, _} = CommonAPI.favorite(activity.id, other_user)
 
       assert length(Notification.for_user(user)) == 1
 
@@ -837,7 +871,7 @@ defmodule Pleroma.NotificationTest do
 
       assert Enum.empty?(Notification.for_user(user))
 
-      {:error, :not_found} = CommonAPI.favorite(other_user, activity.id)
+      {:error, :not_found} = CommonAPI.favorite(activity.id, other_user)
 
       assert Enum.empty?(Notification.for_user(user))
     end
@@ -1087,7 +1121,7 @@ defmodule Pleroma.NotificationTest do
       another_user = insert(:user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "Give me my cofe!"})
-      {:ok, _} = CommonAPI.favorite(another_user, activity.id)
+      {:ok, _} = CommonAPI.favorite(activity.id, another_user)
 
       assert length(Notification.for_user(user)) == 1
     end
@@ -1098,7 +1132,7 @@ defmodule Pleroma.NotificationTest do
 
       insert(:filter, user: followed_user, phrase: "test", hide: true)
 
-      {:ok, _, _, _activity} = CommonAPI.follow(user, followed_user)
+      {:ok, _, _, _activity} = CommonAPI.follow(followed_user, user)
       refute FollowingRelationship.following?(user, followed_user)
       assert [notification] = Notification.for_user(followed_user)
 

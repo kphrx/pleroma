@@ -10,6 +10,7 @@ defmodule Pleroma.Web.Streamer do
   alias Pleroma.Chat.MessageReference
   alias Pleroma.Config
   alias Pleroma.Conversation.Participation
+  alias Pleroma.Marker
   alias Pleroma.Notification
   alias Pleroma.Object
   alias Pleroma.User
@@ -19,6 +20,7 @@ defmodule Pleroma.Web.Streamer do
   alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.Plugs.OAuthScopesPlug
   alias Pleroma.Web.StreamerView
+  require Pleroma.Constants
 
   @registry Pleroma.Web.StreamerRegistry
 
@@ -172,7 +174,13 @@ defmodule Pleroma.Web.Streamer do
   def stream(topics, items) do
     if should_env_send?() do
       for topic <- List.wrap(topics), item <- List.wrap(items) do
-        spawn(fn -> do_stream(topic, item) end)
+        fun = fn -> do_stream(topic, item) end
+
+        if Config.get([__MODULE__, :sync_streaming], false) do
+          fun.()
+        else
+          spawn(fun)
+        end
       end
     end
   end
@@ -187,6 +195,9 @@ defmodule Pleroma.Web.Streamer do
     recipients = MapSet.new(item.recipients)
     domain_blocks = Pleroma.Web.ActivityPub.MRF.subdomains_regex(user.domain_blocks)
 
+    following_ap_ids =
+      if user.domain_blocks == [], do: [], else: User.get_cached_user_friends_ap_ids(user)
+
     with parent <- Object.normalize(item, fetch: false) || item,
          true <- Enum.all?([blocked_ap_ids, muted_ap_ids], &(item.actor not in &1)),
          true <- item.data["type"] != "Announce" || item.actor not in reblog_muted_ap_ids,
@@ -197,10 +208,14 @@ defmodule Pleroma.Web.Streamer do
          true <- MapSet.disjoint?(recipients, recipient_blocks),
          %{host: item_host} <- URI.parse(item.actor),
          %{host: parent_host} <- URI.parse(parent.data["actor"]),
-         false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
-         false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, parent_host),
+         false <-
+           item.actor not in following_ap_ids and
+             Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
+         false <-
+           parent.data["actor"] not in following_ap_ids and
+             Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, parent_host),
          true <- thread_containment(item, user),
-         false <- CommonAPI.thread_muted?(user, parent) do
+         false <- CommonAPI.thread_muted?(parent, user) do
       false
     else
       _ -> true
@@ -281,26 +296,48 @@ defmodule Pleroma.Web.Streamer do
 
   defp do_stream(topic, {user, %MessageReference{} = cm_ref})
        when topic in ["user", "user:pleroma_chat"] do
-    topic = "#{topic}:#{user.id}"
+    if Pleroma.Chat.enabled?() do
+      topic = "#{topic}:#{user.id}"
 
-    text = StreamerView.render("chat_update.json", %{chat_message_reference: cm_ref}, topic)
+      text = StreamerView.render("chat_update.json", %{chat_message_reference: cm_ref}, topic)
 
-    Registry.dispatch(@registry, topic, fn list ->
-      Enum.each(list, fn {pid, _auth} ->
-        send(pid, {:text, text})
+      Registry.dispatch(@registry, topic, fn list ->
+        Enum.each(list, fn {pid, _auth} ->
+          send(pid, {:text, text})
+        end)
       end)
-    end)
+    end
   end
 
-  defp do_stream("user", item) do
+  defp do_stream("user", %Activity{} = item) do
     Logger.debug("Trying to push to users")
 
     recipient_topics =
       User.get_recipients_from_activity(item)
       |> Enum.map(fn %{id: id} -> "user:#{id}" end)
 
-    Enum.each(recipient_topics, fn topic ->
+    hashtag_recipients =
+      if Pleroma.Constants.as_public() in item.recipients do
+        Pleroma.Hashtag.get_recipients_for_activity(item)
+        |> Enum.map(fn id -> "user:#{id}" end)
+      else
+        []
+      end
+
+    all_recipients = Enum.uniq(recipient_topics ++ hashtag_recipients)
+
+    Enum.each(all_recipients, fn topic ->
       push_to_socket(topic, item)
+    end)
+  end
+
+  defp do_stream(topic, %Marker{} = marker) do
+    Registry.dispatch(@registry, "#{topic}:#{marker.user_id}", fn list ->
+      Enum.each(list, fn {pid, _auth} ->
+        text = StreamerView.render("marker.json", marker)
+
+        send(pid, {:text, text})
+      end)
     end)
   end
 

@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.EnsureRePrepended do
-  alias Pleroma.Object
-
   @moduledoc "Ensure a re: is prepended on replies to a post with a Subject"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  alias Pleroma.Object
+
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @reply_prefix Regex.compile!("^re:[[:space:]]*", [:caseless])
 
@@ -29,19 +31,19 @@ defmodule Pleroma.Web.ActivityPub.MRF.EnsureRePrepended do
 
   def filter_by_summary(_in_reply_to, child), do: child
 
-  def filter(%{"type" => type, "object" => child_object} = object)
-      when type in ["Create", "Update"] and is_map(child_object) do
+  def filter(%{"type" => type, "object" => object} = activity)
+      when type in ["Create", "Update"] and is_map(object) do
     child =
-      child_object["inReplyTo"]
+      object["inReplyTo"]
       |> Object.normalize(fetch: false)
-      |> filter_by_summary(child_object)
+      |> filter_by_summary(object)
 
-    object = Map.put(object, "object", child)
+    activity = Map.put(activity, "object", child)
 
-    {:ok, object}
+    {:ok, activity}
   end
 
-  def filter(object), do: {:ok, object}
+  def filter(activity), do: {:ok, activity}
 
   def describe, do: {:ok, %{}}
 end

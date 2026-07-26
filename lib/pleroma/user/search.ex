@@ -4,6 +4,7 @@
 
 defmodule Pleroma.User.Search do
   alias Pleroma.EctoType.ActivityPub.ObjectValidators.Uri, as: UriType
+  alias Pleroma.Instances.Instance
   alias Pleroma.Pagination
   alias Pleroma.User
 
@@ -16,6 +17,7 @@ defmodule Pleroma.User.Search do
     following = Keyword.get(opts, :following, false)
     result_limit = Keyword.get(opts, :limit, @limit)
     offset = Keyword.get(opts, :offset, 0)
+    capabilities = Keyword.get(opts, :capabilities, [])
 
     for_user = Keyword.get(opts, :for_user)
 
@@ -32,7 +34,7 @@ defmodule Pleroma.User.Search do
 
     results =
       query_string
-      |> search_query(for_user, following, top_user_ids)
+      |> search_query(for_user, following, top_user_ids, capabilities)
       |> Pagination.fetch_paginated(%{"offset" => offset, "limit" => result_limit}, :offset)
 
     results
@@ -80,20 +82,22 @@ defmodule Pleroma.User.Search do
     end
   end
 
-  defp search_query(query_string, for_user, following, top_user_ids) do
+  defp search_query(query_string, for_user, following, top_user_ids, capabilities) do
     for_user
     |> base_query(following)
     |> filter_blocked_user(for_user)
     |> filter_invisible_users()
     |> filter_internal_users()
     |> filter_blocked_domains(for_user)
+    |> filter_unreachable_users()
     |> fts_search(query_string)
     |> select_top_users(top_user_ids)
     |> trigram_rank(query_string)
     |> boost_search_rank(for_user, top_user_ids)
     |> subquery()
-    |> order_by(desc: :search_rank)
+    |> order_by_search_rank(for_user)
     |> maybe_restrict_local(for_user)
+    |> maybe_restrict_accepting_chat_messages(capabilities)
     |> filter_deactivated_users()
   end
 
@@ -194,6 +198,14 @@ defmodule Pleroma.User.Search do
 
   defp filter_blocked_domains(query, _), do: query
 
+  defp filter_unreachable_users(query) do
+    from(u in query,
+      left_join: i in Instance,
+      on: i.host == fragment("substring(? from '.*://([^/]*)')", u.ap_id),
+      where: is_nil(i.unreachable_since)
+    )
+  end
+
   defp maybe_resolve(true, user, query) do
     case {limit(), user} do
       {:all, _} -> :noop
@@ -214,6 +226,14 @@ defmodule Pleroma.User.Search do
     end
   end
 
+  defp maybe_restrict_accepting_chat_messages(query, capabilities) do
+    if "accepts_chat_messages" in capabilities do
+      from(q in query, where: q.accepts_chat_messages == true)
+    else
+      query
+    end
+  end
+
   defp limit, do: Pleroma.Config.get([:instance, :limit_to_local_content], :unauthenticated)
 
   defp restrict_local(q), do: where(q, [u], u.local == true)
@@ -226,6 +246,16 @@ defmodule Pleroma.User.Search do
 
     from(u in subquery(query),
       select_merge: %{
+        search_type:
+          fragment(
+            """
+            CASE WHEN (?) THEN 2
+            WHEN (?) THEN 1
+            ELSE 0 END
+            """,
+            u.id in ^top_user_ids,
+            u.id in ^friends_ids or u.id in ^followers_ids
+          ),
         search_rank:
           fragment(
             """
@@ -251,6 +281,14 @@ defmodule Pleroma.User.Search do
   defp boost_search_rank(query, _for_user, top_user_ids) do
     from(u in subquery(query),
       select_merge: %{
+        search_type:
+          fragment(
+            """
+            CASE WHEN (?) THEN 2
+            ELSE 0 END
+            """,
+            u.id in ^top_user_ids
+          ),
         search_rank:
           fragment(
             """
@@ -263,4 +301,22 @@ defmodule Pleroma.User.Search do
       }
     )
   end
+
+  defp order_by_search_rank(query, %User{}) do
+    order_by(
+      query,
+      [u],
+      desc: u.search_type,
+      desc_nulls_last:
+        fragment(
+          "CASE WHEN ? = 1 THEN COALESCE(?, ?) ELSE NULL END",
+          u.search_type,
+          u.last_status_at,
+          u.last_active_at
+        ),
+      desc: u.search_rank
+    )
+  end
+
+  defp order_by_search_rank(query, _), do: order_by(query, desc: :search_rank)
 end

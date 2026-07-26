@@ -1,0 +1,35 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/in-reply-to-embedded-note",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:40:21Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-in-reply-to-embedded-note",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:40:21Z",
+    "content": "embedded note",
+    "inReplyTo": {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Note",
+      "id": "https://fedidev.fun/assets/note1.jsonap",
+      "to": [
+        "https://www.w3.org/ns/activitystreams#Public"
+      ],
+      "attributedTo": "https://fedidev.fun/users/alice",
+      "content": "One",
+      "published": "2024-01-06T13:11:45Z"
+    }
+  }
+}

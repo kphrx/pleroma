@@ -1,14 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"
      xmlns:webfeeds="http://webfeeds.org/rss/1.0"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/"
+     xmlns:media="http://search.yahoo.com/mrss/"
      xmlns:thr="http://purl.org/syndication/thread/1.0">
   <channel>
 
     <title>#<%= @tag %></title>
     <description><%= Gettext.dpgettext("static_pages", "tag feed description", "These are public toots tagged with #%{tag}. You can interact with them if you have an account anywhere in the fediverse.", tag: @tag) %></description>
-    <link><%= '#{Routes.tag_feed_url(@conn, :feed, @tag)}.rss' %></link>
+    <link><%= "#{Routes.tag_feed_url(@conn, :feed, @tag)}.rss" %></link>
     <webfeeds:logo><%= feed_logo() %></webfeeds:logo>
+    <webfeeds:icon><%= feed_logo() %></webfeeds:icon>
     <webfeeds:accentColor>2b90d9</webfeeds:accentColor>
+    <%= with last_build_date when not is_nil(last_build_date) <- most_recent_update(@activities, :rss) do %>
+      <lastBuildDate><%= last_build_date %></lastBuildDate>
+    <% end %>
+    <generator><%= Pleroma.Application.named_version() %></generator>
     <%= for activity <- @activities do %>
     <%= render Phoenix.Controller.view_module(@conn), "_tag_activity.xml", Map.merge(assigns, prepare_activity(activity)) %>
     <% end %>

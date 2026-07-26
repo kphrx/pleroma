@@ -18,6 +18,8 @@ defmodule Pleroma.Web.ApiSpec.CastAndValidate do
   alias OpenApiSpex.Plug.PutApiSpec
   alias Plug.Conn
 
+  require Logger
+
   @impl Plug
   def init(opts) do
     opts
@@ -51,6 +53,10 @@ defmodule Pleroma.Web.ApiSpec.CastAndValidate do
         conn
 
       {:error, reason} ->
+        Logger.error(
+          "Strict ApiSpec: request denied to #{conn.request_path} with params #{inspect(conn.params)}"
+        )
+
         opts = render_error.init(reason)
 
         conn
@@ -100,7 +106,14 @@ defmodule Pleroma.Web.ApiSpec.CastAndValidate do
     OpenApiSpex.cast_and_validate(spec, operation, conn, content_type, cast_opts)
   end
 
-  defp cast_and_validate(spec, operation, conn, content_type, false = _strict, cast_opts) do
+  defp cast_and_validate(
+         spec,
+         operation,
+         %Conn{} = conn,
+         content_type,
+         false = _strict,
+         cast_opts
+       ) do
     case OpenApiSpex.cast_and_validate(spec, operation, conn, content_type) do
       {:ok, conn} ->
         {:ok, conn}

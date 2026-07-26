@@ -71,11 +71,15 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
           drop_static_param_and_redirect(conn)
 
         content_type == "image/gif" ->
-          redirect(conn, external: media_proxy_url)
+          conn
+          |> put_status(301)
+          |> redirect(external: media_proxy_url)
 
         min_content_length_for_preview() > 0 and content_length > 0 and
             content_length < min_content_length_for_preview() ->
-          redirect(conn, external: media_proxy_url)
+          conn
+          |> put_status(301)
+          |> redirect(external: media_proxy_url)
 
         true ->
           handle_preview(content_type, conn, media_proxy_url)
@@ -204,6 +208,7 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
 
   defp media_proxy_opts do
     Config.get([:media_proxy, :proxy_opts], [])
+    |> Keyword.put_new(:sniff_content_type, true)
   end
 
   defp sandbox(conn, _params) do

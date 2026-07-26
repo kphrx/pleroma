@@ -19,7 +19,12 @@ defmodule Pleroma.Web.StreamerTest do
 
   @moduletag needs_streamer: true, capture_log: true
 
-  setup do: clear_config([:instance, :skip_thread_containment])
+  setup do
+    clear_config([:instance, :skip_thread_containment])
+    Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
+
+    :ok
+  end
 
   describe "get_topic/_ (unauthenticated)" do
     test "allows no stream" do
@@ -215,7 +220,7 @@ defmodule Pleroma.Web.StreamerTest do
     } do
       %{token: read_lists_token} = oauth_access(["read:lists"], user: user)
       %{token: invalid_token} = oauth_access(["irrelevant:scope"], user: user)
-      {:ok, list} = List.create("Test", user)
+      {:ok, list} = List.create(%{title: "Test"}, user)
 
       assert {:error, _} = Streamer.get_topic("list:#{list.id}", user, read_oauth_token)
 
@@ -228,7 +233,7 @@ defmodule Pleroma.Web.StreamerTest do
 
     test "disallows list stream that are not owned by the user", %{user: user, token: oauth_token} do
       another_user = insert(:user)
-      {:ok, list} = List.create("Test", another_user)
+      {:ok, list} = List.create(%{title: "Test"}, another_user)
 
       assert {:error, _} = Streamer.get_topic("list:#{list.id}", user, oauth_token)
       assert {:error, _} = Streamer.get_topic("list", user, oauth_token, %{"list" => list.id})
@@ -418,7 +423,7 @@ defmodule Pleroma.Web.StreamerTest do
       Streamer.get_topic_and_add_socket("user:notification", user, oauth_token)
 
       {:ok, activity} = CommonAPI.post(user, %{status: ":("})
-      {:ok, _} = CommonAPI.favorite(blocked, activity.id)
+      {:ok, _} = CommonAPI.favorite(activity.id, blocked)
 
       refute_receive _
     end
@@ -430,11 +435,11 @@ defmodule Pleroma.Web.StreamerTest do
       user2 = insert(:user)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "super hot take"})
-      {:ok, _} = CommonAPI.add_mute(user, activity)
+      {:ok, _} = CommonAPI.add_mute(activity, user)
 
       Streamer.get_topic_and_add_socket("user:notification", user, oauth_token)
 
-      {:ok, favorite_activity} = CommonAPI.favorite(user2, activity.id)
+      {:ok, favorite_activity} = CommonAPI.favorite(activity.id, user2)
 
       refute_receive _
       assert Streamer.filtered_by_user?(user, favorite_activity)
@@ -448,7 +453,7 @@ defmodule Pleroma.Web.StreamerTest do
 
       {:ok, activity} = CommonAPI.post(user, %{status: "super hot take"})
       Streamer.get_topic_and_add_socket("user:notification", user, oauth_token)
-      {:ok, favorite_activity} = CommonAPI.favorite(user2, activity.id)
+      {:ok, favorite_activity} = CommonAPI.favorite(activity.id, user2)
 
       assert_receive {:render_with_user, _, "notification.json", notif, _}
       assert notif.activity.id == favorite_activity.id
@@ -464,10 +469,24 @@ defmodule Pleroma.Web.StreamerTest do
       {:ok, user} = User.block_domain(user, "hecking-lewd-place.com")
       {:ok, activity} = CommonAPI.post(user, %{status: "super hot take"})
       Streamer.get_topic_and_add_socket("user:notification", user, oauth_token)
-      {:ok, favorite_activity} = CommonAPI.favorite(user2, activity.id)
+      {:ok, favorite_activity} = CommonAPI.favorite(activity.id, user2)
 
       refute_receive _
       assert Streamer.filtered_by_user?(user, favorite_activity)
+    end
+
+    test "it does not filter followed users on blocked domains", %{user: user} do
+      followed =
+        insert(:user, %{ap_id: "https://hecking-lewd-place.com/user/friend"})
+
+      {:ok, user} = User.block_domain(user, "hecking-lewd-place.com")
+      {:ok, activity} = CommonAPI.post(followed, %{status: "still a friend"})
+
+      assert Streamer.filtered_by_user?(user, activity)
+
+      {:ok, user, _followed} = User.follow(user, followed)
+
+      refute Streamer.filtered_by_user?(user, activity)
     end
 
     test "it sends follow activities to the 'user:notification' stream", %{
@@ -477,7 +496,7 @@ defmodule Pleroma.Web.StreamerTest do
       user2 = insert(:user)
 
       Streamer.get_topic_and_add_socket("user:notification", user, oauth_token)
-      {:ok, _follower, _followed, follow_activity} = CommonAPI.follow(user2, user)
+      {:ok, _follower, _followed, follow_activity} = CommonAPI.follow(user, user2)
 
       assert_receive {:render_with_user, _, "notification.json", notif, _}
       assert notif.activity.id == follow_activity.id
@@ -493,7 +512,7 @@ defmodule Pleroma.Web.StreamerTest do
       other_user_id = other_user.id
 
       Streamer.get_topic_and_add_socket("user", user, oauth_token)
-      {:ok, _follower, _followed, _follow_activity} = CommonAPI.follow(user, other_user)
+      {:ok, _follower, _followed, _follow_activity} = CommonAPI.follow(other_user, user)
 
       assert_receive {:text, event}
 
@@ -536,12 +555,12 @@ defmodule Pleroma.Web.StreamerTest do
 
     test "it streams edits in the 'user' stream", %{user: user, token: oauth_token} do
       sender = insert(:user)
-      {:ok, _, _, _} = CommonAPI.follow(user, sender)
+      {:ok, _, _, _} = CommonAPI.follow(sender, user)
 
       {:ok, activity} = CommonAPI.post(sender, %{status: "hey"})
 
       Streamer.get_topic_and_add_socket("user", user, oauth_token)
-      {:ok, edited} = CommonAPI.update(sender, activity, %{status: "mew mew"})
+      {:ok, edited} = CommonAPI.update(activity, sender, %{status: "mew mew"})
       create = Pleroma.Activity.get_create_by_object_ap_id_with_object(activity.object.data["id"])
 
       assert_receive {:render_with_user, _, "status_update.json", ^create, _}
@@ -552,11 +571,41 @@ defmodule Pleroma.Web.StreamerTest do
       {:ok, activity} = CommonAPI.post(user, %{status: "hey"})
 
       Streamer.get_topic_and_add_socket("user", user, oauth_token)
-      {:ok, edited} = CommonAPI.update(user, activity, %{status: "mew mew"})
+      {:ok, edited} = CommonAPI.update(activity, user, %{status: "mew mew"})
       create = Pleroma.Activity.get_create_by_object_ap_id_with_object(activity.object.data["id"])
 
       assert_receive {:render_with_user, _, "status_update.json", ^create, _}
       refute Streamer.filtered_by_user?(user, edited)
+    end
+
+    test "it streams posts containing followed hashtags on the 'user' stream", %{
+      user: user,
+      token: oauth_token
+    } do
+      hashtag = insert(:hashtag, %{name: "tenshi"})
+      other_user = insert(:user)
+      {:ok, user} = User.follow_hashtag(user, hashtag)
+
+      Streamer.get_topic_and_add_socket("user", user, oauth_token)
+      {:ok, activity} = CommonAPI.post(other_user, %{status: "hey #tenshi"})
+
+      assert_receive {:render_with_user, _, "update.json", ^activity, _}
+    end
+
+    test "should not stream private posts containing followed hashtags on the 'user' stream", %{
+      user: user,
+      token: oauth_token
+    } do
+      hashtag = insert(:hashtag, %{name: "tenshi"})
+      other_user = insert(:user)
+      {:ok, user} = User.follow_hashtag(user, hashtag)
+
+      Streamer.get_topic_and_add_socket("user", user, oauth_token)
+
+      {:ok, activity} =
+        CommonAPI.post(other_user, %{status: "hey #tenshi", visibility: "private"})
+
+      refute_receive {:render_with_user, _, "update.json", ^activity, _}
     end
   end
 
@@ -608,7 +657,7 @@ defmodule Pleroma.Web.StreamerTest do
       {:ok, activity} = CommonAPI.post(sender, %{status: "hey"})
       assert_receive {:text, _}
 
-      {:ok, edited} = CommonAPI.update(sender, activity, %{status: "mew mew"})
+      {:ok, edited} = CommonAPI.update(activity, sender, %{status: "mew mew"})
 
       edited = Pleroma.Activity.normalize(edited)
 
@@ -627,7 +676,7 @@ defmodule Pleroma.Web.StreamerTest do
       {:ok, activity} = CommonAPI.post(sender, %{status: "hey"})
       assert_receive {:text, _}
 
-      {:ok, edited} = CommonAPI.update(sender, activity, %{status: "mew mew"})
+      {:ok, edited} = CommonAPI.update(activity, sender, %{status: "mew mew"})
 
       edited = Pleroma.Activity.normalize(edited)
 
@@ -638,7 +687,7 @@ defmodule Pleroma.Web.StreamerTest do
       assert %{"id" => ^activity_id} = Jason.decode!(payload)
       refute Streamer.filtered_by_user?(sender, edited)
 
-      {:ok, edited} = CommonAPI.update(sender, activity, %{status: "mew mew 2"})
+      {:ok, edited} = CommonAPI.update(activity, sender, %{status: "mew mew 2"})
 
       edited = Pleroma.Activity.normalize(edited)
 
@@ -768,7 +817,7 @@ defmodule Pleroma.Web.StreamerTest do
 
       {:ok, user_a, user_b} = User.follow(user_a, user_b)
 
-      {:ok, list} = List.create("Test", user_a)
+      {:ok, list} = List.create(%{title: "Test"}, user_a)
       {:ok, list} = List.follow(list, user_b)
 
       Streamer.get_topic_and_add_socket("list", user_a, user_a_token, %{"list" => list.id})
@@ -785,7 +834,7 @@ defmodule Pleroma.Web.StreamerTest do
     test "it doesn't send unwanted private posts to list", %{user: user_a, token: user_a_token} do
       user_b = insert(:user)
 
-      {:ok, list} = List.create("Test", user_a)
+      {:ok, list} = List.create(%{title: "Test"}, user_a)
       {:ok, list} = List.follow(list, user_b)
 
       Streamer.get_topic_and_add_socket("list", user_a, user_a_token, %{"list" => list.id})
@@ -804,7 +853,7 @@ defmodule Pleroma.Web.StreamerTest do
 
       {:ok, user_a, user_b} = User.follow(user_a, user_b)
 
-      {:ok, list} = List.create("Test", user_a)
+      {:ok, list} = List.create(%{title: "Test"}, user_a)
       {:ok, list} = List.follow(list, user_b)
 
       Streamer.get_topic_and_add_socket("list", user_a, user_a_token, %{"list" => list.id})
@@ -826,8 +875,8 @@ defmodule Pleroma.Web.StreamerTest do
     test "it filters muted reblogs", %{user: user1, token: user1_token} do
       user2 = insert(:user)
       user3 = insert(:user)
-      CommonAPI.follow(user1, user2)
-      CommonAPI.hide_reblogs(user1, user2)
+      CommonAPI.follow(user2, user1)
+      CommonAPI.hide_reblogs(user2, user1)
 
       {:ok, create_activity} = CommonAPI.post(user3, %{status: "I'm kawen"})
 
@@ -842,8 +891,8 @@ defmodule Pleroma.Web.StreamerTest do
       token: user1_token
     } do
       user2 = insert(:user)
-      CommonAPI.follow(user1, user2)
-      CommonAPI.hide_reblogs(user1, user2)
+      CommonAPI.follow(user2, user1)
+      CommonAPI.hide_reblogs(user2, user1)
 
       {:ok, create_activity} = CommonAPI.post(user1, %{status: "I'm kawen"})
       Streamer.get_topic_and_add_socket("user", user1, user1_token)
@@ -853,17 +902,17 @@ defmodule Pleroma.Web.StreamerTest do
       assert Streamer.filtered_by_user?(user1, notif)
     end
 
-    test "it send non-reblog notification for reblog-muted actors", %{
+    test "it sends non-reblog notification for reblog-muted actors", %{
       user: user1,
       token: user1_token
     } do
       user2 = insert(:user)
-      CommonAPI.follow(user1, user2)
-      CommonAPI.hide_reblogs(user1, user2)
+      CommonAPI.follow(user2, user1)
+      CommonAPI.hide_reblogs(user2, user1)
 
       {:ok, create_activity} = CommonAPI.post(user1, %{status: "I'm kawen"})
       Streamer.get_topic_and_add_socket("user", user1, user1_token)
-      {:ok, _favorite_activity} = CommonAPI.favorite(user2, create_activity.id)
+      {:ok, _favorite_activity} = CommonAPI.favorite(create_activity.id, user2)
 
       assert_receive {:render_with_user, _, "notification.json", notif, _}
       refute Streamer.filtered_by_user?(user1, notif)
@@ -876,9 +925,9 @@ defmodule Pleroma.Web.StreamerTest do
       %{user: user2, token: user2_token} = oauth_access(["read"])
       Streamer.get_topic_and_add_socket("user", user2, user2_token)
 
-      {:ok, user2, user, _activity} = CommonAPI.follow(user2, user)
+      {:ok, user2, user, _activity} = CommonAPI.follow(user, user2)
       {:ok, activity} = CommonAPI.post(user, %{status: "super hot take"})
-      {:ok, _} = CommonAPI.add_mute(user2, activity)
+      {:ok, _} = CommonAPI.add_mute(activity, user2)
 
       assert_receive {:render_with_user, _, _, ^activity, _}
       assert Streamer.filtered_by_user?(user2, activity)
@@ -1026,8 +1075,8 @@ defmodule Pleroma.Web.StreamerTest do
       %{user: user2, token: user2_token} = oauth_access(["read"])
 
       post_user = insert(:user)
-      CommonAPI.follow(user, post_user)
-      CommonAPI.follow(user2, post_user)
+      CommonAPI.follow(post_user, user)
+      CommonAPI.follow(post_user, user2)
 
       tasks = [
         Task.async(child_proc.(starter.(user, token), hit)),
@@ -1058,7 +1107,7 @@ defmodule Pleroma.Web.StreamerTest do
       %{user: user, token: token} = oauth_access(["read"])
 
       post_user = insert(:user)
-      CommonAPI.follow(user, post_user)
+      CommonAPI.follow(post_user, user)
 
       tasks = [
         Task.async(child_proc.(starter.(user, token), hit)),

@@ -75,48 +75,70 @@ defmodule Pleroma.Web.CommonAPI.Utils do
     {Enum.map(participation.recipients, & &1.ap_id), []}
   end
 
-  def get_to_and_cc(%{visibility: visibility} = draft) when visibility in ["public", "local"] do
-    to =
-      case visibility do
-        "public" -> [Pleroma.Constants.as_public() | draft.mentions]
-        "local" -> [Utils.as_local_public() | draft.mentions]
+  def get_to_and_cc(%{visibility: visibility} = draft) do
+    # If the OP is a DM already, add the implicit actor
+    mentions =
+      if visibility == "direct" && draft.in_reply_to && Visibility.direct?(draft.in_reply_to) do
+        Enum.uniq([draft.in_reply_to.data["actor"] | draft.mentions])
+      else
+        draft.mentions
       end
 
-    cc = [draft.user.follower_address]
-
-    if draft.in_reply_to do
-      {Enum.uniq([draft.in_reply_to.data["actor"] | to]), cc}
-    else
-      {to, cc}
-    end
+    get_to_and_cc_for_visibility(
+      visibility,
+      draft.user.follower_address,
+      draft.in_reply_to && draft.in_reply_to.data["actor"],
+      mentions
+    )
   end
 
-  def get_to_and_cc(%{visibility: "unlisted"} = draft) do
-    to = [draft.user.follower_address | draft.mentions]
-    cc = [Pleroma.Constants.as_public()]
+  def get_to_and_cc_for_visibility("public", follower_collection, parent_actor, mentions) do
+    scope_addr = Pleroma.Constants.as_public()
 
-    if draft.in_reply_to do
-      {Enum.uniq([draft.in_reply_to.data["actor"] | to]), cc}
-    else
-      {to, cc}
-    end
+    to =
+      if parent_actor,
+        do: Enum.uniq([parent_actor, scope_addr | mentions]),
+        else: [scope_addr | mentions]
+
+    {to, [follower_collection]}
   end
 
-  def get_to_and_cc(%{visibility: "private"} = draft) do
-    {to, cc} = get_to_and_cc(struct(draft, visibility: "direct"))
-    {[draft.user.follower_address | to], cc}
+  def get_to_and_cc_for_visibility("local", follower_collection, parent_actor, mentions) do
+    recipients =
+      if parent_actor,
+        do: Enum.uniq([parent_actor | mentions]),
+        else: mentions
+
+    to = [
+      Utils.as_local_public()
+      | Enum.filter(recipients, fn addr ->
+          String.starts_with?(addr, Pleroma.Web.Endpoint.url() <> "/")
+        end)
+    ]
+
+    {to, [follower_collection]}
   end
 
-  def get_to_and_cc(%{visibility: "direct"} = draft) do
-    # If the OP is a DM already, add the implicit actor.
-    if draft.in_reply_to && Visibility.direct?(draft.in_reply_to) do
-      {Enum.uniq([draft.in_reply_to.data["actor"] | draft.mentions]), []}
-    else
-      {draft.mentions, []}
-    end
+  def get_to_and_cc_for_visibility("unlisted", follower_collection, parent_actor, mentions) do
+    to =
+      if parent_actor,
+        do: Enum.uniq([parent_actor, follower_collection | mentions]),
+        else: [follower_collection | mentions]
+
+    {to, [Pleroma.Constants.as_public()]}
   end
 
-  def get_to_and_cc(%{visibility: {:list, _}, mentions: mentions}), do: {mentions, []}
+  def get_to_and_cc_for_visibility("private", follower_collection, _, mentions) do
+    {[follower_collection | mentions], []}
+  end
+
+  def get_to_and_cc_for_visibility("direct", _, _, mentions) do
+    {mentions, []}
+  end
+
+  def get_to_and_cc_for_visibility({:list, _}, _, _, mentions) do
+    {mentions, []}
+  end
 
   def get_addressed_users(_, to) when is_list(to) do
     User.get_ap_ids_by_nicknames(to)
@@ -300,12 +322,30 @@ defmodule Pleroma.Web.CommonAPI.Utils do
     |> Formatter.linkify(options)
   end
 
+  def format_input(text, "text/x.misskeymarkdown", options) do
+    text
+    |> Formatter.markdown_to_html(%{breaks: true})
+    |> safe_mfm_to_html()
+    |> Formatter.linkify(options)
+    |> Formatter.html_escape("text/x.misskeymarkdown")
+  end
+
   def format_input(text, "text/markdown", options) do
     text
     |> Formatter.mentions_escape(options)
     |> Formatter.markdown_to_html()
     |> Formatter.linkify(options)
     |> Formatter.html_escape("text/html")
+  end
+
+  defp safe_mfm_to_html(html) do
+    html
+    |> MfmParser.Parser.parse()
+    |> MfmParser.Encoder.to_html()
+  rescue
+    _ -> html
+  catch
+    _, _ -> html
   end
 
   def format_naive_asctime(date) do
@@ -402,28 +442,6 @@ defmodule Pleroma.Web.CommonAPI.Utils do
 
   def maybe_notify_mentioned_recipients(recipients, _), do: recipients
 
-  def maybe_notify_subscribers(
-        recipients,
-        %Activity{data: %{"actor" => actor, "type" => "Create"}} = activity
-      ) do
-    # Do not notify subscribers if author is making a reply
-    with %Object{data: object} <- Object.normalize(activity, fetch: false),
-         nil <- object["inReplyTo"],
-         %User{} = user <- User.get_cached_by_ap_id(actor) do
-      subscriber_ids =
-        user
-        |> User.subscriber_users()
-        |> Enum.filter(&Visibility.visible_for_user?(activity, &1))
-        |> Enum.map(& &1.ap_id)
-
-      recipients ++ subscriber_ids
-    else
-      _e -> recipients
-    end
-  end
-
-  def maybe_notify_subscribers(recipients, _), do: recipients
-
   def maybe_notify_followers(recipients, %Activity{data: %{"type" => "Move"}} = activity) do
     with %User{} = user <- User.get_cached_by_ap_id(activity.actor) do
       user
@@ -436,6 +454,27 @@ defmodule Pleroma.Web.CommonAPI.Utils do
   end
 
   def maybe_notify_followers(recipients, _), do: recipients
+
+  def get_notified_subscribers(
+        %Activity{data: %{"actor" => actor, "type" => "Create"}} = activity
+      ) do
+    # Do not notify subscribers if author is making a reply
+    with %Object{data: object} <- Object.normalize(activity, fetch: false),
+         nil <- object["inReplyTo"],
+         %User{} = user <- User.get_cached_by_ap_id(actor) do
+      subscriber_ids =
+        user
+        |> User.subscriber_users()
+        |> Enum.filter(&Visibility.visible_for_user?(activity, &1))
+        |> Enum.map(& &1.ap_id)
+
+      subscriber_ids
+    else
+      _e -> []
+    end
+  end
+
+  def get_notified_subscribers(_), do: []
 
   def maybe_extract_mentions(%{"tag" => tag}) do
     tag

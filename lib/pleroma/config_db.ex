@@ -10,6 +10,7 @@ defmodule Pleroma.ConfigDB do
   import Pleroma.Web.Gettext
 
   alias __MODULE__
+  alias Pleroma.EctoType.Config.RateLimit
   alias Pleroma.Repo
 
   @type t :: %__MODULE__{}
@@ -60,7 +61,58 @@ defmodule Pleroma.ConfigDB do
     |> cast(params, [:key, :group, :value])
     |> validate_required([:key, :group, :value])
     |> unique_constraint(:key, name: :config_group_key_index)
+    |> validate_rate_limit()
   end
+
+  defp validate_rate_limit(changeset) do
+    group = get_field(changeset, :group)
+    key = get_field(changeset, :key)
+
+    if group == :pleroma and key == :rate_limit do
+      value = get_field(changeset, :value)
+
+      case normalize_rate_limit(value) do
+        {:ok, normalized_value} ->
+          put_change(changeset, :value, normalized_value)
+
+        {:error, {limiter_name, reason}} ->
+          add_error(
+            changeset,
+            :value,
+            "invalid :rate_limit value for #{inspect(limiter_name)}: #{reason}"
+          )
+      end
+    else
+      changeset
+    end
+  end
+
+  defp normalize_rate_limit(nil), do: {:ok, nil}
+
+  defp normalize_rate_limit(%{} = value), do: normalize_rate_limit(Map.to_list(value))
+
+  defp normalize_rate_limit(value) when is_list(value) do
+    if Keyword.keyword?(value) do
+      value
+      |> Enum.reduce_while({:ok, []}, fn {limiter_name, limiter_value}, {:ok, acc} ->
+        case RateLimit.cast_with_error(limiter_value) do
+          {:ok, normalized_limiter_value} ->
+            {:cont, {:ok, [{limiter_name, normalized_limiter_value} | acc]}}
+
+          {:error, reason} ->
+            {:halt, {:error, {limiter_name, reason}}}
+        end
+      end)
+      |> case do
+        {:ok, acc} -> {:ok, Enum.reverse(acc)}
+        {:error, _} = error -> error
+      end
+    else
+      {:error, {:rate_limit, "must be a keyword list"}}
+    end
+  end
+
+  defp normalize_rate_limit(_), do: {:error, {:rate_limit, "must be a keyword list"}}
 
   defp create(params) do
     %ConfigDB{}
@@ -165,8 +217,7 @@ defmodule Pleroma.ConfigDB do
       {:pleroma, :ecto_repos},
       {:mime, :types},
       {:cors_plug, [:max_age, :methods, :expose, :headers]},
-      {:swarm, :node_blacklist},
-      {:logger, :backends}
+      {:swarm, :node_blacklist}
     ]
 
     Enum.any?(full_key_update, fn
@@ -303,7 +354,7 @@ defmodule Pleroma.ConfigDB do
   end
 
   def to_elixir_types(%{"tuple" => entity}) do
-    Enum.reduce(entity, {}, &Tuple.append(&2, to_elixir_types(&1)))
+    Enum.reduce(entity, {}, &Tuple.insert_at(&2, tuple_size(&2), to_elixir_types(&1)))
   end
 
   def to_elixir_types(entity) when is_map(entity) do
@@ -385,7 +436,12 @@ defmodule Pleroma.ConfigDB do
 
   @spec module_name?(String.t()) :: boolean()
   def module_name?(string) do
-    Regex.match?(~r/^(Pleroma|Phoenix|Tesla|Ueberauth|Swoosh)\./, string) or
-      string in ["Oban", "Ueberauth", "ExSyslogger", "ConcurrentLimiter"]
+    if String.contains?(string, ".") do
+      [name | _] = String.split(string, ".", parts: 2)
+
+      name in ~w[Pleroma Phoenix Tesla Ueberauth Swoosh Logger LoggerBackends]
+    else
+      string in ~w[Oban Ueberauth ExSyslogger ConcurrentLimiter]
+    end
   end
 end

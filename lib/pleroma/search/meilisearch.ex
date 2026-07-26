@@ -4,6 +4,8 @@ defmodule Pleroma.Search.Meilisearch do
 
   alias Pleroma.Activity
   alias Pleroma.Config.Getting, as: Config
+  alias Pleroma.Object
+  alias Pleroma.Search
 
   import Pleroma.Search.DatabaseSearch
   import Ecto.Query
@@ -118,65 +120,24 @@ defmodule Pleroma.Search.Meilisearch do
     end
   end
 
-  def object_to_search_data(object) do
-    # Only index public or unlisted Notes
-    if not is_nil(object) and object.data["type"] == "Note" and
-         not is_nil(object.data["content"]) and
-         (Pleroma.Constants.as_public() in object.data["to"] or
-            Pleroma.Constants.as_public() in object.data["cc"]) and
-         object.data["content"] not in ["", "."] do
-      data = object.data
-
-      content_str =
-        case data["content"] do
-          [nil | rest] -> to_string(rest)
-          str -> str
-        end
-
-      content =
-        with {:ok, scrubbed} <-
-               FastSanitize.Sanitizer.scrub(content_str, Pleroma.HTML.Scrubber.SearchIndexing),
-             trimmed <- String.trim(scrubbed) do
-          trimmed
-        end
-
-      # Make sure we have a non-empty string
-      if content != "" do
-        {:ok, published, _} = DateTime.from_iso8601(data["published"])
-
-        %{
-          id: object.id,
-          content: content,
-          ap: data["id"],
-          published: published |> DateTime.to_unix()
-        }
-      end
-    end
-  end
-
   @impl true
-  def add_to_index(activity) do
-    maybe_search_data = object_to_search_data(activity.object)
+  def add_to_index(%Activity{object: %Object{} = object} = activity) do
+    search_data = Search.object_to_search_data(object)
 
-    if activity.data["type"] == "Create" and maybe_search_data do
-      result =
-        meili_put(
-          "/indexes/objects/documents",
-          [maybe_search_data]
-        )
+    result =
+      meili_put(
+        "/indexes/objects/documents",
+        [search_data]
+      )
 
-      with {:ok, %{"status" => "enqueued"}} <- result do
-        # Added successfully
-        :ok
-      else
-        _ ->
-          # There was an error, report it
-          Logger.error("Failed to add activity #{activity.id} to index: #{inspect(result)}")
-          {:error, result}
-      end
-    else
-      # The post isn't something we can search, that's ok
+    with {:ok, %{"status" => "enqueued"}} <- result do
+      # Added successfully
       :ok
+    else
+      _ ->
+        # There was an error, report it
+        Logger.error("Failed to add activity #{activity.id} to index: #{inspect(result)}")
+        {:error, result}
     end
   end
 

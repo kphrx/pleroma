@@ -21,6 +21,7 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
       acct: %Schema{type: :string},
       avatar_static: %Schema{type: :string, format: :uri},
       avatar: %Schema{type: :string, format: :uri},
+      avatar_description: %Schema{type: :string},
       bot: %Schema{type: :boolean},
       created_at: %Schema{type: :string, format: "date-time"},
       display_name: %Schema{type: :string},
@@ -31,9 +32,9 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
       following_count: %Schema{type: :integer},
       header_static: %Schema{type: :string, format: :uri},
       header: %Schema{type: :string, format: :uri},
+      header_description: %Schema{type: :string},
       id: FlakeID,
       locked: %Schema{type: :boolean},
-      mute_expires_at: %Schema{type: :string, format: "date-time", nullable: true},
       note: %Schema{type: :string, format: :html},
       statuses_count: %Schema{type: :integer},
       url: %Schema{type: :string, format: :uri},
@@ -111,7 +112,9 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
             format: :uri,
             nullable: true,
             description: "Favicon image of the user's instance"
-          }
+          },
+          avatar_description: %Schema{type: :string, deprecated: true},
+          header_description: %Schema{type: :string, deprecated: true}
         }
       },
       source: %Schema{
@@ -152,6 +155,7 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
     example: %{
       "acct" => "foobar",
       "avatar" => "https://mypleroma.com/images/avi.png",
+      "avatar_description" => "",
       "avatar_static" => "https://mypleroma.com/images/avi.png",
       "bot" => false,
       "created_at" => "2020-03-24T13:05:58.000Z",
@@ -162,6 +166,7 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Account do
       "followers_count" => 0,
       "following_count" => 1,
       "header" => "https://mypleroma.com/images/banner.png",
+      "header_description" => "",
       "header_static" => "https://mypleroma.com/images/banner.png",
       "id" => "9tKi3esbG7OQgZ2920",
       "locked" => false,

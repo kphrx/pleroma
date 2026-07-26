@@ -8,6 +8,7 @@ defmodule Pleroma.Web.OAuth.App do
   import Ecto.Query
   alias Pleroma.Repo
   alias Pleroma.User
+  alias Pleroma.Web.OAuth.Token
 
   @type t :: %__MODULE__{}
 
@@ -30,7 +31,30 @@ defmodule Pleroma.Web.OAuth.App do
 
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(struct, params) do
+    params = normalize_redirect_uris_param(params)
+
     cast(struct, params, [:client_name, :redirect_uris, :scopes, :website, :trusted, :user_id])
+  end
+
+  defp normalize_redirect_uris_param(%{} = params) do
+    case params do
+      %{redirect_uris: redirect_uris} when is_list(redirect_uris) ->
+        Map.put(params, :redirect_uris, normalize_redirect_uris(redirect_uris))
+
+      %{"redirect_uris" => redirect_uris} when is_list(redirect_uris) ->
+        Map.put(params, "redirect_uris", normalize_redirect_uris(redirect_uris))
+
+      _ ->
+        params
+    end
+  end
+
+  defp normalize_redirect_uris(redirect_uris) when is_list(redirect_uris) do
+    redirect_uris
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n")
   end
 
   @spec register_changeset(t(), map()) :: Ecto.Changeset.t()
@@ -62,7 +86,7 @@ defmodule Pleroma.Web.OAuth.App do
     |> Repo.insert()
   end
 
-  @spec update(pos_integer(), map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()}
+  @spec update(pos_integer(), map()) :: {:ok, t()} | {:error, Ecto.Changeset.t()} | nil
   def update(id, params) do
     with %__MODULE__{} = app <- Repo.get(__MODULE__, id) do
       app
@@ -154,5 +178,30 @@ defmodule Pleroma.Web.OAuth.App do
       {key, {error, _}}, acc ->
         Map.put(acc, key, error)
     end)
+  end
+
+  @spec maybe_update_owner(Token.t()) :: :ok
+  def maybe_update_owner(%Token{app_id: app_id, user_id: user_id}) when not is_nil(user_id) do
+    __MODULE__.update(app_id, %{user_id: user_id})
+
+    :ok
+  end
+
+  def maybe_update_owner(_), do: :ok
+
+  @spec remove_orphans(pos_integer()) :: :ok
+  def remove_orphans(limit \\ 100) do
+    fifteen_mins_ago = DateTime.add(DateTime.utc_now(), -900, :second)
+
+    Repo.transaction(fn ->
+      from(a in __MODULE__,
+        where: is_nil(a.user_id) and a.inserted_at < ^fifteen_mins_ago,
+        limit: ^limit
+      )
+      |> Repo.all()
+      |> Enum.each(&Repo.delete(&1))
+    end)
+
+    :ok
   end
 end

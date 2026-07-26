@@ -17,7 +17,8 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Chat do
       account: %Schema{type: :object},
       unread: %Schema{type: :integer},
       last_message: ChatMessage,
-      updated_at: %Schema{type: :string, format: :"date-time"}
+      updated_at: %Schema{type: :string, format: :"date-time"},
+      pinned: %Schema{type: :boolean}
     },
     example: %{
       "account" => %{
@@ -68,8 +69,9 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Chat do
       },
       "id" => "1",
       "unread" => 2,
-      "last_message" => ChatMessage.schema().example(),
-      "updated_at" => "2020-04-21T15:06:45.000Z"
+      "last_message" => ChatMessage.schema().example,
+      "updated_at" => "2020-04-21T15:06:45.000Z",
+      "pinned" => false
     }
   })
 end
