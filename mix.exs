@@ -218,7 +218,23 @@ defmodule Pleroma.Mixfile do
       {:covertool, "~> 2.0", only: :test},
       # Hackney 4.7 requires h2 0.11 while WebTransport still declares 0.10.x.
       {:h2, "~> 0.11.0", override: true},
-      {:hackney, "~> 4.7.2", override: true},
+      # 4.7.2 plus https://github.com/benoitc/hackney/pull/919, which is a single
+      # commit on top of the 4.7.2 tag (`git diff 4.7.2..5042f6a` to review it).
+      # An unpooled connection that ends without a reusable socket -- a body cut
+      # short by the peer, a bodyless 204/304, or a failed read -- parks forever
+      # holding what it read, and nothing downstream can release it. Media proxy
+      # warming hits that whenever an attachment fetch is cut short and the
+      # outbound proxy is used as a CONNECT tunnel, since tunnels are never
+      # pooled. See test/pleroma/http/hackney_conn_leak_test.exs and
+      # https://github.com/benoitc/hackney/issues/918.
+      #
+      # Being a git dep, hackney is invisible to `mix deps.audit` and
+      # `mix hex.outdated` until this moves back to a hex release, which should
+      # happen as soon as the fix ships in one.
+      {:hackney,
+       git: "https://github.com/lambadalambda/hackney.git",
+       ref: "5042f6a09df526a46de2c8945634f95605d2fc76",
+       override: true},
       {:mox, "~> 1.2", only: :test},
       {:websockex, "~> 0.4.3", only: :test},
       {:benchee, "~> 1.4", only: :benchmark},
