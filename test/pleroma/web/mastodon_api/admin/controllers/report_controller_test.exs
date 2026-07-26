@@ -8,6 +8,9 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportControllerTest do
 
   import Pleroma.Factory
 
+  alias Pleroma.Activity
+  alias Pleroma.Repo
+  alias Pleroma.Rule
   alias Pleroma.Web.CommonAPI
 
   setup_all do
@@ -58,6 +61,11 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportControllerTest do
                |> get("/api/v1/admin/reports")
                |> json_response_and_validate_schema(200)
 
+      assert [%{"id" => ^report_id1}] =
+               conn
+               |> get("/api/v1/admin/reports?resolved=false")
+               |> json_response_and_validate_schema(200)
+
       assert [%{"id" => ^report_id2}, %{"id" => ^report_id1}] =
                conn
                |> get("/api/v1/admin/reports?resolved=true&unresolved=true")
@@ -66,6 +74,25 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportControllerTest do
       assert [%{"id" => ^report_id2}] =
                conn
                |> get("/api/v1/admin/reports?resolved=true")
+               |> json_response_and_validate_schema(200)
+    end
+
+    test "get reports by target account", %{conn: conn} do
+      [reporter, target_user, other_target] = insert_list(3, :user)
+
+      {:ok, %{id: report_id}} =
+        CommonAPI.report(reporter, %{
+          account_id: target_user.id
+        })
+
+      {:ok, _report} =
+        CommonAPI.report(reporter, %{
+          account_id: other_target.id
+        })
+
+      assert [%{"id" => ^report_id}] =
+               conn
+               |> get("/api/v1/admin/reports?target_account_id=#{target_user.id}")
                |> json_response_and_validate_schema(200)
     end
   end
@@ -86,6 +113,34 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportControllerTest do
                |> get("/api/v1/admin/reports/#{report_id}")
                |> json_response_and_validate_schema(200)
     end
+
+    test "returns report rules", %{conn: conn} do
+      [reporter, target_user] = insert_pair(:user)
+      rule = Rule.create(%{text: "Be excellent to each other"})
+
+      {:ok, %{id: report_id}} =
+        CommonAPI.report(reporter, %{
+          account_id: target_user.id,
+          rule_ids: [rule.id]
+        })
+
+      assert %{
+               "rules" => [
+                 %{"id" => rule_id, "text" => "Be excellent to each other"}
+               ]
+             } =
+               conn
+               |> get("/api/v1/admin/reports/#{report_id}")
+               |> json_response_and_validate_schema(200)
+
+      assert rule_id == to_string(rule.id)
+    end
+
+    test "returns 404 for a missing report", %{conn: conn} do
+      conn
+      |> get("/api/v1/admin/reports/0")
+      |> json_response_and_validate_schema(404)
+    end
   end
 
   describe "POST /api/v1/admin/reports/:id/resolve" do
@@ -103,6 +158,16 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportControllerTest do
                conn
                |> post("/api/v1/admin/reports/#{report_id}/resolve")
                |> json_response_and_validate_schema(200)
+    end
+
+    test "does not mutate a non-report activity", %{conn: conn} do
+      activity = insert(:note_activity)
+
+      conn
+      |> post("/api/v1/admin/reports/#{activity.id}/resolve")
+      |> json_response_and_validate_schema(404)
+
+      refute Repo.reload!(activity).data["state"]
     end
   end
 
@@ -123,6 +188,52 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportControllerTest do
                conn
                |> post("/api/v1/admin/reports/#{report_id}/reopen")
                |> json_response_and_validate_schema(200)
+    end
+
+    test "does not mutate a non-report activity", %{conn: conn} do
+      activity = insert(:note_activity)
+
+      conn
+      |> post("/api/v1/admin/reports/#{activity.id}/reopen")
+      |> json_response_and_validate_schema(404)
+
+      refute Repo.reload!(activity).data["state"]
+    end
+  end
+
+  describe "POST /api/v1/admin/reports/:id/assign_to_self" do
+    test "assign and unassign a report", %{admin: admin, conn: conn} do
+      [reporter, target_user] = insert_pair(:user)
+
+      {:ok, report} =
+        CommonAPI.report(reporter, %{
+          account_id: target_user.id
+        })
+
+      assert %{"assigned_account" => %{"id" => admin_id}} =
+               conn
+               |> post("/api/v1/admin/reports/#{report.id}/assign_to_self")
+               |> json_response_and_validate_schema(200)
+
+      assert admin_id == admin.id
+      assert Repo.reload!(report).data["assigned_account"] == admin.id
+
+      assert %{"assigned_account" => nil} =
+               conn
+               |> post("/api/v1/admin/reports/#{report.id}/unassign")
+               |> json_response_and_validate_schema(200)
+
+      refute Repo.reload!(report).data["assigned_account"]
+    end
+
+    test "does not assign a non-report activity", %{conn: conn} do
+      %Activity{id: id} = activity = insert(:note_activity)
+
+      conn
+      |> post("/api/v1/admin/reports/#{id}/assign_to_self")
+      |> json_response_and_validate_schema(404)
+
+      refute Repo.reload!(activity).data["assigned_account"]
     end
   end
 end

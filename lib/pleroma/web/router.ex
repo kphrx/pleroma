@@ -137,6 +137,12 @@ defmodule Pleroma.Web.Router do
     plug(Pleroma.Web.Plugs.EnsurePrivilegedPlug, :users_manage_activation_state)
   end
 
+  pipeline :require_privileged_role_account_actions do
+    plug(:admin_api)
+    plug(Pleroma.Web.Plugs.EnsurePrivilegedPlug, :users_manage_activation_state)
+    plug(Pleroma.Web.Plugs.EnsurePrivilegedPlug, :reports_manage_reports)
+  end
+
   pipeline :require_privileged_role_users_manage_invites do
     plug(:admin_api)
     plug(Pleroma.Web.Plugs.EnsurePrivilegedPlug, :users_manage_invites)
@@ -443,8 +449,13 @@ defmodule Pleroma.Web.Router do
   scope "/api/v1/admin", Pleroma.Web.MastodonAPI.Admin do
     pipe_through([:require_privileged_role_users_manage_activation_state])
 
-    post("/accounts/:id/action", AccountController, :account_action)
     post("/accounts/:id/enable", AccountController, :enable)
+  end
+
+  scope "/api/v1/admin", Pleroma.Web.MastodonAPI.Admin do
+    pipe_through([:require_privileged_role_account_actions])
+
+    post("/accounts/:id/action", AccountController, :account_action)
   end
 
   # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)
@@ -462,6 +473,8 @@ defmodule Pleroma.Web.Router do
     get("/reports/:id", ReportController, :show)
     post("/reports/:id/resolve", ReportController, :resolve)
     post("/reports/:id/reopen", ReportController, :reopen)
+    post("/reports/:id/assign_to_self", ReportController, :assign_to_self)
+    post("/reports/:id/unassign", ReportController, :unassign)
   end
 
   # Mastodon AdminAPI: admins and mods (staff) can perform these actions (if privileged by role)

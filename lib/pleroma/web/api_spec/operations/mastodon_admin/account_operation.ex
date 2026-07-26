@@ -216,20 +216,24 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.AccountOperation do
             properties: %{
               type: %Schema{
                 type: :string,
-                enum: ["none", "disable", "sensitive", "silence", "suspend"]
+                enum: ["none", "disable"]
               },
               report_id: %Schema{
                 type: :string,
                 nullable: true,
                 description: "ID of an associated report that caused this action to be taken"
               }
-            }
+            },
+            required: [:type]
           },
           required: true
         ),
       responses: %{
         204 => no_content_response(),
-        401 => Operation.response("Error", "application/json", ApiError)
+        400 => Operation.response("Error", "application/json", ApiError),
+        401 => Operation.response("Error", "application/json", ApiError),
+        403 => Operation.response("Error", "application/json", ApiError),
+        404 => Operation.response("Error", "application/json", ApiError)
       }
     }
   end

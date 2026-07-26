@@ -183,6 +183,20 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountControllerTest do
       assert %{is_active: false} = user
     end
 
+    test "does not disable a remote account", %{conn: conn} do
+      %{id: id} = user = insert(:user, local: false)
+
+      assert %{"error" => "Only local accounts can be disabled"} =
+               conn
+               |> put_req_header("content-type", "application/json")
+               |> post("/api/v1/admin/accounts/#{id}/action", %{
+                 "type" => "disable"
+               })
+               |> json_response_and_validate_schema(400)
+
+      assert %{is_active: true} = Repo.reload!(user)
+    end
+
     test "perform action with assigned report", %{conn: conn} do
       [reporter, target_user] = insert_pair(:user)
 
@@ -191,11 +205,9 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountControllerTest do
           account_id: target_user.id
         })
 
-      %{id: id} = insert(:user)
-
       conn
       |> put_req_header("content-type", "application/json")
-      |> post("/api/v1/admin/accounts/#{id}/action", %{
+      |> post("/api/v1/admin/accounts/#{target_user.id}/action", %{
         "type" => "none",
         "report_id" => report_id
       })
@@ -204,6 +216,56 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountControllerTest do
       report = Repo.reload!(report)
 
       assert %{data: %{"state" => "resolved"}} = report
+    end
+
+    test "requires the report management privilege", %{conn: conn} do
+      clear_config([:instance, :admin_privileges], [:users_manage_activation_state])
+
+      %{id: id} = insert(:user)
+
+      assert %{"error" => _} =
+               conn
+               |> put_req_header("content-type", "application/json")
+               |> post("/api/v1/admin/accounts/#{id}/action", %{"type" => "none"})
+               |> json_response(403)
+    end
+
+    test "does not resolve a report for another account", %{conn: conn} do
+      [reporter, target_user, other_user] = insert_list(3, :user)
+
+      {:ok, report} =
+        CommonAPI.report(reporter, %{
+          account_id: target_user.id
+        })
+
+      assert %{"error" => _} =
+               conn
+               |> put_req_header("content-type", "application/json")
+               |> post("/api/v1/admin/accounts/#{other_user.id}/action", %{
+                 "type" => "none",
+                 "report_id" => report.id
+               })
+               |> json_response_and_validate_schema(400)
+
+      assert %{data: %{"state" => "open"}} = Repo.reload!(report)
+    end
+
+    test "requires an action type", %{conn: conn} do
+      %{id: id} = insert(:user)
+
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/v1/admin/accounts/#{id}/action", %{})
+      |> json_response_and_validate_schema(400)
+    end
+
+    test "rejects unsupported action types", %{conn: conn} do
+      %{id: id} = insert(:user)
+
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/v1/admin/accounts/#{id}/action", %{"type" => "sensitive"})
+      |> json_response_and_validate_schema(400)
     end
   end
 

@@ -26,6 +26,13 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
 
   plug(OAuthScopesPlug, %{scopes: ["admin:write:reports"]} when action in [:resolve, :reopen])
 
+  plug(
+    OAuthScopesPlug,
+    %{scopes: ["admin:write:reports"]} when action in [:assign_to_self, :unassign]
+  )
+
+  action_fallback(Pleroma.Web.MastodonAPI.FallbackController)
+
   defdelegate open_api_operation(action), to: Pleroma.Web.ApiSpec.MastodonAdmin.ReportOperation
 
   def index(conn, params) do
@@ -37,6 +44,7 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
       |> Map.put(:total, true)
       |> restrict_state(params)
       |> restrict_actor(params)
+      |> restrict_target(params)
 
     reports =
       ActivityPub.fetch_activities_query([], opts)
@@ -67,6 +75,9 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
 
       render(conn, "show.json", Report.extract_report_info(report))
     else
+      {:error, :not_found} ->
+        {:error, :not_found}
+
       {:error, error} ->
         json_response(conn, :bad_request, %{error: error})
     end
@@ -84,6 +95,9 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
 
       render(conn, "show.json", Report.extract_report_info(report))
     else
+      {:error, :not_found} ->
+        {:error, :not_found}
+
       {:error, error} ->
         json_response(conn, :bad_request, %{error: error})
     end
@@ -102,6 +116,9 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
 
       render(conn, "show.json", Report.extract_report_info(report))
     else
+      {:error, :not_found} ->
+        {:error, :not_found}
+
       {:error, error} ->
         json_response(conn, :bad_request, %{error: error})
     end
@@ -119,14 +136,17 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
 
       render(conn, "show.json", Report.extract_report_info(report))
     else
+      {:error, :not_found} ->
+        {:error, :not_found}
+
       {:error, error} ->
         json_response(conn, :bad_request, %{error: error})
     end
   end
 
-  defp restrict_state(opts, %{resolved: true}), do: Map.put(opts, :state, "resolved")
+  defp restrict_state(opts, %{resolved: true, unresolved: true}), do: opts
 
-  defp restrict_state(opts, %{resolved: _}), do: Map.put(opts, :state, "resolved")
+  defp restrict_state(opts, %{resolved: true}), do: Map.put(opts, :state, "resolved")
 
   defp restrict_state(opts, _params), do: Map.put(opts, :state, "open")
 
@@ -139,4 +159,13 @@ defmodule Pleroma.Web.MastodonAPI.Admin.ReportController do
   end
 
   defp restrict_actor(opts, _params), do: opts
+
+  defp restrict_target(opts, %{target_account_id: actor}) do
+    case User.get_by_id(actor) do
+      %User{ap_id: ap_id} -> Map.put(opts, :report_target_id, ap_id)
+      _ -> Map.put(opts, :report_target_id, actor)
+    end
+  end
+
+  defp restrict_target(opts, _params), do: opts
 end

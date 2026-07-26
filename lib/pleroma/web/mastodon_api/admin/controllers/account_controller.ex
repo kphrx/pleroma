@@ -33,6 +33,8 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
     when action in [:index, :index2, :show]
   )
 
+  action_fallback(Pleroma.Web.MastodonAPI.FallbackController)
+
   plug(
     OAuthScopesPlug,
     %{scopes: ["admin:write:accounts"]}
@@ -92,11 +94,18 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
           conn,
         _params
       ) do
-    {:ok, _user} = handle_account_action(user, admin, type)
+    with :ok <- validate_account_action(user, type),
+         {:ok, report} <- associated_report(user, body_params),
+         :ok <- resolve_report(admin, report),
+         {:ok, _user} <- handle_account_action(user, admin, type) do
+      json_response(conn, :no_content, "")
+    else
+      {:error, :not_found} ->
+        {:error, :not_found}
 
-    resolve_report(admin, body_params)
-
-    json_response(conn, :no_content, "")
+      {:error, error} ->
+        json_response(conn, :bad_request, %{error: error})
+    end
   end
 
   def delete(%{assigns: %{user: admin, account: user}} = conn, _params) do
@@ -161,9 +170,20 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
     User.set_activation(user, false)
   end
 
-  defp handle_account_action(user, _admin, _type) do
+  defp handle_account_action(%User{}, _admin, "disable") do
+    {:error, "Only local accounts can be disabled"}
+  end
+
+  defp handle_account_action(user, _admin, "none") do
     {:ok, user}
   end
+
+  defp validate_account_action(%User{local: true}, "disable"), do: :ok
+
+  defp validate_account_action(%User{}, "disable"),
+    do: {:error, "Only local accounts can be disabled"}
+
+  defp validate_account_action(%User{}, "none"), do: :ok
 
   defp build_criteria(params) do
     %{}
@@ -251,7 +271,23 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
     defp unquote(:"maybe_filter_#{filter_param}")(criteria, _params), do: criteria
   end
 
-  defp resolve_report(admin, %{report_id: id}) do
+  defp associated_report(user, %{report_id: id}) do
+    case Activity.get_report(id) do
+      %Activity{data: %{"object" => [target_ap_id | _]}} = report
+      when target_ap_id == user.ap_id ->
+        {:ok, report}
+
+      %Activity{} ->
+        {:error, "Report does not target this account"}
+
+      nil ->
+        {:error, :not_found}
+    end
+  end
+
+  defp associated_report(_user, _params), do: {:ok, nil}
+
+  defp resolve_report(admin, %Activity{id: id}) do
     with {:ok, activity} <- CommonAPI.update_report_state(id, "resolved"),
          report <- Activity.get_by_id_with_user_actor(activity.id) do
       ModerationLog.insert_log(%{
@@ -260,9 +296,10 @@ defmodule Pleroma.Web.MastodonAPI.Admin.AccountController do
         subject: activity,
         subject_actor: report.user_actor
       })
+
+      :ok
     end
   end
 
-  defp resolve_report(_admin, _params) do
-  end
+  defp resolve_report(_admin, nil), do: :ok
 end

@@ -34,7 +34,7 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.ReportOperation do
             :target_account_id,
             :query,
             :string,
-            "Filter by report target account id (not implemented)"
+            "Filter by report target account id"
           )
         ] ++
           pagination_params(),
@@ -81,7 +81,8 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.ReportOperation do
       responses: %{
         200 => Operation.response("Report", "application/json", report()),
         400 => Operation.response("Error", "application/json", ApiError),
-        401 => Operation.response("Error", "application/json", ApiError)
+        401 => Operation.response("Error", "application/json", ApiError),
+        404 => Operation.response("Error", "application/json", ApiError)
       }
     }
   end
@@ -99,8 +100,40 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.ReportOperation do
       responses: %{
         200 => Operation.response("Report", "application/json", report()),
         400 => Operation.response("Error", "application/json", ApiError),
-        401 => Operation.response("Error", "application/json", ApiError)
+        401 => Operation.response("Error", "application/json", ApiError),
+        404 => Operation.response("Error", "application/json", ApiError)
       }
+    }
+  end
+
+  def assign_to_self_operation do
+    %Operation{
+      tags: ["Report management (Mastodon API)"],
+      summary: "Assign report to self",
+      operationId: "MastodonAdmin.ReportController.assign_to_self",
+      security: [%{"oAuth" => ["admin:write:reports"]}],
+      parameters: [Operation.parameter(:id, :path, :string, "ID of the report")],
+      responses: report_update_responses()
+    }
+  end
+
+  def unassign_operation do
+    %Operation{
+      tags: ["Report management (Mastodon API)"],
+      summary: "Unassign report",
+      operationId: "MastodonAdmin.ReportController.unassign",
+      security: [%{"oAuth" => ["admin:write:reports"]}],
+      parameters: [Operation.parameter(:id, :path, :string, "ID of the report")],
+      responses: report_update_responses()
+    }
+  end
+
+  defp report_update_responses do
+    %{
+      200 => Operation.response("Report", "application/json", report()),
+      400 => Operation.response("Error", "application/json", ApiError),
+      401 => Operation.response("Error", "application/json", ApiError),
+      404 => Operation.response("Error", "application/json", ApiError)
     }
   end
 
@@ -112,7 +145,7 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.ReportOperation do
         id: FlakeID,
         action_taken: %Schema{type: :boolean},
         action_taken_at: %Schema{type: :string, format: "date-time", nullable: true},
-        category: %Schema{type: :string, enum: ["spam", "violation", "other"]},
+        category: %Schema{type: :string, enum: ["spam", "legal", "violation", "other"]},
         comment: %Schema{type: :string, nullable: true},
         forwarded: %Schema{type: :boolean, nullable: true},
         created_at: %Schema{type: :string, format: "date-time"},
@@ -136,7 +169,7 @@ defmodule Pleroma.Web.ApiSpec.MastodonAdmin.ReportOperation do
           items: %Schema{
             type: :object,
             properties: %{
-              id: %Schema{type: :integer},
+              id: %Schema{type: :string},
               text: %Schema{type: :string}
             }
           }
