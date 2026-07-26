@@ -9,6 +9,7 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Status do
   alias Pleroma.Web.ApiSpec.Schemas.Emoji
   alias Pleroma.Web.ApiSpec.Schemas.FlakeID
   alias Pleroma.Web.ApiSpec.Schemas.Poll
+  alias Pleroma.Web.ApiSpec.Schemas.PreviewCard
   alias Pleroma.Web.ApiSpec.Schemas.Tag
   alias Pleroma.Web.ApiSpec.Schemas.VisibilityScope
 
@@ -31,79 +32,8 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Status do
       },
       bookmarked: %Schema{type: :boolean, description: "Have you bookmarked this status?"},
       card: %Schema{
-        type: :object,
-        nullable: true,
-        description: "Preview card for links included within status content",
-        # Yeah, it's effectivelly all required in MastoAPI so far
-        required: [
-          :url,
-          :title,
-          :description,
-          :type,
-          :author_name,
-          :author_url,
-          :provider_name,
-          :provider_url,
-          :html,
-          :width,
-          :height,
-          :image,
-          :embed_url,
-          :blurhash
-        ],
-        properties: %{
-          url: %Schema{type: :string, format: :uri, description: "Location of linked resource"},
-          title: %Schema{type: :string, description: "Title of linked resource"},
-          description: %Schema{type: :string, description: "Description of preview"},
-          type: %Schema{
-            type: :string,
-            enum: ["link", "photo", "video", "rich"],
-            description: "The type of the preview card"
-          },
-          author_name: %Schema{type: :string, description: "author of the original resource"},
-          author_url: %Schema{
-            type: :string,
-            format: :uri,
-            description: "link to the author of the original resource"
-          },
-          provider_name: %Schema{
-            type: :string,
-            description: "The provider of the original resource"
-          },
-          provider_url: %Schema{
-            type: :string,
-            format: :uri,
-            description: "A link to the provider of the original resource"
-          },
-          html: %Schema{
-            type: :string,
-            format: :html,
-            description: "HTML to be used for generating the preview card"
-          },
-          width: %Schema{type: :integer, description: "Width of preview, in pixels"},
-          height: %Schema{type: :integer, description: "Height of preview, in pixels"},
-          image: %Schema{
-            type: :string,
-            nullable: true,
-            format: :uri,
-            description: "Preview thumbnail"
-          },
-          image_description: %Schema{
-            type: :string,
-            description: "Alternate text that describes what is in the thumbnail"
-          },
-          embed_url: %Schema{
-            type: :string,
-            format: :uri,
-            description: "Used for photo embeds, instead of custom `html`"
-          },
-          blurhash: %Schema{
-            type: :string,
-            nullable: true,
-            description:
-              "A hash computed by the (BlurHash algorithm)[https://github.com/woltapp/blurhash], for generating colorful preview thumbnails when media has not been downloaded yet."
-          }
-        }
+        allOf: [PreviewCard],
+        nullable: true
       },
       content: %Schema{type: :string, format: :html, description: "HTML-encoded status content"},
       text: %Schema{

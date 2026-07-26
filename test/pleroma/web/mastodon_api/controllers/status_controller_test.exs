@@ -2430,6 +2430,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
 
   describe "cards" do
     setup do
+      clear_config([:rich_media, :enabled], true)
+      Mox.stub_with(Pleroma.CachexMock, Pleroma.NullCache)
+
       Pleroma.StaticStubbedConfigMock
       |> stub(:get, fn
         [:rich_media, :enabled] -> true
@@ -2443,6 +2446,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       Tesla.Mock.mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "https://example.com/ogp"})
+      ObanHelpers.perform_all()
 
       card_data = %{
         "image" => "http://ia.media-imdb.com/images/rock.jpg",
@@ -2465,10 +2469,14 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
         },
         "author_name" => "",
         "author_url" => "",
+        "authors" => [],
         "blurhash" => nil,
         "embed_url" => "",
         "height" => 0,
         "html" => "",
+        "image_description" => "",
+        "language" => nil,
+        "published_at" => nil,
         "width" => 0
       }
 
@@ -2495,6 +2503,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
       Tesla.Mock.mock_global(fn env -> apply(HttpRequestMock, :request, [env]) end)
 
       {:ok, activity} = CommonAPI.post(user, %{status: "https://example.com/ogp-missing-data"})
+      ObanHelpers.perform_all()
 
       response =
         conn
@@ -2518,10 +2527,14 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
                },
                "author_name" => "",
                "author_url" => "",
+               "authors" => [],
                "blurhash" => nil,
                "embed_url" => "",
                "height" => 0,
                "html" => "",
+               "image_description" => "",
+               "language" => nil,
+               "published_at" => nil,
                "width" => 0
              }
     end

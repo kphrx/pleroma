@@ -845,15 +845,31 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
       fields = %{
         "url" => page_url,
-        "site_name" => "Example site name",
+        "type" => "photo",
         "title" => "Example website",
         "image" => page_url <> "/example.jpg",
-        "description" => "Example description"
+        "description" => "Example description",
+        "author_name" => "Example author",
+        "author_url" => page_url <> "/author",
+        "provider_name" => "Example provider",
+        "provider_url" => page_url <> "/provider",
+        "html" => "<img src=\"#{page_url}/example.jpg\">",
+        "width" => "1024",
+        "height" => 768
       }
 
       {:ok, card} = Card.create(page_url, fields)
 
-      assert match?(%{provider_name: "example.com"}, StatusView.render("card.json", card))
+      assert %{
+               type: "photo",
+               author_name: "Example author",
+               author_url: "https://example.com/author",
+               provider_name: "Example provider",
+               provider_url: "https://example.com/provider",
+               html: "<img src=\"https://example.com/example.jpg\">",
+               width: 1024,
+               height: 768
+             } = StatusView.render("card.json", card)
     end
 
     test "a rich media card has all media proxied" do
