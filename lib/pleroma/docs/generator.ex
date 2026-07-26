@@ -12,13 +12,27 @@ defmodule Pleroma.Docs.Generator do
 
   @spec list_behaviour_implementations(behaviour :: module()) :: [module()]
   def list_behaviour_implementations(behaviour) do
-    :code.all_loaded()
-    |> Enum.filter(fn {module, _} ->
+    # :code.all_loaded() no longer works on Elixir 1.19 and newer since modules are lazily loaded.
+    # We can get a complete list of modules by interating over Application.loaded_applications/0,
+    # but that includes every module which would get loaded below, which is very slow.
+    # Hardcode the Pleroma application instead, which is good enough for now.
+    application_modules =
+      case :application.get_key(:pleroma, :modules) do
+        {:ok, modules} -> modules
+        :undefined -> []
+      end
+
+    # At compile time or in tests some modules will be outside of the Pleroma application.
+    loaded_modules = Enum.map(:code.all_loaded(), fn {module, _} -> module end)
+
+    (application_modules ++ loaded_modules)
+    |> Enum.uniq()
+    |> Enum.filter(fn module ->
+      Code.ensure_loaded(module)
+
       # This shouldn't be needed as all modules are expected to have module_info/1,
       # but in test environments some transient modules `:elixir_compiler_XX`
       # are loaded for some reason (where XX is a random integer).
-      Code.ensure_loaded(module)
-
       if function_exported?(module, :module_info, 1) do
         module.module_info(:attributes)
         |> Keyword.get_values(:behaviour)
@@ -26,7 +40,6 @@ defmodule Pleroma.Docs.Generator do
         |> Enum.member?(behaviour)
       end
     end)
-    |> Enum.map(fn {module, _} -> module end)
   end
 
   @doc """

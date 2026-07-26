@@ -3,10 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.EnsureRePrepended do
-  alias Pleroma.Object
-
   @moduledoc "Ensure a re: is prepended on replies to a post with a Subject"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  alias Pleroma.Object
+
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @reply_prefix Regex.compile!("^re:[[:space:]]*", [:caseless])
 

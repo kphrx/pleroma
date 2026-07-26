@@ -46,6 +46,7 @@ defmodule Pleroma.HTML.Scrubber.Default do
   Meta.allow_tag_with_these_attributes(:b, ["lang"])
   Meta.allow_tag_with_these_attributes(:blockquote, ["lang"])
   Meta.allow_tag_with_these_attributes(:br, ["lang"])
+  Meta.allow_tag_with_these_attributes(:center, [])
   Meta.allow_tag_with_these_attributes(:cite, ["lang"])
   Meta.allow_tag_with_these_attributes(:code, ["lang"])
   Meta.allow_tag_with_these_attributes(:del, ["lang"])

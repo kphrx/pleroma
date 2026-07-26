@@ -195,6 +195,9 @@ defmodule Pleroma.Web.Streamer do
     recipients = MapSet.new(item.recipients)
     domain_blocks = Pleroma.Web.ActivityPub.MRF.subdomains_regex(user.domain_blocks)
 
+    following_ap_ids =
+      if user.domain_blocks == [], do: [], else: User.get_cached_user_friends_ap_ids(user)
+
     with parent <- Object.normalize(item, fetch: false) || item,
          true <- Enum.all?([blocked_ap_ids, muted_ap_ids], &(item.actor not in &1)),
          true <- item.data["type"] != "Announce" || item.actor not in reblog_muted_ap_ids,
@@ -205,8 +208,12 @@ defmodule Pleroma.Web.Streamer do
          true <- MapSet.disjoint?(recipients, recipient_blocks),
          %{host: item_host} <- URI.parse(item.actor),
          %{host: parent_host} <- URI.parse(parent.data["actor"]),
-         false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
-         false <- Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, parent_host),
+         false <-
+           item.actor not in following_ap_ids and
+             Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, item_host),
+         false <-
+           parent.data["actor"] not in following_ap_ids and
+             Pleroma.Web.ActivityPub.MRF.subdomain_match?(domain_blocks, parent_host),
          true <- thread_containment(item, user),
          false <- CommonAPI.thread_muted?(parent, user) do
       false
@@ -289,15 +296,17 @@ defmodule Pleroma.Web.Streamer do
 
   defp do_stream(topic, {user, %MessageReference{} = cm_ref})
        when topic in ["user", "user:pleroma_chat"] do
-    topic = "#{topic}:#{user.id}"
+    if Pleroma.Chat.enabled?() do
+      topic = "#{topic}:#{user.id}"
 
-    text = StreamerView.render("chat_update.json", %{chat_message_reference: cm_ref}, topic)
+      text = StreamerView.render("chat_update.json", %{chat_message_reference: cm_ref}, topic)
 
-    Registry.dispatch(@registry, topic, fn list ->
-      Enum.each(list, fn {pid, _auth} ->
-        send(pid, {:text, text})
+      Registry.dispatch(@registry, topic, fn list ->
+        Enum.each(list, fn {pid, _auth} ->
+          send(pid, {:text, text})
+        end)
       end)
-    end)
+    end
   end
 
   defp do_stream("user", %Activity{} = item) do

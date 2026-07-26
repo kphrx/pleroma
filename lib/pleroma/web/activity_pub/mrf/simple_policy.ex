@@ -6,6 +6,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.SimplePolicy do
   @moduledoc "Filter activities depending on their origin instance"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
 
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.Config
   alias Pleroma.FollowingRelationship
   alias Pleroma.User
@@ -108,7 +110,7 @@ defmodule Pleroma.Web.ActivityPub.MRF.SimplePolicy do
   end
 
   defp intersection(list1, list2) do
-    list1 -- (list1 -- list2)
+    list1 -- list1 -- list2
   end
 
   defp check_followers_only(%{host: actor_host} = _actor_info, activity) do
