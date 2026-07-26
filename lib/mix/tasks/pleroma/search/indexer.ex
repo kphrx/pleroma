@@ -4,9 +4,6 @@
 
 defmodule Mix.Tasks.Pleroma.Search.Indexer do
   import Mix.Pleroma
-  import Ecto.Query
-
-  alias Pleroma.Workers.SearchIndexingWorker
 
   def run(["create_index"]) do
     start_pleroma()
@@ -35,49 +32,30 @@ defmodule Mix.Tasks.Pleroma.Search.Indexer do
         strict: [
           chunk: :integer,
           limit: :integer,
-          step: :integer
+          step: :integer,
+          before: :string
         ]
       )
 
     start_pleroma()
 
-    chunk_size = Keyword.get(options, :chunk, 100)
-    limit = Keyword.get(options, :limit, 100_000)
-    per_step = Keyword.get(options, :step, 1000)
+    result =
+      Pleroma.Search.Backfill.run(
+        options ++
+          [
+            on_page: fn page ->
+              IO.puts(
+                "Queued #{page.count} activities (#{page.enqueued} total), " <>
+                  "checkpoint: #{page.next_cursor}"
+              )
+            end
+          ]
+      )
 
-    chunks = max(div(limit, per_step), 1)
+    IO.puts("Queued #{result.enqueued} activities")
 
-    1..chunks
-    |> Enum.each(fn step ->
-      q =
-        from(a in Pleroma.Activity,
-          limit: ^per_step,
-          offset: ^per_step * (^step - 1),
-          select: [:id],
-          order_by: [desc: :id]
-        )
-
-      {:ok, ids} =
-        Pleroma.Repo.transaction(fn ->
-          Pleroma.Repo.stream(q, timeout: :infinity)
-          |> Enum.map(fn a ->
-            a.id
-          end)
-        end)
-
-      IO.puts("Got #{length(ids)} activities, adding to indexer")
-
-      ids
-      |> Enum.chunk_every(chunk_size)
-      |> Enum.each(fn chunk ->
-        IO.puts("Adding #{length(chunk)} activities to indexing queue")
-
-        chunk
-        |> Enum.map(fn id ->
-          SearchIndexingWorker.new(%{"op" => "add_to_index", "activity" => id})
-        end)
-        |> Oban.insert_all()
-      end)
-    end)
+    unless result.exhausted do
+      IO.puts("Resume with --before #{result.next_cursor}")
+    end
   end
 end
