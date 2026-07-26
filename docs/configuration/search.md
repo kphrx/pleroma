@@ -85,7 +85,7 @@ You will see a "Default Admin API Key", this is the key you actually put into yo
 
 ### Initial indexing
 
-After setting up the configuration, you'll want to index all of your already existing posts. Only public posts are indexed.  You'll only
+After setting up the configuration, you'll want to index all of your already existing posts. Only public/unlisted posts are indexed.  You'll only
 have to do it one time, but it might take a while, depending on the amount of posts your instance has seen. This is also a fairly RAM
 consuming process for `meilisearch`, and it will take a lot of RAM when running if you have a lot of posts (seems to be around 5G for ~1.2
 million posts while idle and up to 7G while indexing initially, but your experience may be different).
@@ -145,3 +145,155 @@ This will clear **all** the posts from the search index. Note, that deleted post
 there is no need to actually clear the whole index, unless you want **all** of it gone. That said, the index does not hold any information
 that cannot be re-created from the database, it should also generally be a lot smaller than the size of your database. Still, the size
 depends on the amount of text in posts.
+
+## ParadeDB
+
+[ParadeDB](https://www.paradedb.com/) is a Postgres extension that provides BM25 full-text search. In Pleroma, it can be used as an
+external search backend by pointing Pleroma at a separate Postgres instance with the `pg_search` extension installed.
+Pleroma's integration suite tests `pg_search` 0.24.3 on PostgreSQL 15.
+
+Pleroma will maintain a small `pleroma_search_documents` table in that database (via the existing search indexing queue) and run search
+queries against it.
+The indexed text includes status content, content warnings, and attachment descriptions.
+
+### Configuration
+
+Set the search module to `Pleroma.Search.ParadeDB` and configure the ParadeDB database URL. These settings must be in static/runtime config
+(or `PARADEDB_DATABASE_URL`) so the dedicated ParadeDB Repo is started with the application. They cannot be migrated to or changed through
+ConfigDB.
+
+> config :pleroma, Pleroma.Search, module: Pleroma.Search.ParadeDB
+>
+> config :pleroma, Pleroma.Search.ParadeDB,
+>   url: System.get_env("PARADEDB_DATABASE_URL"),
+>   table: "pleroma_search_documents",
+>   fuzzy_distance: 0
+>
+> config :pleroma, Pleroma.Search.ParadeDB.Repo,
+>   pool_size: 2,
+>   prepare: :unnamed
+
+When connecting over an untrusted network, enable certificate verification in the Repo configuration. For example:
+
+> config :pleroma, Pleroma.Search.ParadeDB.Repo,
+>   ssl: [
+>     verify: :verify_peer,
+>     cacertfile: "/etc/pleroma/paradedb-ca.pem",
+>     server_name_indication: ~c"paradedb.example.com"
+>   ]
+
+### Initial rollout
+
+The `pg_search` extension must already be available in the database. Creating the extension normally requires an administrative database
+role. The Pleroma runtime role requires `CONNECT` on the database, `USAGE` on the table's schema and the `pdb` schema, and `SELECT`, `INSERT`, `UPDATE`,
+and `DELETE` on the generated table. For example, after creating the table as its owner:
+
+```sql
+GRANT CONNECT ON DATABASE paradedb TO pleroma_search;
+GRANT USAGE ON SCHEMA public, pdb TO pleroma_search;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE pleroma_search_documents TO pleroma_search;
+```
+
+Use this rollout order to prevent jobs from being handled by the previous backend:
+
+1. Install `pg_search` 0.24.3 on PostgreSQL 15 or another deliberately tested combination.
+2. Stop Pleroma so no search indexing jobs are running.
+3. Put the ParadeDB backend in static configuration.
+4. Create the table and BM25 index in a one-shot offline process using `PARADEDB_DATABASE_URL` with the table owner/setup credential.
+5. Apply the runtime grants shown above, set the service's `PARADEDB_DATABASE_URL` to the restricted runtime credential, and start Pleroma.
+6. Start the initial backfill and monitor the `search_indexing` queue.
+
+Create the table and BM25 index once with:
+
+=== "OTP"
+    ```sh
+    PARADEDB_DATABASE_URL='OWNER_URL' PLEROMA_CTL_RPC_DISABLED=true \
+      ./bin/pleroma_ctl search.indexer create_index
+    ```
+
+=== "From Source"
+    ```sh
+    PARADEDB_DATABASE_URL='OWNER_URL' mix pleroma.search.indexer create_index
+    ```
+
+The task currently prints an error without returning a failing process status. Verify that it prints `Index created` before continuing.
+
+### Backfill
+
+Run an initial indexing pass to enqueue existing posts:
+
+=== "OTP"
+    ```sh
+    ./bin/pleroma_ctl search.indexer index
+    ```
+
+=== "From Source"
+    ```sh
+    PARADEDB_DATABASE_URL='RUNTIME_URL' mix pleroma.search.indexer index
+    ```
+
+The command enqueues up to 100,000 Create activities by default. It uses keyset pagination, so new activities arriving during the backfill
+do not shift the remaining pages. The defaults and accepted options are:
+
+* `--limit`: maximum activities to enqueue in this run; defaults to `100000` and must be positive
+* `--step`: activities fetched from Pleroma's database per page; defaults to `1000` and must be positive
+* `--chunk`: jobs inserted into Oban per batch; defaults to `100` and must be positive
+* `--before`: resume before the checkpoint activity ID printed by an earlier run; the cursor is exclusive
+
+The checkpoint is the last activity enqueued, not confirmation that its job succeeded. Repeat the command with its last `--before`
+checkpoint only when it reports that more activities remain. Inspect failed or discarded Oban jobs as well as waiting jobs before declaring
+the backfill complete.
+
+The same operation can be run from an attached console while Pleroma is online:
+
+```elixir
+Pleroma.Search.Backfill.run(limit: 10_000)
+```
+
+The returned `next_cursor` can be supplied as `before` when `exhausted` is `false`. The attached API also accepts `limit: :infinity`, but this
+can create an unbounded number of Oban rows; bounded runs are safer on large instances. An `on_page` callback may be supplied for progress
+reporting.
+
+Note: Like the other external search backends, only public/unlisted Notes are indexed.
+
+Set `fuzzy_distance` to `1` or `2` to allow typo-tolerant matching (`2` is the maximum ParadeDB supports).
+
+Indexing runs via the Oban `search_indexing` queue. Its stock configuration starts paused so the search health monitor can control it; verify
+that the queue is running before backfilling. A manually managed queue can be enabled with `search_indexing: 10` in the Oban `queues`
+configuration instead of a `paused: true` entry.
+Monitor that queue until the backfill jobs have drained before evaluating search completeness.
+
+### Rebuilding
+
+Stop Pleroma, or otherwise ensure no search indexing jobs are running, before rebuilding. While ParadeDB is still the configured backend,
+run `drop_index`, then `create_index` with the table owner/setup credential. Reapply runtime grants after recreating the table, restart
+Pleroma, and begin a new backfill. The DDL tasks print failures without returning a failing process status, so verify the exact `Index
+dropped` and `Index created` success messages. Dropping the table removes only derived search data; Pleroma activities remain in the primary
+database.
+
+### Rolling back
+
+To retain the ParadeDB table for a later retry, configure `Pleroma.Search.DatabaseSearch` (or the previous external backend) in static config
+and restart Pleroma.
+
+Before switching backends, inspect the `search_indexing` queue. Drain or cancel pending backfill jobs, or explicitly accept that they will run
+against the newly configured backend after restart.
+
+To remove the table during rollback, first stop Pleroma and run `drop_index` with the table owner/setup credential while ParadeDB is still
+configured:
+
+=== "OTP"
+    ```sh
+    PARADEDB_DATABASE_URL='OWNER_URL' PLEROMA_CTL_RPC_DISABLED=true \
+      ./bin/pleroma_ctl search.indexer drop_index
+    ```
+
+=== "From Source"
+    ```sh
+    PARADEDB_DATABASE_URL='OWNER_URL' mix pleroma.search.indexer drop_index
+    ```
+
+Verify that the task prints `Index dropped`. Then change the backend in static config and restart. The ParadeDB environment variable may be
+removed after removing the ParadeDB stanza or switching to a backend that does not start its Repo. After switching away from ParadeDB, the
+generic `drop_index` task targets the newly configured backend and will not remove the ParadeDB table; remove it directly with the database
+owner instead.

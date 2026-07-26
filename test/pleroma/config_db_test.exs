@@ -36,6 +36,20 @@ defmodule Pleroma.ConfigDBTest do
     assert config[:goose][:webhook_url] == "https://gander.com/"
   end
 
+  test "get_all_as_keyword/1 excludes static search configuration" do
+    insert(:config, key: Pleroma.Search, value: [module: Pleroma.Search.ParadeDB])
+    insert(:config, key: Pleroma.Search.ParadeDB, value: [url: "postgres://example/db"])
+    insert(:config, key: Pleroma.Search.ParadeDB.Repo, value: [pool_size: 50])
+    insert(:config, key: :instance, value: [name: "Pleroma"])
+
+    config = ConfigDB.get_all_as_keyword(exclude_static: true)
+
+    refute config[:pleroma][Pleroma.Search]
+    refute config[:pleroma][Pleroma.Search.ParadeDB]
+    refute config[:pleroma][Pleroma.Search.ParadeDB.Repo]
+    assert config[:pleroma][:instance] == [name: "Pleroma"]
+  end
+
   describe "update_or_create/1" do
     test "common" do
       config = insert(:config)

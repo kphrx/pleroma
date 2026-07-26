@@ -81,12 +81,15 @@ defmodule Pleroma.Application do
       [
         Pleroma.PromEx,
         Pleroma.LDAP,
-        Pleroma.Repo,
-        Config.TransferTask,
-        Pleroma.Emoji,
-        Pleroma.Web.Plugs.RateLimiter.Supervisor,
-        {Task.Supervisor, name: Pleroma.TaskSupervisor}
+        Pleroma.Repo
       ] ++
+        search_children() ++
+        [
+          Config.TransferTask,
+          Pleroma.Emoji,
+          Pleroma.Web.Plugs.RateLimiter.Supervisor,
+          {Task.Supervisor, name: Pleroma.TaskSupervisor}
+        ] ++
         cachex_children() ++
         http_children(adapter) ++
         [
@@ -196,6 +199,16 @@ defmodule Pleroma.Application do
       build_cachex("host_meta", default_ttl: :timer.minutes(120), limit: 5_000),
       build_cachex("translations", default_ttl: :timer.hours(24), limit: 5_000)
     ]
+  end
+
+  defp search_children do
+    case Config.get([Pleroma.Search, :module]) do
+      Pleroma.Search.ParadeDB ->
+        [Pleroma.Search.ParadeDB.Repo]
+
+      _ ->
+        []
+    end
   end
 
   defp emoji_packs_expiration,

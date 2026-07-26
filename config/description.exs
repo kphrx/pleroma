@@ -3536,7 +3536,12 @@ config :pleroma, :config_description, [
         key: :module,
         type: :keyword,
         description: "Selected search module.",
-        suggestion: [Pleroma.Search.DatabaseSearch, Pleroma.Search.Meilisearch]
+        suggestion: [
+          Pleroma.Search.DatabaseSearch,
+          Pleroma.Search.Meilisearch,
+          Pleroma.Search.QdrantSearch,
+          Pleroma.Search.ParadeDB
+        ]
       }
     ]
   },
@@ -3566,6 +3571,34 @@ config :pleroma, :config_description, [
           "Amount of posts in a batch when running the initial indexing operation. Should probably not be more than 100000" <>
             " since there's a limit on maximum insert size",
         suggestion: [100_000]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Search.ParadeDB,
+    type: :group,
+    description: "ParadeDB settings.",
+    children: [
+      %{
+        key: :url,
+        type: :string,
+        description:
+          "ParadeDB database URL (separate Postgres instance). " <>
+            "Can also be set via `PARADEDB_DATABASE_URL`.",
+        suggestion: ["postgres://postgres:postgres@127.0.0.1:5432/paradedb"]
+      },
+      %{
+        key: :table,
+        type: :string,
+        description: "Table name used for search documents.",
+        suggestion: ["pleroma_search_documents"]
+      },
+      %{
+        key: :fuzzy_distance,
+        type: :integer,
+        description: "Edit-distance used for fuzzy token matching (0 disables fuzziness, max 2).",
+        suggestion: [0, 1, 2]
       }
     ]
   },
