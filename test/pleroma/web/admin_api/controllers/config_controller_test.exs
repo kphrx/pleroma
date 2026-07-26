@@ -121,6 +121,19 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       end)
     end
 
+    test "effective configuration omits static search settings", %{conn: conn} do
+      insert(:config, key: Pleroma.Search, value: [module: Pleroma.Search.ParadeDB])
+      insert(:config, key: Pleroma.Search.ParadeDB, value: [url: "postgres://example/db"])
+
+      %{"configs" => configs} =
+        conn
+        |> get("/api/pleroma/admin/config")
+        |> json_response_and_validate_schema(200)
+
+      refute Enum.any?(configs, &(&1["key"] == "Pleroma.Search"))
+      refute Enum.any?(configs, &(&1["key"] == "Pleroma.Search.ParadeDB"))
+    end
+
     test "subkeys with full update right merge", %{conn: conn} do
       insert(:config,
         key: ":emoji",
@@ -1552,12 +1565,15 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       assert web_endpoint["children"]
     end
 
-    test "all keys from description are whitelisted", %{conn: conn} do
+    test "descriptions exclude blacklisted keys", %{conn: conn} do
       conn = get(conn, "/api/pleroma/admin/config/descriptions")
 
       assert response = json_response_and_validate_schema(conn, 200)
 
-      assert length(response) == length(Pleroma.Docs.JSON.compiled_descriptions())
+      refute Enum.any?(response, &(&1["key"] == "Pleroma.Search"))
+      refute Enum.any?(response, &(&1["key"] == "Pleroma.Search.ParadeDB"))
+
+      assert length(response) == length(Pleroma.Docs.JSON.compiled_descriptions()) - 2
     end
 
     test "filters by database configuration blacklist and whitelist", %{conn: conn} do
