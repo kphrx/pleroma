@@ -83,6 +83,11 @@ defmodule Pleroma.SearchTest do
         "summary" => "subject text",
         "attachment" => [
           %{"type" => "Document", "name" => "image description"},
+          %{
+            "type" => "Document",
+            "name" => "remote-image.jpg",
+            "summary" => "remote image description"
+          },
           %{"type" => "Document", "name" => ""}
         ],
         "published" => DateTime.utc_now() |> DateTime.to_iso8601()
@@ -93,6 +98,8 @@ defmodule Pleroma.SearchTest do
     assert content =~ "body text"
     assert content =~ "subject text"
     assert content =~ "image description"
+    assert content =~ "remote image description"
+    refute content =~ "remote-image.jpg"
   end
 
   test "object_to_search_data ignores objects with invalid published dates" do

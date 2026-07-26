@@ -78,6 +78,7 @@ defmodule Pleroma.Search do
 
   defp attachment_names(attachments) when is_list(attachments) do
     Enum.map(attachments, fn
+      %{"summary" => summary} when is_binary(summary) -> summary
       %{"name" => name} -> name
       _ -> nil
     end)
