@@ -1357,6 +1357,43 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_unauthenticated(query, _), do: query
 
+  defp restrict_unauthenticated_object(query, nil) do
+    local = Config.restrict_unauthenticated_access?(:activities, :local)
+    remote = Config.restrict_unauthenticated_access?(:activities, :remote)
+    local_object_pattern = Pleroma.Web.Endpoint.url() <> "/%"
+
+    cond do
+      local and remote ->
+        from([object: object] in query, where: false)
+
+      local ->
+        from([object: object] in query,
+          where: not fragment("(?->>'id') LIKE ?", object.data, ^local_object_pattern)
+        )
+
+      remote ->
+        from([object: object] in query,
+          where: fragment("(?->>'id') LIKE ?", object.data, ^local_object_pattern)
+        )
+
+      true ->
+        query
+    end
+  end
+
+  defp restrict_unauthenticated_object(query, _), do: query
+
+  defp maybe_restrict_unauthenticated(
+         query,
+         %{restrict_unauthenticated: true, user: user}
+       ) do
+    query
+    |> restrict_unauthenticated(user)
+    |> restrict_unauthenticated_object(user)
+  end
+
+  defp maybe_restrict_unauthenticated(query, _), do: query
+
   defp restrict_quote_url(query, %{quote_url: quote_url}) do
     from([_activity, object] in query,
       where: fragment("(?)->'quoteUrl' = ?", object.data, ^quote_url)
@@ -1514,6 +1551,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> maybe_preload_report_notes(opts)
       |> maybe_set_thread_muted_field(opts)
       |> maybe_order(opts)
+      |> maybe_restrict_unauthenticated(opts)
       |> restrict_recipients_or_hashtags(recipients, opts[:user], opts[:followed_hashtags])
       |> restrict_replies(opts)
       |> restrict_since(opts)
