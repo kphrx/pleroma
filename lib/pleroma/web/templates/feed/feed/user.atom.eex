@@ -8,10 +8,12 @@
 
   <id><%= Routes.user_feed_url(@conn, :feed, @user.nickname) <> ".atom" %></id>
   <title><%= @user.nickname <> "'s timeline" %></title>
-  <subtitle><%= escape(@user.bio) %></subtitle>
+  <%= if @user.bio && @user.bio != "" do %>
+    <subtitle><%= escape(@user.bio) %></subtitle>
+  <% end %>
   <updated><%= most_recent_update(@activities, @user, :atom) %></updated>
   <logo><%= logo(@user) %></logo>
-  <link rel="self" href="<%= "#{Routes.user_feed_url(@conn, :feed, @user.nickname)}.atom" %>" type="application/atom+xml"/>
+  <link rel="self" href="<%= feed_self_url(@conn) %>" type="application/atom+xml"/>
 
   <%= render Phoenix.Controller.view_module(@conn), "_author.atom", assigns %>
 

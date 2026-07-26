@@ -6,11 +6,13 @@ defmodule Pleroma.Web.ActivityPub.MRF.QuietReply do
   @moduledoc """
   QuietReply alters the scope of activities from local users when replying by enforcing them to be "Unlisted" or "Quiet Public". This delivers the activity to all the expected recipients and instances, but it will not be published in the Federated / The Whole Known Network timelines. It will still be published to the Home timelines of the user's followers and visible to anyone who opens the thread.
   """
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   require Pleroma.Constants
 
   alias Pleroma.User
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @impl true
   def history_awareness, do: :auto

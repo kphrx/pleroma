@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.DropPolicy do
-  require Logger
   @moduledoc "Drop and log everything received"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  require Logger
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   @impl true
   def filter(activity) do

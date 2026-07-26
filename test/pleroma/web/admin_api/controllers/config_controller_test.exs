@@ -194,19 +194,9 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
 
     setup do: clear_config(:configurable_from_database, true)
 
-    setup do:
-            clear_config(:database_config_whitelist, [
-              {:pleroma},
-              {:http},
-              {:idna},
-              {:oban},
-              {:tesla},
-              {:ueberauth}
-            ])
-
     test "create new config setting in db", %{conn: conn} do
-      ueberauth = Application.get_env(:ueberauth, Ueberauth)
-      on_exit(fn -> Application.put_env(:ueberauth, Ueberauth, ueberauth) end)
+      aws = Application.get_env(:ex_aws, :s3)
+      on_exit(fn -> Application.put_env(:ex_aws, :s3, aws) end)
 
       conn =
         conn
@@ -215,9 +205,9 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
           configs: [
             %{group: ":pleroma", key: ":key1", value: "value1"},
             %{
-              group: ":ueberauth",
-              key: "Ueberauth",
-              value: [%{"tuple" => [":consumer_secret", "aaaa"]}]
+              group: ":cors_plug",
+              key: ":key1",
+              value: [%{"tuple" => [":key", "value"]}]
             },
             %{
               group: ":pleroma",
@@ -244,9 +234,9 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
               value: %{":nested_5" => ":upload", "endpoint" => "https://example.com"}
             },
             %{
-              group: ":idna",
-              key: ":key5",
-              value: %{"tuple" => ["string", "Pleroma.Captcha.NotReal", []]}
+              group: ":ex_aws",
+              key: ":s3",
+              value: %{"tuple" => ["access_key_id", "aaaa", []]}
             }
           ]
         })
@@ -260,10 +250,10 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
                    "db" => [":key1"]
                  },
                  %{
-                   "group" => ":ueberauth",
-                   "key" => "Ueberauth",
-                   "value" => [%{"tuple" => [":consumer_secret", "aaaa"]}],
-                   "db" => [":consumer_secret"]
+                   "group" => ":cors_plug",
+                   "key" => ":key1",
+                   "value" => [%{"tuple" => [":key", "value"]}],
+                   "db" => [":key"]
                  },
                  %{
                    "group" => ":pleroma",
@@ -293,10 +283,10 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
                    "db" => [":key4"]
                  },
                  %{
-                   "group" => ":idna",
-                   "key" => ":key5",
-                   "value" => %{"tuple" => ["string", "Pleroma.Captcha.NotReal", []]},
-                   "db" => [":key5"]
+                   "group" => ":ex_aws",
+                   "key" => ":s3",
+                   "value" => %{"tuple" => ["access_key_id", "aaaa", []]},
+                   "db" => [":s3"]
                  }
                ],
                "need_reboot" => false
@@ -322,18 +312,19 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
                nested_5: :upload
              }
 
-      assert Application.get_env(:idna, :key5) == {"string", Pleroma.Captcha.NotReal, []}
+      assert Application.get_env(:cors_plug, :key1) == [key: "value"]
+      assert Application.get_env(:ex_aws, :s3) == {"access_key_id", "aaaa", []}
     end
 
     test "save configs setting without explicit key", %{conn: conn} do
-      adapter = Application.get_env(:http, :adapter)
-      send_user_agent = Application.get_env(:http, :send_user_agent)
-      user_agent = Application.get_env(:http, :user_agent)
+      mime = Application.get_env(:mime, :library)
+      prometheus = Application.get_env(:prometheus, Pleroma.Web.Endpoint.MetricsExporter)
+      web_push = Application.get_env(:web_push_encryption, :vapid_details)
 
       on_exit(fn ->
-        Application.put_env(:http, :adapter, adapter)
-        Application.put_env(:http, :send_user_agent, send_user_agent)
-        Application.put_env(:http, :user_agent, user_agent)
+        Application.put_env(:mime, :library, mime)
+        Application.put_env(:prometheus, Pleroma.Web.Endpoint.MetricsExporter, prometheus)
+        Application.put_env(:web_push_encryption, :vapid_details, web_push)
       end)
 
       conn =
@@ -342,19 +333,19 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
         |> post("/api/pleroma/admin/config", %{
           configs: [
             %{
-              group: ":http",
-              key: ":adapter",
+              group: ":mime",
+              key: ":library",
               value: [":someval"]
             },
             %{
-              group: ":http",
-              key: ":send_user_agent",
+              group: ":prometheus",
+              key: "Pleroma.Web.Endpoint.MetricsExporter",
               value: true
             },
             %{
-              group: ":http",
-              key: ":user_agent",
-              value: [":default"]
+              group: ":web_push_encryption",
+              key: ":vapid_details",
+              value: [":nope"]
             }
           ]
         })
@@ -362,30 +353,30 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       assert json_response_and_validate_schema(conn, 200) == %{
                "configs" => [
                  %{
-                   "group" => ":http",
-                   "key" => ":adapter",
+                   "group" => ":mime",
+                   "key" => ":library",
                    "value" => [":someval"],
-                   "db" => [":adapter"]
+                   "db" => [":library"]
                  },
                  %{
-                   "group" => ":http",
-                   "key" => ":send_user_agent",
+                   "group" => ":prometheus",
+                   "key" => "Pleroma.Web.Endpoint.MetricsExporter",
                    "value" => true,
-                   "db" => [":send_user_agent"]
+                   "db" => ["Pleroma.Web.Endpoint.MetricsExporter"]
                  },
                  %{
-                   "group" => ":http",
-                   "key" => ":user_agent",
-                   "value" => [":default"],
-                   "db" => [":user_agent"]
+                   "group" => ":web_push_encryption",
+                   "key" => ":vapid_details",
+                   "value" => [":nope"],
+                   "db" => [":vapid_details"]
                  }
                ],
                "need_reboot" => false
              }
 
-      assert Application.get_env(:http, :adapter) == [:someval]
-      assert Application.get_env(:http, :send_user_agent) == true
-      assert Application.get_env(:http, :user_agent) == [:default]
+      assert Application.get_env(:mime, :library) == [:someval]
+      assert Application.get_env(:prometheus, Pleroma.Web.Endpoint.MetricsExporter) == true
+      assert Application.get_env(:web_push_encryption, :vapid_details) == [:nope]
     end
 
     test "saving config with partial update", %{conn: conn} do
@@ -631,17 +622,17 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
         |> put_req_header("content-type", "application/json")
         |> post("/api/pleroma/admin/config", %{
           configs: [
-            %{group: ":tesla", key: ":adapter", value: "Tesla.Adapter.Httpc"}
+            %{group: ":pleroma", key: ":key1", value: "Pleroma.Web.Endpoint"}
           ]
         })
 
       assert json_response_and_validate_schema(conn, 200) == %{
                "configs" => [
                  %{
-                   "group" => ":tesla",
-                   "key" => ":adapter",
-                   "value" => "Tesla.Adapter.Httpc",
-                   "db" => [":adapter"]
+                   "group" => ":pleroma",
+                   "key" => ":key1",
+                   "value" => "Pleroma.Web.Endpoint",
+                   "db" => [":key1"]
                  }
                ],
                "need_reboot" => false
@@ -653,14 +644,14 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       admin: admin,
       token: token
     } do
-      ueberauth = Application.get_env(:ueberauth, Ueberauth)
+      prometheus = Application.get_env(:prometheus, Pleroma.Web.Endpoint.MetricsExporter)
       insert(:config, key: :keyaa1)
       insert(:config, key: :keyaa2)
 
       config3 =
         insert(:config,
-          group: :ueberauth,
-          key: Ueberauth
+          group: :prometheus,
+          key: Pleroma.Web.Endpoint.MetricsExporter
         )
 
       conn =
@@ -693,7 +684,9 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
 
       assert Application.get_env(:pleroma, :keyaa1) == "another_value"
       assert Application.get_env(:pleroma, :keyaa2) == "another_value"
-      assert Application.get_env(:ueberauth, Ueberauth) == config3.value
+
+      assert Application.get_env(:prometheus, Pleroma.Web.Endpoint.MetricsExporter) ==
+               config3.value
 
       conn =
         build_conn()
@@ -704,8 +697,8 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
           configs: [
             %{group: ":pleroma", key: ":keyaa2", delete: true},
             %{
-              group: ":ueberauth",
-              key: "Ueberauth",
+              group: ":prometheus",
+              key: "Pleroma.Web.Endpoint.MetricsExporter",
               delete: true
             }
           ]
@@ -716,7 +709,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
                "need_reboot" => false
              }
 
-      assert Application.get_env(:ueberauth, Ueberauth) == ueberauth
+      assert Application.get_env(:prometheus, Pleroma.Web.Endpoint.MetricsExporter) == prometheus
       refute Keyword.has_key?(Application.get_all_env(:pleroma), :keyaa2)
     end
 
@@ -1021,8 +1014,8 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
         |> post("/api/pleroma/admin/config", %{
           configs: [
             %{
-              "group" => ":oban",
-              "key" => ":queues",
+              "group" => ":pleroma",
+              "key" => ":nonexist_oban_queues",
               "value" => [
                 %{"tuple" => [":federator_incoming", 50]},
                 %{"tuple" => [":federator_outgoing", 50]},
@@ -1039,8 +1032,8 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       assert json_response_and_validate_schema(conn, 200) == %{
                "configs" => [
                  %{
-                   "group" => ":oban",
-                   "key" => ":queues",
+                   "group" => ":pleroma",
+                   "key" => ":nonexist_oban_queues",
                    "value" => [
                      %{"tuple" => [":federator_incoming", 50]},
                      %{"tuple" => [":federator_outgoing", 50]},
@@ -1243,6 +1236,57 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       assert configs == []
       assert Pleroma.Config.get(:database_config_whitelist) == original_whitelist
       refute ConfigDB.get_by_group_and_key(:pleroma, :database_config_whitelist)
+    end
+
+    test "doesn't set keys in the blacklist", %{conn: conn} do
+      clear_config(:database_config_blacklist, [
+        {:pleroma, :logger},
+        {:pleroma, :key2},
+        {:pleroma, Pleroma.Captcha.NotReal},
+        {:blacklisted_group}
+      ])
+
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/pleroma/admin/config", %{
+        configs: [
+          %{group: ":pleroma", key: ":logger", value: "logconf"},
+          %{group: ":pleroma", key: ":key1", value: "value1"},
+          %{group: ":pleroma", key: ":key2", value: "value2"},
+          %{group: ":not_real", key: ":anything", value: "value3"},
+          %{group: ":blacklisted_group", key: ":anything", value: "value4"}
+        ]
+      })
+
+      assert Application.get_env(:pleroma, :logger) == nil
+      assert Application.get_env(:pleroma, :key1) == "value1"
+      assert Application.get_env(:pleroma, :key2) == nil
+      assert Application.get_env(:pleroma, Pleroma.Captcha.NotReal) == nil
+      assert Application.get_env(:blacklisted_group, :anything) == nil
+    end
+
+    test "doesn't allow updating the database_config_blacklist itself", %{conn: conn} do
+      original_blacklist = Pleroma.Config.get(:database_config_blacklist)
+
+      refute ConfigDB.get_by_group_and_key(:pleroma, :database_config_blacklist)
+
+      %{"configs" => configs} =
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/pleroma/admin/config", %{
+          configs: [
+            %{
+              group: ":pleroma",
+              key: ":database_config_blacklist",
+              value: [%{"tuple" => [":pleroma", ":key1"]}]
+            }
+          ]
+        })
+        |> json_response_and_validate_schema(200)
+
+      assert configs == []
+      assert Pleroma.Config.get(:database_config_blacklist) == original_blacklist
+      refute ConfigDB.get_by_group_and_key(:pleroma, :database_config_blacklist)
     end
 
     test "args for Pleroma.Upload.Filter.Mogrify with custom tuples", %{conn: conn} do
@@ -1514,6 +1558,36 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       assert response = json_response_and_validate_schema(conn, 200)
 
       assert length(response) == length(Pleroma.Docs.JSON.compiled_descriptions())
+    end
+
+    test "filters by database configuration blacklist and whitelist", %{conn: conn} do
+      clear_config(:database_config_whitelist, [
+        {:pleroma, :instance},
+        {:pleroma, :activitypub},
+        {:pleroma, Pleroma.Upload}
+      ])
+
+      clear_config(:database_config_blacklist, [
+        {:pleroma, Pleroma.Upload}
+      ])
+
+      children =
+        conn
+        |> get("/api/pleroma/admin/config/descriptions")
+        |> json_response_and_validate_schema(200)
+
+      assert length(children) == 2
+
+      assert Enum.count(children, fn c -> c["group"] == ":pleroma" end) == 2
+
+      instance = Enum.find(children, fn c -> c["key"] == ":instance" end)
+      assert instance["children"]
+
+      activitypub = Enum.find(children, fn c -> c["key"] == ":activitypub" end)
+      assert activitypub["children"]
+
+      web_endpoint = Enum.find(children, fn c -> c["key"] == "Pleroma.Upload" end)
+      refute web_endpoint["children"]
     end
   end
 end
