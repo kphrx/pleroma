@@ -32,6 +32,7 @@ Other than things bundled in the OTP release Pleroma depends on:
 * curl (to download the release build)
 * unzip (needed to unpack release builds)
 * ncurses (ERTS won't run without it)
+* libvips (for image processing)
 * PostgreSQL (also utilizes extensions in postgresql-contrib)
 * nginx (could be swapped with another reverse proxy but this guide covers only it)
 * certbot (for Let's Encrypt certificates, could be swapped with another ACME client, but this guide covers only it)
