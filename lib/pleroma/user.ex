@@ -327,7 +327,7 @@ defmodule Pleroma.User do
   @spec visible_for(User.t(), User.t() | nil) ::
           :visible
           | :invisible
-          | :restricted_unauthenticated
+          | :restrict_unauthenticated
           | :deactivated
           | :confirmation_pending
   def visible_for(user, for_user \\ nil)
