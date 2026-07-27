@@ -1,0 +1,25 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/missing-attributedto",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:42:00Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-missing-attributedto",
+    "attributedTo": null,
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:42:00Z",
+    "content": "object without attributedTo"
+  }
+}
+

@@ -48,7 +48,7 @@ config :pleroma, ecto_repos: [Pleroma.Repo]
 
 config :pleroma, Pleroma.Repo,
   telemetry_event: [Pleroma.Repo.Instrumenter],
-  migration_lock: nil
+  migration_lock: :pg_advisory_lock
 
 config :pleroma, Pleroma.Captcha,
   enabled: true,
@@ -65,7 +65,8 @@ config :pleroma, Pleroma.Upload,
   proxy_remote: false,
   filename_display_max_length: 30,
   default_description: nil,
-  base_url: nil
+  base_url: nil,
+  allowed_mime_types: ["image", "audio", "video"]
 
 config :pleroma, Pleroma.Uploaders.Local, uploads: "uploads"
 
@@ -132,13 +133,17 @@ config :pleroma, Pleroma.Web.Endpoint,
   ]
 
 # Configures Elixir's Logger
-config :logger, backends: [:console]
+# Primary config
+config :logger, level: :debug
 
-config :logger, :console,
-  level: :debug,
+# Console config
+config :logger, :default_handler, level: :debug
+
+config :logger, :default_formatter,
   format: "\n$time $metadata[$level] $message\n",
   metadata: [:actor, :path, :type, :user]
 
+# Syslog config
 config :logger, :ex_syslogger,
   level: :debug,
   ident: "pleroma",
@@ -150,7 +155,10 @@ config :mime, :types, %{
   "application/xrd+xml" => ["xrd+xml"],
   "application/jrd+json" => ["jrd+json"],
   "application/activity+json" => ["activity+json"],
-  "application/ld+json" => ["activity+json"]
+  "application/ld+json" => ["activity+json"],
+  # Can be removed when bumping MIME past 2.0.5
+  # see https://akkoma.dev/AkkomaGang/akkoma/issues/657
+  "image/apng" => ["apng"]
 }
 
 config :tesla, adapter: Tesla.Adapter.Hackney
@@ -190,7 +198,6 @@ config :pleroma, :instance,
   account_approval_required: false,
   federating: true,
   federation_incoming_replies_max_depth: 100,
-  federation_reachability_timeout_days: 7,
   allow_relay: true,
   public: true,
   quarantined_instances: [],
@@ -200,7 +207,8 @@ config :pleroma, :instance,
     "text/plain",
     "text/html",
     "text/markdown",
-    "text/bbcode"
+    "text/bbcode",
+    "text/x.misskeymarkdown"
   ],
   autofollowed_nicknames: [],
   autofollowing_nicknames: [],
@@ -303,6 +311,7 @@ config :pleroma, :frontend_configurations,
     collapseMessageWithSubject: false,
     disableChat: false,
     greentext: false,
+    embeddedToS: true,
     hideFilteredStatuses: false,
     hideMutedPosts: false,
     hidePostStats: false,
@@ -359,7 +368,10 @@ config :pleroma, :activitypub,
   follow_handshake_timeout: 500,
   note_replies_output_limit: 5,
   sign_object_fetches: true,
-  authorized_fetch_mode: false
+  authorized_fetch_mode: false,
+  client_api_enabled: false,
+  anonymize_reporter: false,
+  anonymize_reporter_local_nickname: ""
 
 config :pleroma, :streamer,
   workers: 3,
@@ -412,11 +424,6 @@ config :pleroma, :mrf_activity_expiration, days: 365
 config :pleroma, :mrf_vocabulary,
   accept: [],
   reject: []
-
-config :pleroma, :mrf_dnsrbl,
-  nameserver: "127.0.0.1",
-  port: 53,
-  zone: "bl.pleroma.com"
 
 # threshold of 7 days
 config :pleroma, :mrf_object_age,
@@ -589,6 +596,7 @@ config :pleroma, Pleroma.User,
 # value or it cannot enforce uniqueness.
 config :pleroma, Oban,
   repo: Pleroma.Repo,
+  notifier: Oban.Notifiers.PG,
   log: false,
   queues: [
     activity_expiration: 10,
@@ -599,7 +607,7 @@ config :pleroma, Oban,
     search_indexing: [limit: 10, paused: true],
     slow: 5
   ],
-  plugins: [{Oban.Plugins.Pruner, max_age: 900}],
+  plugins: [Oban.Plugins.Lazarus, {Oban.Plugins.Pruner, max_age: 900}],
   crontab: [
     {"0 0 * * 0", Pleroma.Workers.Cron.DigestEmailsWorker},
     {"0 0 * * *", Pleroma.Workers.Cron.NewUsersDigestWorker},
@@ -734,6 +742,7 @@ config :pleroma, Pleroma.Workers.PurgeExpiredActivity, enabled: true, min_lifeti
 config :pleroma, Pleroma.Web.Plugs.RemoteIp,
   enabled: true,
   headers: ["x-forwarded-for"],
+  clients: [],
   proxies: [],
   reserved: [
     "127.0.0.0/8",
@@ -772,7 +781,7 @@ config :pleroma, :frontends,
       "name" => "pleroma-fe",
       "git" => "https://git.pleroma.social/pleroma/pleroma-fe",
       "build_url" =>
-        "https://git.pleroma.social/pleroma/pleroma-fe/-/jobs/artifacts/${ref}/download?job=build",
+        "https://git.pleroma.social/api/packages/pleroma/generic/pleroma-fe-builds/${ref}/latest.zip",
       "ref" => "develop"
     },
     "fedi-fe" => %{
@@ -807,6 +816,13 @@ config :pleroma, :frontends,
         "https://lily-is.land/infra/glitch-lily/-/jobs/artifacts/${ref}/download?job=build",
       "ref" => "servant",
       "build_dir" => "public"
+    },
+    "pl-fe" => %{
+      "name" => "pl-fe",
+      "git" => "https://github.com/mkljczk/pl-fe",
+      "build_url" => "https://pl.mkljczk.pl/pl-fe.zip",
+      "ref" => "develop",
+      "build_dir" => "."
     }
   }
 
@@ -916,7 +932,8 @@ config :pleroma, Pleroma.User.Backup,
   timeout: :timer.minutes(30)
 
 config :pleroma, ConcurrentLimiter, [
-  {Pleroma.Search, [max_running: 30, max_waiting: 50]}
+  {Pleroma.Search, [max_running: 30, max_waiting: 50]},
+  {Pleroma.Webhook.Notify, [max_running: 5, max_waiting: 200]}
 ]
 
 config :pleroma, Pleroma.Web.WebFinger, domain: nil, update_nickname_on_user_fetch: true
@@ -927,6 +944,15 @@ config :pleroma, Pleroma.Search.Meilisearch,
   url: "http://127.0.0.1:7700/",
   private_key: nil,
   initial_indexing_chunk_size: 100_000
+
+config :pleroma, Pleroma.Search.ParadeDB,
+  url: nil,
+  table: "pleroma_search_documents",
+  fuzzy_distance: 0
+
+config :pleroma, Pleroma.Search.ParadeDB.Repo,
+  pool_size: 2,
+  prepare: :unnamed
 
 config :pleroma, Pleroma.Application,
   background_migrators: true,
@@ -949,6 +975,21 @@ config :pleroma, Pleroma.Search.QdrantSearch,
   qdrant_index_configuration: %{
     vectors: %{size: 384, distance: "Cosine"}
   }
+
+config :pleroma, :database_config_blacklist, [
+  {:pleroma, :logger}
+]
+
+config :pleroma, :database_config_whitelist, [
+  {:pleroma},
+  {:cors_plug},
+  {:ex_aws, :s3},
+  {:mime},
+  {:prometheus, Pleroma.Web.Endpoint.MetricsExporter},
+  {:web_push_encryption, :vapid_details}
+]
+
+config :pleroma, Pleroma.Chat, enabled: true
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

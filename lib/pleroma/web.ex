@@ -30,7 +30,7 @@ defmodule Pleroma.Web do
 
   def controller do
     quote do
-      use Phoenix.Controller, namespace: Pleroma.Web
+      use Phoenix.Controller, formats: [json: "View", html: "View"]
 
       import Plug.Conn
 
@@ -42,7 +42,10 @@ defmodule Pleroma.Web do
       plug(:set_put_layout)
 
       defp set_put_layout(conn, _) do
-        put_layout(conn, Pleroma.Config.get(:app_layout, "app.html"))
+        case Pleroma.Config.get(:app_layout, "app.html") do
+          false -> put_layout(conn, false)
+          layout -> put_layout(conn, {Pleroma.Web.LayoutView, layout})
+        end
       end
 
       # Marks plugs intentionally skipped and blocks their execution if present in plugs chain

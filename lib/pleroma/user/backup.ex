@@ -16,6 +16,7 @@ defmodule Pleroma.User.Backup do
   alias Pleroma.Bookmark
   alias Pleroma.Config
   alias Pleroma.Repo
+  alias Pleroma.SafeZip
   alias Pleroma.Uploaders.Uploader
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.ActivityPub
@@ -179,12 +180,12 @@ defmodule Pleroma.User.Backup do
   end
 
   @files [
-    ~c"actor.json",
-    ~c"outbox.json",
-    ~c"likes.json",
-    ~c"bookmarks.json",
-    ~c"followers.json",
-    ~c"following.json"
+    "actor.json",
+    "outbox.json",
+    "likes.json",
+    "bookmarks.json",
+    "followers.json",
+    "following.json"
   ]
 
   @spec run(t()) :: {:ok, t()} | {:error, :failed}
@@ -192,7 +193,7 @@ defmodule Pleroma.User.Backup do
     backup = Repo.preload(backup, :user)
     tempfile = Path.join([backup.tempdir, backup.file_name])
 
-    with {_, :ok} <- {:mkdir, File.mkdir_p(backup.tempdir)},
+    with {_, :ok} <- {:mkdir, Pleroma.Backports.mkdir_p(backup.tempdir)},
          {_, :ok} <- {:actor, actor(backup.tempdir, backup.user)},
          {_, :ok} <- {:statuses, statuses(backup.tempdir, backup.user)},
          {_, :ok} <- {:likes, likes(backup.tempdir, backup.user)},
@@ -200,7 +201,7 @@ defmodule Pleroma.User.Backup do
          {_, :ok} <- {:followers, followers(backup.tempdir, backup.user)},
          {_, :ok} <- {:following, following(backup.tempdir, backup.user)},
          {_, {:ok, _zip_path}} <-
-           {:zip, :zip.create(to_charlist(tempfile), @files, cwd: to_charlist(backup.tempdir))},
+           {:zip, SafeZip.zip(tempfile, @files, backup.tempdir)},
          {_, {:ok, %File.Stat{size: zip_size}}} <- {:filestat, File.stat(tempfile)},
          {:ok, updated_backup} <- update_record(backup, %{file_size: zip_size}) do
       {:ok, updated_backup}
@@ -341,7 +342,7 @@ defmodule Pleroma.User.Backup do
       dir,
       "outbox",
       fn a ->
-        with {:ok, activity} <- Transmogrifier.prepare_outgoing(a.data) do
+        with {:ok, activity} <- Transmogrifier.prepare_activity(a.data) do
           {:ok, Map.delete(activity, "@context")}
         end
       end

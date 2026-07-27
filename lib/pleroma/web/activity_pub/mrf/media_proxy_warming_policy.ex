@@ -6,6 +6,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicy do
   @moduledoc "Preloads any attachments in the MediaProxy cache by prefetching them"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
 
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.HTTP
   alias Pleroma.Web.MediaProxy
 
@@ -27,7 +29,14 @@ defmodule Pleroma.Web.ActivityPub.MRF.MediaProxyWarmingPolicy do
   end
 
   defp fetch(url) do
-    http_client_opts = Pleroma.Config.get([:media_proxy, :proxy_opts, :http], pool: :media)
+    # This module uses Tesla (Pleroma.HTTP) to fetch the MediaProxy URL.
+    # Redirect following is handled by Tesla middleware, so we must not enable
+    # adapter-level redirect logic (Hackney can crash on relative redirects when proxied).
+    http_client_opts =
+      [:media_proxy, :proxy_opts, :http]
+      |> Pleroma.Config.get(pool: :media)
+      |> Keyword.drop([:follow_redirect, :force_redirect])
+
     HTTP.get(url, [], http_client_opts)
   end
 

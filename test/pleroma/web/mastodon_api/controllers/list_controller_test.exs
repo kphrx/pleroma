@@ -19,6 +19,16 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
              |> json_response_and_validate_schema(:ok)
   end
 
+  test "creating a list with an emoji" do
+    %{conn: conn} = oauth_access(["write:lists"])
+
+    assert %{"title" => "cuties", "pleroma" => %{"emoji" => "🕓", "emoji_url" => nil}} =
+             conn
+             |> put_req_header("content-type", "application/json")
+             |> post("/api/v1/lists", %{"title" => "cuties", "emoji" => "🕓"})
+             |> json_response_and_validate_schema(:ok)
+  end
+
   test "renders error for invalid params" do
     %{conn: conn} = oauth_access(["write:lists"])
 
@@ -29,6 +39,18 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
 
     assert %{"error" => "title - null value where string expected."} =
              json_response_and_validate_schema(conn, 400)
+  end
+
+  test "renders error for an invalid emoji" do
+    %{conn: conn} = oauth_access(["write:lists"])
+
+    conn =
+      conn
+      |> put_req_header("content-type", "application/json")
+      |> post("/api/v1/lists", %{"title" => "cuties", "emoji" => "not an emoji"})
+
+    assert %{"error" => "Invalid emoji"} =
+             json_response_and_validate_schema(conn, :unprocessable_entity)
   end
 
   test "listing a user's lists" do
@@ -56,7 +78,7 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
     %{user: user, conn: conn} = oauth_access(["write:lists"])
     other_user = insert(:user)
     third_user = insert(:user)
-    {:ok, list} = Pleroma.List.create("name", user)
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
 
     assert %{} ==
              conn
@@ -77,7 +99,7 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
     other_user = insert(:user)
     third_user = insert(:user)
     fourth_user = insert(:user)
-    {:ok, list} = Pleroma.List.create("name", user)
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
     {:ok, list} = Pleroma.List.follow(list, other_user)
     {:ok, list} = Pleroma.List.follow(list, third_user)
     {:ok, list} = Pleroma.List.follow(list, fourth_user)
@@ -98,7 +120,7 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
     %{user: user, conn: conn} = oauth_access(["write:lists"])
     other_user = insert(:user)
     third_user = insert(:user)
-    {:ok, list} = Pleroma.List.create("name", user)
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
     {:ok, list} = Pleroma.List.follow(list, other_user)
     {:ok, list} = Pleroma.List.follow(list, third_user)
 
@@ -115,7 +137,7 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
   test "listing users in a list" do
     %{user: user, conn: conn} = oauth_access(["read:lists"])
     other_user = insert(:user)
-    {:ok, list} = Pleroma.List.create("name", user)
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
     {:ok, list} = Pleroma.List.follow(list, other_user)
 
     conn =
@@ -129,7 +151,7 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
 
   test "retrieving a list" do
     %{user: user, conn: conn} = oauth_access(["read:lists"])
-    {:ok, list} = Pleroma.List.create("name", user)
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
 
     conn =
       conn
@@ -150,7 +172,7 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
 
   test "renaming a list" do
     %{user: user, conn: conn} = oauth_access(["write:lists"])
-    {:ok, list} = Pleroma.List.create("name", user)
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
 
     assert %{"title" => "newname"} =
              conn
@@ -159,9 +181,20 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
              |> json_response_and_validate_schema(:ok)
   end
 
+  test "updating a list's emoji" do
+    %{user: user, conn: conn} = oauth_access(["write:lists"])
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
+
+    assert %{"pleroma" => %{"emoji" => "🕓", "emoji_url" => nil}} =
+             conn
+             |> put_req_header("content-type", "application/json")
+             |> put("/api/v1/lists/#{list.id}", %{"title" => "name", "emoji" => "🕓"})
+             |> json_response_and_validate_schema(:ok)
+  end
+
   test "validates title when renaming a list" do
     %{user: user, conn: conn} = oauth_access(["write:lists"])
-    {:ok, list} = Pleroma.List.create("name", user)
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
 
     conn =
       conn
@@ -175,7 +208,7 @@ defmodule Pleroma.Web.MastodonAPI.ListControllerTest do
 
   test "deleting a list" do
     %{user: user, conn: conn} = oauth_access(["write:lists"])
-    {:ok, list} = Pleroma.List.create("name", user)
+    {:ok, list} = Pleroma.List.create(%{title: "name"}, user)
 
     conn = delete(conn, "/api/v1/lists/#{list.id}")
 

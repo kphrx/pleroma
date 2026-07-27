@@ -29,8 +29,22 @@ defmodule Pleroma.Web.Fallback.RedirectController do
     )
   end
 
+  def live_dashboard(conn, %{"path" => path}) do
+    query_params = conn.query_string
+
+    redirect_path =
+      if query_params == "" do
+        "/pleroma/live_dashboard/#{path}"
+      else
+        "/pleroma/live_dashboard/#{path}?#{query_params}"
+      end
+
+    conn
+    |> redirect(to: redirect_path)
+  end
+
   def redirector(conn, _params, code \\ 200) do
-    {:ok, index_content} = File.read(index_file_path())
+    {:ok, index_content} = File.read(index_file_path(conn))
 
     response =
       index_content
@@ -51,7 +65,7 @@ defmodule Pleroma.Web.Fallback.RedirectController do
   end
 
   def redirector_with_meta(conn, params) do
-    {:ok, index_content} = File.read(index_file_path())
+    {:ok, index_content} = File.read(index_file_path(conn))
     tags = build_tags(conn, params)
     preloads = preload_data(conn, params)
 
@@ -69,7 +83,7 @@ defmodule Pleroma.Web.Fallback.RedirectController do
   end
 
   def redirector_with_preload(conn, params) do
-    {:ok, index_content} = File.read(index_file_path())
+    {:ok, index_content} = File.read(index_file_path(conn))
     preloads = preload_data(conn, params)
 
     response =
@@ -91,8 +105,10 @@ defmodule Pleroma.Web.Fallback.RedirectController do
     |> text("")
   end
 
-  defp index_file_path do
-    Pleroma.Web.Plugs.InstanceStatic.file_path("index.html")
+  defp index_file_path(conn) do
+    frontend_type = Pleroma.Web.Plugs.FrontendStatic.preferred_or_fallback(conn, :primary)
+
+    Pleroma.Web.Plugs.InstanceStatic.file_path("index.html", frontend_type)
   end
 
   defp build_tags(conn, params) do

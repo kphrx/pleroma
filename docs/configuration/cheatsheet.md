@@ -98,7 +98,7 @@ To add configuration to your config file, you can copy it from the base config. 
 * `moderator_privileges`: A list of privileges a moderator has (e.g. delete messages, manage reports...)
     * Possible values are the same as for `admin_privileges`
 
-## :database
+## :features
 * `improved_hashtag_timeline`: Setting to force toggle / force disable improved hashtags timeline. `:enabled` forces hashtags to be fetched from `hashtags` table for hashtags timeline. `:disabled` forces object-embedded hashtags to be used (slower). Keep it `:auto` for automatic behaviour (it is auto-set to `:enabled` [unless overridden] when HashtagsTableMigrator completes).
 
 ## Background migrations
@@ -573,7 +573,8 @@ Settings for HTTP connection pool.
 
 * `:connection_acquisition_wait` - Timeout to acquire a connection from pool.The total max time is this value multiplied by the number of retries.
 * `connection_acquisition_retries` - Number of attempts to acquire the connection from the pool if it is overloaded. Each attempt is timed `:connection_acquisition_wait` apart.
-* `:max_connections` - Maximum number of connections in the pool.
+* `:max_connections` - Maximum total number of connections in the pool. HTTP/1 origins may use multiple connections within this limit, while HTTP/2 connections are multiplexed.
+* `:max_idle_time` - Time before an unused connection is closed.
 * `:connect_timeout` - Timeout to connect to the host.
 * `:reclaim_multiplier` - Multiplied by `:max_connections` this will be the maximum number of idle connections that will be reclaimed in case the pool is overloaded.
 
@@ -733,13 +734,11 @@ An example for SMTP adapter:
 ```elixir
 config :pleroma, Pleroma.Emails.Mailer,
   enabled: true,
-  adapter: Swoosh.Adapters.SMTP,
+  adapter: Swoosh.Adapters.Mua,
   relay: "smtp.gmail.com",
-  username: "YOUR_USERNAME@gmail.com",
-  password: "YOUR_SMTP_PASSWORD",
+  auth: [username: "YOUR_USERNAME@gmail.com", password: "YOUR_SMTP_PASSWORD"],
   port: 465,
-  ssl: true,
-  auth: :always
+  protocol: :ssl
 ```
 
 An example for Mua adapter:
@@ -860,12 +859,14 @@ Web Push Notifications configuration. You can use the mix task `mix web_push.gen
 * ``private_key``: VAPID private key
 
 ## :logger
-* `backends`: `:console` is used to send logs to stdout, `{ExSyslogger, :ex_syslogger}` to log to syslog
+* Logging to console/stdout is done by default, use `{ExSyslogger, :ex_syslogger}` to log to syslog
 
 An example to enable ONLY ExSyslogger (f/ex in ``prod.secret.exs``) with info and debug suppressed:
 ```elixir
-config :logger,
+config :pleroma, :logger,
   backends: [{ExSyslogger, :ex_syslogger}]
+
+config :logger, default_handler: false
 
 config :logger, :ex_syslogger,
   level: :warning
@@ -873,8 +874,8 @@ config :logger, :ex_syslogger,
 
 Another example, keeping console output and adding the pid to syslog output:
 ```elixir
-config :logger,
-  backends: [:console, {ExSyslogger, :ex_syslogger}]
+config :pleroma, :logger,
+  backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :warning,
@@ -885,41 +886,50 @@ See: [logger’s documentation](https://hexdocs.pm/logger/Logger.html) and [ex_s
 
 An example of logging info to local syslog, but debug to console:
 ```elixir
-config :logger,
-  backends: [ {ExSyslogger, :ex_syslogger}, :console ],
-  level: :info
+config :pleroma, :logger,
+  backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :info,
   ident: "pleroma",
   format: "$metadata[$level] $message"
 
-config :logger, :console,
-  level: :debug,
+config :logger, :default_handler,
+  level: :debug
+
+config :logger, :default_formatter,
   format: "\n$time $metadata[$level] $message\n",
   metadata: [:request_id]
 ```
-
-
 
 ## Database options
 
 ### RUM indexing for full text search
 
-!!! warning
-    It is recommended to use PostgreSQL v11 or newer. We have seen some minor issues with lower PostgreSQL versions.
-
 * `rum_enabled`: If RUM indexes should be used. Defaults to `false`.
 
-RUM indexes are an alternative indexing scheme that is not included in PostgreSQL by default. While they may eventually be mainlined, for now they have to be installed as a PostgreSQL extension from https://github.com/postgrespro/rum.
+RUM indexes are an alternative indexing scheme that is not included in PostgreSQL by default. While they may eventually be mainlined, for now they have to be installed as a PostgreSQL extension from [https://github.com/postgrespro/rum](https://github.com/postgrespro/rum).
 
-Their advantage over the standard GIN indexes is that they allow efficient ordering of search results by timestamp, which makes search queries a lot faster on larger servers, by one or two orders of magnitude. They take up around 3 times as much space as GIN indexes.
+Their advantage over the standard GIN indexes is that they allow efficient ordering of search results by timestamp, which makes search queries a lot faster on larger servers, by one or two orders of magnitude. They take up around 3-4 times as much space as GIN indexes.
 
 To enable them, both the `rum_enabled` flag has to be set and the following special migration has to be run:
 
-`mix ecto.migrate --migrations-path priv/repo/optional_migrations/rum_indexing/`
+  * Source install:
+    - Stop Pleroma
+    - `mix ecto.migrate --migrations-path priv/repo/optional_migrations/rum_indexing/`
+  * OTP install:
+    - Stop Pleroma
+    - `pleroma_ctl migrate --migrations-path priv/repo/optional_migrations/rum_indexing/`
 
 This will probably take a long time.
+
+!!! note
+    It is recommended to `VACUUM FULL` the objects table after the migration has completed, to do that run:
+    ```
+    # sudo -Hu postgres vacuumdb --full --analyze -t objects <pleroma DB name>
+    ```
+
+Now you can start Pleroma back up.
 
 ## Alternative client protocols
 
@@ -1124,8 +1134,9 @@ Boolean, enables/disables in-database configuration. Read [Transferring the conf
 
 List of valid configuration sections which are allowed to be configured from the
 database. Settings stored in the database before the whitelist is configured are
-still applied, so it is suggested to only use the whitelist on instances that
-have not migrated the config to the database.
+still applied. Consider running the `mix pleroma.config filter_whitelisted` task
+after updating the whitelist. Read [Remove non-whitelisted configs from the database](../administration/CLI_tasks/config.md#remove-non-whitelisted-configs-from-the-database)
+for more information.
 
 Example:
 ```elixir

@@ -9,6 +9,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
   alias Pleroma.Object
   alias Pleroma.Repo
   alias Pleroma.User
+  alias Pleroma.Web.ActivityPub.CollectionViewHelper
   alias Pleroma.Web.ActivityPub.ObjectView
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.ActivityPub.Utils
@@ -34,32 +35,14 @@ defmodule Pleroma.Web.ActivityPub.UserView do
   def render("endpoints.json", _), do: %{}
 
   def render("service.json", %{user: user}) do
-    {:ok, _, public_key} = Keys.keys_from_pem(user.keys)
-    public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
-    public_key = :public_key.pem_encode([public_key])
-
-    endpoints = render("endpoints.json", %{user: user})
-
-    %{
-      "id" => user.ap_id,
+    Map.merge(common_actor_fields(user), %{
       "type" => "Application",
-      "following" => "#{user.ap_id}/following",
-      "followers" => "#{user.ap_id}/followers",
-      "inbox" => "#{user.ap_id}/inbox",
-      "outbox" => "#{user.ap_id}/outbox",
       "name" => "Pleroma",
       "summary" =>
         "An internal service actor for this Pleroma instance.  No user-serviceable parts inside.",
-      "url" => user.ap_id,
       "manuallyApprovesFollowers" => false,
-      "publicKey" => %{
-        "id" => "#{user.ap_id}#main-key",
-        "owner" => user.ap_id,
-        "publicKeyPem" => public_key
-      },
-      "endpoints" => endpoints,
       "invisible" => User.invisible?(user)
-    }
+    })
     |> Map.merge(Utils.make_json_ld_header())
   end
 
@@ -76,12 +59,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
   end
 
   def render("user.json", %{user: user}) do
-    {:ok, _, public_key} = Keys.keys_from_pem(user.keys)
-    public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
-    public_key = :public_key.pem_encode([public_key])
     user = User.sanitize_html(user)
-
-    endpoints = render("endpoints.json", %{user: user})
 
     emoji_tags = Transmogrifier.take_emoji_tags(user)
 
@@ -90,7 +68,7 @@ defmodule Pleroma.Web.ActivityPub.UserView do
     capabilities =
       if is_boolean(user.accepts_chat_messages) do
         %{
-          "acceptsChatMessages" => user.accepts_chat_messages
+          "acceptsChatMessages" => Pleroma.Chat.enabled?() and user.accepts_chat_messages
         }
       else
         %{}
@@ -101,25 +79,9 @@ defmodule Pleroma.Web.ActivityPub.UserView do
         do: Date.to_iso8601(user.birthday),
         else: nil
 
-    %{
-      "id" => user.ap_id,
-      "type" => user.actor_type,
-      "following" => "#{user.ap_id}/following",
-      "followers" => "#{user.ap_id}/followers",
-      "inbox" => "#{user.ap_id}/inbox",
-      "outbox" => "#{user.ap_id}/outbox",
+    Map.merge(common_actor_fields(user), %{
       "featured" => "#{user.ap_id}/collections/featured",
       "preferredUsername" => user.nickname,
-      "name" => user.name,
-      "summary" => user.bio,
-      "url" => user.ap_id,
-      "manuallyApprovesFollowers" => user.is_locked,
-      "publicKey" => %{
-        "id" => "#{user.ap_id}#main-key",
-        "owner" => user.ap_id,
-        "publicKeyPem" => public_key
-      },
-      "endpoints" => endpoints,
       "attachment" => fields,
       "tag" => emoji_tags,
       # Note: key name is indeed "discoverable" (not an error)
@@ -127,8 +89,9 @@ defmodule Pleroma.Web.ActivityPub.UserView do
       "capabilities" => capabilities,
       "alsoKnownAs" => user.also_known_as,
       "vcard:bday" => birthday,
-      "webfinger" => "acct:#{User.full_nickname(user)}"
-    }
+      "webfinger" => "acct:#{User.full_nickname(user)}",
+      "published" => Pleroma.Web.CommonAPI.Utils.to_masto_date(user.inserted_at)
+    })
     |> Map.merge(
       maybe_make_image(
         &User.avatar_url/2,
@@ -163,7 +126,13 @@ defmodule Pleroma.Web.ActivityPub.UserView do
         0
       end
 
-    collection(following, "#{user.ap_id}/following", page, showing_items, total)
+    CollectionViewHelper.collection_page_offset(
+      following,
+      "#{user.ap_id}/following",
+      page,
+      showing_items,
+      total
+    )
     |> Map.merge(Utils.make_json_ld_header())
   end
 
@@ -188,7 +157,12 @@ defmodule Pleroma.Web.ActivityPub.UserView do
       "totalItems" => total,
       "first" =>
         if showing_items do
-          collection(following, "#{user.ap_id}/following", 1, !user.hide_follows)
+          CollectionViewHelper.collection_page_offset(
+            following,
+            "#{user.ap_id}/following",
+            1,
+            !user.hide_follows
+          )
         else
           "#{user.ap_id}/following?page=1"
         end
@@ -211,7 +185,13 @@ defmodule Pleroma.Web.ActivityPub.UserView do
         0
       end
 
-    collection(followers, "#{user.ap_id}/followers", page, showing_items, total)
+    CollectionViewHelper.collection_page_offset(
+      followers,
+      "#{user.ap_id}/followers",
+      page,
+      showing_items,
+      total
+    )
     |> Map.merge(Utils.make_json_ld_header())
   end
 
@@ -235,7 +215,12 @@ defmodule Pleroma.Web.ActivityPub.UserView do
       "type" => "OrderedCollection",
       "first" =>
         if showing_items do
-          collection(followers, "#{user.ap_id}/followers", 1, showing_items, total)
+          CollectionViewHelper.collection_page_offset(
+            followers,
+            "#{user.ap_id}/followers",
+            1,
+            showing_items
+          )
         else
           "#{user.ap_id}/followers?page=1"
         end
@@ -255,22 +240,15 @@ defmodule Pleroma.Web.ActivityPub.UserView do
 
   def render("activity_collection_page.json", %{
         activities: activities,
-        iri: iri,
         pagination: pagination
       }) do
     collection =
       Enum.map(activities, fn activity ->
-        {:ok, data} = Transmogrifier.prepare_outgoing(activity.data)
+        {:ok, data} = Transmogrifier.prepare_activity(activity.data)
         data
       end)
 
-    %{
-      "type" => "OrderedCollectionPage",
-      "partOf" => iri,
-      "orderedItems" => collection
-    }
-    |> Map.merge(Utils.make_json_ld_header())
-    |> Map.merge(pagination)
+    CollectionViewHelper.collection_page_keyset(collection, pagination)
   end
 
   def render("featured.json", %{
@@ -292,31 +270,37 @@ defmodule Pleroma.Web.ActivityPub.UserView do
     |> Map.merge(Utils.make_json_ld_header())
   end
 
+  defp common_actor_fields(%User{} = user) do
+    endpoints = render("endpoints.json", %{user: user})
+
+    {:ok, _, public_key} = Keys.keys_from_pem(user.keys)
+    public_key = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+    public_key = :public_key.pem_encode([public_key])
+
+    %{
+      "id" => user.ap_id,
+      "type" => user.actor_type,
+      "following" => "#{user.ap_id}/following",
+      "followers" => "#{user.ap_id}/followers",
+      "inbox" => "#{user.ap_id}/inbox",
+      "outbox" => "#{user.ap_id}/outbox",
+      "name" => user.name,
+      "summary" => user.bio,
+      "url" => user.ap_id,
+      "manuallyApprovesFollowers" => user.is_locked,
+      "endpoints" => endpoints,
+      "publicKey" => %{
+        "id" => "#{user.ap_id}#main-key",
+        "owner" => user.ap_id,
+        "publicKeyPem" => public_key
+      }
+    }
+  end
+
   defp maybe_put_total_items(map, false, _total), do: map
 
   defp maybe_put_total_items(map, true, total) do
     Map.put(map, "totalItems", total)
-  end
-
-  def collection(collection, iri, page, show_items \\ true, total \\ nil) do
-    offset = (page - 1) * 10
-    items = Enum.slice(collection, offset, 10)
-    items = Enum.map(items, fn user -> user.ap_id end)
-    total = total || length(collection)
-
-    map = %{
-      "id" => "#{iri}?page=#{page}",
-      "type" => "OrderedCollectionPage",
-      "partOf" => iri,
-      "totalItems" => total,
-      "orderedItems" => if(show_items, do: items, else: [])
-    }
-
-    if offset < total do
-      Map.put(map, "next", "#{iri}?page=#{page + 1}")
-    else
-      map
-    end
   end
 
   defp maybe_make_image(func, description, key, user) do

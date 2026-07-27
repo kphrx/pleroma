@@ -55,49 +55,26 @@ defmodule Pleroma.Web.OAuth.AppTest do
   end
 
   test "removes orphaned apps" do
-    # Create an orphaned app (no user_id)
     attrs = %{client_name: "Mastodon-Local", redirect_uris: "."}
     {:ok, %App{} = old_app} = App.get_or_make(attrs, ["write"])
 
-    # Create a non-orphaned app with a user
     user = insert(:user)
-    attrs = %{client_name: "PleromaFE", redirect_uris: ".", user_id: user.id}
-    {:ok, %App{} = kept_app} = App.get_or_make(attrs, ["write"])
-
-    # Create an old but non-orphaned app
     attrs = %{client_name: "OldButValid", redirect_uris: ".", user_id: user.id}
-    {:ok, %App{} = old_kept_app} = App.get_or_make(attrs, ["write"])
+    {:ok, %App{} = old_owned_app} = App.get_or_make(attrs, ["write"])
 
-    # backdate both old apps so they're within the threshold for being cleaned up
-    # 1 hour ago
-    past_time = NaiveDateTime.add(NaiveDateTime.utc_now(), -3600)
+    one_hour_ago = NaiveDateTime.add(NaiveDateTime.utc_now(), -3600)
 
     {:ok, _} =
-      Repo.query(
-        "UPDATE apps SET inserted_at = $1 WHERE id IN ($2, $3)",
-        [past_time, old_app.id, old_kept_app.id]
-      )
+      "UPDATE apps SET inserted_at = $1, updated_at = $1 WHERE id IN ($2, $3)"
+      |> Repo.query([one_hour_ago, old_app.id, old_owned_app.id])
 
-    # Ensure the updates were applied
-    updated_app = Repo.get(App, old_app.id)
-    updated_kept_app = Repo.get(App, old_kept_app.id)
-
-    assert NaiveDateTime.compare(
-             updated_app.inserted_at,
-             NaiveDateTime.add(NaiveDateTime.utc_now(), -900)
-           ) == :lt
-
-    assert NaiveDateTime.compare(
-             updated_kept_app.inserted_at,
-             NaiveDateTime.add(NaiveDateTime.utc_now(), -900)
-           ) == :lt
+    attrs = %{client_name: "PleromaFE", redirect_uris: "."}
+    {:ok, %App{} = recent_app} = App.get_or_make(attrs, ["write"])
 
     App.remove_orphans()
 
-    # Verify the orphaned app was removed
-    assert is_nil(Repo.get(App, old_app.id))
-    # Verify both non-orphaned apps still exist, regardless of age
-    assert Repo.get(App, kept_app.id)
-    assert Repo.get(App, old_kept_app.id)
+    refute Repo.get(App, old_app.id)
+    assert Repo.get(App, recent_app.id)
+    assert Repo.get(App, old_owned_app.id)
   end
 end

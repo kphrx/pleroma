@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.EmojiPolicy do
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   require Pleroma.Constants
 
   alias Pleroma.Object.Updater
@@ -10,7 +12,7 @@ defmodule Pleroma.Web.ActivityPub.MRF.EmojiPolicy do
 
   @moduledoc "Reject or force-unlisted emojis with certain URLs or names"
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp config_remove_url do
     Pleroma.Config.get([:mrf_emoji, :remove_url], [])

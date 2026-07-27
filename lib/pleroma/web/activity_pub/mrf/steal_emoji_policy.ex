@@ -3,12 +3,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.StealEmojiPolicy do
+  @moduledoc "Detect new emojis by their shortcode and steals them"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   require Logger
 
   alias Pleroma.Config
 
-  @moduledoc "Detect new emojis by their shortcode and steals them"
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp accept_host?(host), do: host in Config.get([:mrf_steal_emoji, :hosts], [])
 
@@ -18,6 +20,19 @@ defmodule Pleroma.Web.ActivityPub.MRF.StealEmojiPolicy do
 
   defp shortcode_matches?(shortcode, pattern) do
     String.match?(shortcode, pattern)
+  end
+
+  defp reject_emoji?({shortcode, _url}, installed_emoji) do
+    valid_shortcode? = String.match?(shortcode, ~r/^[a-zA-Z0-9_-]+$/)
+
+    rejected_shortcode? =
+      [:mrf_steal_emoji, :rejected_shortcodes]
+      |> Config.get([])
+      |> Enum.any?(fn pattern -> shortcode_matches?(shortcode, pattern) end)
+
+    emoji_installed? = Enum.member?(installed_emoji, shortcode)
+
+    !valid_shortcode? or rejected_shortcode? or emoji_installed?
   end
 
   defp steal_emoji({shortcode, url}, emoji_dir_path) do
@@ -74,20 +89,11 @@ defmodule Pleroma.Web.ActivityPub.MRF.StealEmojiPolicy do
           Path.join(Config.get([:instance, :static_dir]), "emoji/stolen")
         )
 
-      File.mkdir_p(emoji_dir_path)
+      Pleroma.Backports.mkdir_p(emoji_dir_path)
 
       new_emojis =
         foreign_emojis
-        |> Enum.reject(fn {shortcode, _url} -> shortcode in installed_emoji end)
-        |> Enum.reject(fn {shortcode, _url} -> String.contains?(shortcode, ["/", "\\"]) end)
-        |> Enum.filter(fn {shortcode, _url} ->
-          reject_emoji? =
-            [:mrf_steal_emoji, :rejected_shortcodes]
-            |> Config.get([])
-            |> Enum.find(false, fn pattern -> shortcode_matches?(shortcode, pattern) end)
-
-          !reject_emoji?
-        end)
+        |> Enum.reject(&reject_emoji?(&1, installed_emoji))
         |> Enum.map(&steal_emoji(&1, emoji_dir_path))
         |> Enum.filter(& &1)
 

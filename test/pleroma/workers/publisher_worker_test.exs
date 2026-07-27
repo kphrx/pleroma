@@ -3,16 +3,20 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Workers.PublisherWorkerTest do
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
   use Oban.Testing, repo: Pleroma.Repo
 
+  import Mox
   import Pleroma.Factory
 
+  alias Pleroma.Instances
   alias Pleroma.Object
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.Builder
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.Federator
+  alias Pleroma.Web.FederatorMock
+  alias Pleroma.Workers.PublisherWorker
 
   describe "Oban job priority:" do
     setup do
@@ -35,6 +39,118 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
 
     test "Creates are normal priority", %{post: post} do
       assert {:ok, %Oban.Job{priority: 0}} = Federator.publish(post)
+    end
+  end
+
+  describe "Server reachability:" do
+    setup do
+      user = insert(:user)
+      remote_user = insert(:user, local: false, inbox: "https://example.com/inbox")
+      {:ok, _, _} = Pleroma.User.follow(remote_user, user)
+      {:ok, activity} = CommonAPI.post(user, %{status: "Test post"})
+
+      %{
+        user: user,
+        remote_user: remote_user,
+        activity: activity
+      }
+    end
+
+    test "marks server as unreachable only on final failure", %{activity: activity} do
+      expect(FederatorMock, :perform, 2, fn :publish_one, _params ->
+        {:error, :connection_error}
+      end)
+
+      # First attempt
+      job = %Oban.Job{
+        args: %{
+          "op" => "publish_one",
+          "params" => %{
+            "inbox" => "https://example.com/inbox",
+            "activity_id" => activity.id
+          }
+        },
+        attempt: 1,
+        max_attempts: 5
+      }
+
+      assert {:error, :connection_error} = PublisherWorker.perform(job)
+      assert Instances.reachable?("https://example.com/inbox")
+
+      # Final attempt
+      job = %{job | attempt: 5}
+      assert {:error, :connection_error} = PublisherWorker.perform(job)
+      refute Instances.reachable?("https://example.com/inbox")
+    end
+
+    test "does not mark server as unreachable on successful publish", %{activity: activity} do
+      expect(FederatorMock, :perform, fn :publish_one, _params -> {:ok, %{status: 200}} end)
+
+      job = %Oban.Job{
+        args: %{
+          "op" => "publish_one",
+          "params" => %{
+            "inbox" => "https://example.com/inbox",
+            "activity_id" => activity.id
+          }
+        },
+        attempt: 1,
+        max_attempts: 5
+      }
+
+      assert :ok = PublisherWorker.perform(job)
+      assert Instances.reachable?("https://example.com/inbox")
+    end
+
+    test "does not create atoms from unexpected job params", %{activity: activity} do
+      unknown_key = "unknown_#{System.unique_integer([:positive])}"
+
+      assert_raise ArgumentError, fn -> String.to_existing_atom(unknown_key) end
+
+      expect(FederatorMock, :perform, fn :publish_one, params ->
+        assert params == %{
+                 inbox: "https://example.com/inbox",
+                 activity_id: activity.id
+               }
+
+        {:ok, %{status: 200}}
+      end)
+
+      job = %Oban.Job{
+        args: %{
+          "op" => "publish_one",
+          "params" => %{
+            "inbox" => "https://example.com/inbox",
+            "activity_id" => activity.id,
+            unknown_key => "ignored"
+          }
+        },
+        attempt: 1,
+        max_attempts: 5
+      }
+
+      assert :ok = PublisherWorker.perform(job)
+      assert_raise ArgumentError, fn -> String.to_existing_atom(unknown_key) end
+    end
+
+    test "cancels job if server is unreachable", %{activity: activity} do
+      # First mark the server as unreachable
+      Instances.set_unreachable("https://example.com/inbox")
+      refute Instances.reachable?("https://example.com/inbox")
+
+      job = %Oban.Job{
+        args: %{
+          "op" => "publish_one",
+          "params" => %{
+            "inbox" => "https://example.com/inbox",
+            "activity_id" => activity.id
+          }
+        },
+        attempt: 1,
+        max_attempts: 5
+      }
+
+      assert {:cancel, :unreachable} = PublisherWorker.perform(job)
     end
   end
 end

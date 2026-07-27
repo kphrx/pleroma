@@ -126,7 +126,7 @@ defmodule Pleroma.Object do
     Logger.debug("Backtrace: #{inspect(Process.info(:erlang.self(), :current_stacktrace))}")
   end
 
-  def normalize(_, options \\ [fetch: false, id_only: false])
+  def normalize(_, options \\ [fetch: false])
 
   # If we pass an Activity to Object.normalize(), we can try to use the preloaded object.
   # Use this whenever possible, especially when walking graphs in an O(N) loop!
@@ -155,9 +155,6 @@ defmodule Pleroma.Object do
 
   def normalize(ap_id, options) when is_binary(ap_id) do
     cond do
-      Keyword.get(options, :id_only) ->
-        ap_id
-
       Keyword.get(options, :fetch) ->
         case Fetcher.fetch_object_from_id(ap_id, options) do
           {:ok, object} -> object
@@ -375,12 +372,28 @@ defmodule Pleroma.Object do
             option
         end)
 
-      voters = [actor | object.data["voters"] || []] |> Enum.uniq()
+      existing_voters = object.data["voters"] || []
+      voters = [actor | existing_voters] |> Enum.uniq()
+      new_voter? = actor not in existing_voters
+      existing_voters_count = object.data["votersCount"]
+
+      voters_count =
+        cond do
+          is_integer(existing_voters_count) and new_voter? ->
+            existing_voters_count + 1
+
+          is_integer(existing_voters_count) ->
+            existing_voters_count
+
+          true ->
+            length(voters)
+        end
 
       data =
         object.data
         |> Map.put(key, options)
         |> Map.put("voters", voters)
+        |> Map.put("votersCount", voters_count)
 
       object
       |> Object.change(%{data: data})
@@ -400,28 +413,6 @@ defmodule Pleroma.Object do
   def local?(%Object{data: %{"id" => id}}) do
     String.starts_with?(id, Pleroma.Web.Endpoint.url() <> "/")
   end
-
-  def replies(object, opts \\ []) do
-    object = Object.normalize(object, fetch: false)
-
-    query =
-      Object
-      |> where(
-        [o],
-        fragment("(?)->>'inReplyTo' = ?", o.data, ^object.data["id"])
-      )
-      |> order_by([o], asc: o.id)
-
-    if opts[:self_only] do
-      actor = object.data["actor"]
-      where(query, [o], fragment("(?)->>'actor' = ?", o.data, ^actor))
-    else
-      query
-    end
-  end
-
-  def self_replies(object, opts \\ []),
-    do: replies(object, Keyword.put(opts, :self_only, true))
 
   def tags(%Object{data: %{"tag" => tags}}) when is_list(tags), do: tags
 

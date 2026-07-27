@@ -83,12 +83,12 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
         |> get(user_feed_path(conn, :feed, user.nickname))
         |> response(200)
 
-      activity_titles =
-        resp
-        |> SweetXml.parse()
-        |> SweetXml.xpath(~x"//entry/title/text()"l)
+      xml = SweetXml.parse(resp)
+      activity_titles = SweetXml.xpath(xml, ~x"//entry/title/text()"l)
 
       assert activity_titles == [~c"Won't, didn'...", ~c"2hu", ~c"2hu & as"]
+      assert SweetXml.xpath(xml, ~x"//entry/link[@rel='self']/@href"sl) == []
+      assert length(SweetXml.xpath(xml, ~x"//entry/link[@rel='alternate']/@href"sl)) == 3
       assert resp =~ FeedView.escape(object.data["content"])
       assert resp =~ FeedView.escape(object.data["summary"])
       assert resp =~ FeedView.escape(object.data["context"])
@@ -136,6 +136,107 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
         |> SweetXml.xpath(~x"//item/title/text()"l)
 
       assert activity_titles == [~c"2hu & as"]
+    end
+
+    test "escapes query parameters in feed self links", %{conn: conn, user: user} do
+      for format <- ~w[atom rss] do
+        response =
+          conn
+          |> get("/users/#{user.nickname}/feed.#{format}?first=one&second=two")
+          |> response(200)
+
+        assert response =~ "first=one&amp;second=two"
+        refute response =~ "first=one&second=two"
+      end
+    end
+
+    test "keeps fallback summary markup inert in rendered Atom content", %{
+      conn: conn,
+      object: object,
+      user: user
+    } do
+      data =
+        object.data
+        |> Map.put("content", "")
+        |> Map.put("summary", "<script>alert('feed')</script>")
+
+      object
+      |> Ecto.Changeset.change(data: data)
+      |> Pleroma.Repo.update!()
+
+      response =
+        conn
+        |> get("/users/#{user.nickname}/feed.atom")
+        |> response(200)
+
+      assert response =~
+               "&amp;lt;script&amp;gt;alert(&amp;#39;feed&amp;#39;)&amp;lt;/script&amp;gt;"
+
+      content_values = response |> parse() |> xpath(~x"//entry/content/text()"sl)
+
+      assert Enum.any?(content_values, fn content ->
+               String.starts_with?(content, "&lt;script&gt;alert(&#39;feed&#39;)&lt;/script&gt;")
+             end)
+    end
+
+    test "does not expose sensitive attachments as enclosures", %{
+      conn: conn,
+      object: object,
+      user: user
+    } do
+      object
+      |> Ecto.Changeset.change(data: Map.put(object.data, "sensitive", true))
+      |> Pleroma.Repo.update!()
+
+      atom_response =
+        conn
+        |> get("/users/#{user.nickname}/feed.atom")
+        |> response(200)
+
+      rss_response =
+        conn
+        |> get("/users/#{user.nickname}/feed.rss")
+        |> response(200)
+
+      refute atom_response =~ "rel=\"enclosure\""
+      refute rss_response =~ "<enclosure "
+    end
+
+    test "uses enclosure fallbacks for user feeds", %{conn: conn, object: object, user: user} do
+      attachment = %{"url" => [%{"href" => "https://example.com/file.bin"}]}
+
+      object
+      |> Ecto.Changeset.change(data: Map.put(object.data, "attachment", [attachment]))
+      |> Pleroma.Repo.update!()
+
+      atom_xml =
+        conn
+        |> get("/users/#{user.nickname}/feed.atom")
+        |> response(200)
+        |> parse()
+
+      assert xpath(atom_xml, ~x"//entry/link[@rel='enclosure']/@href"sl) == [
+               "https://example.com/file.bin"
+             ]
+
+      assert xpath(atom_xml, ~x"//entry/link[@rel='enclosure']/@type"sl) == [
+               "application/octet-stream"
+             ]
+
+      assert xpath(atom_xml, ~x"//entry/link[@rel='enclosure']/@length"sl) == []
+
+      rss_xml =
+        conn
+        |> get("/users/#{user.nickname}/feed.rss")
+        |> response(200)
+        |> parse()
+
+      assert xpath(rss_xml, ~x"//item/enclosure/@url"sl) == []
+      assert xpath(rss_xml, ~x"//item/media:content/@url"sl) == ["https://example.com/file.bin"]
+
+      assert xpath(rss_xml, ~x"//item/media:content/@type"sl) == [
+               "application/octet-stream"
+             ]
     end
 
     test "returns 404 for a missing feed", %{conn: conn} do
@@ -280,6 +381,21 @@ defmodule Pleroma.Web.Feed.UserControllerTest do
 
       assert redirected_to(conn) ==
                "#{Pleroma.Web.Endpoint.url()}/users/#{user.nickname}/feed.atom"
+    end
+
+    test "redirects to rss feed when explicitly requested", %{conn: conn} do
+      note_activity = insert(:note_activity)
+      user = User.get_cached_by_ap_id(note_activity.data["actor"])
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/xml")
+        |> get("/users/#{user.nickname}.rss")
+
+      assert conn.status == 302
+
+      assert redirected_to(conn) ==
+               "#{Pleroma.Web.Endpoint.url()}/users/#{user.nickname}/feed.rss"
     end
 
     test "with non-html / non-json format, it returns error when user is not found", %{conn: conn} do

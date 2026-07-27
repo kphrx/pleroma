@@ -671,6 +671,7 @@ Audio scrobbling in Pleroma is **deprecated**.
        "artist": "Some Artist",
        "album": "Some Album",
        "length": 180000,
+       "external_link": "https://www.last.fm/music/Some+Artist/_/Some+Title",
        "created_at": "2019-09-28T12:40:45.000Z"
    }
 ]
@@ -683,11 +684,13 @@ Audio scrobbling in Pleroma is **deprecated**.
 ### Creates a new Listen activity for an account
 * Method `POST`
 * Authentication: required
+* OAuth scope: `write:scrobbles`
 * Params:
   * `title`: the title of the media playing
   * `album`: the album of the media playing [optional]
   * `artist`: the artist of the media playing [optional]
   * `length`: the length of the media playing [optional]
+  * `external_link`: a URL referencing the media playing [optional]
 * Response: the newly created media metadata entity representing the Listen activity
 
 # Emoji Reactions

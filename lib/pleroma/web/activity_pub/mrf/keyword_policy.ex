@@ -3,13 +3,14 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.KeywordPolicy do
+  @moduledoc "Reject or Word-Replace activities with a keyword or regex"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   require Pleroma.Constants
 
   alias Pleroma.Web.ActivityPub.MRF.Utils
 
-  @moduledoc "Reject or Word-Replace activities with a keyword or regex"
-
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp string_matches?(string, pattern) when is_binary(pattern) do
     String.contains?(string, pattern)

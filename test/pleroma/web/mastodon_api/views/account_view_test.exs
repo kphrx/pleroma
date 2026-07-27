@@ -54,8 +54,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       note: "<span>valid html</span>. a<br/>b<br/>c<br/>d<br/>f &#39;&amp;&lt;&gt;&quot;",
       url: user.ap_id,
       avatar: "http://localhost:4001/images/avi.png",
+      avatar_description: "",
       avatar_static: "http://localhost:4001/images/avi.png",
       header: "http://localhost:4001/images/banner.png",
+      header_description: "",
       header_static: "http://localhost:4001/images/banner.png",
       emojis: [
         %{
@@ -103,6 +105,25 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
     }
 
     assert expected == AccountView.render("show.json", %{user: user, skip_visibility_check: true})
+  end
+
+  test "encodes emoji urls in the emojis field" do
+    user =
+      insert(:user,
+        name: ":brackets: :percent:",
+        emoji: %{
+          "brackets" => "/emoji/hana[pog].png",
+          "percent" => "/emoji/hana%20pog.png"
+        }
+      )
+
+    %{emojis: emojis} =
+      AccountView.render("show.json", %{user: user, skip_visibility_check: true})
+
+    emoji_urls = Map.new(emojis, &{&1.shortcode, &1.url})
+
+    assert emoji_urls["brackets"] == "/emoji/hana%5Bpog%5D.png"
+    assert emoji_urls["percent"] == "/emoji/hana%2520pog.png"
   end
 
   describe "roles and privileges" do
@@ -307,8 +328,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       note: user.bio,
       url: user.ap_id,
       avatar: "http://localhost:4001/images/avi.png",
+      avatar_description: "",
       avatar_static: "http://localhost:4001/images/avi.png",
       header: "http://localhost:4001/images/banner.png",
+      header_description: "",
       header_static: "http://localhost:4001/images/banner.png",
       emojis: [],
       fields: [],
@@ -420,8 +443,10 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       following: false,
       followed_by: false,
       blocking: false,
+      block_expires_at: nil,
       blocked_by: false,
       muting: false,
+      mute_expires_at: nil,
       muting_notifications: false,
       subscribing: false,
       notifying: false,
@@ -512,6 +537,53 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
         Map.merge(
           @blank_response,
           %{following: false, blocking: true, blocked_by: true, id: to_string(other_user.id)}
+        )
+
+      test_relationship_rendering(user, other_user, expected)
+    end
+
+    test "represent a relationship for the blocking and blocked user with expiry" do
+      user = insert(:user)
+      other_user = insert(:user)
+      {:ok, user, other_user} = User.follow(user, other_user)
+      {:ok, _subscription} = User.subscribe(user, other_user)
+      {:ok, user_relationship} = User.block(user, other_user, %{duration: 24 * 60 * 60})
+      {:ok, _user_relationship} = User.block(other_user, user)
+
+      expected =
+        Map.merge(
+          @blank_response,
+          %{
+            following: false,
+            blocking: true,
+            block_expires_at: user_relationship.expires_at,
+            blocked_by: true,
+            id: to_string(other_user.id)
+          }
+        )
+
+      test_relationship_rendering(user, other_user, expected)
+    end
+
+    test "represent a relationship for the muting user with expiry" do
+      user = insert(:user)
+      other_user = insert(:user)
+
+      {:ok, user_relationships} =
+        User.mute(user, other_user, %{notifications: true, duration: 24 * 60 * 60})
+
+      user_relationship =
+        Enum.find(user_relationships, &(&1.relationship_type == :mute))
+
+      expected =
+        Map.merge(
+          @blank_response,
+          %{
+            muting: true,
+            mute_expires_at: user_relationship.expires_at,
+            muting_notifications: true,
+            id: to_string(other_user.id)
+          }
         )
 
       test_relationship_rendering(user, other_user, expected)
@@ -837,11 +909,36 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
       User.mute(user, other_user, %{notifications: true, duration: 24 * 60 * 60})
 
     %{
-      mute_expires_at: mute_expires_at
-    } = AccountView.render("show.json", %{user: other_user, for: user, mutes: true})
+      pleroma: %{
+        relationship: %{
+          mute_expires_at: mute_expires_at
+        }
+      }
+    } = AccountView.render("show.json", %{user: other_user, for: user, embed_relationships: true})
 
     assert DateTime.diff(
              mute_expires_at,
+             DateTime.utc_now() |> DateTime.add(24 * 60 * 60)
+           ) in -3..3
+  end
+
+  test "renders block expiration date" do
+    user = insert(:user)
+    other_user = insert(:user)
+
+    {:ok, _user_relationships} =
+      User.block(user, other_user, %{duration: 24 * 60 * 60})
+
+    %{
+      pleroma: %{
+        relationship: %{
+          block_expires_at: block_expires_at
+        }
+      }
+    } = AccountView.render("show.json", %{user: other_user, for: user, embed_relationships: true})
+
+    assert DateTime.diff(
+             block_expires_at,
              DateTime.utc_now() |> DateTime.add(24 * 60 * 60)
            ) in -3..3
   end

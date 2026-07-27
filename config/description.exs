@@ -117,6 +117,19 @@ config :pleroma, :config_description, [
         key: :filename_display_max_length,
         type: :integer,
         description: "Set max length of a filename to display. 0 = no limit. Default: 30"
+      },
+      %{
+        key: :allowed_mime_types,
+        label: "Allowed MIME types",
+        type: {:list, :string},
+        description:
+          "List of MIME (main) types uploads are allowed to identify themselves with. Other types may still be uploaded, but will identify as a generic binary to clients. WARNING: Loosening this over the defaults can lead to security issues. Removing types is safe, but only add to the list if you are sure you know what you are doing.",
+        suggestions: [
+          "image",
+          "audio",
+          "video",
+          "font"
+        ]
       }
     ]
   },
@@ -802,7 +815,8 @@ config :pleroma, :config_description, [
           "text/plain",
           "text/html",
           "text/markdown",
-          "text/bbcode"
+          "text/bbcode",
+          "text/x.misskeymarkdown"
         ]
       },
       %{
@@ -1248,6 +1262,7 @@ config :pleroma, :config_description, [
             background: "/static/aurora_borealis.jpg",
             collapseMessageWithSubject: false,
             greentext: false,
+            embeddedToS: true,
             hideFilteredStatuses: false,
             hideMutedPosts: false,
             hidePostStats: false,
@@ -1298,6 +1313,12 @@ config :pleroma, :config_description, [
             label: "Greentext",
             type: :boolean,
             description: "Enables green text on lines prefixed with the > character"
+          },
+          %{
+            key: :embeddedToS,
+            label: "Embedded ToS panel",
+            type: :boolean,
+            description: "Hide Terms of Service panel decorations on About and Registration pages"
           },
           %{
             key: :hideFilteredStatuses,
@@ -1374,7 +1395,13 @@ config :pleroma, :config_description, [
             label: "Post Content Type",
             type: {:dropdown, :atom},
             description: "Default post formatting option",
-            suggestions: ["text/plain", "text/html", "text/markdown", "text/bbcode"]
+            suggestions: [
+              "text/plain",
+              "text/html",
+              "text/markdown",
+              "text/bbcode",
+              "text/x.misskeymarkdown"
+            ]
           },
           %{
             key: :redirectRootNoLogin,
@@ -1772,6 +1799,28 @@ config :pleroma, :config_description, [
         type: :integer,
         description: "Following handshake timeout",
         suggestions: [500]
+      },
+      %{
+        key: :client_api_enabled,
+        type: :boolean,
+        description: "Allow client to server ActivityPub interactions"
+      },
+      %{
+        key: :anonymize_reporter,
+        type: :boolean,
+        label: "Anonymize local reports",
+        description:
+          "If true, replace local reporters with the designated local user for the copy to be sent to remote servers"
+      },
+      %{
+        key: :anonymize_reporter_local_nickname,
+        type: :string,
+        label: "Anonymized reporter",
+        description:
+          "The nickname of the designated local user that replaces the actual reporter in the copy to be sent to remote servers",
+        suggestions: [
+          "lain"
+        ]
       }
     ]
   },
@@ -2089,6 +2138,11 @@ config :pleroma, :config_description, [
         description:
           "Amount of milliseconds after which the HTTP request is forcibly terminated.",
         suggestions: [5_000]
+      },
+      %{
+        key: :user_agent,
+        type: :string,
+        description: "Custom User-Agent header to be used when fetching rich media content."
       }
     ]
   },
@@ -2674,6 +2728,19 @@ config :pleroma, :config_description, [
   },
   %{
     group: :pleroma,
+    key: Pleroma.Chat,
+    type: :group,
+    description: "Pleroma Chat settings",
+    children: [
+      %{
+        key: :enabled,
+        type: :boolean,
+        description: "Enables the chats API."
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
     key: :http,
     label: "HTTP",
     type: :group,
@@ -2856,7 +2923,7 @@ config :pleroma, :config_description, [
     key: Pleroma.Web.Plugs.RemoteIp,
     type: :group,
     description: """
-    `Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://git.pleroma.social/pleroma/remote_ip) but with runtime configuration.
+    `Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://hex.pm/packages/remote_ip) but with runtime configuration.
     **If your instance is not behind at least one reverse proxy, you should not enable this plug.**
     """,
     children: [
@@ -2871,6 +2938,12 @@ config :pleroma, :config_description, [
         description: """
           A list of strings naming the HTTP headers to use when deriving the true client IP. Default: `["x-forwarded-for"]`.
         """
+      },
+      %{
+        key: :clients,
+        type: {:list, :string},
+        description:
+          "A list of client IPs or subnets in CIDR notation. These will not be treated as proxies or reserved ranges. Defaults to `[]`. IPv4 entries without a bitmask will be assumed to be /32 and IPv6 /128."
       },
       %{
         key: :proxies,
@@ -3025,8 +3098,15 @@ config :pleroma, :config_description, [
       %{
         key: :max_connections,
         type: :integer,
-        description: "Maximum number of connections in the pool. Default: 250 connections.",
+        description:
+          "Maximum total number of connections in the pool. HTTP/1 origins may use multiple connections within this limit, while HTTP/2 connections are multiplexed. Default: 250 connections.",
         suggestions: [250]
+      },
+      %{
+        key: :max_idle_time,
+        type: :integer,
+        description: "Time before an unused connection is closed. Default: 30000ms.",
+        suggestions: [30_000]
       },
       %{
         key: :connect_timeout,
@@ -3286,6 +3366,12 @@ config :pleroma, :config_description, [
         description:
           "A map containing available frontends and parameters for their installation.",
         children: frontend_options
+      },
+      %{
+        key: :pickable,
+        type: {:list, :string},
+        description:
+          "A list containing all frontends users can pick as their preference, format is :name/:ref, e.g pleroma-fe/stable."
       }
     ]
   },
@@ -3302,8 +3388,7 @@ config :pleroma, :config_description, [
         suggestions: [
           Pleroma.Web.Preload.Providers.Instance,
           Pleroma.Web.Preload.Providers.User,
-          Pleroma.Web.Preload.Providers.Timelines,
-          Pleroma.Web.Preload.Providers.StatusNet
+          Pleroma.Web.Preload.Providers.Timelines
         ]
       }
     ]
@@ -3438,6 +3523,26 @@ config :pleroma, :config_description, [
             suggestion: [5]
           }
         ]
+      },
+      %{
+        key: Pleroma.Webhook.Notify,
+        type: :keyword,
+        description: "Concurrent limits configuration for webhooks.",
+        suggestions: [max_running: 5, max_waiting: 200],
+        children: [
+          %{
+            key: :max_running,
+            type: :integer,
+            description: "Max running concurrently jobs.",
+            suggestion: [5]
+          },
+          %{
+            key: :max_waiting,
+            type: :integer,
+            description: "Max waiting jobs.",
+            suggestion: [200]
+          }
+        ]
       }
     ]
   },
@@ -3451,7 +3556,12 @@ config :pleroma, :config_description, [
         key: :module,
         type: :keyword,
         description: "Selected search module.",
-        suggestion: [Pleroma.Search.DatabaseSearch, Pleroma.Search.Meilisearch]
+        suggestion: [
+          Pleroma.Search.DatabaseSearch,
+          Pleroma.Search.Meilisearch,
+          Pleroma.Search.QdrantSearch,
+          Pleroma.Search.ParadeDB
+        ]
       }
     ]
   },
@@ -3481,6 +3591,116 @@ config :pleroma, :config_description, [
           "Amount of posts in a batch when running the initial indexing operation. Should probably not be more than 100000" <>
             " since there's a limit on maximum insert size",
         suggestion: [100_000]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Search.ParadeDB,
+    type: :group,
+    description: "ParadeDB settings.",
+    children: [
+      %{
+        key: :url,
+        type: :string,
+        description:
+          "ParadeDB database URL (separate Postgres instance). " <>
+            "Can also be set via `PARADEDB_DATABASE_URL`.",
+        suggestion: ["postgres://postgres:postgres@127.0.0.1:5432/paradedb"]
+      },
+      %{
+        key: :table,
+        type: :string,
+        description: "Table name used for search documents.",
+        suggestion: ["pleroma_search_documents"]
+      },
+      %{
+        key: :fuzzy_distance,
+        type: :integer,
+        description: "Edit-distance used for fuzzy token matching (0 disables fuzziness, max 2).",
+        suggestion: [0, 1, 2]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Language.LanguageDetector,
+    type: :group,
+    description: "Language detection providers",
+    children: [
+      %{
+        key: :provider,
+        type: :module,
+        suggestions: {:list_behaviour_implementations, Pleroma.Language.LanguageDetector.Provider}
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.LanguageDetector.Fasttext},
+        key: :model,
+        label: "fastText language detection model",
+        type: :string,
+        suggestions: ["/usr/share/fasttext/lid.176.bin"]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Language.Translation,
+    type: :group,
+    description: "Translation providers",
+    children: [
+      %{
+        key: :provider,
+        type: :module,
+        suggestions: {:list_behaviour_implementations, Pleroma.Language.Translation.Provider}
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Deepl},
+        key: :base_url,
+        label: "DeepL base URL",
+        type: :string,
+        suggestions: ["https://api-free.deepl.com", "https://api.deepl.com"]
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Deepl},
+        key: :api_key,
+        label: "DeepL API Key",
+        type: :string,
+        suggestions: ["YOUR_API_KEY"]
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Libretranslate},
+        key: :base_url,
+        label: "LibreTranslate instance URL",
+        type: :string,
+        suggestions: ["https://libretranslate.com"]
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Libretranslate},
+        key: :api_key,
+        label: "LibreTranslate API Key",
+        type: :string,
+        suggestions: ["YOUR_API_KEY"]
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.TranslateLocally},
+        key: :intermediary_language,
+        label:
+          "translateLocally intermediary language (used when direct source->target model is not available)",
+        type: :string,
+        suggestions: ["en"]
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Mozhi},
+        key: :base_url,
+        label: "Mozhi instance URL",
+        type: :string
+      },
+      %{
+        group: {:subgroup, Pleroma.Language.Translation.Mozhi},
+        key: :engine,
+        label: "Engine used for Mozhi",
+        type: :string,
+        suggestions: ["libretranslate"]
       }
     ]
   }

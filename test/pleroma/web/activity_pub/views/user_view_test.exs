@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.UserViewTest do
-  use Pleroma.DataCase, async: true
+  use Pleroma.DataCase, async: false
   import Pleroma.Factory
 
   alias Pleroma.User
@@ -169,6 +169,18 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
       user = Map.merge(user, %{hide_followers_count: false, hide_followers: true})
       assert %{"totalItems" => 1} = UserView.render("followers.json", %{user: user})
     end
+
+    test "does not hide follower items based on `hide_follows`" do
+      user = insert(:user)
+      follower = insert(:user)
+      {:ok, user, _follower, _activity} = CommonAPI.follow(user, follower)
+
+      user = Map.merge(user, %{hide_followers: false, hide_follows: true})
+      follower_ap_id = follower.ap_id
+
+      assert %{"first" => %{"orderedItems" => [^follower_ap_id]}} =
+               UserView.render("followers.json", %{user: user})
+    end
   end
 
   describe "following" do
@@ -207,6 +219,14 @@ defmodule Pleroma.Web.ActivityPub.UserViewTest do
                UserView.render("user.json", user: nil_user)["capabilities"],
                "acceptsChatMessages"
              )
+    end
+
+    test "it returns false if chat is disabled" do
+      clear_config([Pleroma.Chat, :enabled], false)
+      user = insert(:user, accepts_chat_messages: true)
+
+      assert %{"capabilities" => %{"acceptsChatMessages" => false}} =
+               UserView.render("user.json", user: user)
     end
   end
 end

@@ -28,9 +28,13 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   # This is a naive way to do this, just spawning a process per activity
   # to fetch the preview. However it should be fine considering
   # pagination is restricted to 40 activities at a time
-  defp fetch_rich_media_for_activities(activities) do
+  # Force disable Websockets streaming for backfill jobs,
+  # otherwise old posts can show up on timelines.
+  defp fetch_rich_media_for_activities(activities, opts) do
+    opts = Map.put(opts, :stream, false)
+
     Enum.each(activities, fn activity ->
-      Card.get_by_activity(activity)
+      Card.get_by_activity(activity, opts)
     end)
   end
 
@@ -113,7 +117,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     activities = Enum.filter(opts.activities, & &1)
 
     # Start prefetching rich media before doing anything else
-    fetch_rich_media_for_activities(activities)
+    fetch_rich_media_for_activities(activities, opts)
+
     replied_to_activities = get_replied_to_activities(activities)
     quoted_activities = get_quoted_activities(activities)
 
@@ -227,7 +232,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       mentions: mentions,
       tags: reblogged[:tags] || [],
       application: build_application(object.data["generator"]),
-      language: nil,
+      language: get_language(object),
       emojis: [],
       pleroma: %{
         local: activity.local,
@@ -240,7 +245,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   def render("show.json", %{activity: %{data: %{"object" => _object}} = activity} = opts) do
     object = Object.normalize(activity, fetch: false)
 
-    user = CommonAPI.get_user(activity.data["actor"])
+    user = CommonAPI.get_user(object.data["actor"])
     user_follower_address = user.follower_address
 
     like_count = object.data["like_count"] || 0
@@ -361,8 +366,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
 
     summary = object.data["summary"] || ""
 
+    # Force disable Websockets streaming for backfill jobs which the below call will create,
+    # otherwise old posts can show up on timelines.
     card =
-      case Card.get_by_activity(activity) do
+      case Card.get_by_activity(activity, Map.put(opts, :stream, false)) do
         %Card{} = result -> render("card.json", result)
         _ -> nil
       end
@@ -445,8 +452,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       mentions: mentions,
       tags: build_tags(tags),
       application: build_application(object.data["generator"]),
-      language: nil,
+      language: get_language(object),
       emojis: build_emojis(object.data["emoji"]),
+      quotes_count: object.data["quotesCount"] || 0,
       pleroma: %{
         local: activity.local,
         conversation_id: get_context_id(activity),
@@ -579,14 +587,25 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     video_url = proxied_url(rich_media["video"], page_url_data)
 
     %{
-      type: "link",
-      provider_name: page_url_data.host,
-      provider_url: page_url_data.scheme <> "://" <> page_url_data.host,
+      type: card_type(rich_media["type"]),
+      provider_name: rich_media["provider_name"] || page_url_data.host,
+      provider_url:
+        rich_media["provider_url"] || page_url_data.scheme <> "://" <> page_url_data.host,
       url: page_url,
       image: image_url,
       image_description: rich_media["image:alt"] || "",
       title: rich_media["title"] || "",
       description: rich_media["description"] || "",
+      language: nil,
+      authors: [],
+      author_name: rich_media["author_name"] || "",
+      author_url: rich_media["author_url"] || "",
+      html: rich_media["html"] || "",
+      width: card_dimension(rich_media["width"]),
+      height: card_dimension(rich_media["height"]),
+      embed_url: rich_media["embed_url"] || "",
+      blurhash: nil,
+      published_at: nil,
       pleroma: %{
         opengraph:
           rich_media
@@ -602,7 +621,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   def render("attachment.json", %{attachment: attachment}) do
     [attachment_url | _] = attachment["url"]
     media_type = attachment_url["mediaType"] || attachment_url["mimeType"] || "image"
-    href = attachment_url["href"] |> MediaProxy.url()
+    href_remote = attachment_url["href"]
+    href = href_remote |> MediaProxy.url()
     href_preview = attachment_url["href"] |> MediaProxy.preview_url()
     meta = render("attachment_meta.json", %{attachment: attachment})
 
@@ -611,6 +631,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
         String.contains?(media_type, "image") -> "image"
         String.contains?(media_type, "video") -> "video"
         String.contains?(media_type, "audio") -> "audio"
+        attachment["type"] == "Image" -> "image"
         true -> "unknown"
       end
 
@@ -641,7 +662,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     %{
       id: attachment_id,
       url: href,
-      remote_url: href,
+      remote_url: href_remote,
       preview_url: href_preview,
       text_url: href,
       type: type,
@@ -680,6 +701,28 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       descendants: render("index.json", for: user, activities: descendants, as: :activity)
     }
   end
+
+  def render("translation.json", %{
+        content: content,
+        detected_source_language: detected_source_language,
+        provider: provider
+      }) do
+    %{content: content, detected_source_language: detected_source_language, provider: provider}
+  end
+
+  defp card_type(type) when type in ["link", "photo", "video", "rich"], do: type
+  defp card_type(_), do: "link"
+
+  defp card_dimension(value) when is_integer(value) and value >= 0, do: value
+
+  defp card_dimension(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {dimension, ""} when dimension >= 0 -> dimension
+      _ -> 0
+    end
+  end
+
+  defp card_dimension(_), do: 0
 
   def get_reply_to(activity, %{replied_to_activities: replied_to_activities}) do
     object = Object.normalize(activity, fetch: false)
@@ -828,6 +871,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   defp get_source_content_type(_source) do
     Utils.get_content_type(nil)
   end
+
+  defp get_language(%{data: %{"language" => "und"}}), do: nil
+
+  defp get_language(object), do: object.data["language"]
 
   defp proxied_url(url, page_url_data) do
     if is_binary(url) do

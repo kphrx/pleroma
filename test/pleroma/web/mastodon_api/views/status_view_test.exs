@@ -54,7 +54,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
                count: 2,
                me: false,
                name: "dinosaur",
-               url: "http://localhost:4001/emoji/dino walking.gif",
+               url: "http://localhost:4001/emoji/dino%20walking.gif",
                account_ids: [other_user.id, user.id]
              },
              %{name: "🍵", count: 1, me: false, url: nil, account_ids: [third_user.id]}
@@ -70,7 +70,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
                count: 2,
                me: true,
                name: "dinosaur",
-               url: "http://localhost:4001/emoji/dino walking.gif",
+               url: "http://localhost:4001/emoji/dino%20walking.gif",
                account_ids: [other_user.id, user.id]
              },
              %{name: "🍵", count: 1, me: false, url: nil, account_ids: [third_user.id]}
@@ -344,7 +344,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
         quotes_count: 0,
         bookmark_folder: nil,
         list_id: nil
-      }
+      },
+      quotes_count: 0
     }
 
     assert status == expected
@@ -436,8 +437,10 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     post = insert(:note_activity)
     user = insert(:user)
 
-    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quote_id: post.id})
-    {:ok, quoted_quote_post} = CommonAPI.post(user, %{status: "yo", quote_id: quote_post.id})
+    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quoted_status_id: post.id})
+
+    {:ok, quoted_quote_post} =
+      CommonAPI.post(user, %{status: "yo", quoted_status_id: quote_post.id})
 
     status = StatusView.render("show.json", %{activity: quoted_quote_post})
 
@@ -508,7 +511,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     post = insert(:note_activity)
     user = insert(:user)
 
-    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quote_id: post.id})
+    {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quoted_status_id: post.id})
     {:ok, repost} = CommonAPI.repeat(quote_post.id, user)
 
     [status] = StatusView.render("index.json", %{activities: [repost], as: :activity})
@@ -664,6 +667,23 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
       assert expected == StatusView.render("attachment.json", %{attachment: object})
       assert_schema(expected, "Attachment", api_spec)
+    end
+
+    test "uses the ActivityStreams image type when the MIME type is generic" do
+      object = %{
+        "type" => "Image",
+        "url" => [
+          %{
+            "mediaType" => "application/octet-stream",
+            "href" => "https://example.com/extensionless"
+          }
+        ]
+      }
+
+      attachment = StatusView.render("attachment.json", %{attachment: object})
+
+      assert attachment.type == "image"
+      assert attachment.pleroma.mime_type == "application/octet-stream"
     end
   end
 
@@ -825,15 +845,31 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
       fields = %{
         "url" => page_url,
-        "site_name" => "Example site name",
+        "type" => "photo",
         "title" => "Example website",
         "image" => page_url <> "/example.jpg",
-        "description" => "Example description"
+        "description" => "Example description",
+        "author_name" => "Example author",
+        "author_url" => page_url <> "/author",
+        "provider_name" => "Example provider",
+        "provider_url" => page_url <> "/provider",
+        "html" => "<img src=\"#{page_url}/example.jpg\">",
+        "width" => "1024",
+        "height" => 768
       }
 
       {:ok, card} = Card.create(page_url, fields)
 
-      assert match?(%{provider_name: "example.com"}, StatusView.render("card.json", card))
+      assert %{
+               type: "photo",
+               author_name: "Example author",
+               author_url: "https://example.com/author",
+               provider_name: "Example provider",
+               provider_url: "https://example.com/provider",
+               html: "<img src=\"https://example.com/example.jpg\">",
+               width: 1024,
+               height: 768
+             } = StatusView.render("card.json", card)
     end
 
     test "a rich media card has all media proxied" do
@@ -906,7 +942,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
   test "visibility/list" do
     user = insert(:user)
 
-    {:ok, list} = Pleroma.List.create("foo", user)
+    {:ok, list} = Pleroma.List.create(%{title: "foo"}, user)
 
     {:ok, activity} = CommonAPI.post(user, %{status: "foobar", visibility: "list:#{list.id}"})
 
@@ -949,6 +985,26 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
     status = StatusView.render("show.json", activity: edited)
     assert status.edited_at
+  end
+
+  test "it shows post language" do
+    user = insert(:user)
+
+    {:ok, post} = CommonAPI.post(user, %{status: "Szczęść Boże", language: "pl"})
+
+    status = StatusView.render("show.json", activity: post)
+
+    assert status.language == "pl"
+  end
+
+  test "doesn't show post language if it's 'und'" do
+    user = insert(:user)
+
+    {:ok, post} = CommonAPI.post(user, %{status: "sdifjogijodfg", language: "und"})
+
+    status = StatusView.render("show.json", activity: post)
+
+    assert status.language == nil
   end
 
   test "with a source object" do

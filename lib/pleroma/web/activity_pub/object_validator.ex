@@ -26,6 +26,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
   alias Pleroma.Web.ActivityPub.ObjectValidators.AudioImageVideoValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.BlockValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.ChatMessageValidator
+  alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
   alias Pleroma.Web.ActivityPub.ObjectValidators.CreateChatMessageValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.CreateGenericValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.DeleteValidator
@@ -115,7 +116,11 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
         meta
       )
       when objtype in ~w[Question Answer Audio Video Image Event Article Note Page] do
-    with {:ok, object_data} <- cast_and_apply_and_stringify_with_history(object),
+    with {:ok, object_data} <-
+           object
+           |> CommonFixes.maybe_set_attributed_to_from_activity(create_activity)
+           |> CommonFixes.maybe_add_language_from_activity(create_activity)
+           |> cast_and_apply_and_stringify_with_history(),
          meta = Keyword.put(meta, :object_data, object_data),
          {:ok, create_activity} <-
            create_activity
@@ -165,7 +170,12 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
       )
       when objtype in ~w[Question Answer Audio Video Event Article Note Page] do
     with {_, false} <- {:local, Access.get(meta, :local, false)},
-         {_, {:ok, object_data, _}} <- {:object_validation, validate(object, meta)},
+         {_, {:ok, object_data, _}} <-
+           {:object_validation,
+            object
+            |> CommonFixes.maybe_set_attributed_to_from_activity(update_activity)
+            |> CommonFixes.maybe_add_language_from_activity(update_activity)
+            |> validate(meta)},
          meta = Keyword.put(meta, :object_data, object_data),
          {:ok, update_activity} <-
            update_activity
@@ -192,14 +202,13 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
   end
 
   def validate(%{"type" => type} = object, meta)
-      when type in ~w[Accept Reject Follow Update Like EmojiReact Announce
+      when type in ~w[Accept Reject Follow Like EmojiReact Announce
       ChatMessage Answer] do
     validator =
       case type do
         "Accept" -> AcceptRejectValidator
         "Reject" -> AcceptRejectValidator
         "Follow" -> FollowValidator
-        "Update" -> UpdateValidator
         "Like" -> LikeValidator
         "EmojiReact" -> EmojiReactValidator
         "Announce" -> AnnounceValidator
@@ -207,16 +216,19 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
         "Answer" -> AnswerValidator
       end
 
-    cast_func =
-      if type == "Update" do
-        fn o -> validator.cast_and_validate(o, meta) end
-      else
-        fn o -> validator.cast_and_validate(o) end
-      end
-
     with {:ok, object} <-
            object
-           |> cast_func.()
+           |> validator.cast_and_validate()
+           |> Ecto.Changeset.apply_action(:insert) do
+      object = stringify_keys(object)
+      {:ok, object, meta}
+    end
+  end
+
+  def validate(%{"type" => type} = object, meta) when type == "Update" do
+    with {:ok, object} <-
+           object
+           |> UpdateValidator.cast_and_validate(meta)
            |> Ecto.Changeset.apply_action(:insert) do
       object = stringify_keys(object)
       {:ok, object, meta}

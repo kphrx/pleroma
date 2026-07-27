@@ -97,7 +97,7 @@ defmodule Pleroma.Web.ApiSpec do
               "Frontend management",
               "Instance configuration",
               "Instance documents",
-              "Instance rule managment",
+              "Instance rule management",
               "Invites",
               "MediaProxy cache",
               "OAuth application management",
@@ -105,7 +105,15 @@ defmodule Pleroma.Web.ApiSpec do
               "Report management",
               "Status administration",
               "User administration",
-              "Announcement management"
+              "Announcement management",
+              "Webhooks"
+            ]
+          },
+          %{
+            "name" => "Administration (Mastodon API)",
+            "tags" => [
+              "User administration (Mastodon API)",
+              "Report management (Mastodon API)"
             ]
           },
           %{"name" => "Applications", "tags" => ["Applications", "Push subscriptions"]},
@@ -139,7 +147,8 @@ defmodule Pleroma.Web.ApiSpec do
               "Search",
               "Status actions",
               "Media attachments",
-              "Bookmark folders"
+              "Bookmark folders",
+              "Tags"
             ]
           },
           %{
@@ -150,13 +159,14 @@ defmodule Pleroma.Web.ApiSpec do
               "Suggestions",
               "Announcements",
               "Remote interaction",
-              "Others"
+              "Others",
+              "Preferred frontends"
             ]
           }
         ]
       }
     }
     # discover request/response schemas from path specs
-    |> OpenApiSpex.resolve_schema_modules()
+    |> then(&OpenApiSpex.resolve_schema_modules/1)
   end
 end

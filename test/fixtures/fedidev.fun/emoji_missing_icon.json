@@ -1,0 +1,31 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/emoji-missing-icon",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:40:02Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-emoji-missing-icon",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:40:02Z",
+    "content": "emoji missing icon :cow3:",
+    "tag": [
+      {
+        "type": "Emoji",
+        "name": ":cow3:"
+      }
+    ]
+  }
+}
+

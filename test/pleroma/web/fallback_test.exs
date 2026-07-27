@@ -77,6 +77,16 @@ defmodule Pleroma.Web.FallbackTest do
     assert redirected_to(get(conn, "/pleroma/admin")) =~ "/pleroma/admin/"
   end
 
+  test "GET /phoenix/live_dashboard -> /pleroma/live_dashboard", %{conn: conn} do
+    assert redirected_to(get(conn, "/phoenix/live_dashboard")) =~ "/pleroma/live_dashboard"
+    assert redirected_to(get(conn, "/phoenix/live_dashboard/")) =~ "/pleroma/live_dashboard/"
+  end
+
+  test "GET /phoenix/live_dashboard/* -> /pleroma/live_dashboard/*", %{conn: conn} do
+    assert redirected_to(get(conn, "/phoenix/live_dashboard/ecto_stats?nav=diagnose")) =~
+             "/pleroma/live_dashboard/ecto_stats?nav=diagnose"
+  end
+
   test "OPTIONS /*path", %{conn: conn} do
     assert conn
            |> options("/foo")

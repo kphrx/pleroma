@@ -30,6 +30,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   import Ecto.Query
   import Pleroma.Web.ActivityPub.Utils
   import Pleroma.Web.ActivityPub.Visibility
+  import Pleroma.Webhook.Notify, only: [trigger_webhooks: 2]
 
   require Logger
   require Pleroma.Constants
@@ -414,10 +415,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
     with flag_data <- make_flag_data(params, additional),
          {:ok, activity} <- insert(flag_data, local),
-         {:ok, stripped_activity} <- strip_report_status_data(activity),
          _ <- notify_and_stream(activity),
+         _ <- trigger_webhooks(activity, :"report.created"),
          :ok <-
-           maybe_federate(stripped_activity) do
+           maybe_federate(activity) do
       User.all_users_with_privilege(:reports_manage_reports)
       |> Enum.filter(fn user -> user.ap_id != actor end)
       |> Enum.filter(fn user -> not is_nil(user.email) end)
@@ -501,6 +502,28 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> Repo.all()
   end
 
+  def fetch_objects_for_replies_collection(parent_ap_id, opts \\ %{}) do
+    opts =
+      opts
+      |> Map.put(:order_asc, true)
+      |> Map.put(:id_type, :integer)
+
+    from(o in Object,
+      where:
+        fragment("?->>'inReplyTo' = ?", o.data, ^parent_ap_id) and
+          fragment(
+            "(?->'to' \\? ?::text OR ?->'cc' \\? ?::text)",
+            o.data,
+            ^Pleroma.Constants.as_public(),
+            o.data,
+            ^Pleroma.Constants.as_public()
+          ) and
+          fragment("?->>'type' <> 'Answer'", o.data),
+      select: %{id: o.id, ap_id: fragment("?->>'id'", o.data)}
+    )
+    |> Pagination.fetch_paginated(opts, :keyset)
+  end
+
   @spec fetch_latest_direct_activity_id_for_context(String.t(), keyword() | map()) ::
           Ecto.UUID.t() | nil
   def fetch_latest_direct_activity_id_for_context(context, opts \\ %{}) do
@@ -517,8 +540,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     #   and extra sorting on "activities.id DESC NULLS LAST" would worse the query plan
     opts = Map.put(opts, :skip_extra_order, true)
 
-    Pagination.fetch_paginated(query, opts, pagination)
+    Pagination.fetch_paginated(query, opts, pagination, pagination_binding(opts))
   end
+
+  defp pagination_binding(%{favorited_by: _}), do: :favorited_activity
+  defp pagination_binding(_), do: nil
 
   def fetch_activities(recipients, opts \\ %{}, pagination \\ :keyset) do
     list_memberships = Pleroma.List.memberships(opts[:user])
@@ -766,6 +792,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_since(query, %{since_id: ""}), do: query
 
+  defp restrict_since(query, %{favorited_by: _, since_id: _}), do: query
+
   defp restrict_since(query, %{since_id: since_id}) do
     from(activity in query, where: activity.id > ^since_id)
   end
@@ -873,14 +901,22 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> Repo.all()
 
     # Note: NO extra ordering should be done on "activities.id desc nulls last" for optimal plan
-    from(
-      [_activity, object] in query,
-      join: hto in "hashtags_objects",
-      on: hto.object_id == object.id,
-      where: hto.hashtag_id in ^hashtag_ids,
-      distinct: [desc: object.id],
-      order_by: [desc: object.id]
-    )
+    query =
+      from(
+        [_activity, object] in query,
+        join: hto in "hashtags_objects",
+        on: hto.object_id == object.id,
+        where: hto.hashtag_id in ^hashtag_ids
+      )
+
+    if is_nil(query.distinct) do
+      from([_activity, object] in query,
+        distinct: [desc: object.id],
+        order_by: [desc: object.id]
+      )
+    else
+      query
+    end
   end
 
   defp restrict_hashtag_any(query, %{tag: tag}) when is_binary(tag) do
@@ -924,6 +960,31 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     )
   end
 
+  # Essentially, either look for activities addressed to `recipients`, _OR_ ones
+  # that reference a hashtag that the user follows
+  # Firstly, two fallbacks in case there's no hashtag constraint, or the user doesn't
+  # follow any
+  defp restrict_recipients_or_hashtags(query, recipients, user, nil) do
+    restrict_recipients(query, recipients, user)
+  end
+
+  defp restrict_recipients_or_hashtags(query, recipients, user, []) do
+    restrict_recipients(query, recipients, user)
+  end
+
+  defp restrict_recipients_or_hashtags(query, recipients, _user, hashtag_ids) do
+    from([activity, object] in query)
+    |> join(:left, [activity, object], hto in "hashtags_objects",
+      on: hto.object_id == object.id,
+      as: :hto
+    )
+    |> where(
+      [activity, object, hto: hto],
+      (hto.hashtag_id in ^hashtag_ids and ^Constants.as_public() in activity.recipients) or
+        fragment("? && ?", ^recipients, activity.recipients)
+    )
+  end
+
   defp restrict_local(query, %{local_only: true}) do
     from(activity in query, where: activity.local == true)
   end
@@ -958,10 +1019,48 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_state(query, _), do: query
 
+  defp restrict_report_target(query, %{report_target_id: actor_id}) do
+    from(activity in query,
+      where: fragment("?->'object'->>0 = ?", activity.data, ^actor_id)
+    )
+  end
+
+  defp restrict_report_target(query, _), do: query
+
+  defp restrict_assigned_account(query, %{assigned_account: assigned_account}) do
+    from(activity in query,
+      where: fragment("?->>'assigned_account' = ?", activity.data, ^assigned_account)
+    )
+  end
+
+  defp restrict_assigned_account(query, _), do: query
+
   defp restrict_favorited_by(query, %{favorited_by: ap_id}) do
+    newer_favorite =
+      from(newer_favorite in Activity,
+        where: newer_favorite.actor == ^ap_id,
+        where: newer_favorite.id > parent_as(:favorited_activity).id,
+        where: fragment("?->>'type' = ?", newer_favorite.data, "Like"),
+        where:
+          fragment(
+            "associated_object_id(?) = associated_object_id(?)",
+            newer_favorite.data,
+            parent_as(:favorited_activity).data
+          ),
+        select: 1
+      )
+
     from(
-      [_activity, object] in query,
-      where: fragment("(?)->'likes' \\? (?)", object.data, ^ap_id)
+      [activity, object: object] in query,
+      join: favorited_activity in Activity,
+      as: :favorited_activity,
+      on:
+        favorited_activity.actor == ^ap_id and
+          fragment("?->>'type' = ?", favorited_activity.data, "Like") and
+          fragment("associated_object_id(?) = (?)->>'id'", favorited_activity.data, object.data),
+      where: fragment("(?)->'likes' \\? (?)", object.data, ^ap_id),
+      where: not exists(subquery(newer_favorite)),
+      select: %Activity{activity | pagination_id: favorited_activity.id}
     )
   end
 
@@ -1038,6 +1137,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_reblogs(query, %{exclude_reblogs: true}) do
     from(activity in query, where: fragment("?->>'type' != 'Announce'", activity.data))
+  end
+
+  defp restrict_reblogs(query, %{only_reblogs: true}) do
+    from(activity in query, where: fragment("?->>'type' = 'Announce'", activity.data))
   end
 
   defp restrict_reblogs(query, _), do: query
@@ -1414,7 +1517,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> maybe_preload_report_notes(opts)
       |> maybe_set_thread_muted_field(opts)
       |> maybe_order(opts)
-      |> restrict_recipients(recipients, opts[:user])
+      |> restrict_recipients_or_hashtags(recipients, opts[:user], opts[:followed_hashtags])
       |> restrict_replies(opts)
       |> restrict_since(opts)
       |> restrict_local(opts)
@@ -1422,6 +1525,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> restrict_actor(opts)
       |> restrict_type(opts)
       |> restrict_state(opts)
+      |> restrict_report_target(opts)
+      |> restrict_assigned_account(opts)
       |> restrict_favorited_by(opts)
       |> restrict_blocked(restrict_blocked_opts)
       |> restrict_blockers_visibility(opts)
@@ -1542,7 +1647,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp get_actor_url(_url), do: nil
 
-  defp normalize_image(%{"url" => url} = data) do
+  defp normalize_image(%{"url" => url} = data) when is_binary(url) do
     %{
       "type" => "Image",
       "url" => [%{"href" => url}]
@@ -1550,8 +1655,19 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     |> maybe_put_description(data)
   end
 
+  defp normalize_image(%{"url" => urls}) when is_list(urls) do
+    url = urls |> List.first()
+
+    %{"url" => url}
+    |> normalize_image()
+  end
+
   defp normalize_image(urls) when is_list(urls), do: urls |> List.first() |> normalize_image()
   defp normalize_image(_), do: nil
+
+  defp normalize_also_known_as(urls) when is_list(urls), do: urls
+  defp normalize_also_known_as(url) when is_binary(url), do: [url]
+  defp normalize_also_known_as(nil), do: []
 
   defp maybe_put_description(map, %{"name" => description}) when is_binary(description) do
     Map.put(map, "name", description)
@@ -1608,44 +1724,80 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
     show_birthday = !!birthday
 
-    # if WebFinger request was already done, we probably have acct, otherwise
-    # we request WebFinger here
-    nickname = additional[:nickname_from_acct] || generate_nickname(data)
+    with {:ok, nickname} <- nickname_from_actor(data, additional) do
+      {:ok,
+       %{
+         ap_id: data["id"],
+         uri: get_actor_url(data["url"]),
+         banner: normalize_image(data["image"]),
+         fields: fields,
+         emoji: emojis,
+         is_locked: is_locked,
+         is_discoverable: is_discoverable,
+         invisible: invisible,
+         avatar: normalize_image(data["icon"]),
+         name: data["name"],
+         follower_address: data["followers"],
+         following_address: data["following"],
+         featured_address: featured_address,
+         bio: data["summary"] || "",
+         actor_type: actor_type,
+         also_known_as: normalize_also_known_as(data["alsoKnownAs"]),
+         public_key: public_key,
+         inbox: data["inbox"],
+         shared_inbox: shared_inbox,
+         accepts_chat_messages: accepts_chat_messages,
+         birthday: birthday,
+         show_birthday: show_birthday,
+         pinned_objects: pinned_objects,
+         nickname: nickname
+       }}
+    end
+  end
 
-    %{
-      ap_id: data["id"],
-      uri: get_actor_url(data["url"]),
-      banner: normalize_image(data["image"]),
-      fields: fields,
-      emoji: emojis,
-      is_locked: is_locked,
-      is_discoverable: is_discoverable,
-      invisible: invisible,
-      avatar: normalize_image(data["icon"]),
-      name: data["name"],
-      follower_address: data["followers"],
-      following_address: data["following"],
-      featured_address: featured_address,
-      bio: data["summary"] || "",
-      actor_type: actor_type,
-      also_known_as: Map.get(data, "alsoKnownAs", []),
-      public_key: public_key,
-      inbox: data["inbox"],
-      shared_inbox: shared_inbox,
-      accepts_chat_messages: accepts_chat_messages,
-      birthday: birthday,
-      show_birthday: show_birthday,
-      pinned_objects: pinned_objects,
-      nickname: nickname
-    }
+  defp nickname_from_actor(data, additional) do
+    generated = generated_nickname(data)
+
+    case additional[:nickname_from_acct] do
+      ^generated when is_binary(generated) ->
+        {:ok, generated}
+
+      acct when is_binary(acct) ->
+        with ^acct <- webfinger_nickname(data) do
+          {:ok, acct}
+        else
+          _ -> {:error, {:webfinger_actor_mismatch, acct, data["id"]}}
+        end
+
+      _ ->
+        {:ok, generate_nickname(data)}
+    end
+  end
+
+  defp generated_nickname(%{"preferredUsername" => username, "id" => ap_id})
+       when is_binary(username) and is_binary(ap_id) do
+    case URI.parse(ap_id) do
+      %URI{host: host} when is_binary(host) -> "#{username}@#{host}"
+      _ -> nil
+    end
+  end
+
+  defp generated_nickname(_), do: nil
+
+  defp webfinger_nickname(data) do
+    with generated when is_binary(generated) <- generated_nickname(data),
+         {:ok, %{"subject" => "acct:" <> acct, "ap_id" => ap_id}} <- WebFinger.finger(generated),
+         true <- ap_id == data["id"] do
+      acct
+    end
   end
 
   defp generate_nickname(%{"preferredUsername" => username} = data) when is_binary(username) do
-    generated = "#{username}@#{URI.parse(data["id"]).host}"
+    generated = generated_nickname(data)
 
     if Config.get([WebFinger, :update_nickname_on_user_fetch]) do
-      case WebFinger.finger(generated) do
-        {:ok, %{"subject" => "acct:" <> acct}} -> acct
+      case webfinger_nickname(data) do
+        acct when is_binary(acct) -> acct
         _ -> generated
       end
     else
@@ -1725,9 +1877,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp collection_private(_data), do: {:ok, true}
 
   def user_data_from_user_object(data, additional \\ []) do
-    with {:ok, data} <- MRF.filter(data) do
-      {:ok, object_to_user_data(data, additional)}
+    with {:ok, data} <- MRF.filter(data),
+         {:ok, data} <- object_to_user_data(data, additional) do
+      {:ok, data}
     else
+      {:error, _} = e -> e
       e -> {:error, e}
     end
   end
@@ -1774,11 +1928,15 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
+  @featured_collection_types ["OrderedCollection", "Collection"]
+  @featured_collection_page_types ["OrderedCollectionPage", "CollectionPage"]
+  @featured_collection_item_types @featured_collection_types ++ @featured_collection_page_types
+
   def pin_data_from_featured_collection(%{
         "type" => type,
         "orderedItems" => objects
       })
-      when type in ["OrderedCollection", "Collection"] do
+      when type in @featured_collection_item_types do
     Map.new(objects, fn
       %{"id" => object_ap_id} -> {object_ap_id, NaiveDateTime.utc_now()}
       object_ap_id when is_binary(object_ap_id) -> {object_ap_id, NaiveDateTime.utc_now()}
@@ -1796,12 +1954,40 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   def fetch_and_prepare_featured_from_ap_id(ap_id) do
     with {:ok, data} <- Fetcher.fetch_and_contain_remote_object_from_id(ap_id) do
-      {:ok, pin_data_from_featured_collection(data)}
+      {:ok, prepare_featured_collection(data)}
     else
       e ->
         Logger.error("Could not decode featured collection at fetch #{ap_id}, #{inspect(e)}")
         {:ok, %{}}
     end
+  end
+
+  defp prepare_featured_collection(%{"orderedItems" => objects} = data) when is_list(objects) do
+    pin_data_from_featured_collection(data)
+  end
+
+  defp prepare_featured_collection(%{
+         "type" => type,
+         "first" => %{"type" => page_type} = first
+       })
+       when type in @featured_collection_types and page_type in @featured_collection_page_types do
+    pin_data_from_featured_collection(first)
+  end
+
+  defp prepare_featured_collection(%{"type" => type, "first" => first})
+       when type in @featured_collection_types and is_binary(first) do
+    case Fetcher.fetch_and_contain_remote_object_from_id(first) do
+      {:ok, data} ->
+        pin_data_from_featured_collection(data)
+
+      e ->
+        Logger.error("Could not decode featured collection page at fetch #{first}, #{inspect(e)}")
+        %{}
+    end
+  end
+
+  defp prepare_featured_collection(data) do
+    pin_data_from_featured_collection(data)
   end
 
   def enqueue_pin_fetches(%{pinned_objects: pins}) do

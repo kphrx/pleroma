@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.AntiFollowbotPolicy do
+  @moduledoc "Prevent followbots from following with a bit of heuristic"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
   alias Pleroma.User
 
-  @moduledoc "Prevent followbots from following with a bit of heuristic"
-
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   # XXX: this should become User.normalize_by_ap_id() or similar, really.
   defp normalize_by_ap_id(%{"id" => id}), do: User.get_cached_by_ap_id(id)

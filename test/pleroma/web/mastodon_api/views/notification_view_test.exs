@@ -23,7 +23,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
   import Pleroma.Factory
 
   setup do
-    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Config)
+    Mox.stub_with(Pleroma.UnstubbedConfigMock, Pleroma.Test.StaticConfig)
     :ok
   end
 
@@ -98,10 +98,11 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     {:ok, favorite_activity} = CommonAPI.favorite(create_activity.id, another_user)
     {:ok, [notification]} = Notification.create_notifications(favorite_activity)
     create_activity = Activity.get_by_id(create_activity.id)
+    assert is_binary(notification.group_key)
 
     expected = %{
       id: to_string(notification.id),
-      group_key: "ungrouped-#{to_string(notification.id)}",
+      group_key: Notification.group_key(notification),
       pleroma: %{is_seen: false, is_muted: false},
       type: "favourite",
       account: AccountView.render("show.json", %{user: another_user, for: user}),
@@ -119,10 +120,11 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     {:ok, reblog_activity} = CommonAPI.repeat(create_activity.id, another_user)
     {:ok, [notification]} = Notification.create_notifications(reblog_activity)
     reblog_activity = Activity.get_by_id(create_activity.id)
+    assert is_binary(notification.group_key)
 
     expected = %{
       id: to_string(notification.id),
-      group_key: "ungrouped-#{to_string(notification.id)}",
+      group_key: Notification.group_key(notification),
       pleroma: %{is_seen: false, is_muted: false},
       type: "reblog",
       account: AccountView.render("show.json", %{user: another_user, for: user}),
@@ -138,10 +140,11 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     followed = insert(:user)
     {:ok, followed, follower, _activity} = CommonAPI.follow(followed, follower)
     notification = Notification |> Repo.one() |> Repo.preload(:activity)
+    assert is_binary(notification.group_key)
 
     expected = %{
       id: to_string(notification.id),
-      group_key: "ungrouped-#{to_string(notification.id)}",
+      group_key: Notification.group_key(notification),
       pleroma: %{is_seen: false, is_muted: false},
       type: "follow",
       account: AccountView.render("show.json", %{user: follower, for: followed}),
@@ -219,7 +222,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
         data: %{
           "reactions" => [
             ["👍", [user.ap_id], nil],
-            ["dinosaur", [user.ap_id], "http://localhost:4001/emoji/dino walking.gif"]
+            ["dinosaur", [user.ap_id], "http://localhost:4001/emoji/dino%20walking.gif"]
           ]
         }
       )
@@ -243,7 +246,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
       account: AccountView.render("show.json", %{user: other_user, for: user}),
       status: StatusView.render("show.json", %{activity: activity, for: user}),
       created_at: Utils.to_masto_date(notification.inserted_at),
-      emoji_url: "http://localhost:4001/emoji/dino walking.gif"
+      emoji_url: "http://localhost:4001/emoji/dino%20walking.gif"
     }
 
     test_notifications_rendering([notification], user, [expected])
@@ -333,7 +336,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
 
     expected = %{
       id: to_string(notification.id),
-      group_key: "ungrouped-#{to_string(notification.id)}",
+      group_key: Notification.group_key(notification),
       pleroma: %{is_seen: true, is_muted: true},
       type: "favourite",
       account: AccountView.render("show.json", %{user: another_user, for: user}),

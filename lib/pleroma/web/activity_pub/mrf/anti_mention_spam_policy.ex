@@ -3,11 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.AntiMentionSpamPolicy do
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.Config
   alias Pleroma.User
   require Pleroma.Constants
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp user_has_posted?(%User{} = u), do: u.note_count > 0
 

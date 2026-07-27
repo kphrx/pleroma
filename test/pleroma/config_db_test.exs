@@ -36,6 +36,20 @@ defmodule Pleroma.ConfigDBTest do
     assert config[:goose][:webhook_url] == "https://gander.com/"
   end
 
+  test "get_all_as_keyword/1 excludes static search configuration" do
+    insert(:config, key: Pleroma.Search, value: [module: Pleroma.Search.ParadeDB])
+    insert(:config, key: Pleroma.Search.ParadeDB, value: [url: "postgres://example/db"])
+    insert(:config, key: Pleroma.Search.ParadeDB.Repo, value: [pool_size: 50])
+    insert(:config, key: :instance, value: [name: "Pleroma"])
+
+    config = ConfigDB.get_all_as_keyword(exclude_static: true)
+
+    refute config[:pleroma][Pleroma.Search]
+    refute config[:pleroma][Pleroma.Search.ParadeDB]
+    refute config[:pleroma][Pleroma.Search.ParadeDB.Repo]
+    assert config[:pleroma][:instance] == [name: "Pleroma"]
+  end
+
   describe "update_or_create/1" do
     test "common" do
       config = insert(:config)
@@ -174,6 +188,22 @@ defmodule Pleroma.ConfigDBTest do
       assert updated1.value == [groups: [c: 3, d: 4], key: [a: 1, b: 2]]
       assert updated2.value == [mascots: [c: 3, d: 4], key: [a: 1, b: 2]]
     end
+
+    test "rejects invalid :rate_limit values (e.g. empty-string scale from AdminFE)" do
+      assert {:error, _changeset} =
+               ConfigDB.update_or_create(%{
+                 group: ":pleroma",
+                 key: ":rate_limit",
+                 value: [
+                   %{
+                     "tuple" => [
+                       ":statuses_actions",
+                       [%{"tuple" => ["", 0]}, %{"tuple" => ["", ""]}]
+                     ]
+                   }
+                 ]
+               })
+    end
   end
 
   describe "delete/1" do
@@ -273,24 +303,28 @@ defmodule Pleroma.ConfigDBTest do
     end
 
     test "sigil" do
-      assert ConfigDB.to_elixir_types("~r[comp[lL][aA][iI][nN]er]") == ~r/comp[lL][aA][iI][nN]er/
+      assert ConfigDB.to_elixir_types("~r[comp[lL][aA][iI][nN]er]").source ==
+               ~r/comp[lL][aA][iI][nN]er/.source
     end
 
     test "link sigil" do
-      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/") == ~r/https:\/\/example.com/
+      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/").source ==
+               ~r/https:\/\/example.com/.source
     end
 
     test "link sigil with um modifiers" do
-      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/um") ==
-               ~r/https:\/\/example.com/um
+      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/um").source ==
+               ~r/https:\/\/example.com/um.source
     end
 
     test "link sigil with i modifier" do
-      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/i") == ~r/https:\/\/example.com/i
+      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/i").source ==
+               ~r/https:\/\/example.com/i.source
     end
 
     test "link sigil with s modifier" do
-      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/s") == ~r/https:\/\/example.com/s
+      assert ConfigDB.to_elixir_types("~r/https:\/\/example.com/s").source ==
+               ~r/https:\/\/example.com/s.source
     end
 
     test "raise if valid delimiter not found" do
@@ -460,11 +494,11 @@ defmodule Pleroma.ConfigDBTest do
     test "complex keyword with sigil" do
       assert ConfigDB.to_elixir_types([
                %{"tuple" => [":federated_timeline_removal", []]},
-               %{"tuple" => [":reject", ["~r/comp[lL][aA][iI][nN]er/"]]},
+               %{"tuple" => [":reject", [~r/comp[lL][aA][iI][nN]er/.source]]},
                %{"tuple" => [":replace", []]}
              ]) == [
                federated_timeline_removal: [],
-               reject: [~r/comp[lL][aA][iI][nN]er/],
+               reject: [~r/comp[lL][aA][iI][nN]er/.source],
                replace: []
              ]
     end

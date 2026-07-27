@@ -29,7 +29,9 @@ defmodule Pleroma.Web.PleromaAPI.ChatController do
            :create,
            :mark_as_read,
            :mark_message_as_read,
-           :delete_message
+           :delete_message,
+           :pin,
+           :unpin
          ]
   )
 
@@ -39,6 +41,7 @@ defmodule Pleroma.Web.PleromaAPI.ChatController do
   )
 
   plug(Pleroma.Web.ApiSpec.CastAndValidate, replace_params: false)
+  plug(:ensure_chats_enabled)
 
   defdelegate open_api_operation(action), to: Pleroma.Web.ApiSpec.ChatOperation
 
@@ -199,7 +202,15 @@ defmodule Pleroma.Web.PleromaAPI.ChatController do
     user_id
     |> Chat.for_user_query()
     |> where([c], c.recipient not in ^exclude_users)
+    |> restrict_pinned(params)
   end
+
+  defp restrict_pinned(query, %{pinned: pinned}) when is_boolean(pinned) do
+    query
+    |> where([c], c.pinned == ^pinned)
+  end
+
+  defp restrict_pinned(query, _), do: query
 
   def create(%{assigns: %{user: user}, private: %{open_api_spex: %{params: %{id: id}}}} = conn, _) do
     with %User{ap_id: recipient} <- User.get_cached_by_id(id),
@@ -214,10 +225,36 @@ defmodule Pleroma.Web.PleromaAPI.ChatController do
     end
   end
 
+  def pin(%{assigns: %{user: user}, private: %{open_api_spex: %{params: %{id: id}}}} = conn, _) do
+    with {:ok, chat} <- Chat.get_by_user_and_id(user, id),
+         {:ok, chat} <- Chat.pin(chat) do
+      render(conn, "show.json", chat: chat)
+    end
+  end
+
+  def unpin(%{assigns: %{user: user}, private: %{open_api_spex: %{params: %{id: id}}}} = conn, _) do
+    with {:ok, chat} <- Chat.get_by_user_and_id(user, id),
+         {:ok, chat} <- Chat.unpin(chat) do
+      render(conn, "show.json", chat: chat)
+    end
+  end
+
   defp idempotency_key(conn) do
     case get_req_header(conn, "idempotency-key") do
       [key] -> key
       _ -> nil
+    end
+  end
+
+  defp ensure_chats_enabled(conn, _opts) do
+    if Chat.enabled?() do
+      conn
+    else
+      conn
+      |> put_status(:not_found)
+      |> put_view(Pleroma.Web.ErrorView)
+      |> render("404.json")
+      |> halt()
     end
   end
 end

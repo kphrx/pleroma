@@ -123,7 +123,10 @@ defmodule Pleroma.Web.ApiSpec.Admin.OAuthAppOperation do
         name: %Schema{type: :string, description: "Application Name"},
         scopes: %Schema{type: :array, items: %Schema{type: :string}, description: "oAuth scopes"},
         redirect_uris: %Schema{
-          type: :string,
+          oneOf: [
+            %Schema{type: :string},
+            %Schema{type: :array, items: %Schema{type: :string}}
+          ],
           description:
             "Where the user should be redirected after authorization. To display the authorization code to the user instead of redirecting to a web page, use `urn:ietf:wg:oauth:2.0:oob` in this parameter."
         },
@@ -141,7 +144,7 @@ defmodule Pleroma.Web.ApiSpec.Admin.OAuthAppOperation do
       },
       example: %{
         "name" => "My App",
-        "redirect_uris" => "https://myapp.com/auth/callback",
+        "redirect_uris" => ["https://myapp.com/auth/callback"],
         "website" => "https://myapp.com/",
         "scopes" => ["read", "write"],
         "trusted" => true
@@ -157,7 +160,10 @@ defmodule Pleroma.Web.ApiSpec.Admin.OAuthAppOperation do
         name: %Schema{type: :string, description: "Application Name"},
         scopes: %Schema{type: :array, items: %Schema{type: :string}, description: "oAuth scopes"},
         redirect_uris: %Schema{
-          type: :string,
+          oneOf: [
+            %Schema{type: :string},
+            %Schema{type: :array, items: %Schema{type: :string}}
+          ],
           description:
             "Where the user should be redirected after authorization. To display the authorization code to the user instead of redirecting to a web page, use `urn:ietf:wg:oauth:2.0:oob` in this parameter."
         },
@@ -175,7 +181,7 @@ defmodule Pleroma.Web.ApiSpec.Admin.OAuthAppOperation do
       },
       example: %{
         "name" => "My App",
-        "redirect_uris" => "https://myapp.com/auth/callback",
+        "redirect_uris" => ["https://myapp.com/auth/callback"],
         "website" => "https://myapp.com/",
         "scopes" => ["read", "write"],
         "trusted" => true

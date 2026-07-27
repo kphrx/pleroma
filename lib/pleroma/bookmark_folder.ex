@@ -14,7 +14,7 @@ defmodule Pleroma.BookmarkFolder do
   alias Pleroma.User
 
   @type t :: %__MODULE__{}
-  @primary_key {:id, FlakeId.Ecto.CompatType, autogenerate: true}
+  @primary_key {:id, FlakeId.Ecto.Type, autogenerate: true}
 
   schema "bookmark_folders" do
     field(:name, :string)

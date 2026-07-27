@@ -71,7 +71,11 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
   end
 
   def descriptions(conn, _params) do
-    descriptions = Enum.filter(Pleroma.Docs.JSON.compiled_descriptions(), &whitelisted_config?/1)
+    descriptions =
+      Pleroma.Docs.JSON.compiled_descriptions()
+      |> Enum.filter(&allowed_config?(&1, :whitelist))
+      |> Enum.reject(&allowed_config?(&1, :blacklist))
+      |> Enum.reject(&ConfigDB.static?/1)
 
     json(conn, translate_descriptions(descriptions))
   end
@@ -89,7 +93,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
 
   def show(conn, _params) do
     with :ok <- configurable_from_database() do
-      configs = ConfigDB.get_all_as_keyword()
+      configs = ConfigDB.get_all_as_keyword(exclude_static: true)
 
       merged =
         Config.Holder.default_config()
@@ -120,6 +124,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
           end)
         end)
         |> List.flatten()
+        |> Enum.reject(&ConfigDB.static?/1)
 
       render(conn, "index.json", %{
         configs: merged,
@@ -132,7 +137,9 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
     with :ok <- configurable_from_database() do
       results =
         configs
-        |> Enum.filter(&whitelisted_config?/1)
+        |> Enum.filter(&allowed_config?(&1, :whitelist))
+        |> Enum.reject(&allowed_config?(&1, :blacklist))
+        |> Enum.reject(&(ConfigDB.static?(&1) and not &1[:delete]))
         |> Enum.map(fn
           %{group: group, key: key, delete: true} = params ->
             ConfigDB.delete(%{group: group, key: key, subkeys: params[:subkeys]})
@@ -174,25 +181,34 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
     end
   end
 
-  defp whitelisted_config?(group, key) do
-    if whitelisted_configs = Config.get(:database_config_whitelist) do
-      Enum.any?(whitelisted_configs, fn
-        {whitelisted_group} ->
-          group == inspect(whitelisted_group)
+  defp allowed_config?(":pleroma", ":database_config_whitelist", _), do: true
+  defp allowed_config?(":pleroma", ":database_config_blacklist", _), do: true
 
-        {whitelisted_group, whitelisted_key} ->
-          group == inspect(whitelisted_group) && key == inspect(whitelisted_key)
+  defp allowed_config?(group, key, mode) do
+    configs =
+      case mode do
+        :whitelist -> Config.get(:database_config_whitelist)
+        :blacklist -> Config.get(:database_config_blacklist)
+      end
+
+    if configs do
+      Enum.any?(configs, fn
+        {allowed_group} ->
+          group == inspect(allowed_group)
+
+        {allowed_group, allowed_key} ->
+          group == inspect(allowed_group) && key == inspect(allowed_key)
       end)
     else
       true
     end
   end
 
-  defp whitelisted_config?(%{group: group, key: key}) do
-    whitelisted_config?(group, key)
+  defp allowed_config?(%{group: group, key: key}, mode) do
+    allowed_config?(group, key, mode)
   end
 
-  defp whitelisted_config?(%{group: group} = config) do
-    whitelisted_config?(group, config[:key])
+  defp allowed_config?(%{group: group} = config, mode) do
+    allowed_config?(group, config[:key], mode)
   end
 end

@@ -87,6 +87,14 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
       config = ConfigDB.get_by_params(%{group: ":pleroma", key: ":first_setting"})
       assert config.value == [key: "value", key2: [Repo]]
     end
+
+    test "static search settings remain in the config file" do
+      MixTask.migrate_to_db("test/fixtures/config/static_search.config")
+
+      refute ConfigDB.get_by_group_and_key(:pleroma, Pleroma.Search)
+      refute ConfigDB.get_by_group_and_key(:pleroma, Pleroma.Search.ParadeDB)
+      refute ConfigDB.get_by_group_and_key(:pleroma, Pleroma.Search.ParadeDB.Repo)
+    end
   end
 
   describe "with deletion of temp file" do
@@ -144,7 +152,13 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
           quarantined_instances: [],
           managed_config: true,
           static_dir: "instance/static/",
-          allowed_post_formats: ["text/plain", "text/html", "text/markdown", "text/bbcode"],
+          allowed_post_formats: [
+            "text/plain",
+            "text/html",
+            "text/markdown",
+            "text/bbcode",
+            "text/x.misskeymarkdown"
+          ],
           autofollowed_nicknames: [],
           max_pinned_statuses: 1,
           attachment_links: false,
@@ -328,6 +342,74 @@ defmodule Mix.Tasks.Pleroma.ConfigTest do
       MixTask.run(["reset", "--force"])
 
       assert config_records() == []
+    end
+
+    test "filters non-whitelisted settings" do
+      clear_config(:database_config_whitelist, [
+        {:pleroma},
+        {:web_push_encryption, :vapid_details}
+      ])
+
+      insert_config_record(:web_push_encryption, :non_whitelisted_key, a: 1)
+      insert_config_record(:web_push_encryption, :vapid_details, b: 1)
+
+      MixTask.run(["filter_whitelisted", "--force"])
+
+      assert [
+               %ConfigDB{group: :pleroma, key: :instance},
+               %ConfigDB{group: :pleroma, key: Pleroma.Captcha},
+               %ConfigDB{group: :web_push_encryption, key: :vapid_details}
+             ] = config_records()
+    end
+
+    test "filter_whitelisted doesn't crash when whitelist is unset" do
+      clear_config(:database_config_whitelist, nil)
+
+      existing = config_records()
+      MixTask.run(["filter_whitelisted", "--force"])
+      assert config_records() == existing
+    end
+
+    test "filter_whitelisted doesn't crash when whitelist is disabled" do
+      clear_config(:database_config_whitelist, false)
+
+      existing = config_records()
+      MixTask.run(["filter_whitelisted", "--force"])
+      assert config_records() == existing
+    end
+
+    test "filters blacklisted settings" do
+      clear_config(:database_config_whitelist, [{:pleroma}])
+      clear_config(:database_config_blacklist, [{:pleroma, :logger}, {:blacklisted_group}])
+
+      insert_config_record(:pleroma, :logger, backends: :console)
+      insert_config_record(:web_push_encryption, :vapid_details, a: 1)
+      insert_config_record(:blacklisted_group, :anything, a: 1)
+
+      MixTask.run(["filter_blacklisted", "--force"])
+
+      assert [
+               %ConfigDB{group: :pleroma, key: :instance},
+               %ConfigDB{group: :pleroma, key: Pleroma.Captcha},
+               %ConfigDB{group: :pleroma2, key: :key2},
+               %ConfigDB{group: :web_push_encryption, key: :vapid_details}
+             ] = config_records()
+    end
+
+    test "filter_blacklisted doesn't crash when blacklist is unset" do
+      clear_config(:database_config_blacklist, nil)
+
+      existing = config_records()
+      MixTask.run(["filter_blacklisted", "--force"])
+      assert config_records() == existing
+    end
+
+    test "filter_blacklisted doesn't crash when blacklist is disabled" do
+      clear_config(:database_config_blacklist, false)
+
+      existing = config_records()
+      MixTask.run(["filter_blacklisted", "--force"])
+      assert config_records() == existing
     end
   end
 end

@@ -1,0 +1,16 @@
+[Unit]
+Description=Pleroma social network (OTP release via Docker glibc shim)
+After=network.target docker.service postgresql.service nginx.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/etc/pleroma/container
+ExecStart=/usr/bin/docker compose up --build --remove-orphans
+ExecStop=/usr/bin/docker compose down
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

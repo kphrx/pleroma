@@ -11,6 +11,7 @@ defmodule Pleroma.Web.Federator do
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Workers.PublisherWorker
   alias Pleroma.Workers.ReceiverWorker
+  alias Pleroma.Workers.SignatureRetryWorker
 
   require Logger
 
@@ -35,12 +36,21 @@ defmodule Pleroma.Web.Federator do
   end
 
   # Client API
-  def incoming_ap_doc(%{params: params, req_headers: req_headers}) do
-    ReceiverWorker.new(
+  def incoming_failed_signature_ap_doc(%{
+        method: method,
+        params: params,
+        req_headers: req_headers,
+        request_path: request_path,
+        query_string: query_string
+      }) do
+    SignatureRetryWorker.new(
       %{
-        "op" => "incoming_ap_doc",
+        "op" => "incoming_failed_signature_ap_doc",
+        "method" => method,
         "req_headers" => req_headers,
         "params" => params,
+        "request_path" => request_path,
+        "query_string" => query_string,
         "timeout" => :timer.seconds(20)
       },
       priority: 2
@@ -79,7 +89,8 @@ defmodule Pleroma.Web.Federator do
 
   # Job Worker Callbacks
 
-  @spec perform(atom(), any()) :: {:ok, any()} | {:error, any()}
+  @impl true
+  @spec perform(atom(), any()) :: :ok | {:ok, any()} | {:error, any()}
   def perform(:publish_one, params) do
     Publisher.prepare_one(params)
     |> Publisher.publish_one()
@@ -120,6 +131,10 @@ defmodule Pleroma.Web.Federator do
 
       {:actor, e} ->
         Logger.debug("Unhandled actor #{actor}, #{inspect(e)}")
+        {:error, e}
+
+      {:reject, reason} = e ->
+        Logger.debug("Rejected by MRF: #{inspect(reason)}")
         {:error, e}
 
       e ->

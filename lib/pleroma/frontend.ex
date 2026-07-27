@@ -65,30 +65,18 @@ defmodule Pleroma.Frontend do
   end
 
   def unzip(zip, dest) do
-    with {:ok, unzipped} <- :zip.unzip(zip, [:memory]) do
-      File.rm_rf!(dest)
-      File.mkdir_p!(dest)
+    File.rm_rf!(dest)
+    Pleroma.Backports.mkdir_p!(dest)
 
-      Enum.each(unzipped, fn {filename, data} ->
-        path = filename
-
-        new_file_path = Path.join(dest, path)
-
-        path
-        |> Path.dirname()
-        |> then(&Path.join(dest, &1))
-        |> File.mkdir_p!()
-
-        if not File.dir?(new_file_path) do
-          File.write!(new_file_path, data)
-        end
-      end)
+    case Pleroma.SafeZip.unzip_data(zip, dest) do
+      {:ok, _} -> :ok
+      error -> error
     end
   end
 
   defp download_build(frontend_info, dest) do
-    Logger.info("Downloading pre-built bundle for #{frontend_info["name"]}")
     url = String.replace(frontend_info["build_url"], "${ref}", frontend_info["ref"])
+    Logger.info("Downloading pre-built bundle for #{frontend_info["name"]} from #{url}")
 
     with {:ok, %{status: 200, body: zip_body}} <-
            Pleroma.HTTP.get(url, [], pool: :media, recv_timeout: 120_000) do
@@ -102,7 +90,7 @@ defmodule Pleroma.Frontend do
   defp install_frontend(frontend_info, source, dest) do
     from = frontend_info["build_dir"] || "dist"
     File.rm_rf!(dest)
-    File.mkdir_p!(dest)
+    Pleroma.Backports.mkdir_p!(dest)
     File.cp_r!(Path.join([source, from]), dest)
     :ok
   end

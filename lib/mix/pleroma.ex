@@ -26,7 +26,11 @@ defmodule Mix.Pleroma do
     Application.put_env(:phoenix, :serve_endpoints, false, persistent: true)
 
     unless System.get_env("DEBUG") do
-      Logger.remove_backend(:console)
+      try do
+        Logger.remove_backend(:console)
+      catch
+        :exit, _ -> :ok
+      end
     end
 
     adapter = Application.get_env(:tesla, :adapter)
@@ -58,7 +62,8 @@ defmodule Mix.Pleroma do
         {Majic.Pool,
          [name: Pleroma.MajicPool, pool_size: Pleroma.Config.get([:majic_pool, :size], 2)]}
       ] ++
-        http_children(adapter)
+        http_children(adapter) ++
+        search_children()
 
     cachex_children = Enum.map(@cachex_children, &Pleroma.Application.build_cachex(&1, []))
 
@@ -137,4 +142,14 @@ defmodule Mix.Pleroma do
   end
 
   defp http_children(_), do: []
+
+  defp search_children do
+    case Pleroma.Config.get([Pleroma.Search, :module]) do
+      Pleroma.Search.ParadeDB ->
+        [Pleroma.Search.ParadeDB.Repo]
+
+      _ ->
+        []
+    end
+  end
 end

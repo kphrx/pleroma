@@ -3,15 +3,34 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Workers.ReceiverWorkerTest do
-  use Pleroma.DataCase
+  use Pleroma.DataCase, async: false
   use Oban.Testing, repo: Pleroma.Repo
 
   import Mock
   import Pleroma.Factory
 
   alias Pleroma.User
-  alias Pleroma.Web.Federator
+  alias Pleroma.Web.CommonAPI
   alias Pleroma.Workers.ReceiverWorker
+
+  defp signature_headers_for(%User{} = signer) do
+    [
+      {"host", "local.test"},
+      {"date", "Thu, 25 Jul 2024 13:33:31 GMT"},
+      {"digest", "SHA-256=fake-digest"},
+      {"content-type", "application/activity+json"},
+      {
+        "signature",
+        "keyId=\"#{signer.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+      }
+    ]
+  end
+
+  defp perform_incoming(params) do
+    ReceiverWorker.perform(%Oban.Job{
+      args: %{"op" => "incoming_ap_doc", "params" => params}
+    })
+  end
 
   test "it does not retry MRF reject" do
     params = insert(:note).data
@@ -80,16 +99,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
         insert(:note_activity).data
         |> Map.put("actor", "https://springfield.social/users/bart")
 
-      {:ok, oban_job} =
-        Federator.incoming_ap_doc(%{
-          method: "POST",
-          req_headers: [],
-          request_path: "/inbox",
-          params: params,
-          query_string: ""
-        })
-
-      assert {:cancel, {:error, :forbidden}} = ReceiverWorker.perform(oban_job)
+      assert {:cancel, {:error, :forbidden}} = perform_incoming(params)
     end
 
     test "when request returns a 404" do
@@ -97,16 +107,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
         insert(:note_activity).data
         |> Map.put("actor", "https://springfield.social/users/troymcclure")
 
-      {:ok, oban_job} =
-        Federator.incoming_ap_doc(%{
-          method: "POST",
-          req_headers: [],
-          request_path: "/inbox",
-          params: params,
-          query_string: ""
-        })
-
-      assert {:cancel, {:error, :not_found}} = ReceiverWorker.perform(oban_job)
+      assert {:cancel, {:error, :not_found}} = perform_incoming(params)
     end
 
     test "when request returns a 410" do
@@ -114,16 +115,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
         insert(:note_activity).data
         |> Map.put("actor", "https://springfield.social/users/hankscorpio")
 
-      {:ok, oban_job} =
-        Federator.incoming_ap_doc(%{
-          method: "POST",
-          req_headers: [],
-          request_path: "/inbox",
-          params: params,
-          query_string: ""
-        })
-
-      assert {:cancel, {:error, :not_found}} = ReceiverWorker.perform(oban_job)
+      assert {:cancel, {:error, :not_found}} = perform_incoming(params)
     end
 
     test "when user account is disabled" do
@@ -137,69 +129,8 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
 
       {:ok, %User{}} = User.set_activation(user, false)
 
-      {:ok, oban_job} =
-        Federator.incoming_ap_doc(%{
-          method: "POST",
-          req_headers: [],
-          request_path: "/inbox",
-          params: params,
-          query_string: ""
-        })
-
-      assert {:cancel, {:user_active, false}} = ReceiverWorker.perform(oban_job)
+      assert {:cancel, {:user_active, false}} = perform_incoming(params)
     end
-  end
-
-  test "it can validate the signature" do
-    Tesla.Mock.mock(fn
-      %{url: "https://phpc.social/users/denniskoch"} ->
-        %Tesla.Env{
-          status: 200,
-          body: File.read!("test/fixtures/denniskoch.json"),
-          headers: [{"content-type", "application/activity+json"}]
-        }
-
-      %{url: "https://phpc.social/users/denniskoch/collections/featured"} ->
-        %Tesla.Env{
-          status: 200,
-          headers: [{"content-type", "application/activity+json"}],
-          body:
-            File.read!("test/fixtures/users_mock/masto_featured.json")
-            |> String.replace("{{domain}}", "phpc.social")
-            |> String.replace("{{nickname}}", "denniskoch")
-        }
-    end)
-
-    params =
-      File.read!("test/fixtures/receiver_worker_signature_activity.json") |> Jason.decode!()
-
-    req_headers = [
-      ["accept-encoding", "gzip"],
-      ["content-length", "5184"],
-      ["content-type", "application/activity+json"],
-      ["date", "Thu, 25 Jul 2024 13:33:31 GMT"],
-      ["digest", "SHA-256=ouge/6HP2/QryG6F3JNtZ6vzs/hSwMk67xdxe87eH7A="],
-      ["host", "bikeshed.party"],
-      [
-        "signature",
-        "keyId=\"https://mastodon.social/users/bastianallgeier#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"ymE3vn5Iw50N6ukSp8oIuXJB5SBjGAGjBasdTDvn+ahZIzq2SIJfmVCsIIzyqIROnhWyQoTbavTclVojEqdaeOx+Ejz2wBnRBmhz5oemJLk4RnnCH0lwMWyzeY98YAvxi9Rq57Gojuv/1lBqyGa+rDzynyJpAMyFk17XIZpjMKuTNMCbjMDy76ILHqArykAIL/v1zxkgwxY/+ELzxqMpNqtZ+kQ29znNMUBB3eVZ/mNAHAz6o33Y9VKxM2jw+08vtuIZOusXyiHbRiaj2g5HtN2WBUw1MzzfRfHF2/yy7rcipobeoyk5RvP5SyHV3WrIeZ3iyoNfmv33y8fxllF0EA==\""
-      ],
-      [
-        "user-agent",
-        "http.rb/5.2.0 (Mastodon/4.3.0-nightly.2024-07-25; +https://mastodon.social/)"
-      ]
-    ]
-
-    {:ok, oban_job} =
-      Federator.incoming_ap_doc(%{
-        method: "POST",
-        req_headers: req_headers,
-        request_path: "/inbox",
-        params: params,
-        query_string: ""
-      })
-
-    assert {:ok, %Pleroma.Activity{}} = ReceiverWorker.perform(oban_job)
   end
 
   test "cancels due to origin containment" do
@@ -207,16 +138,7 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
       insert(:note_activity).data
       |> Map.put("id", "https://notorigindomain.com/activity")
 
-    {:ok, oban_job} =
-      Federator.incoming_ap_doc(%{
-        method: "POST",
-        req_headers: [],
-        request_path: "/inbox",
-        params: params,
-        query_string: ""
-      })
-
-    assert {:cancel, :origin_containment_failed} = ReceiverWorker.perform(oban_job)
+    assert {:cancel, :origin_containment_failed} = perform_incoming(params)
   end
 
   test "canceled due to deleted object" do
@@ -232,15 +154,171 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
         }
     end)
 
-    {:ok, oban_job} =
-      Federator.incoming_ap_doc(%{
-        method: "POST",
-        req_headers: [],
-        request_path: "/inbox",
-        params: params,
-        query_string: ""
-      })
+    assert {:cancel, _} = perform_incoming(params)
+  end
 
-    assert {:cancel, _} = ReceiverWorker.perform(oban_job)
+  test "delegates legacy failed-signature metadata jobs instead of processing them as trusted" do
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+    object_id = "https://two.com/objects/legacy-forged-note"
+
+    create = %{
+      "type" => "Create",
+      "actor" => bob.ap_id,
+      "id" => "https://two.com/activities/legacy-forged-create",
+      "context" => "https://two.com/contexts/legacy-forged-create",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => %{
+        "type" => "Note",
+        "id" => object_id,
+        "actor" => bob.ap_id,
+        "attributedTo" => bob.ap_id,
+        "context" => "https://two.com/contexts/legacy-forged-create",
+        "content" => "forged post",
+        "published" => "2024-07-25T13:33:31Z",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => []
+      }
+    }
+
+    assert {:cancel, :actor_signature_mismatch} =
+             ReceiverWorker.perform(%Oban.Job{
+               args: %{
+                 "op" => "incoming_ap_doc",
+                 "method" => "POST",
+                 "params" => create,
+                 "req_headers" => signature_headers_for(alice),
+                 "request_path" => "/inbox",
+                 "query_string" => ""
+               }
+             })
+
+    refute Pleroma.Activity.get_by_ap_id(create["id"])
+    refute Pleroma.Object.get_by_ap_id(object_id)
+  end
+
+  test "fails closed for the old persisted failed-signature job shape" do
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    bob = insert(:user, local: false, ap_id: "https://two.com/users/bob")
+    object_id = "https://two.com/objects/old-shape-forged-note"
+
+    create = %{
+      "type" => "Create",
+      "actor" => bob.ap_id,
+      "id" => "https://two.com/activities/old-shape-forged-create",
+      "context" => "https://two.com/contexts/old-shape-forged-create",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => %{
+        "type" => "Note",
+        "id" => object_id,
+        "actor" => bob.ap_id,
+        "attributedTo" => bob.ap_id,
+        "context" => "https://two.com/contexts/old-shape-forged-create",
+        "content" => "forged post",
+        "published" => "2024-07-25T13:33:31Z",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => []
+      }
+    }
+
+    assert {:cancel, :missing_signature_retry_metadata} =
+             ReceiverWorker.perform(%Oban.Job{
+               args: %{
+                 "op" => "incoming_ap_doc",
+                 "params" => create,
+                 "req_headers" => signature_headers_for(alice),
+                 "timeout" => 20_000
+               }
+             })
+
+    refute Pleroma.Activity.get_by_ap_id(create["id"])
+    refute Pleroma.Object.get_by_ap_id(object_id)
+  end
+
+  test "fails closed for legacy retry jobs missing one metadata field" do
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+    params = insert(:note_activity).data
+
+    assert {:cancel, :missing_signature_retry_metadata} =
+             ReceiverWorker.perform(%Oban.Job{
+               args: %{
+                 "op" => "incoming_ap_doc",
+                 "method" => "POST",
+                 "params" => params,
+                 "req_headers" => signature_headers_for(alice),
+                 "request_path" => "/inbox"
+               }
+             })
+  end
+
+  test "fails closed for malformed legacy metadata jobs without params" do
+    assert {:cancel, :missing_signature_retry_metadata} =
+             ReceiverWorker.perform(%Oban.Job{
+               args: %{
+                 "op" => "incoming_ap_doc",
+                 "req_headers" => [],
+                 "timeout" => 20_000
+               }
+             })
+  end
+
+  describe "Server reachability:" do
+    setup do
+      user = insert(:user)
+      remote_user = insert(:user, local: false, ap_id: "https://example.com/users/remote")
+      {:ok, _, _} = Pleroma.User.follow(user, remote_user)
+      {:ok, activity} = CommonAPI.post(remote_user, %{status: "Test post"})
+
+      %{
+        user: user,
+        remote_user: remote_user,
+        activity: activity
+      }
+    end
+
+    test "schedules ReachabilityWorker if host is unreachable", %{activity: activity} do
+      with_mocks [
+        {Pleroma.Web.ActivityPub.Transmogrifier, [],
+         [handle_incoming: fn _ -> {:ok, activity} end]},
+        {Pleroma.Instances, [], [reachable?: fn _ -> false end]},
+        {Pleroma.Web.Federator, [], [perform: fn :incoming_ap_doc, _params -> {:ok, nil} end]}
+      ] do
+        job = %Oban.Job{
+          args: %{
+            "op" => "incoming_ap_doc",
+            "params" => activity.data
+          }
+        }
+
+        Pleroma.Workers.ReceiverWorker.perform(job)
+
+        assert_enqueued(
+          worker: Pleroma.Workers.ReachabilityWorker,
+          args: %{"domain" => "example.com"}
+        )
+      end
+    end
+
+    test "does not schedule ReachabilityWorker if host is reachable", %{activity: activity} do
+      with_mocks [
+        {Pleroma.Web.ActivityPub.Transmogrifier, [],
+         [handle_incoming: fn _ -> {:ok, activity} end]},
+        {Pleroma.Instances, [], [reachable?: fn _ -> true end]},
+        {Pleroma.Web.Federator, [], [perform: fn :incoming_ap_doc, _params -> {:ok, nil} end]}
+      ] do
+        job = %Oban.Job{
+          args: %{
+            "op" => "incoming_ap_doc",
+            "params" => activity.data
+          }
+        }
+
+        Pleroma.Workers.ReceiverWorker.perform(job)
+
+        refute_enqueued(worker: Pleroma.Workers.ReachabilityWorker)
+      end
+    end
   end
 end

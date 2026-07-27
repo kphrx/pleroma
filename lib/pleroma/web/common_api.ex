@@ -27,9 +27,9 @@ defmodule Pleroma.Web.CommonAPI do
   require Logger
 
   @spec block(User.t(), User.t()) :: {:ok, Activity.t()} | Pipeline.errors()
-  def block(blocked, blocker) do
-    with {:ok, block_data, _} <- Builder.block(blocker, blocked),
-         {:ok, block, _} <- Pipeline.common_pipeline(block_data, local: true) do
+  def block(blocked, blocker, params \\ %{}) do
+    with {:ok, block_data, meta} <- Builder.block(blocker, blocked, params),
+         {:ok, block, _} <- Pipeline.common_pipeline(block_data, meta ++ [local: true]) do
       {:ok, block}
     end
   end
@@ -222,8 +222,8 @@ defmodule Pleroma.Web.CommonAPI do
     with %Activity{data: %{"type" => "Create"}} = activity <- Activity.get_by_id(id),
          object = %Object{} <- Object.normalize(activity, fetch: false),
          {_, nil} <- {:existing_announce, Utils.get_existing_announce(user.ap_id, object)},
-         public = public_announce?(object, params),
-         {:ok, announce, _} <- Builder.announce(user, object, public: public),
+         visibility = announce_visibility(object, params),
+         {:ok, announce, _} <- Builder.announce(user, object, visibility: visibility),
          {:ok, activity, _} <- Pipeline.common_pipeline(announce, local: true) do
       {:ok, activity}
     else
@@ -269,6 +269,7 @@ defmodule Pleroma.Web.CommonAPI do
 
   defp favorite_helper(user, id) do
     with {_, %Activity{object: object}} <- {:find_object, Activity.get_by_id_with_object(id)},
+         {_, true} <- {:visibility_error, activity_visible_to_actor(object, user)},
          {_, {:ok, like_object, meta}} <- {:build_object, Builder.like(user, object)},
          {_, {:ok, %Activity{} = activity, _meta}} <-
            {:common_pipeline,
@@ -276,6 +277,9 @@ defmodule Pleroma.Web.CommonAPI do
       {:ok, activity}
     else
       {:find_object, _} ->
+        {:error, :not_found}
+
+      {:visibility_error, _} ->
         {:error, :not_found}
 
       {:common_pipeline, {:error, {:validate, {:error, changeset}}}} = e ->
@@ -296,6 +300,7 @@ defmodule Pleroma.Web.CommonAPI do
     with {_, %Activity{data: %{"type" => "Create"}} = activity} <-
            {:find_activity, Activity.get_by_id(id)},
          %Object{} = note <- Object.normalize(activity, fetch: false),
+         {_, true} <- {:visibility_error, activity_visible_to_actor(note, user)},
          %Activity{} = like <- Utils.get_existing_like(user.ap_id, note),
          {_, {:ok, _}} <- {:cancel_jobs, maybe_cancel_jobs(like)},
          {:ok, undo, _} <- Builder.undo(user, like),
@@ -303,6 +308,7 @@ defmodule Pleroma.Web.CommonAPI do
       {:ok, activity}
     else
       {:find_activity, _} -> {:error, :not_found}
+      {:visibility_error, _} -> {:error, :not_found}
       _ -> {:error, dgettext("errors", "Could not unfavorite")}
     end
   end
@@ -311,11 +317,15 @@ defmodule Pleroma.Web.CommonAPI do
           {:ok, Activity.t()} | {:error, String.t()}
   def react_with_emoji(id, user, emoji) do
     with %Activity{} = activity <- Activity.get_by_id(id),
+         {_, true} <- {:visibility_error, activity_visible_to_actor(activity, user)},
          object <- Object.normalize(activity, fetch: false),
          {:ok, emoji_react, _} <- Builder.emoji_react(user, object, emoji),
          {:ok, activity, _} <- Pipeline.common_pipeline(emoji_react, local: true) do
       {:ok, activity}
     else
+      {:visibility_error, _} ->
+        {:error, :not_found}
+
       _ ->
         {:error, dgettext("errors", "Could not add reaction emoji")}
     end
@@ -397,13 +407,11 @@ defmodule Pleroma.Web.CommonAPI do
     end
   end
 
-  defp public_announce?(_, %{visibility: visibility})
-       when visibility in ~w{public unlisted private direct},
-       do: visibility in ~w(public unlisted)
+  def announce_visibility(_, %{visibility: visibility})
+      when visibility in ~w{public unlisted private direct local},
+      do: visibility
 
-  defp public_announce?(object, _) do
-    Visibility.public?(object)
-  end
+  def announce_visibility(object, _), do: Visibility.get_visibility(object)
 
   @spec get_visibility(map(), map() | nil, Participation.t() | nil) ::
           {String.t() | nil, String.t() | nil}
@@ -506,6 +514,7 @@ defmodule Pleroma.Web.CommonAPI do
   @spec pin(String.t(), User.t()) :: {:ok, Activity.t()} | Pipeline.errors()
   def pin(id, %User{} = user) do
     with %Activity{} = activity <- create_activity_by_id(id),
+         true <- activity_visible_to_actor(activity, user),
          true <- activity_belongs_to_actor(activity, user.ap_id),
          true <- object_type_is_allowed_for_pin(activity.object),
          true <- activity_is_public(activity),
@@ -531,6 +540,14 @@ defmodule Pleroma.Web.CommonAPI do
   defp activity_belongs_to_actor(%{actor: actor}, actor), do: true
   defp activity_belongs_to_actor(_, _), do: {:error, :ownership_error}
 
+  defp activity_visible_to_actor(activity, %User{} = user) do
+    if Visibility.visible_for_user?(activity, user) do
+      true
+    else
+      {:error, :visibility_error}
+    end
+  end
+
   defp object_type_is_allowed_for_pin(%{data: %{"type" => type}}) do
     with false <- type in ["Note", "Article", "Question"] do
       {:error, :not_allowed}
@@ -539,13 +556,18 @@ defmodule Pleroma.Web.CommonAPI do
 
   defp activity_is_public(activity) do
     with false <- Visibility.public?(activity) do
-      {:error, :visibility_error}
+      {:error, :non_public_error}
     end
   end
 
   @spec unpin(String.t(), User.t()) :: {:ok, Activity.t()} | Pipeline.errors()
   def unpin(id, user) do
+    # Order of visibility/belonging matters for MastoAPI responses.
+    # post not visible -> 404
+    # post visible, not owned -> 422
     with %Activity{} = activity <- create_activity_by_id(id),
+         true <- activity_visible_to_actor(activity, user),
+         true <- activity_belongs_to_actor(activity, user.ap_id),
          {:ok, unpin_data, _} <- Builder.unpin(user, activity.object),
          {:ok, _unpin, _} <-
            Pipeline.common_pipeline(unpin_data,
@@ -562,7 +584,8 @@ defmodule Pleroma.Web.CommonAPI do
   def add_mute(activity, user, params \\ %{}) do
     expires_in = Map.get(params, :expires_in, 0)
 
-    with {:ok, _} <- ThreadMute.add_mute(user.id, activity.data["context"]),
+    with true <- activity_visible_to_actor(activity, user),
+         {:ok, _} <- ThreadMute.add_mute(user.id, activity.data["context"]),
          _ <- Pleroma.Notification.mark_context_as_read(user, activity.data["context"]) do
       if expires_in > 0 do
         Pleroma.Workers.MuteExpireWorker.new(
@@ -574,14 +597,21 @@ defmodule Pleroma.Web.CommonAPI do
 
       {:ok, activity}
     else
+      {:error, :visibility_error} -> {:error, :visibility_error}
       {:error, _} -> {:error, dgettext("errors", "conversation is already muted")}
     end
   end
 
   @spec remove_mute(Activity.t(), User.t()) :: {:ok, Activity.t()} | {:error, any()}
   def remove_mute(%Activity{} = activity, %User{} = user) do
-    ThreadMute.remove_mute(user.id, activity.data["context"])
-    {:ok, activity}
+    case activity_visible_to_actor(activity, user) do
+      true ->
+        ThreadMute.remove_mute(user.id, activity.data["context"])
+        {:ok, activity}
+
+      error ->
+        error
+    end
   end
 
   @spec remove_mute(String.t(), String.t()) :: {:ok, Activity.t()} | {:error, any()}
@@ -612,6 +642,7 @@ defmodule Pleroma.Web.CommonAPI do
     with {:ok, account} <- get_reported_account(data.account_id),
          {:ok, {content_html, _, _}} <- make_report_content_html(data[:comment]),
          {:ok, statuses} <- get_report_statuses(account, data),
+         true <- check_statuses_visibility(user, statuses),
          rules <- get_report_rules(Map.get(data, :rule_ids, nil)) do
       ActivityPub.flag(%{
         context: Utils.generate_context_id(),
@@ -622,8 +653,26 @@ defmodule Pleroma.Web.CommonAPI do
         forward: Map.get(data, :forward, false),
         rules: rules
       })
+    else
+      false ->
+        {:error, :visibility_error}
+
+      error ->
+        error
     end
   end
+
+  defp check_statuses_visibility(user, statuses) when is_list(statuses) do
+    visibility = for status <- statuses, do: Visibility.visible_for_user?(status, user)
+
+    case Enum.all?(visibility) do
+      true -> true
+      _ -> false
+    end
+  end
+
+  # There are no statuses associated with the report, pass!
+  defp check_statuses_visibility(_, status) when status == nil, do: true
 
   defp get_reported_account(account_id) do
     case User.get_cached_by_id(account_id) do
@@ -651,10 +700,26 @@ defmodule Pleroma.Web.CommonAPI do
   end
 
   def update_report_state(activity_id, state) do
-    with %Activity{} = activity <- Activity.get_by_id(activity_id, filter: []) do
+    with %Activity{} = activity <- Activity.get_report(activity_id) do
       Utils.update_report_state(activity, state)
     else
       nil -> {:error, :not_found}
+    end
+  end
+
+  def assign_report_to_account(activity_ids, user) when is_list(activity_ids) do
+    case Utils.assign_report_to_account(activity_ids, user) do
+      :ok -> {:ok, activity_ids}
+      _ -> {:error, dgettext("errors", "Could not assign account")}
+    end
+  end
+
+  def assign_report_to_account(activity_id, user) do
+    with %Activity{} = activity <- Activity.get_report(activity_id) do
+      Utils.assign_report_to_account(activity, user)
+    else
+      nil -> {:error, :not_found}
+      _ -> {:error, dgettext("errors", "Could not assign account")}
     end
   end
 

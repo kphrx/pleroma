@@ -4,7 +4,8 @@
 
 defmodule Pleroma.Web.Plugs.RemoteIpTest do
   use ExUnit.Case
-  use Plug.Test
+  import Plug.Conn
+  import Plug.Test
 
   alias Pleroma.Web.Plugs.RemoteIp
 
@@ -104,5 +105,39 @@ defmodule Pleroma.Web.Plugs.RemoteIpTest do
       |> RemoteIp.call(nil)
 
     assert conn.remote_ip == {1, 1, 1, 1}
+  end
+
+  test "reserved ranges are configurable" do
+    clear_config([RemoteIp, :reserved], [])
+
+    conn =
+      conn(:get, "/")
+      |> put_req_header("x-forwarded-for", "1.1.1.1, 10.0.0.3")
+      |> RemoteIp.call(nil)
+
+    assert conn.remote_ip == {10, 0, 0, 3}
+  end
+
+  test "clients override reserved ranges" do
+    clear_config([RemoteIp, :clients], ["10.0.0.0/8"])
+
+    conn =
+      conn(:get, "/")
+      |> put_req_header("x-forwarded-for", "1.1.1.1, 10.0.0.3")
+      |> RemoteIp.call(nil)
+
+    assert conn.remote_ip == {10, 0, 0, 3}
+  end
+
+  test "clients override proxies" do
+    clear_config([RemoteIp, :clients], ["10.0.0.3"])
+    clear_config([RemoteIp, :proxies], ["10.0.0.0/8"])
+
+    conn =
+      conn(:get, "/")
+      |> put_req_header("x-forwarded-for", "1.1.1.1, 10.0.0.3")
+      |> RemoteIp.call(nil)
+
+    assert conn.remote_ip == {10, 0, 0, 3}
   end
 end
