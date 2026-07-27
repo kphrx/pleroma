@@ -6,7 +6,9 @@ defmodule Pleroma.Web.OAuth.AppTest do
   use Pleroma.DataCase, async: true
 
   alias Pleroma.MFA.Token, as: MFAToken
-  alias Pleroma.Web.OAuth.{App, Authorization, Token}
+  alias Pleroma.Web.OAuth.App
+  alias Pleroma.Web.OAuth.Authorization
+  alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.Push.Subscription
   import Pleroma.Factory
 

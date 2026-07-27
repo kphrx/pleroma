@@ -8,7 +8,8 @@ defmodule Pleroma.Web.OAuth.App do
   import Ecto.Query
   alias Pleroma.Repo
   alias Pleroma.User
-  alias Pleroma.Web.OAuth.{Authorization, Token}
+  alias Pleroma.Web.OAuth.Authorization
+  alias Pleroma.Web.OAuth.Token
 
   @type t :: %__MODULE__{}
 
