@@ -8,7 +8,7 @@ defmodule Pleroma.Web.OAuth.App do
   import Ecto.Query
   alias Pleroma.Repo
   alias Pleroma.User
-  alias Pleroma.Web.OAuth.Token
+  alias Pleroma.Web.OAuth.{Authorization, Token}
 
   @type t :: %__MODULE__{}
 
@@ -193,18 +193,25 @@ defmodule Pleroma.Web.OAuth.App do
   def remove_orphans(limit \\ 100) do
     fifteen_mins_ago = NaiveDateTime.add(NaiveDateTime.utc_now(), -900)
 
-    # First get the IDs of apps to delete
-    app_ids =
-      from(a in __MODULE__,
-        where: is_nil(a.user_id) and a.inserted_at < ^fifteen_mins_ago,
-        limit: ^limit,
-        select: a.id
-      )
-      |> Repo.all()
+    Repo.transaction(fn ->
+      app_ids =
+        from(a in __MODULE__,
+          where: is_nil(a.user_id) and a.inserted_at < ^fifteen_mins_ago,
+          limit: ^limit,
+          lock: "FOR UPDATE SKIP LOCKED",
+          select: a.id
+        )
+        |> Repo.all()
 
-    # Then delete those specific apps
-    from(a in __MODULE__, where: a.id in ^app_ids)
-    |> Repo.delete_all()
+      # Bulk deletes bypass the schema's association cleanup.
+      from(a in Authorization, where: a.app_id in ^app_ids) |> Repo.delete_all()
+      from(t in Token, where: t.app_id in ^app_ids) |> Repo.delete_all()
+
+      from(a in __MODULE__,
+        where: a.id in ^app_ids and is_nil(a.user_id) and a.inserted_at < ^fifteen_mins_ago
+      )
+      |> Repo.delete_all()
+    end)
 
     :ok
   end

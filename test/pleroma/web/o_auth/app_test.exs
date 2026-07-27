@@ -5,7 +5,9 @@
 defmodule Pleroma.Web.OAuth.AppTest do
   use Pleroma.DataCase, async: true
 
-  alias Pleroma.Web.OAuth.App
+  alias Pleroma.MFA.Token, as: MFAToken
+  alias Pleroma.Web.OAuth.{App, Authorization, Token}
+  alias Pleroma.Web.Push.Subscription
   import Pleroma.Factory
 
   describe "get_or_make/2" do
@@ -57,6 +59,10 @@ defmodule Pleroma.Web.OAuth.AppTest do
   test "removes orphaned apps" do
     attrs = %{client_name: "Mastodon-Local", redirect_uris: "."}
     {:ok, %App{} = old_app} = App.get_or_make(attrs, ["write"])
+    authorization = insert(:oauth_authorization, app: old_app)
+    token = insert(:oauth_token, app: old_app)
+    mfa_token = insert(:mfa_token, authorization: authorization)
+    push_subscription = insert(:push_subscription, token: token)
 
     user = insert(:user)
     attrs = %{client_name: "OldButValid", redirect_uris: ".", user_id: user.id}
@@ -74,6 +80,10 @@ defmodule Pleroma.Web.OAuth.AppTest do
     App.remove_orphans()
 
     refute Repo.get(App, old_app.id)
+    refute Repo.get(Authorization, authorization.id)
+    refute Repo.get(Token, token.id)
+    refute Repo.get(MFAToken, mfa_token.id)
+    refute Repo.get(Subscription, push_subscription.id)
     assert Repo.get(App, recent_app.id)
     assert Repo.get(App, old_owned_app.id)
   end

@@ -1,1 +1,1 @@
-- Optimize orphaned OAuth apps cleanup by using a single delete query instead of deleting records one by one.
+- Optimize orphaned OAuth apps cleanup by deleting records in batches instead of one by one.
