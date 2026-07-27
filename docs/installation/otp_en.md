@@ -32,6 +32,7 @@ Other than things bundled in the OTP release Pleroma depends on:
 * curl (to download the release build)
 * unzip (needed to unpack release builds)
 * ncurses (ERTS won't run without it)
+* libvips (for image processing)
 * PostgreSQL (also utilizes extensions in postgresql-contrib)
 * nginx (could be swapped with another reverse proxy but this guide covers only it)
 * certbot (for Let's Encrypt certificates, could be swapped with another ACME client, but this guide covers only it)
@@ -46,7 +47,13 @@ Other than things bundled in the OTP release Pleroma depends on:
 
 === "Debian/Ubuntu"
     ```
-    apt install curl unzip libncurses5 postgresql postgresql-contrib nginx certbot libmagic-dev
+    apt install curl unzip libncurses6 libvips42t64 postgresql postgresql-contrib nginx certbot libmagic-dev
+    ```
+
+    On Debian 12 and Ubuntu 22.04, replace `libvips42t64` with `libvips42`:
+
+    ```
+    apt install curl unzip libncurses6 libvips42 postgresql postgresql-contrib nginx certbot libmagic-dev
     ```
 
 ### Installing optional packages
@@ -88,9 +95,23 @@ RUM indexes are an alternative indexing scheme that is not included in PostgreSQ
     ```
 
 === "Debian/Ubuntu"
+    Install the package matching your distribution's PostgreSQL version:
+
     ```
-    # Available only on Buster/19.04
-    apt install postgresql-11-rum
+    # Debian 13
+    apt install postgresql-17-rum
+
+    # Debian 12
+    apt install postgresql-15-rum
+
+    # Ubuntu 26.04
+    apt install postgresql-18-rum
+
+    # Ubuntu 24.04
+    apt install postgresql-16-rum
+
+    # Ubuntu 22.04
+    apt install postgresql-14-rum
     ```
 
 #### (Optional) Performance configuration
