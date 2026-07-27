@@ -46,11 +46,13 @@ Other than things bundled in the OTP release Pleroma depends on:
 
 === "Debian/Ubuntu"
     ```
-    apt install curl unzip libncurses5 postgresql postgresql-contrib nginx certbot libmagic-dev
-    ```
-    On Debian 13 and Ubuntu 24.04, replace `libncurses5` by `libncurses6` and add `libvips42t64`. So
-    ```
     apt install curl unzip libncurses6 libvips42t64 postgresql postgresql-contrib nginx certbot libmagic-dev
+    ```
+
+    On Debian 12 and Ubuntu 22.04, replace `libvips42t64` with `libvips42`:
+
+    ```
+    apt install curl unzip libncurses6 libvips42 postgresql postgresql-contrib nginx certbot libmagic-dev
     ```
 
 ### Installing optional packages
@@ -92,20 +94,22 @@ RUM indexes are an alternative indexing scheme that is not included in PostgreSQ
     ```
 
 === "Debian/Ubuntu"
+    Install the package matching your distribution's PostgreSQL version:
+
     ```
-    # On Trixie and Ubuntu 25.04
+    # Debian 13
     apt install postgresql-17-rum
-    ```
-    # On Debian 12
-    ```
+
+    # Debian 12
     apt install postgresql-15-rum
-    ```
-    # On Ubuntu 24.04
-    ```
+
+    # Ubuntu 26.04
+    apt install postgresql-18-rum
+
+    # Ubuntu 24.04
     apt install postgresql-16-rum
-    ```
-    # On Ubuntu 22.04
-    ```
+
+    # Ubuntu 22.04
     apt install postgresql-14-rum
     ```
 
