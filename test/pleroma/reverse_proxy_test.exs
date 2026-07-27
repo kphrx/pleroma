@@ -11,12 +11,103 @@ defmodule Pleroma.ReverseProxyTest do
   alias Pleroma.ReverseProxy.ClientMock
   alias Plug.Conn
 
+  defmodule ProxyPlug do
+    @moduledoc false
+
+    def init(options), do: options
+
+    def call(conn, {url, opts}), do: Pleroma.ReverseProxy.call(conn, url, opts)
+    def call(conn, url), do: Pleroma.ReverseProxy.call(conn, url)
+  end
+
   setup_all do
     {:ok, _} = Registry.start_link(keys: :unique, name: ClientMock)
     :ok
   end
 
   setup :verify_on_exit!
+
+  defp start_bandit(url, opts \\ []) do
+    start_supervised!(
+      {Bandit,
+       plug: {ProxyPlug, {url, opts}},
+       ip: {127, 0, 0, 1},
+       port: 0,
+       http_options: [log_exceptions_with_status_codes: []]}
+    )
+  end
+
+  defp start_cowboy(url, opts \\ []) do
+    ref = {__MODULE__, make_ref()}
+
+    {:ok, _pid} =
+      Plug.Cowboy.http(ProxyPlug, {url, opts},
+        ip: {127, 0, 0, 1},
+        port: 0,
+        ref: ref,
+        protocol_options: [stream_handlers: [:cowboy_stream_h]]
+      )
+
+    on_exit(fn -> Plug.Cowboy.shutdown(ref) end)
+    :ranch.get_port(ref)
+  end
+
+  defp bandit_request(url, headers \\ [], opts \\ []) do
+    pid = start_bandit(url, opts)
+    {:ok, {{127, 0, 0, 1}, port}} = ThousandIsland.listener_info(pid)
+    http1_request(port, headers)
+  end
+
+  defp cowboy_request(url, headers \\ [], opts \\ []) do
+    url
+    |> start_cowboy(opts)
+    |> http1_request(headers)
+  end
+
+  defp http1_request(port, headers) do
+    {:ok, socket} = :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, active: false])
+
+    request_headers =
+      [["host: localhost", "connection: close"] | headers]
+      |> List.flatten()
+      |> Enum.join("\r\n")
+
+    :ok = :gen_tcp.send(socket, "GET / HTTP/1.1\r\n#{request_headers}\r\n\r\n")
+    recv_all(socket, [])
+  end
+
+  defp recv_all(socket, chunks) do
+    case :gen_tcp.recv(socket, 0, 5_000) do
+      {:ok, data} -> recv_all(socket, [data | chunks])
+      {:error, reason} -> {reason, chunks |> Enum.reverse() |> IO.iodata_to_binary()}
+    end
+  end
+
+  defp receive_mint_responses(conn, responses \\ []) do
+    receive do
+      message ->
+        case Mint.HTTP2.stream(conn, message) do
+          {:ok, conn, new_responses} ->
+            responses = responses ++ new_responses
+
+            if Enum.any?(new_responses, fn response ->
+                 elem(response, 0) in [:done, :error]
+               end) do
+              responses
+            else
+              receive_mint_responses(conn, responses)
+            end
+
+          {:error, _conn, error, new_responses} ->
+            responses ++ new_responses ++ [{:connection_error, error}]
+
+          :unknown ->
+            receive_mint_responses(conn, responses)
+        end
+    after
+      2_000 -> responses ++ [:timeout]
+    end
+  end
 
   defp request_mock(invokes) do
     ClientMock
@@ -31,6 +122,45 @@ defmodule Pleroma.ReverseProxyTest do
        ], %{url: url, body: body}}
     end)
     |> expect(:stream_body, invokes, fn %{url: url, body: body} = client ->
+      case Registry.lookup(ClientMock, url) do
+        [{_, 0}] ->
+          Registry.update_value(ClientMock, url, &(&1 + 1))
+          {:ok, body, client}
+
+        [{_, 1}] ->
+          Registry.unregister(ClientMock, url)
+          :done
+      end
+    end)
+  end
+
+  defp stream_then_error_mock(url, headers, chunk \\ "partial", error \\ :closed) do
+    ClientMock
+    |> expect(:request, fn :get, ^url, _, _, _ ->
+      Registry.register(ClientMock, url, 0)
+      {:ok, 200, headers, %{url: url}}
+    end)
+    |> expect(:stream_body, 2, fn %{url: ^url} = client ->
+      case Registry.lookup(ClientMock, url) do
+        [{_, 0}] ->
+          Registry.update_value(ClientMock, url, &(&1 + 1))
+          {:ok, chunk, client}
+
+        [{_, 1}] ->
+          Registry.unregister(ClientMock, url)
+          {:error, error}
+      end
+    end)
+    |> expect(:close, fn _ -> :ok end)
+  end
+
+  defp complete_stream_mock(url, headers, body) do
+    ClientMock
+    |> expect(:request, fn :get, ^url, _, _, _ ->
+      Registry.register(ClientMock, url, 0)
+      {:ok, 200, headers, %{url: url}}
+    end)
+    |> expect(:stream_body, 2, fn %{url: ^url} = client ->
       case Registry.lookup(ClientMock, url) do
         [{_, 0}] ->
           Registry.update_value(ClientMock, url, &(&1 + 1))
@@ -70,14 +200,202 @@ defmodule Pleroma.ReverseProxyTest do
     assert response == %{"user-agent" => Pleroma.Application.user_agent()}
   end
 
-  test "closed connection", %{conn: conn} do
-    ClientMock
-    |> expect(:request, fn :get, "/closed", _, _, _ -> {:ok, 200, [], %{}} end)
-    |> expect(:stream_body, fn _ -> {:error, :closed} end)
-    |> expect(:close, fn _ -> :ok end)
+  test "aborts a partially streamed response when the upstream closes", %{conn: conn} do
+    stream_then_error_mock("/closed", [{"content-length", "20"}])
 
-    conn = ReverseProxy.call(conn, "/closed")
-    assert conn.halted
+    assert_raise ReverseProxy.StreamError, fn ->
+      ReverseProxy.call(conn, "/closed")
+    end
+
+    assert Cachex.get(:failed_proxy_url_cache, "/closed") == {:ok, true}
+  end
+
+  describe "Bandit HTTP/1 streaming" do
+    test "closes an incomplete chunked response without a terminating chunk" do
+      Mox.set_mox_global(ClientMock)
+      stream_then_error_mock("/bandit-closed", [{"content-type", "image/png"}])
+
+      assert {:closed, response} = bandit_request("/bandit-closed")
+      assert response =~ "transfer-encoding: chunked"
+      assert response =~ "partial"
+      refute response =~ "0\r\n\r\n"
+    end
+
+    test "closes an incomplete fixed-length response before the declared length" do
+      Mox.set_mox_global(ClientMock)
+
+      stream_then_error_mock("/bandit-fixed-closed", [
+        {"content-length", "20"},
+        {"content-type", "image/png"}
+      ])
+
+      assert {:closed, response} = bandit_request("/bandit-fixed-closed")
+      assert response =~ "content-length: 20"
+      refute response =~ "transfer-encoding"
+      assert String.ends_with?(response, "partial")
+    end
+
+    test "streams a complete fixed-length response without transformation" do
+      Mox.set_mox_global(ClientMock)
+      body = "complete body"
+
+      complete_stream_mock(
+        "/bandit-complete",
+        [
+          {"content-length", to_string(byte_size(body))},
+          {"content-type", "image/png"}
+        ],
+        body
+      )
+
+      assert {:closed, response} =
+               bandit_request("/bandit-complete", ["accept-encoding: deflate"])
+
+      assert response =~ "content-length: #{byte_size(body)}"
+      assert response =~ "cache-control: public, max-age=1209600, immutable, no-transform"
+      refute response =~ "content-encoding: gzip"
+      refute response =~ "content-encoding: deflate"
+      assert String.ends_with?(response, body)
+    end
+
+    test "keeps no-transform when custom response headers replace cache-control" do
+      Mox.set_mox_global(ClientMock)
+      body = "complete body"
+
+      complete_stream_mock(
+        "/bandit-custom-cache-control",
+        [
+          {"content-length", to_string(byte_size(body))},
+          {"content-type", "image/png"}
+        ],
+        body
+      )
+
+      assert {:closed, response} =
+               bandit_request(
+                 "/bandit-custom-cache-control",
+                 ["accept-encoding: deflate"],
+                 resp_headers: [{"cache-control", "private, max-age=60"}]
+               )
+
+      assert response =~ "content-length: #{byte_size(body)}"
+      assert response =~ "cache-control: private, max-age=60, no-transform"
+      refute response =~ "content-encoding: gzip"
+      refute response =~ "content-encoding: deflate"
+      assert String.ends_with?(response, body)
+    end
+
+    test "does not blacklist the upstream when the downstream disconnects" do
+      Mox.set_mox_global(ClientMock)
+      test_pid = self()
+
+      ClientMock
+      |> expect(:request, fn :get, "/bandit-client-closed", _, _, _ ->
+        {:ok, 200, [{"content-type", "image/png"}], %{url: "/bandit-client-closed"}}
+      end)
+      |> stub(:stream_body, fn client ->
+        send(test_pid, {:stream_requested, self()})
+
+        receive do
+          :continue -> {:ok, :binary.copy("x", 1_000_000), client}
+        after
+          1_000 -> raise "timed out waiting for downstream disconnect"
+        end
+      end)
+      |> expect(:close, fn _ ->
+        send(test_pid, :upstream_closed)
+        :ok
+      end)
+
+      pid = start_bandit("/bandit-client-closed")
+      {:ok, {{127, 0, 0, 1}, port}} = ThousandIsland.listener_info(pid)
+      {:ok, socket} = :gen_tcp.connect({127, 0, 0, 1}, port, [:binary, active: false])
+      :ok = :gen_tcp.send(socket, "GET / HTTP/1.1\r\nhost: localhost\r\n\r\n")
+
+      assert_receive {:stream_requested, request_pid}
+      :ok = :inet.setopts(socket, linger: {true, 0})
+      :ok = :gen_tcp.close(socket)
+      send(request_pid, :continue)
+
+      assert_receive :upstream_closed
+      assert Cachex.get(:failed_proxy_url_cache, "/bandit-client-closed") == {:ok, nil}
+    end
+  end
+
+  describe "Cowboy streaming" do
+    test "closes an incomplete HTTP/1 chunked response without a terminating chunk" do
+      Mox.set_mox_global(ClientMock)
+      stream_then_error_mock("/cowboy-closed", [{"content-type", "image/png"}])
+
+      assert {:closed, response} = cowboy_request("/cowboy-closed")
+      assert response =~ "transfer-encoding: chunked"
+      assert response =~ "partial"
+      refute response =~ "0\r\n\r\n"
+    end
+
+    test "closes an incomplete HTTP/1 fixed-length response before the declared length" do
+      Mox.set_mox_global(ClientMock)
+
+      stream_then_error_mock("/cowboy-fixed-closed", [
+        {"content-length", "20"},
+        {"content-type", "image/png"}
+      ])
+
+      assert {:closed, response} = cowboy_request("/cowboy-fixed-closed")
+      assert response =~ "content-length: 20"
+      refute response =~ "transfer-encoding"
+      assert String.ends_with?(response, "partial")
+    end
+
+    test "resets an incomplete HTTP/2 stream" do
+      Mox.set_mox_global(ClientMock)
+      stream_then_error_mock("/cowboy-http2-closed", [{"content-type", "image/png"}])
+
+      port = start_cowboy("/cowboy-http2-closed")
+      {:ok, mint} = Mint.HTTP2.connect(:http, "localhost", port)
+      {:ok, mint, request_ref} = Mint.HTTP2.request(mint, "GET", "/", [], nil)
+      responses = receive_mint_responses(mint)
+
+      assert {:status, request_ref, 200} in responses
+      assert {:data, request_ref, "partial"} in responses
+
+      assert Enum.any?(responses, fn
+               {:error, ^request_ref, %Mint.HTTPError{reason: {:server_closed_request, _}}} ->
+                 true
+
+               _ ->
+                 false
+             end)
+
+      refute {:done, request_ref} in responses
+      refute :timeout in responses
+    end
+  end
+
+  test "resets an incomplete Bandit HTTP/2 stream" do
+    Mox.set_mox_global(ClientMock)
+    stream_then_error_mock("/bandit-http2-closed", [{"content-type", "image/png"}])
+
+    pid = start_bandit("/bandit-http2-closed")
+    {:ok, {{127, 0, 0, 1}, port}} = ThousandIsland.listener_info(pid)
+    {:ok, mint} = Mint.HTTP2.connect(:http, "localhost", port)
+    {:ok, mint, request_ref} = Mint.HTTP2.request(mint, "GET", "/", [], nil)
+    responses = receive_mint_responses(mint)
+
+    assert {:status, request_ref, 200} in responses
+    assert {:data, request_ref, "partial"} in responses
+
+    assert Enum.any?(responses, fn
+             {:error, ^request_ref,
+              %Mint.HTTPError{reason: {:server_closed_request, :internal_error}}} ->
+               true
+
+             _ ->
+               false
+           end)
+
+    refute {:done, request_ref} in responses
+    refute :timeout in responses
   end
 
   defp stream_mock(invokes, with_close? \\ false) do
@@ -142,9 +460,14 @@ defmodule Pleroma.ReverseProxyTest do
     test "max_body_length returns error if streaming body more than that option", %{conn: conn} do
       stream_mock(3, true)
 
-      assert capture_log(fn ->
-               ReverseProxy.call(conn, "/stream-bytes/50", max_body_length: 29)
-             end) =~
+      log =
+        capture_log(fn ->
+          assert_raise ReverseProxy.StreamError, fn ->
+            ReverseProxy.call(conn, "/stream-bytes/50", max_body_length: 29)
+          end
+        end)
+
+      assert log =~
                "Elixir.Pleroma.ReverseProxy request to /stream-bytes/50 failed while reading/chunking: :body_too_large"
     end
 
@@ -168,6 +491,19 @@ defmodule Pleroma.ReverseProxyTest do
       assert conn.status == 200
       assert Conn.get_resp_header(conn, "content-type") == ["image/png"]
       assert conn.resp_body == ""
+    end
+
+    test "rejects a malformed content-length", %{conn: conn} do
+      url = "/head-invalid-content-length"
+
+      expect(ClientMock, :request, fn :head, ^url, _, _, _ ->
+        {:ok, 200, [{"content-length", "20junk"}]}
+      end)
+
+      conn = ReverseProxy.call(Map.put(conn, :method, "HEAD"), url)
+
+      assert conn.status == 500
+      assert Cachex.get(:failed_proxy_url_cache, url) == {:ok, true}
     end
   end
 
@@ -271,6 +607,28 @@ defmodule Pleroma.ReverseProxyTest do
            ]
   end
 
+  test "redirects a content sniffing failure before committing the response", %{conn: conn} do
+    url = "https://example.com/extensionless"
+
+    ClientMock
+    |> expect(:request, fn :get, ^url, _, _, _ ->
+      {:ok, 200, [{"content-type", "application/octet-stream"}], %{url: url}}
+    end)
+    |> expect(:stream_body, fn _ -> {:error, :closed} end)
+    |> expect(:close, fn _ -> :ok end)
+
+    conn =
+      ReverseProxy.call(conn, url,
+        sniff_content_type: true,
+        redirect_on_failure: true
+      )
+
+    assert conn.status == 302
+    assert Conn.get_resp_header(conn, "location") == [url]
+    assert conn.state == :sent
+    assert Cachex.get(:failed_proxy_url_cache, url) == {:ok, true}
+  end
+
   test "preserves a generic content type for a non-image body", %{conn: conn} do
     body = "not an image"
 
@@ -365,7 +723,73 @@ defmodule Pleroma.ReverseProxyTest do
       |> expect(:stream_body, fn _ -> :done end)
 
       conn = ReverseProxy.call(conn, "/cache")
-      assert {"cache-control", "public, max-age=1209600, immutable"} in conn.resp_headers
+
+      assert {"cache-control", "public, max-age=1209600, immutable, no-transform"} in conn.resp_headers
+    end
+
+    test "preserves a valid upstream content-length", %{conn: conn} do
+      body = "complete body"
+
+      ClientMock
+      |> expect(:request, fn :get, "/content-length", _, _, _ ->
+        {:ok, 200, [{"content-length", to_string(byte_size(body))}], %{body: body}}
+      end)
+      |> expect(:stream_body, fn %{body: ^body} = client ->
+        {:ok, body, Map.delete(client, :body)}
+      end)
+      |> expect(:stream_body, fn %{} -> :done end)
+
+      conn = ReverseProxy.call(conn, "/content-length")
+
+      assert Conn.get_resp_header(conn, "content-length") == [to_string(byte_size(body))]
+    end
+
+    test "rejects malformed upstream content-length values" do
+      Enum.each(["20junk", "-1"], fn content_length ->
+        url = "/invalid-content-length/#{content_length}"
+
+        ClientMock
+        |> expect(:request, fn :get, ^url, _, _, _ ->
+          {:ok, 200, [{"content-length", content_length}], %{url: url}}
+        end)
+        |> expect(:close, fn %{url: ^url} -> :ok end)
+
+        conn = ReverseProxy.call(build_conn(), url)
+
+        assert conn.status == 500
+        assert Cachex.get(:failed_proxy_url_cache, url) == {:ok, true}
+      end)
+    end
+
+    test "rejects conflicting upstream content-length values" do
+      url = "/conflicting-content-length"
+
+      ClientMock
+      |> expect(:request, fn :get, ^url, _, _, _ ->
+        {:ok, 200, [{"content-length", "7"}, {"content-length", "20"}], %{url: url}}
+      end)
+      |> stub(:stream_body, fn _ -> :done end)
+      |> stub(:close, fn _ -> :ok end)
+
+      conn = ReverseProxy.call(build_conn(), url)
+
+      assert conn.status == 500
+      assert Cachex.get(:failed_proxy_url_cache, url) == {:ok, true}
+    end
+
+    test "normalizes equivalent upstream content-length values", %{conn: conn} do
+      body = "partial"
+
+      complete_stream_mock(
+        "/duplicate-content-length",
+        [{"content-length", "7"}, {"content-length", "07"}],
+        body
+      )
+
+      conn = ReverseProxy.call(conn, "/duplicate-content-length")
+
+      assert Conn.get_resp_header(conn, "content-length") == ["7"]
+      assert conn.resp_body == body
     end
   end
 
