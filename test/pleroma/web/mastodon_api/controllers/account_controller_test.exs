@@ -494,13 +494,16 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
       assert activity_id == activity.id
     end
 
-    test "activity restrictions apply to boosted objects", %{conn: conn} do
+    test "remote activity restrictions apply to created and boosted objects", %{conn: conn} do
       clear_config([:restrict_unauthenticated, :activities, :local], false)
       clear_config([:restrict_unauthenticated, :activities, :remote], true)
 
       local_user = insert(:user)
       remote_user = insert(:user, local: false, domain: "example.com")
       local_activity = insert(:note_activity, user: local_user)
+
+      mixed_create =
+        insert(:note_activity, local: true, object_local: false, user: local_user)
 
       remote_activity =
         insert(:note_activity, local: false, object_local: false, user: remote_user)
@@ -514,6 +517,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
         |> Enum.map(& &1["id"])
 
       assert local_activity.id in status_ids
+      refute mixed_create.id in status_ids
       refute announce.id in status_ids
 
       authenticated_status_ids =
@@ -523,10 +527,11 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
         |> Enum.map(& &1["id"])
 
       assert local_activity.id in authenticated_status_ids
+      assert mixed_create.id in authenticated_status_ids
       assert announce.id in authenticated_status_ids
     end
 
-    test "local object restrictions apply to remote boosts", %{conn: conn} do
+    test "local activity restrictions apply to created and boosted objects", %{conn: conn} do
       clear_config([:restrict_unauthenticated, :activities, :local], true)
       clear_config([:restrict_unauthenticated, :activities, :remote], false)
 
@@ -536,6 +541,9 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
 
       remote_activity =
         insert(:note_activity, local: false, object_local: false, user: remote_user)
+
+      mixed_create =
+        insert(:note_activity, local: false, object_local: true, user: remote_user)
 
       remote_announce =
         insert(:announce_activity, note_activity: local_activity, user: remote_user)
@@ -552,6 +560,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
         |> Enum.map(& &1["id"])
 
       assert remote_activity.id in status_ids
+      refute mixed_create.id in status_ids
       refute remote_announce.id in status_ids
 
       authenticated_status_ids =
@@ -561,7 +570,56 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
         |> Enum.map(& &1["id"])
 
       assert remote_activity.id in authenticated_status_ids
+      assert mixed_create.id in authenticated_status_ids
       assert remote_announce.id in authenticated_status_ids
+    end
+
+    test "restricted local accounts reject activities with mismatched remote origins", %{
+      conn: conn
+    } do
+      clear_config([:restrict_unauthenticated, :activities, :local], true)
+      clear_config([:restrict_unauthenticated, :activities, :remote], false)
+
+      local_user = insert(:user)
+
+      mismatched_activity =
+        insert(:note_activity, local: false, object_local: false, user: local_user)
+
+      assert [] =
+               build_conn()
+               |> get("/api/v1/accounts/#{local_user.id}/statuses")
+               |> json_response_and_validate_schema(200)
+
+      assert [%{"id" => activity_id}] =
+               conn
+               |> get("/api/v1/accounts/#{local_user.id}/statuses")
+               |> json_response_and_validate_schema(200)
+
+      assert activity_id == mismatched_activity.id
+    end
+
+    test "restricted remote accounts reject activities with mismatched local origins", %{
+      conn: conn
+    } do
+      clear_config([:restrict_unauthenticated, :activities, :local], false)
+      clear_config([:restrict_unauthenticated, :activities, :remote], true)
+
+      remote_user = insert(:user, local: false, domain: "example.com")
+
+      mismatched_activity =
+        insert(:note_activity, local: true, object_local: true, user: remote_user)
+
+      assert [] =
+               build_conn()
+               |> get("/api/v1/accounts/#{remote_user.id}/statuses")
+               |> json_response_and_validate_schema(200)
+
+      assert [%{"id" => activity_id}] =
+               conn
+               |> get("/api/v1/accounts/#{remote_user.id}/statuses")
+               |> json_response_and_validate_schema(200)
+
+      assert activity_id == mismatched_activity.id
     end
 
     test "gets a user's statuses without reblogs", %{user: user, conn: conn} do
