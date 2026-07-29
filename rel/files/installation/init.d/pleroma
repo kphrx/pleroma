@@ -17,6 +17,13 @@ retry="SIGTERM/30/SIGKILL/5"
 pidfile="/var/run/pleroma.pid"
 
 depend() {
-    want nginx
-    need postgresql
+	want nginx
+	need postgresql
+}
+
+start_pre() {
+	ebegin "running migrations if any"
+	su -s /bin/sh -c "cd \"${directory}\" && exec /opt/pleroma/bin/pleroma_ctl migrate" \
+		"${command_user%%:*}"
+	eend "$?"
 }
