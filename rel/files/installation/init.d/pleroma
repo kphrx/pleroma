@@ -16,10 +16,6 @@ retry="SIGTERM/30/SIGKILL/5"
 
 pidfile="/var/run/pleroma.pid"
 
-# Needs OpenRC >= 0.42
-respawn_max=200
-respawn_period=86400 # 1*day
-
 depend() {
 	want nginx
 	need postgresql
@@ -27,6 +23,7 @@ depend() {
 
 start_pre() {
 	ebegin "running migrations if any"
-	su -s /bin/sh -c '/opt/pleroma/bin/pleroma_ctl migrate' -l "${command_user}"
+	su -s /bin/sh -c "cd \"${directory}\" && exec /opt/pleroma/bin/pleroma_ctl migrate" \
+		"${command_user%%:*}"
 	eend "$?"
 }

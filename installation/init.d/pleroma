@@ -39,7 +39,8 @@ depend() {
 
 start_pre() {
 	ebegin "running migrations if any"
-	su -s /bin/sh -c '/usr/bin/mix ecto.migrate' -l "${command_user}"
+	su -s /bin/sh -c "cd \"${directory}\" && exec /usr/bin/mix ecto.migrate" \
+		"${command_user%%:*}"
 	eend "$?"
 }
 
