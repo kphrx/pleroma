@@ -713,6 +713,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> Map.put(:type, ["Create", "Announce"])
       |> Map.put(:user, reading_user)
       |> Map.put(:actor_id, user.ap_id)
+      |> Map.put(:actor_local, user.local)
       |> Map.put(:pinned_object_ids, Map.keys(user.pinned_objects))
 
     params =
@@ -1360,6 +1361,50 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_unauthenticated(query, _), do: query
 
+  defp restrict_activity_and_object_origin(query, local?) do
+    local_object_prefix = Pleroma.Web.Endpoint.url() <> "/"
+
+    # Keeping the correlated origin checks inside CASE prevents PostgreSQL from choosing a
+    # global bitmap-and-sort plan before applying the account statuses limit.
+    from([activity, object: object] in query,
+      where:
+        fragment(
+          "CASE WHEN ? = ? AND starts_with((?->>'id'), ?) = ? THEN true ELSE false END",
+          activity.local,
+          ^local?,
+          object.data,
+          ^local_object_prefix,
+          ^local?
+        )
+    )
+  end
+
+  defp maybe_restrict_unauthenticated(
+         query,
+         %{restrict_unauthenticated: true, user: nil, actor_local: actor_local}
+       )
+       when is_boolean(actor_local) do
+    local_restricted = Config.restrict_unauthenticated_access?(:activities, :local)
+    remote_restricted = Config.restrict_unauthenticated_access?(:activities, :remote)
+    actor_restricted = if actor_local, do: local_restricted, else: remote_restricted
+
+    cond do
+      actor_restricted ->
+        from(activity in query, where: false)
+
+      local_restricted ->
+        restrict_activity_and_object_origin(query, false)
+
+      remote_restricted ->
+        restrict_activity_and_object_origin(query, true)
+
+      true ->
+        query
+    end
+  end
+
+  defp maybe_restrict_unauthenticated(query, _), do: query
+
   defp restrict_quote_url(query, %{quote_url: quote_url}) do
     from([_activity, object] in query,
       where: fragment("(?)->'quoteUrl' = ?", object.data, ^quote_url)
@@ -1517,6 +1562,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> maybe_preload_report_notes(opts)
       |> maybe_set_thread_muted_field(opts)
       |> maybe_order(opts)
+      |> maybe_restrict_unauthenticated(opts)
       |> restrict_recipients_or_hashtags(recipients, opts[:user], opts[:followed_hashtags])
       |> restrict_replies(opts)
       |> restrict_since(opts)

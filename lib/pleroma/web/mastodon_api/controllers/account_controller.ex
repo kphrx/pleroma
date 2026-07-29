@@ -348,6 +348,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
         params
         |> Map.delete(:tagged)
         |> Map.put(:tag, params[:tagged])
+        |> Map.put(:restrict_unauthenticated, true)
 
       activities = ActivityPub.fetch_user_activities(user, reading_user, params)
 
