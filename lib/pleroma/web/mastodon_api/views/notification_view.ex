@@ -101,13 +101,13 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
       |> Enum.filter(& &1)
       |> Enum.uniq_by(& &1[:id])
 
-    actors =
+    accounts =
       notification_groups
       |> List.flatten()
-      |> notification_actors()
+      |> notification_accounts()
 
     %{
-      accounts: AccountView.render("index.json", %{users: actors, for: reading_user}),
+      accounts: AccountView.render("index.json", %{users: accounts, for: reading_user}),
       statuses: statuses,
       notification_groups:
         Enum.map(
@@ -191,7 +191,7 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
 
   defp render_group(
          [%Notification{} = notification | _] = notifications,
-         _reading_user,
+         reading_user,
          grouped_types,
          notification_group_counts,
          notification_group_bounds,
@@ -237,12 +237,48 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
         response
       end
 
-    if status_activity do
-      Map.put(response, :status_id, to_string(status_activity.id))
-    else
-      response
+    response =
+      if status_activity do
+        Map.put(response, :status_id, to_string(status_activity.id))
+      else
+        response
+      end
+
+    put_group_details(response, notification, reading_user)
+  end
+
+  defp put_group_details(response, %Notification{type: "move", activity: activity}, _reading_user) do
+    case User.get_cached_by_ap_id(activity.data["target"]) do
+      %User{id: id} -> Map.put(response, :target_id, to_string(id))
+      _ -> response
     end
   end
+
+  defp put_group_details(
+         response,
+         %Notification{type: "pleroma:emoji_reaction", activity: activity},
+         _reading_user
+       ) do
+    put_emoji(response, activity)
+  end
+
+  defp put_group_details(
+         response,
+         %Notification{type: "pleroma:chat_mention", activity: activity},
+         reading_user
+       ) do
+    put_chat_message(response, activity, reading_user, %{})
+  end
+
+  defp put_group_details(
+         response,
+         %Notification{type: "pleroma:report", activity: activity},
+         _reading_user
+       ) do
+    put_report(response, activity)
+  end
+
+  defp put_group_details(response, _notification, _reading_user), do: response
 
   defp status_activity_for_group([%Notification{} = notification | _], grouped_types) do
     status_activity_for(notification, grouped_types)
@@ -284,6 +320,19 @@ defmodule Pleroma.Web.MastodonAPI.NotificationView do
     notifications
     |> Enum.map(&User.get_cached_by_ap_id(&1.activity.data["actor"]))
     |> Enum.filter(& &1)
+    |> Enum.uniq_by(& &1.id)
+  end
+
+  defp notification_accounts(notifications) do
+    move_targets =
+      notifications
+      |> Enum.filter(&(&1.type == "move"))
+      |> Enum.map(&User.get_cached_by_ap_id(&1.activity.data["target"]))
+      |> Enum.filter(& &1)
+
+    notifications
+    |> notification_actors()
+    |> Kernel.++(move_targets)
     |> Enum.uniq_by(& &1.id)
   end
 
