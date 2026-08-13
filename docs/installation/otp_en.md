@@ -130,60 +130,90 @@ Restart PostgreSQL to apply configuration changes:
     ```
 
 ### Installing Pleroma
+Create a Pleroma user:
+
 ```sh
-# Create a Pleroma user
 adduser --system --shell  /bin/false --home /opt/pleroma pleroma
+```
 
-# Set the flavour environment variable to the string you got in Detecting flavour section.
-# For example if the flavour is `amd64-musl` the command will be
+Set the flavour environment variable to the string you got in Detecting flavour section. For example if the flavour is `amd64-musl` the command will be:
+
+```sh
 export FLAVOUR="amd64-musl"
+```
 
-# Clone the release build into a temporary directory and unpack it
-sudo -Hu pleroma "
-curl 'https://git.pleroma.social/api/packages/pleroma/generic/pleroma-otp-stable-$FLAVOUR/latest/pleroma.zip' -o /tmp/pleroma.zip
-unzip /tmp/pleroma.zip -d /tmp/
-"
+Clone the release build into a temporary directory and unpack it:
 
-# Move the release to the home directory and delete temporary files
-sudo -Hu pleroma "
-mv /tmp/release/* /opt/pleroma
-rmdir /tmp/release
-rm /tmp/pleroma.zip
-"
-# Create uploads directory and set proper permissions (skip if planning to use a remote uploader)
-# Note: It does not have to be `/var/lib/pleroma/uploads`, the config generator will ask about the upload directory later
+```sh
+sudo -Hu pleroma curl "https://git.pleroma.social/api/packages/pleroma/generic/pleroma-otp-stable-$FLAVOUR/latest/pleroma.zip" -o /tmp/pleroma.zip
+sudo -Hu pleroma unzip /tmp/pleroma.zip -d /tmp/
+```
 
+Move the release to the home directory and delete temporary files:
+
+```sh
+sudo -Hu pleroma mv /tmp/release/* /opt/pleroma
+sudo -Hu pleroma rmdir /tmp/release
+sudo -Hu pleroma rm /tmp/pleroma.zip
+```
+
+Create uploads directory and set proper permissions (skip if planning to use a remote uploader).
+Note: It does not have to be `/var/lib/pleroma/uploads`, the config generator will ask about the upload directory later.
+
+```sh
 mkdir -p /var/lib/pleroma/uploads
 chown -R pleroma /var/lib/pleroma
+```
 
-# Create custom public files directory (custom emojis, frontend bundle overrides, robots.txt, etc.)
-# Note: It does not have to be `/var/lib/pleroma/static`, the config generator will ask about the custom public files directory later
+Create custom public files directory (custom emojis, frontend bundle overrides, robots.txt, etc.)
+Note: It does not have to be `/var/lib/pleroma/static`, the config generator will ask about the custom public files directory later.
+
+```sh
 mkdir -p /var/lib/pleroma/static
 chown -R pleroma /var/lib/pleroma
+```
 
-# Create a config directory
+Create a config directory:
+
+```sh
 mkdir -p /etc/pleroma
 chown -R pleroma /etc/pleroma
+```
 
-# Run the config generator
+Run the config generator:
+
+```sh
 sudo -Hu pleroma "./bin/pleroma_ctl instance gen --output /etc/pleroma/config.exs --output-psql /tmp/setup_db.psql"
+```
 
-# Create the postgres database
+Create the postgres database and schema:
+
+```sh
 sudo -u postgres -s $SHELL -lc "psql -f /tmp/setup_db.psql"
-
-# Create the database schema
 sudo -Hu pleroma "./bin/pleroma_ctl migrate"
+```
 
-# If you have installed RUM indexes uncommend and run
-# sudo -Hu pleroma "./bin/pleroma_ctl migrate --migrations-path priv/repo/optional_migrations/rum_indexing/"
+(Optional) If you have installed RUM indexes:
 
-# Start the instance to verify that everything is working as expected
+```sh
+sudo -Hu pleroma "./bin/pleroma_ctl migrate --migrations-path priv/repo/optional_migrations/rum_indexing/"
+```
+
+Start the instance to verify that everything is working as expected:
+
+```sh
 sudo -Hu pleroma "./bin/pleroma daemon"
+```
 
-# Wait for about 20 seconds and query the instance endpoint, if it shows your uri, name and email correctly, you are configured correctly
+Wait for about 20 seconds and query the instance endpoint, if it shows your uri, name and email correctly, you are configured correctly:
+
+```sh
 sleep 20 && curl http://localhost:4000/api/v1/instance
+```
 
-# Stop the instance
+Stop the instance:
+
+```sh
 sudo -Hu pleroma "./bin/pleroma stop"
 ```
 
