@@ -87,7 +87,7 @@ export FLAVOUR="amd64-musl"
 # Clone the release build into a temporary directory and unpack it
 # Replace `stable` with `unstable` if you want to run the unstable branch
 sudo -Hu pleroma "
-curl 'https://git.pleroma.social/api/v4/projects/2/jobs/artifacts/stable/download?job=$FLAVOUR' -o /tmp/pleroma.zip
+curl 'https://git.pleroma.social/api/packages/pleroma/generic/pleroma-otp-stable-$FLAVOUR/latest/pleroma.zip' -o /tmp/pleroma.zip
 unzip /tmp/pleroma.zip -d /tmp/
 "
 
