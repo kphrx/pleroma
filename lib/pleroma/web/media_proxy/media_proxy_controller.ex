@@ -208,7 +208,6 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
 
   defp media_proxy_opts do
     Config.get([:media_proxy, :proxy_opts], [])
-    |> Keyword.put_new(:sniff_content_type, true)
   end
 
   defp sandbox(conn, _params) do
