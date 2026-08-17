@@ -607,7 +607,11 @@ config :pleroma, Oban,
     search_indexing: [limit: 10, paused: true],
     slow: 5
   ],
-  plugins: [Oban.Plugins.Lazarus, {Oban.Plugins.Pruner, max_age: 900}],
+  plugins: [
+    Oban.Plugins.Lazarus,
+    {Oban.Plugins.Pruner, max_age: 900},
+    {Oban.Plugins.Reindexer, schedule: "@weekly"}
+  ],
   crontab: [
     {"0 0 * * 0", Pleroma.Workers.Cron.DigestEmailsWorker},
     {"0 0 * * *", Pleroma.Workers.Cron.NewUsersDigestWorker},

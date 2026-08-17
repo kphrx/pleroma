@@ -1,0 +1,1 @@
+Oban: Enabled the Reindexer plugin to reduce oban_jobs index DB bloat
