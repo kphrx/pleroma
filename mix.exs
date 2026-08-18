@@ -172,6 +172,13 @@ defmodule Pleroma.Mixfile do
       {:gen_smtp, "~> 0.15"},
       {:mua, "~> 0.2.4"},
       {:mail, "~> 0.3.1"},
+      # Fixes intermittent failure to compile due to an old pc version,
+      # upstream hasn't made a release with the fix yet.
+      # https://github.com/Vagabond/erlang-syslog/pull/44
+      {:syslog,
+       git: "https://github.com/Vagabond/erlang-syslog",
+       ref: "614a1fde7a8654bee2815b599bbdaae1bb0323b5",
+       override: true},
       {:ex_syslogger, "~> 1.5"},
       {:floki, "~> 0.38"},
       {:timex, "~> 3.7"},
