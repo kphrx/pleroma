@@ -136,7 +136,7 @@ defmodule Pleroma.Mixfile do
       {:ecto_enum, "~> 1.4"},
       {:postgrex, "~> 0.22"},
       {:phoenix_html, "~> 3.3"},
-      {:phoenix_live_view, "~> 1.1.19"},
+      {:phoenix_live_view, "~> 1.2"},
       {:phoenix_live_dashboard, "~> 0.8.7"},
       {:telemetry_metrics, "~> 0.6"},
       {:telemetry_poller, "~> 1.3"},
