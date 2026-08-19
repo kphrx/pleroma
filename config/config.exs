@@ -607,7 +607,11 @@ config :pleroma, Oban,
     search_indexing: [limit: 10, paused: true],
     slow: 5
   ],
-  plugins: [Oban.Plugins.Lazarus, {Oban.Plugins.Pruner, max_age: 900}],
+  plugins: [
+    Oban.Plugins.Lazarus,
+    {Oban.Plugins.Pruner, max_age: 900},
+    {Oban.Plugins.Reindexer, schedule: "@weekly"}
+  ],
   crontab: [
     {"0 0 * * 0", Pleroma.Workers.Cron.DigestEmailsWorker},
     {"0 0 * * *", Pleroma.Workers.Cron.NewUsersDigestWorker},
@@ -932,7 +936,8 @@ config :pleroma, Pleroma.User.Backup,
   timeout: :timer.minutes(30)
 
 config :pleroma, ConcurrentLimiter, [
-  {Pleroma.Search, [max_running: 30, max_waiting: 50]}
+  {Pleroma.Search, [max_running: 30, max_waiting: 50]},
+  {Pleroma.Webhook.Notify, [max_running: 5, max_waiting: 200]}
 ]
 
 config :pleroma, Pleroma.Web.WebFinger, domain: nil, update_nickname_on_user_fetch: true
@@ -943,6 +948,15 @@ config :pleroma, Pleroma.Search.Meilisearch,
   url: "http://127.0.0.1:7700/",
   private_key: nil,
   initial_indexing_chunk_size: 100_000
+
+config :pleroma, Pleroma.Search.ParadeDB,
+  url: nil,
+  table: "pleroma_search_documents",
+  fuzzy_distance: 0
+
+config :pleroma, Pleroma.Search.ParadeDB.Repo,
+  pool_size: 2,
+  prepare: :unnamed
 
 config :pleroma, Pleroma.Application,
   background_migrators: true,

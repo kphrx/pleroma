@@ -1,0 +1,32 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/attachment-embedded-note",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:43:01Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-attachment-embedded-note",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:43:01Z",
+    "content": "Note with embedded Note attachment",
+    "attachment": {
+      "type": "Note",
+      "attributedTo": "https://fedidev.fun/users/alice",
+      "name": "attached note",
+      "content": "This is just a note",
+      "published": "2024-03-06T07:23:56Z"
+    }
+  }
+}
+

@@ -32,6 +32,7 @@ Other than things bundled in the OTP release Pleroma depends on:
 * curl (to download the release build)
 * unzip (needed to unpack release builds)
 * ncurses (ERTS won't run without it)
+* libvips (for image processing)
 * PostgreSQL (also utilizes extensions in postgresql-contrib)
 * nginx (could be swapped with another reverse proxy but this guide covers only it)
 * certbot (for Let's Encrypt certificates, could be swapped with another ACME client, but this guide covers only it)
@@ -46,7 +47,13 @@ Other than things bundled in the OTP release Pleroma depends on:
 
 === "Debian/Ubuntu"
     ```
-    apt install curl unzip libncurses5 postgresql postgresql-contrib nginx certbot libmagic-dev
+    apt install curl unzip libncurses6 libvips42t64 postgresql postgresql-contrib nginx certbot libmagic-dev
+    ```
+
+    On Debian 12 and Ubuntu 22.04, replace `libvips42t64` with `libvips42`:
+
+    ```
+    apt install curl unzip libncurses6 libvips42 postgresql postgresql-contrib nginx certbot libmagic-dev
     ```
 
 ### Installing optional packages
@@ -88,9 +95,23 @@ RUM indexes are an alternative indexing scheme that is not included in PostgreSQ
     ```
 
 === "Debian/Ubuntu"
+    Install the package matching your distribution's PostgreSQL version:
+
     ```
-    # Available only on Buster/19.04
-    apt install postgresql-11-rum
+    # Debian 13
+    apt install postgresql-17-rum
+
+    # Debian 12
+    apt install postgresql-15-rum
+
+    # Ubuntu 26.04
+    apt install postgresql-18-rum
+
+    # Ubuntu 24.04
+    apt install postgresql-16-rum
+
+    # Ubuntu 22.04
+    apt install postgresql-14-rum
     ```
 
 #### (Optional) Performance configuration
@@ -109,60 +130,90 @@ Restart PostgreSQL to apply configuration changes:
     ```
 
 ### Installing Pleroma
+Create a Pleroma user:
+
 ```sh
-# Create a Pleroma user
 adduser --system --shell  /bin/false --home /opt/pleroma pleroma
+```
 
-# Set the flavour environment variable to the string you got in Detecting flavour section.
-# For example if the flavour is `amd64-musl` the command will be
+Set the flavour environment variable to the string you got in Detecting flavour section. For example if the flavour is `amd64-musl` the command will be:
+
+```sh
 export FLAVOUR="amd64-musl"
+```
 
-# Clone the release build into a temporary directory and unpack it
-sudo -Hu pleroma "
-curl 'https://git.pleroma.social/api/v4/projects/2/jobs/artifacts/stable/download?job=$FLAVOUR' -o /tmp/pleroma.zip
-unzip /tmp/pleroma.zip -d /tmp/
-"
+Clone the release build into a temporary directory and unpack it:
 
-# Move the release to the home directory and delete temporary files
-sudo -Hu pleroma "
-mv /tmp/release/* /opt/pleroma
-rmdir /tmp/release
-rm /tmp/pleroma.zip
-"
-# Create uploads directory and set proper permissions (skip if planning to use a remote uploader)
-# Note: It does not have to be `/var/lib/pleroma/uploads`, the config generator will ask about the upload directory later
+```sh
+sudo -Hu pleroma curl "https://git.pleroma.social/api/packages/pleroma/generic/pleroma-otp-stable-$FLAVOUR/latest/pleroma.zip" -o /tmp/pleroma.zip
+sudo -Hu pleroma unzip /tmp/pleroma.zip -d /tmp/
+```
 
+Move the release to the home directory and delete temporary files:
+
+```sh
+sudo -Hu pleroma mv /tmp/release/* /opt/pleroma
+sudo -Hu pleroma rmdir /tmp/release
+sudo -Hu pleroma rm /tmp/pleroma.zip
+```
+
+Create uploads directory and set proper permissions (skip if planning to use a remote uploader).
+Note: It does not have to be `/var/lib/pleroma/uploads`, the config generator will ask about the upload directory later.
+
+```sh
 mkdir -p /var/lib/pleroma/uploads
 chown -R pleroma /var/lib/pleroma
+```
 
-# Create custom public files directory (custom emojis, frontend bundle overrides, robots.txt, etc.)
-# Note: It does not have to be `/var/lib/pleroma/static`, the config generator will ask about the custom public files directory later
+Create custom public files directory (custom emojis, frontend bundle overrides, robots.txt, etc.)
+Note: It does not have to be `/var/lib/pleroma/static`, the config generator will ask about the custom public files directory later.
+
+```sh
 mkdir -p /var/lib/pleroma/static
 chown -R pleroma /var/lib/pleroma
+```
 
-# Create a config directory
+Create a config directory:
+
+```sh
 mkdir -p /etc/pleroma
 chown -R pleroma /etc/pleroma
+```
 
-# Run the config generator
+Run the config generator:
+
+```sh
 sudo -Hu pleroma "./bin/pleroma_ctl instance gen --output /etc/pleroma/config.exs --output-psql /tmp/setup_db.psql"
+```
 
-# Create the postgres database
+Create the postgres database and schema:
+
+```sh
 sudo -u postgres -s $SHELL -lc "psql -f /tmp/setup_db.psql"
-
-# Create the database schema
 sudo -Hu pleroma "./bin/pleroma_ctl migrate"
+```
 
-# If you have installed RUM indexes uncommend and run
-# sudo -Hu pleroma "./bin/pleroma_ctl migrate --migrations-path priv/repo/optional_migrations/rum_indexing/"
+(Optional) If you have installed RUM indexes:
 
-# Start the instance to verify that everything is working as expected
+```sh
+sudo -Hu pleroma "./bin/pleroma_ctl migrate --migrations-path priv/repo/optional_migrations/rum_indexing/"
+```
+
+Start the instance to verify that everything is working as expected:
+
+```sh
 sudo -Hu pleroma "./bin/pleroma daemon"
+```
 
-# Wait for about 20 seconds and query the instance endpoint, if it shows your uri, name and email correctly, you are configured correctly
+Wait for about 20 seconds and query the instance endpoint, if it shows your uri, name and email correctly, you are configured correctly:
+
+```sh
 sleep 20 && curl http://localhost:4000/api/v1/instance
+```
 
-# Stop the instance
+Stop the instance:
+
+```sh
 sudo -Hu pleroma "./bin/pleroma stop"
 ```
 

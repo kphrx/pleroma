@@ -5,7 +5,11 @@
 defmodule Pleroma.Web.OAuth.AppTest do
   use Pleroma.DataCase, async: true
 
+  alias Pleroma.MFA.Token, as: MFAToken
   alias Pleroma.Web.OAuth.App
+  alias Pleroma.Web.OAuth.Authorization
+  alias Pleroma.Web.OAuth.Token
+  alias Pleroma.Web.Push.Subscription
   import Pleroma.Factory
 
   describe "get_or_make/2" do
@@ -57,29 +61,32 @@ defmodule Pleroma.Web.OAuth.AppTest do
   test "removes orphaned apps" do
     attrs = %{client_name: "Mastodon-Local", redirect_uris: "."}
     {:ok, %App{} = old_app} = App.get_or_make(attrs, ["write"])
+    authorization = insert(:oauth_authorization, app: old_app)
+    token = insert(:oauth_token, app: old_app)
+    mfa_token = insert(:mfa_token, authorization: authorization)
+    push_subscription = insert(:push_subscription, token: token)
 
-    # backdate the old app so it's within the threshold for being cleaned up
-    one_hour_ago = DateTime.add(DateTime.utc_now(), -3600)
+    user = insert(:user)
+    attrs = %{client_name: "OldButValid", redirect_uris: ".", user_id: user.id}
+    {:ok, %App{} = old_owned_app} = App.get_or_make(attrs, ["write"])
+
+    one_hour_ago = NaiveDateTime.add(NaiveDateTime.utc_now(), -3600)
 
     {:ok, _} =
-      "UPDATE apps SET inserted_at = $1, updated_at = $1 WHERE id = $2"
-      |> Pleroma.Repo.query([one_hour_ago, old_app.id])
+      "UPDATE apps SET inserted_at = $1, updated_at = $1 WHERE id IN ($2, $3)"
+      |> Repo.query([one_hour_ago, old_app.id, old_owned_app.id])
 
-    # Create the new app after backdating the old one
     attrs = %{client_name: "PleromaFE", redirect_uris: "."}
-    {:ok, %App{} = app} = App.get_or_make(attrs, ["write"])
-
-    # Ensure the new app has a recent timestamp
-    now = DateTime.utc_now()
-
-    {:ok, _} =
-      "UPDATE apps SET inserted_at = $1, updated_at = $1 WHERE id = $2"
-      |> Pleroma.Repo.query([now, app.id])
+    {:ok, %App{} = recent_app} = App.get_or_make(attrs, ["write"])
 
     App.remove_orphans()
 
-    assert [returned_app] = Pleroma.Repo.all(App)
-    assert returned_app.client_name == "PleromaFE"
-    assert returned_app.id == app.id
+    refute Repo.get(App, old_app.id)
+    refute Repo.get(Authorization, authorization.id)
+    refute Repo.get(Token, token.id)
+    refute Repo.get(MFAToken, mfa_token.id)
+    refute Repo.get(Subscription, push_subscription.id)
+    assert Repo.get(App, recent_app.id)
+    assert Repo.get(App, old_owned_app.id)
   end
 end

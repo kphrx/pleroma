@@ -75,6 +75,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
       Pleroma.Docs.JSON.compiled_descriptions()
       |> Enum.filter(&allowed_config?(&1, :whitelist))
       |> Enum.reject(&allowed_config?(&1, :blacklist))
+      |> Enum.reject(&ConfigDB.static?/1)
 
     json(conn, translate_descriptions(descriptions))
   end
@@ -92,7 +93,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
 
   def show(conn, _params) do
     with :ok <- configurable_from_database() do
-      configs = ConfigDB.get_all_as_keyword()
+      configs = ConfigDB.get_all_as_keyword(exclude_static: true)
 
       merged =
         Config.Holder.default_config()
@@ -123,6 +124,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
           end)
         end)
         |> List.flatten()
+        |> Enum.reject(&ConfigDB.static?/1)
 
       render(conn, "index.json", %{
         configs: merged,
@@ -137,6 +139,7 @@ defmodule Pleroma.Web.AdminAPI.ConfigController do
         configs
         |> Enum.filter(&allowed_config?(&1, :whitelist))
         |> Enum.reject(&allowed_config?(&1, :blacklist))
+        |> Enum.reject(&(ConfigDB.static?(&1) and not &1[:delete]))
         |> Enum.map(fn
           %{group: group, key: key, delete: true} = params ->
             ConfigDB.delete(%{group: group, key: key, subkeys: params[:subkeys]})

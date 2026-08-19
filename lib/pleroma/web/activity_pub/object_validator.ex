@@ -118,6 +118,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
       when objtype in ~w[Question Answer Audio Video Image Event Article Note Page] do
     with {:ok, object_data} <-
            object
+           |> CommonFixes.maybe_set_attributed_to_from_activity(create_activity)
            |> CommonFixes.maybe_add_language_from_activity(create_activity)
            |> cast_and_apply_and_stringify_with_history(),
          meta = Keyword.put(meta, :object_data, object_data),
@@ -172,6 +173,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
          {_, {:ok, object_data, _}} <-
            {:object_validation,
             object
+            |> CommonFixes.maybe_set_attributed_to_from_activity(update_activity)
             |> CommonFixes.maybe_add_language_from_activity(update_activity)
             |> validate(meta)},
          meta = Keyword.put(meta, :object_data, object_data),

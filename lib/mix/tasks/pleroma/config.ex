@@ -335,9 +335,12 @@ defmodule Mix.Tasks.Pleroma.Config do
     group
     |> Pleroma.Config.Loader.filter_group(settings)
     |> Enum.each(fn {key, value} ->
-      {:ok, _} = ConfigDB.update_or_create(%{group: group, key: key, value: value})
-
-      shell_info("Settings for key #{key} migrated.")
+      if ConfigDB.static?(group, key) do
+        shell_info("Settings for key #{key} must remain in static configuration; skipping.")
+      else
+        {:ok, _} = ConfigDB.update_or_create(%{group: group, key: key, value: value})
+        shell_info("Settings for key #{key} migrated.")
+      end
     end)
 
     shell_info("Settings for group #{inspect(group)} migrated.")

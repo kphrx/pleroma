@@ -82,8 +82,15 @@ defmodule Pleroma.Web.ApiSpec.Admin.UserOperation do
                   properties: %{
                     nickname: %Schema{type: :string},
                     email: %Schema{type: :string},
-                    password: %Schema{type: :string}
-                  }
+                    password: %Schema{
+                      type: :string,
+                      description:
+                        "Optional. When omitted, a `password_reset_link` is returned, " <>
+                          "allowing the user to set their own password. When provided, " <>
+                          "it must not be empty."
+                    }
+                  },
+                  required: [:nickname, :email]
                 }
               }
             }
@@ -102,7 +109,8 @@ defmodule Pleroma.Web.ApiSpec.Admin.UserOperation do
                   type: :object,
                   properties: %{
                     email: %Schema{type: :string, format: :email},
-                    nickname: %Schema{type: :string}
+                    nickname: %Schema{type: :string},
+                    password_reset_link: %Schema{type: :string}
                   }
                 }
               }

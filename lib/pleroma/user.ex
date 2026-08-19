@@ -39,6 +39,7 @@ defmodule Pleroma.User do
   alias Pleroma.Web.Endpoint
   alias Pleroma.Web.OAuth
   alias Pleroma.Web.RelMe
+  alias Pleroma.Webhook.Notify
   alias Pleroma.Workers.BackgroundWorker
   alias Pleroma.Workers.DeleteWorker
   alias Pleroma.Workers.UserRefreshWorker
@@ -326,7 +327,7 @@ defmodule Pleroma.User do
   @spec visible_for(User.t(), User.t() | nil) ::
           :visible
           | :invisible
-          | :restricted_unauthenticated
+          | :restrict_unauthenticated
           | :deactivated
           | :confirmation_pending
   def visible_for(user, for_user \\ nil)
@@ -987,6 +988,7 @@ defmodule Pleroma.User do
   @doc "Inserts provided changeset, performs post-registration actions (confirmation email sending etc.)"
   def register(%Ecto.Changeset{} = changeset) do
     with {:ok, user} <- Repo.insert(changeset) do
+      Notify.trigger_webhooks(user, :"account.created")
       post_register_action(user)
     end
   end
@@ -1969,6 +1971,12 @@ defmodule Pleroma.User do
   end
 
   def approve(%User{} = user), do: {:ok, user}
+
+  def reject(%User{is_approved: false} = user) do
+    delete(user)
+  end
+
+  def reject(%User{} = _user), do: {:error, "User is approved"}
 
   def confirm(users) when is_list(users) do
     Repo.transaction(fn ->

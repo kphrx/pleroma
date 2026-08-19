@@ -1,0 +1,94 @@
+# Pleroma: A lightweight social networking server
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
+# SPDX-License-Identifier: AGPL-3.0-only
+
+defmodule Pleroma.WebhookTest do
+  use Pleroma.DataCase, async: true
+
+  alias Pleroma.Webhook
+
+  test "creating a webhook" do
+    {:ok, %{id: id}} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+
+    assert %{url: "https://example.com/webhook"} = Webhook.get(id)
+  end
+
+  test "editing a webhook" do
+    {:ok, %{id: id} = webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+
+    Webhook.update(webhook, %{events: [:"account.created"]})
+
+    assert %{events: [:"account.created"]} = Webhook.get(id)
+  end
+
+  test "rejects invalid events" do
+    assert {:error, _changeset} =
+             Webhook.create(%{url: "https://example.com/webhook", events: [:"status.created"]})
+
+    {:ok, webhook} =
+      Webhook.create(%{url: "https://example.com/valid-webhook", events: [:"report.created"]})
+
+    assert {:error, _changeset} = Webhook.update(webhook, %{events: [:"status.created"]})
+  end
+
+  test "rejects URLs longer than the database column" do
+    url = "https://example.com/" <> String.duplicate("a", 256)
+
+    assert {:error, changeset} =
+             Webhook.create(%{url: url, events: [:"report.created"]})
+
+    assert %{url: ["should be at most 255 character(s)"]} = errors_on(changeset)
+  end
+
+  test "rejects empty events for non-internal webhooks" do
+    assert {:error, changeset} = Webhook.create(%{url: "https://example.com/webhook", events: []})
+    assert %{events: ["can't be blank"]} = errors_on(changeset)
+
+    {:ok, webhook} =
+      Webhook.create(%{url: "https://example.com/valid-webhook", events: [:"report.created"]})
+
+    assert {:error, changeset} = Webhook.update(webhook, %{events: []})
+    assert %{events: ["can't be blank"]} = errors_on(changeset)
+
+    assert {:ok, _webhook} =
+             Webhook.create(%{
+               url: "https://example.com/internal-webhook",
+               events: [],
+               internal: true
+             })
+  end
+
+  test "filter webhooks by type" do
+    {:ok, %{id: id1}} =
+      Webhook.create(%{url: "https://example.com/webhook1", events: [:"report.created"]})
+
+    {:ok, %{id: id2}} =
+      Webhook.create(%{
+        url: "https://example.com/webhook2",
+        events: [:"account.created", :"report.created"]
+      })
+
+    Webhook.create(%{url: "https://example.com/webhook3", events: [:"account.created"]})
+
+    assert [%{id: ^id1}, %{id: ^id2}] = Webhook.get_by_type(:"report.created")
+  end
+
+  test "change webhook state" do
+    {:ok, %{id: id, enabled: true} = webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+
+    Webhook.set_enabled(webhook, false)
+    assert %{enabled: false} = Webhook.get(id)
+  end
+
+  test "rotate webhook secrets" do
+    {:ok, %{id: id, secret: secret} = webhook} =
+      Webhook.create(%{url: "https://example.com/webhook", events: [:"report.created"]})
+
+    Webhook.rotate_secret(webhook)
+    %{secret: new_secret} = Webhook.get(id)
+    assert secret != new_secret
+  end
+end

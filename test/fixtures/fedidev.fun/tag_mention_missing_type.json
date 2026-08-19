@@ -1,0 +1,31 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/tag-mention-missing-type",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:41:01Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-tag-mention-missing-type",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:41:01Z",
+    "content": "mention without type",
+    "tag": [
+      {
+        "name": "@bob",
+        "href": "https://remote.example/users/bob"
+      }
+    ]
+  }
+}
+

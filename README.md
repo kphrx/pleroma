@@ -1,4 +1,4 @@
-<img src="https://git.pleroma.social/attachments/06a95f5a-7cac-42ad-8b1d-1483f1739f38" width="300px" />
+<img src="https://git.pleroma.social/pleroma/pleroma/raw/branch/develop/logo-with-name.png" width="300px" />
 
 ## About 
 

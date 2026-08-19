@@ -1,0 +1,64 @@
+when:
+  - event: pull_request
+    path:
+      - ".woodpecker/**"
+      - "lib/pleroma/search/**"
+      - "test/pleroma/search/**"
+      - "mix.exs"
+      - "mix.lock"
+    evaluate: 'CI_COMMIT_SOURCE_BRANCH != "weblate"'
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path:
+      - ".woodpecker/**"
+      - "lib/pleroma/search/**"
+      - "test/pleroma/search/**"
+      - "mix.exs"
+      - "mix.lock"
+
+depends_on:
+  - lint
+
+labels:
+  platform: linux/amd64
+
+variables:
+  script_file_entrypoint: &script_file_entrypoint
+    - /bin/sh
+    - -c
+    - 'printf "%s" "$CI_SCRIPT" | base64 -d > /tmp/ci-script.sh && /bin/sh -xe /tmp/ci-script.sh'
+
+steps:
+  paradedb-integration:
+    image: docker.io/elixir:1.19-otp-28-alpine
+    entrypoint: *script_file_entrypoint
+    environment:
+      MIX_ENV: test
+      VIX_COMPILATION_MODE: PLATFORM_PROVIDED_LIBVIPS
+      DB_HOST: postgres
+      DB_PORT: 5432
+      PARADEDB_TEST_URL: postgres://postgres:postgres@paradedb:5432/paradedb
+    commands:
+      - apk add --no-cache build-base cmake exiftool ffmpeg vips-dev file-dev git openssl postgresql-client
+      - mix local.hex --force
+      - mix local.rebar --force
+      - mix deps.get
+      - timeout 60 sh -c 'until pg_isready -h postgres -U postgres -d pleroma_test; do sleep 1; done' || { echo "PostgreSQL did not become ready" >&2; exit 1; }
+      - timeout 60 sh -c 'until pg_isready -h paradedb -U postgres -d paradedb; do sleep 1; done' || { echo "ParadeDB did not become ready" >&2; exit 1; }
+      - mix ecto.create
+      - mix ecto.migrate
+      - mix test --include integration test/pleroma/search/parade_db_integration_test.exs
+
+services:
+  postgres:
+    image: docker.io/postgres:13-alpine
+    environment:
+      POSTGRES_DB: pleroma_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+  paradedb:
+    image: docker.io/paradedb/paradedb:0.24.3-pg15@sha256:997d62f6c2605becb7c45878af3f8c8c698f355006b675b3ce212d4eb2d14f2e
+    environment:
+      POSTGRES_DB: paradedb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres

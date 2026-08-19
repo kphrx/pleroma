@@ -4,7 +4,7 @@
 
 ExUnit.configure(capture_log: true, max_cases: System.schedulers_online())
 
-ExUnit.start(exclude: [:federated])
+ExUnit.start(exclude: [:federated, :integration])
 
 if match?({:unix, :darwin}, :os.type()) do
   excluded = ExUnit.configuration() |> Keyword.get(:exclude, [])

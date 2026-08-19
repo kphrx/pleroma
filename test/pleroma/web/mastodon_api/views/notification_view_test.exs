@@ -65,6 +65,15 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     }
 
     test_notifications_rendering([notification], recipient, [expected])
+
+    grouped =
+      NotificationView.render("grouped_index.json", %{
+        notifications: [notification],
+        for: recipient
+      })
+
+    assert [group] = grouped.notification_groups
+    assert group.chat_message == expected.chat_message
   end
 
   test "Mention notification" do
@@ -182,6 +191,16 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     }
 
     test_notifications_rendering([notification], follower, [expected])
+
+    grouped =
+      NotificationView.render("grouped_index.json", %{
+        notifications: [notification],
+        for: follower
+      })
+
+    assert [group] = grouped.notification_groups
+    assert group.target_id == new_user.id
+    assert Enum.any?(grouped.accounts, &(&1.id == new_user.id))
   end
 
   test "EmojiReact notification" do
@@ -210,6 +229,13 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     }
 
     test_notifications_rendering([notification], user, [expected])
+
+    grouped =
+      NotificationView.render("grouped_index.json", %{notifications: [notification], for: user})
+
+    assert [group] = grouped.notification_groups
+    assert group.emoji == expected.emoji
+    assert group.emoji_url == expected.emoji_url
   end
 
   test "EmojiReact custom emoji notification" do
@@ -295,6 +321,15 @@ defmodule Pleroma.Web.MastodonAPI.NotificationViewTest do
     }
 
     test_notifications_rendering([notification], moderator_user, [expected])
+
+    grouped =
+      NotificationView.render("grouped_index.json", %{
+        notifications: [notification],
+        for: moderator_user
+      })
+
+    assert [group] = grouped.notification_groups
+    assert group.report == expected.report
   end
 
   test "Edit notification" do
