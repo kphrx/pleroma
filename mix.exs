@@ -201,7 +201,7 @@ defmodule Pleroma.Mixfile do
       {:elixir_make, "~> 0.7.8", override: true},
       {:blurhash, "~> 0.1.0", hex: :rinpatch_blurhash},
       {:exile, "~> 0.10.0"},
-      {:bandit, "~> 1.11.1"},
+      {:bandit, "~> 1.12"},
       {:websock_adapter, "~> 0.5.8"},
       {:oban_live_dashboard, "~> 0.1.1"},
       {:multipart, "~> 0.4.0", optional: true},
