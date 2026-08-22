@@ -12,7 +12,7 @@ defmodule Pleroma.ReverseProxy do
   @keep_resp_headers @resp_cache_headers ++
                        ~w(content-length content-type content-disposition content-encoding) ++
                        ~w(content-range accept-ranges vary)
-  @default_cache_control_header "public, max-age=1209600, immutable"
+  @default_cache_control_header "public, max-age=1209600, immutable, no-transform"
   @valid_resp_codes [200, 206, 304]
   @max_read_duration :timer.seconds(30)
   @max_body_length :infinity
@@ -22,6 +22,16 @@ defmodule Pleroma.ReverseProxy do
   @allowed_mime_types Pleroma.Config.get([Pleroma.Upload, :allowed_mime_types], [])
 
   @cachex Pleroma.Config.get([:cachex, :provider], Cachex)
+
+  defmodule StreamError do
+    @moduledoc false
+    defexception [:url, :reason]
+
+    @impl true
+    def message(%{url: url, reason: reason}) do
+      "reverse proxy stream from #{url} failed: #{inspect(reason)}"
+    end
+  end
 
   def max_read_duration_default, do: @max_read_duration
   def default_cache_control_header, do: @default_cache_control_header
@@ -69,11 +79,15 @@ defmodule Pleroma.ReverseProxy do
   @default_options [pool: :media]
 
   @inline_content_types [
+    "image/apng",
+    "image/avif",
+    "image/bmp",
     "image/gif",
     "image/jpeg",
     "image/jpg",
     "image/png",
     "image/svg+xml",
+    "image/webp",
     "audio/mpeg",
     "audio/mp3",
     "video/webm",
@@ -110,12 +124,8 @@ defmodule Pleroma.ReverseProxy do
       end
 
     with {:ok, nil} <- @cachex.get(:failed_proxy_url_cache, url),
-         {:ok, code, headers, client} <- request(method, url, req_headers, client_opts),
-         :ok <-
-           header_length_constraint(
-             headers,
-             Keyword.get(opts, :max_body_length, @max_body_length)
-           ) do
+         {:ok, code, headers, client} <-
+           request_with_constraints(method, url, req_headers, client_opts, opts) do
       response(conn, client, url, code, headers, opts)
     else
       {:ok, true} ->
@@ -170,7 +180,8 @@ defmodule Pleroma.ReverseProxy do
       {:ok, code, headers} when code in @valid_resp_codes ->
         {:ok, code, downcase_headers(headers)}
 
-      {:ok, code, _, _} ->
+      {:ok, code, _, client} ->
+        client().close(client)
         {:error, {:invalid_http_response, code}}
 
       {:ok, code, _} ->
@@ -181,13 +192,38 @@ defmodule Pleroma.ReverseProxy do
     end
   end
 
+  defp request_with_constraints(method, url, headers, client_opts, opts) do
+    method
+    |> request(url, headers, client_opts)
+    |> constrain_response(Keyword.get(opts, :max_body_length, @max_body_length))
+  end
+
+  defp constrain_response({:ok, code, headers, client}, limit) do
+    case header_length_constraint(headers, limit) do
+      {:ok, headers} ->
+        {:ok, code, headers, client}
+
+      error ->
+        client().close(client)
+        error
+    end
+  end
+
+  defp constrain_response({:ok, code, headers}, limit) do
+    case header_length_constraint(headers, limit) do
+      {:ok, headers} -> {:ok, code, headers}
+      error -> error
+    end
+  end
+
+  defp constrain_response(response, _limit), do: response
+
   defp response(conn, client, url, status, headers, opts) do
     Logger.debug("#{__MODULE__} #{status} #{url} #{inspect(headers)}")
 
     result =
       conn
       |> put_resp_headers(build_resp_headers(headers, opts))
-      |> streaming_compat
       |> send_chunked(status)
       |> chunk_reply(client, opts)
 
@@ -195,17 +231,18 @@ defmodule Pleroma.ReverseProxy do
       {:ok, conn} ->
         halt(conn)
 
-      {:error, :closed, conn} ->
+      {:error, {:downstream, _error}, conn} ->
         client().close(client)
         halt(conn)
 
-      {:error, error, conn} ->
+      {:error, {:upstream, error}, conn} ->
         Logger.warning(
           "#{__MODULE__} request to #{url} failed while reading/chunking: #{inspect(error)}"
         )
 
         client().close(client)
-        halt(conn)
+        track_failed_url(url, error, opts)
+        raise_stream_error(conn, url, error)
     end
   end
 
@@ -227,11 +264,19 @@ defmodule Pleroma.ReverseProxy do
              sent_so_far,
              Keyword.get(opts, :max_body_length, @max_body_length)
            ),
-         {:ok, conn} <- chunk(conn, data) do
+         {:ok, conn} <- write_chunk(conn, data) do
       chunk_reply(conn, client, opts, sent_so_far, duration)
     else
       :done -> {:ok, conn}
-      {:error, error} -> {:error, error, conn}
+      {:error, {source, error}} -> {:error, {source, error}, conn}
+      {:error, error} -> {:error, {:upstream, error}, conn}
+    end
+  end
+
+  defp write_chunk(conn, data) do
+    case chunk(conn, data) do
+      {:error, error} -> {:error, {:downstream, error}}
+      result -> result
     end
   end
 
@@ -281,7 +326,7 @@ defmodule Pleroma.ReverseProxy do
     |> Enum.filter(fn {k, _} -> k in @keep_req_headers end)
     |> build_req_range_or_encoding_header(opts)
     |> build_req_user_agent_header(opts)
-    |> Keyword.merge(Keyword.get(opts, :req_headers, []))
+    |> merge_headers(Keyword.get(opts, :req_headers, []))
   end
 
   # Disable content-encoding if any @range_headers are requested (see #1823).
@@ -310,7 +355,30 @@ defmodule Pleroma.ReverseProxy do
     |> build_resp_cache_headers(opts)
     |> sanitise_content_type()
     |> build_resp_content_disposition_header(opts)
-    |> Keyword.merge(Keyword.get(opts, :resp_headers, []))
+    |> merge_headers(Keyword.get(opts, :resp_headers, []))
+    |> ensure_no_transform()
+  end
+
+  defp merge_headers(headers, extra_headers) do
+    Enum.reduce(extra_headers, headers, fn {key, value}, headers ->
+      List.keystore(headers, String.downcase(key), 0, {String.downcase(key), value})
+    end)
+  end
+
+  defp ensure_no_transform(headers) do
+    {_, cache_control} =
+      List.keyfind(headers, "cache-control", 0, {"cache-control", @default_cache_control_header})
+
+    directives =
+      cache_control
+      |> String.split(",")
+      |> Enum.map(&(&1 |> String.trim() |> String.downcase()))
+
+    if "no-transform" in directives do
+      headers
+    else
+      replace_header(headers, "cache-control", cache_control <> ", no-transform")
+    end
   end
 
   defp sanitise_content_type(headers) do
@@ -384,29 +452,46 @@ defmodule Pleroma.ReverseProxy do
 
       disposition = "attachment; filename=\"#{name}\""
 
-      List.keystore(headers, "content-disposition", 0, {"content-disposition", disposition})
+      replace_header(headers, "content-disposition", disposition)
     else
       headers
     end
   end
 
-  defp header_length_constraint(headers, limit) when is_integer(limit) and limit > 0 do
-    with {_, size} <- List.keyfind(headers, "content-length", 0),
-         {size, _} <- Integer.parse(size),
-         true <- size <= limit do
-      :ok
-    else
-      false ->
-        {:error, :body_too_large}
+  defp replace_header(headers, key, value) do
+    [{key, value} | Enum.reject(headers, fn {header, _} -> header == key end)]
+  end
+
+  defp header_length_constraint(headers, limit) do
+    lengths =
+      for {"content-length", value} <- headers,
+          do: parse_content_length(value)
+
+    case Enum.uniq(lengths) do
+      [] ->
+        {:ok, headers}
+
+      [size] when is_integer(size) ->
+        case body_size_constraint(size, limit) do
+          :ok -> {:ok, replace_header(headers, "content-length", to_string(size))}
+          error -> error
+        end
 
       _ ->
-        :ok
+        {:error, :invalid_content_length}
     end
   end
 
-  defp header_length_constraint(_, _), do: :ok
+  defp parse_content_length(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {size, ""} when size >= 0 -> size
+      _ -> :invalid
+    end
+  end
 
-  defp body_size_constraint(size, limit) when is_integer(limit) and limit > 0 and size >= limit do
+  defp parse_content_length(_value), do: :invalid
+
+  defp body_size_constraint(size, limit) when is_integer(limit) and limit > 0 and size > limit do
     {:error, :body_too_large}
   end
 
@@ -431,6 +516,40 @@ defmodule Pleroma.ReverseProxy do
 
   defp client, do: Pleroma.ReverseProxy.Client.Wrapper
 
+  # Neither Plug adapter exposes a public way to abort a committed response.
+  # Cowboy finalizes chunked HTTP/1 responses when the request process exits,
+  # so terminate the connection first to leave the response visibly incomplete.
+  defp raise_stream_error(
+         %Plug.Conn{adapter: {Plug.Cowboy.Conn, %{pid: connection_pid}}} = conn,
+         url,
+         error
+       ) do
+    if Plug.Conn.get_http_protocol(conn) in [:"HTTP/1.0", :"HTTP/1.1"] do
+      Process.exit(connection_pid, :kill)
+    end
+
+    raise StreamError, url: url, reason: error
+  end
+
+  # Bandit turns this exception into RST_STREAM; a regular exception sends an
+  # empty DATA frame with END_STREAM and makes the partial body look complete.
+  defp raise_stream_error(
+         %Plug.Conn{
+           adapter: {Bandit.Adapter, %{transport: %{stream_id: stream_id}}}
+         },
+         url,
+         error
+       ) do
+    raise Bandit.HTTP2.Errors.StreamError,
+      message: StreamError.message(%StreamError{url: url, reason: error}),
+      error_code: Bandit.HTTP2.Errors.internal_error(),
+      stream_id: stream_id
+  end
+
+  defp raise_stream_error(_conn, url, error) do
+    raise StreamError, url: url, reason: error
+  end
+
   defp track_failed_url(url, error, opts) do
     ttl =
       unless error in [:body_too_large, 400, 204] do
@@ -440,19 +559,6 @@ defmodule Pleroma.ReverseProxy do
       end
 
     @cachex.put(:failed_proxy_url_cache, url, true, ttl: ttl)
-  end
-
-  # When Cowboy handles a chunked response with a content-length header it streams
-  # over HTTP 1.1 instead of chunking. Bandit cannot stream over HTTP 1.1 so the header
-  # must be stripped or it breaks RFC compliance for Transfer Encoding: Chunked. RFC9112§6.2
-  #
-  # HTTP2 is always streamed for all adapters.
-  defp streaming_compat(conn) do
-    with Phoenix.Endpoint.Cowboy2Adapter <- Pleroma.Web.Endpoint.config(:adapter) do
-      conn
-    else
-      _ -> delete_resp_header(conn, "content-length")
-    end
   end
 
   # Only when Tesla adapter is Hackney or Finch does the URL

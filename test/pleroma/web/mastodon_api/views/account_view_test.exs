@@ -545,11 +545,9 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
     test "represent a relationship for the blocking and blocked user with expiry" do
       user = insert(:user)
       other_user = insert(:user)
-      date = DateTime.utc_now() |> DateTime.add(24 * 60 * 60) |> DateTime.truncate(:second)
-
       {:ok, user, other_user} = User.follow(user, other_user)
       {:ok, _subscription} = User.subscribe(user, other_user)
-      {:ok, _user_relationship} = User.block(user, other_user, %{duration: 24 * 60 * 60})
+      {:ok, user_relationship} = User.block(user, other_user, %{duration: 24 * 60 * 60})
       {:ok, _user_relationship} = User.block(other_user, user)
 
       expected =
@@ -558,7 +556,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
           %{
             following: false,
             blocking: true,
-            block_expires_at: date,
+            block_expires_at: user_relationship.expires_at,
             blocked_by: true,
             id: to_string(other_user.id)
           }
@@ -570,17 +568,19 @@ defmodule Pleroma.Web.MastodonAPI.AccountViewTest do
     test "represent a relationship for the muting user with expiry" do
       user = insert(:user)
       other_user = insert(:user)
-      date = DateTime.utc_now() |> DateTime.add(24 * 60 * 60) |> DateTime.truncate(:second)
 
-      {:ok, _user_relationship} =
+      {:ok, user_relationships} =
         User.mute(user, other_user, %{notifications: true, duration: 24 * 60 * 60})
+
+      user_relationship =
+        Enum.find(user_relationships, &(&1.relationship_type == :mute))
 
       expected =
         Map.merge(
           @blank_response,
           %{
             muting: true,
-            mute_expires_at: date,
+            mute_expires_at: user_relationship.expires_at,
             muting_notifications: true,
             id: to_string(other_user.id)
           }

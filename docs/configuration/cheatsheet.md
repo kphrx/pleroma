@@ -573,7 +573,8 @@ Settings for HTTP connection pool.
 
 * `:connection_acquisition_wait` - Timeout to acquire a connection from pool.The total max time is this value multiplied by the number of retries.
 * `connection_acquisition_retries` - Number of attempts to acquire the connection from the pool if it is overloaded. Each attempt is timed `:connection_acquisition_wait` apart.
-* `:max_connections` - Maximum number of connections in the pool.
+* `:max_connections` - Maximum total number of connections in the pool. HTTP/1 origins may use multiple connections within this limit, while HTTP/2 connections are multiplexed.
+* `:max_idle_time` - Time before an unused connection is closed.
 * `:connect_timeout` - Timeout to connect to the host.
 * `:reclaim_multiplier` - Multiplied by `:max_connections` this will be the maximum number of idle connections that will be reclaimed in case the pool is overloaded.
 
@@ -858,12 +859,14 @@ Web Push Notifications configuration. You can use the mix task `mix web_push.gen
 * ``private_key``: VAPID private key
 
 ## :logger
-* `backends`: `:console` is used to send logs to stdout, `{ExSyslogger, :ex_syslogger}` to log to syslog
+* Logging to console/stdout is done by default, use `{ExSyslogger, :ex_syslogger}` to log to syslog
 
 An example to enable ONLY ExSyslogger (f/ex in ``prod.secret.exs``) with info and debug suppressed:
 ```elixir
-config :logger,
+config :pleroma, :logger,
   backends: [{ExSyslogger, :ex_syslogger}]
+
+config :logger, default_handler: false
 
 config :logger, :ex_syslogger,
   level: :warning
@@ -871,8 +874,8 @@ config :logger, :ex_syslogger,
 
 Another example, keeping console output and adding the pid to syslog output:
 ```elixir
-config :logger,
-  backends: [:console, {ExSyslogger, :ex_syslogger}]
+config :pleroma, :logger,
+  backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :warning,
@@ -883,22 +886,21 @@ See: [logger’s documentation](https://hexdocs.pm/logger/Logger.html) and [ex_s
 
 An example of logging info to local syslog, but debug to console:
 ```elixir
-config :logger,
-  backends: [ {ExSyslogger, :ex_syslogger}, :console ],
-  level: :info
+config :pleroma, :logger,
+  backends: [{ExSyslogger, :ex_syslogger}]
 
 config :logger, :ex_syslogger,
   level: :info,
   ident: "pleroma",
   format: "$metadata[$level] $message"
 
-config :logger, :console,
-  level: :debug,
+config :logger, :default_handler,
+  level: :debug
+
+config :logger, :default_formatter,
   format: "\n$time $metadata[$level] $message\n",
   metadata: [:request_id]
 ```
-
-
 
 ## Database options
 

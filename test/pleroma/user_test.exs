@@ -11,12 +11,14 @@ defmodule Pleroma.UserTest do
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.CommonAPI
+  alias Pleroma.Webhook.Notify
 
   use Pleroma.DataCase, async: false
   use Oban.Testing, repo: Pleroma.Repo
 
   import Pleroma.Factory
   import ExUnit.CaptureLog
+  import Mock
   import Swoosh.TestAssertions
 
   setup do
@@ -718,6 +720,14 @@ defmodule Pleroma.UserTest do
       {:ok, user} = Repo.insert(changeset)
 
       assert user.is_confirmed
+    end
+
+    test_with_mock "triggers webhooks", Notify, trigger_webhooks: fn _, _ -> nil end do
+      cng = User.register_changeset(%User{}, @full_user_data)
+
+      {:ok, registered_user} = User.register(cng)
+
+      assert_called(Notify.trigger_webhooks(registered_user, :"account.created"))
     end
   end
 
@@ -1988,14 +1998,26 @@ defmodule Pleroma.UserTest do
   end
 
   describe "caching" do
+    test "set_cache stores friends under the AP ID cache key" do
+      user = insert(:user)
+
+      User.set_cache(user)
+
+      assert {:ok, []} = Cachex.get(:user_cache, "friends_ap_ids:#{user.ap_id}")
+      assert {:ok, nil} = Cachex.get(:user_cache, "friends_ap_ids:#{user.nickname}")
+    end
+
     test "invalidate_cache works" do
       user = insert(:user)
 
       User.set_cache(user)
+      User.get_cached_by_id(user.id)
       User.invalidate_cache(user)
 
       {:ok, nil} = Cachex.get(:user_cache, "ap_id:#{user.ap_id}")
       {:ok, nil} = Cachex.get(:user_cache, "nickname:#{user.nickname}")
+      {:ok, nil} = Cachex.get(:user_cache, "friends_ap_ids:#{user.ap_id}")
+      {:ok, nil} = Cachex.get(:user_cache, "id:#{user.id}")
     end
 
     test "User.delete() plugs any possible zombie objects" do

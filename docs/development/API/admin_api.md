@@ -80,10 +80,24 @@ The `/api/v1/pleroma/admin/*` path is backwards compatible with `/api/pleroma/ad
     {
       `nickname`,
       `email`,
-      `password`
+      `password` (optional; when provided, must not be empty)
     }
   ]
-- Response: Array of user objects
+- Response: Array of user objects. When a user is created without a `password`, `data`
+  object contains a `password_reset_link` the user can follow to set their own password.
+
+```json
+[
+  {
+    "data": {
+      "nickname": string,
+      "email": string,
+      "password_reset_link": string (optional)
+    },
+    "type": "success"
+  }
+]
+```
 
 ## `POST /api/v1/pleroma/admin/users/follow`
 
@@ -1839,3 +1853,92 @@ Note that this differs from the Mastodon API variant: Mastodon API only returns 
 ```json
 {}
 ```
+
+## `GET /api/v1/pleroma/admin/webhooks`
+
+### List webhooks
+
+- Method: `GET`
+- Response:
+
+```json
+[
+  {
+    "enabled": true,
+    "id": "2",
+    "events": ["account.created"],
+    "url": "https://webhook.example/",
+    "secret": "eb85d4ccd8510e78f912743949dc354e8146987d",
+    "updated_at": "2022-10-29T17:44:16.000Z",
+    "created_at": "2022-10-29T17:44:13.000Z"
+  }
+]
+```
+
+## `GET /api/v1/pleroma/admin/webhooks/:id`
+
+### Get an individual webhook
+
+- Method: `GET`
+- Params:
+  - `id`: **string** Webhook ID
+- Response: A webhook
+
+## `POST /api/v1/pleroma/admin/webhooks`
+
+### Create a webhook
+
+- Method: `POST`
+- Params:
+  - `url`: **string** Webhook URL
+  - `events`: **[string]** Types of events to trigger on (`account.created`, `report.created`)
+  - *optional* `enabled`: **boolean** Whether webhook is enabled
+- Response: A webhook
+
+## `PATCH /api/v1/pleroma/admin/webhooks/:id`
+
+### Update a webhook
+
+- Method: `PATCH`
+- Params:
+  - `id`: **string** Webhook ID
+  - *optional* `url`: **string** Webhook URL
+  - *optional* `events`: **[string]** Types of events to trigger on (`account.created`, `report.created`)
+  - *optional* `enabled`: **boolean** Whether webhook is enabled
+- Response: A webhook
+
+## `DELETE /api/v1/pleroma/admin/webhooks/:id`
+
+### Delete a webhook
+
+- Method: `DELETE`
+- Params:
+  - `id`: **string** Webhook ID
+- Response: A webhook
+
+## `POST /api/v1/pleroma/admin/webhooks/:id/enable`
+
+### Activate a webhook
+
+- Method: `POST`
+- Params:
+  - `id`: **string** Webhook ID
+- Response: A webhook
+
+## `POST /api/v1/pleroma/admin/webhooks/:id/disable`
+
+### Deactivate a webhook
+
+- Method: `POST`
+- Params:
+  - `id`: **string** Webhook ID
+- Response: A webhook
+
+## `POST /api/v1/pleroma/admin/webhooks/:id/rotate_secret`
+
+### Rotate webhook signing secret
+
+- Method: `POST`
+- Params:
+  - `id`: **string** Webhook ID
+- Response: A webhook

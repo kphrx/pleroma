@@ -11,6 +11,7 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
 
   alias Pleroma.Integration.WebsocketClient
   alias Pleroma.Web.CommonAPI
+  alias Pleroma.Web.MastodonAPI.StatusView
   alias Pleroma.Web.OAuth
 
   @moduletag needs_streamer: true, capture_log: true
@@ -29,6 +30,48 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
       end
 
     WebsocketClient.start_link(self(), path, headers)
+  end
+
+  defp raw_websocket_handshake(qs, headers) do
+    uri = URI.parse(@path <> qs)
+    port = uri.port || 80
+    path = uri.path <> if(uri.query, do: "?" <> uri.query, else: "")
+
+    default_headers = [
+      {"host", "#{uri.host}:#{port}"},
+      {"upgrade", "websocket"},
+      {"connection", "Upgrade"},
+      {"sec-websocket-key", Base.encode64(:crypto.strong_rand_bytes(16))},
+      {"sec-websocket-version", "13"}
+    ]
+
+    request = [
+      "GET #{path} HTTP/1.1\r\n",
+      Enum.map(default_headers ++ headers, fn {name, value} -> "#{name}: #{value}\r\n" end),
+      "\r\n"
+    ]
+
+    with {:ok, socket} <-
+           :gen_tcp.connect(String.to_charlist(uri.host), port, [:binary, active: false], 1_000),
+         :ok <- :gen_tcp.send(socket, request),
+         {:ok, response} <- :gen_tcp.recv(socket, 0, 1_000) do
+      :gen_tcp.close(socket)
+      {:ok, parse_http_response(response)}
+    end
+  end
+
+  defp parse_http_response(response) do
+    [headers | _] = String.split(response, "\r\n\r\n", parts: 2)
+    [status_line | header_lines] = String.split(headers, "\r\n")
+    [_, status | _] = String.split(status_line, " ")
+
+    headers =
+      Enum.map(header_lines, fn line ->
+        [name, value] = String.split(line, ":", parts: 2)
+        {String.downcase(name), String.trim(value)}
+      end)
+
+    %{status: String.to_integer(status), headers: headers}
   end
 
   defp decode_json(json) do
@@ -85,9 +128,7 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
     assert json["payload"]
     assert {:ok, json} = Jason.decode(json["payload"])
 
-    view_json =
-      Pleroma.Web.MastodonAPI.StatusView.render("show.json", activity: activity, for: nil)
-      |> atom_key_to_string()
+    view_json = atom_key_to_string(StatusView.render("show.json", activity: activity, for: nil))
 
     assert json == view_json
   end
@@ -114,10 +155,7 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
       assert json["payload"]
       assert {:ok, json} = Jason.decode(json["payload"])
 
-      view_json =
-        Pleroma.Web.MastodonAPI.StatusView.render("show.json", activity: activity, for: nil)
-        |> Jason.encode!()
-        |> Jason.decode!()
+      view_json = atom_key_to_string(StatusView.render("show.json", activity: activity, for: nil))
 
       assert json == view_json
     end
@@ -277,6 +315,34 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
 
         Process.sleep(30)
       end)
+    end
+
+    test "echoes the Sec-WebSocket-Protocol token in the handshake", %{token: token} do
+      assert {:ok, %{status: 101, headers: headers}} =
+               raw_websocket_handshake("?stream=user", [
+                 {"sec-websocket-protocol", token.token}
+               ])
+
+      assert {"sec-websocket-protocol", token.token} in headers
+    end
+
+    test "echoes the selected Sec-WebSocket-Protocol token", %{token: token} do
+      assert {:ok, %{status: 101, headers: headers}} =
+               raw_websocket_handshake("?stream=user", [
+                 {"sec-websocket-protocol", "#{token.token}, phoenix"}
+               ])
+
+      assert {"sec-websocket-protocol", token.token} in headers
+    end
+
+    test "does not echo an invalid Sec-WebSocket-Protocol token", %{token: token} do
+      assert {:ok, %{status: 401, headers: headers}} =
+               raw_websocket_handshake("?stream=user", [
+                 {"sec-websocket-protocol", "invalid"}
+               ])
+
+      refute {"sec-websocket-protocol", token.token} in headers
+      refute List.keymember?(headers, "sec-websocket-protocol", 0)
     end
 
     test "prefers sec-websocket-protocol token over query access_token", %{
@@ -450,12 +516,12 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
       assert {:ok, json} = Jason.decode(json["payload"])
 
       view_json =
-        Pleroma.Web.MastodonAPI.StatusView.render("show.json",
-          activity: activity,
-          for: reading_user
+        atom_key_to_string(
+          StatusView.render("show.json",
+            activity: activity,
+            for: reading_user
+          )
         )
-        |> Jason.encode!()
-        |> Jason.decode!()
 
       assert json == view_json
     end
@@ -478,12 +544,12 @@ defmodule Pleroma.Integration.MastodonWebsocketTest do
       activity = Pleroma.Activity.normalize(activity)
 
       view_json =
-        Pleroma.Web.MastodonAPI.StatusView.render("show.json",
-          activity: activity,
-          for: reading_user
+        atom_key_to_string(
+          StatusView.render("show.json",
+            activity: activity,
+            for: reading_user
+          )
         )
-        |> Jason.encode!()
-        |> Jason.decode!()
 
       assert {:ok, %{"event" => "status.update", "payload" => ^view_json}} = decode_json(raw_json)
     end

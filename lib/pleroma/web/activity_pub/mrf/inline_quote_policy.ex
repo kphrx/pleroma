@@ -6,6 +6,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.InlineQuotePolicy do
   @moduledoc "Force a quote line into the message content."
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
 
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   defp build_inline_quote(template, url) do
     quote_line = String.replace(template, "{url}", "<a href=\"#{url}\">#{url}</a>")
 

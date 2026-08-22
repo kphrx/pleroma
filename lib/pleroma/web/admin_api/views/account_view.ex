@@ -88,18 +88,29 @@ defmodule Pleroma.Web.AdminAPI.AccountView do
     }
   end
 
-  def render("created_many.json", %{users: users}) do
-    render_many(users, AccountView, "created.json", as: :user)
+  def render("created_many.json", %{users: users} = assigns) do
+    password_reset_links = Map.get(assigns, :password_reset_links, %{})
+
+    render_many(users, AccountView, "created.json",
+      as: :user,
+      password_reset_links: password_reset_links
+    )
   end
 
-  def render("created.json", %{user: user}) do
-    %{
-      type: "success",
-      code: 200,
-      data: %{
+  def render("created.json", %{user: user} = assigns) do
+    password_reset_links = Map.get(assigns, :password_reset_links, %{})
+
+    data =
+      %{
         nickname: user.nickname,
         email: user.email
       }
+      |> maybe_put_password_reset_link(Map.get(password_reset_links, user.id))
+
+    %{
+      type: "success",
+      code: 200,
+      data: data
     }
   end
 
@@ -118,6 +129,11 @@ defmodule Pleroma.Web.AdminAPI.AccountView do
       }
     }
   end
+
+  defp maybe_put_password_reset_link(data, nil), do: data
+
+  defp maybe_put_password_reset_link(data, link),
+    do: Map.put(data, :password_reset_link, link)
 
   def merge_account_views(%User{} = user) do
     MastodonAPI.AccountView.render("show.json", %{user: user, skip_visibility_check: true})

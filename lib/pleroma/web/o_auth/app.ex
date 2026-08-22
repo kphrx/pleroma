@@ -8,6 +8,7 @@ defmodule Pleroma.Web.OAuth.App do
   import Ecto.Query
   alias Pleroma.Repo
   alias Pleroma.User
+  alias Pleroma.Web.OAuth.Authorization
   alias Pleroma.Web.OAuth.Token
 
   @type t :: %__MODULE__{}
@@ -191,15 +192,26 @@ defmodule Pleroma.Web.OAuth.App do
 
   @spec remove_orphans(pos_integer()) :: :ok
   def remove_orphans(limit \\ 100) do
-    fifteen_mins_ago = DateTime.add(DateTime.utc_now(), -900, :second)
+    fifteen_mins_ago = NaiveDateTime.add(NaiveDateTime.utc_now(), -900)
 
     Repo.transaction(fn ->
+      app_ids =
+        from(a in __MODULE__,
+          where: is_nil(a.user_id) and a.inserted_at < ^fifteen_mins_ago,
+          limit: ^limit,
+          lock: "FOR UPDATE SKIP LOCKED",
+          select: a.id
+        )
+        |> Repo.all()
+
+      # Bulk deletes bypass the schema's association cleanup.
+      from(a in Authorization, where: a.app_id in ^app_ids) |> Repo.delete_all()
+      from(t in Token, where: t.app_id in ^app_ids) |> Repo.delete_all()
+
       from(a in __MODULE__,
-        where: is_nil(a.user_id) and a.inserted_at < ^fifteen_mins_ago,
-        limit: ^limit
+        where: a.id in ^app_ids and is_nil(a.user_id) and a.inserted_at < ^fifteen_mins_ago
       )
-      |> Repo.all()
-      |> Enum.each(&Repo.delete(&1))
+      |> Repo.delete_all()
     end)
 
     :ok

@@ -5,6 +5,7 @@
 defmodule Pleroma.Web.ApiSpec.Schemas.ChatMessage do
   alias OpenApiSpex.Schema
   alias Pleroma.Web.ApiSpec.Schemas.Emoji
+  alias Pleroma.Web.ApiSpec.Schemas.PreviewCard
 
   require OpenApiSpex
 
@@ -22,36 +23,8 @@ defmodule Pleroma.Web.ApiSpec.Schemas.ChatMessage do
       emojis: %Schema{type: :array, items: Emoji},
       attachment: %Schema{type: :object, nullable: true},
       card: %Schema{
-        type: :object,
-        nullable: true,
-        description: "Preview card for links included within status content",
-        required: [:url, :title, :description, :type],
-        properties: %{
-          type: %Schema{
-            type: :string,
-            enum: ["link", "photo", "video", "rich"],
-            description: "The type of the preview card"
-          },
-          provider_name: %Schema{
-            type: :string,
-            nullable: true,
-            description: "The provider of the original resource"
-          },
-          provider_url: %Schema{
-            type: :string,
-            format: :uri,
-            description: "A link to the provider of the original resource"
-          },
-          url: %Schema{type: :string, format: :uri, description: "Location of linked resource"},
-          image: %Schema{
-            type: :string,
-            nullable: true,
-            format: :uri,
-            description: "Preview thumbnail"
-          },
-          title: %Schema{type: :string, description: "Title of linked resource"},
-          description: %Schema{type: :string, description: "Description of preview"}
-        }
+        allOf: [PreviewCard],
+        nullable: true
       },
       unread: %Schema{type: :boolean, description: "Whether a message has been marked as read."}
     },

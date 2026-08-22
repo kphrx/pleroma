@@ -71,6 +71,31 @@ defmodule Pleroma.Config.TransferTaskTest do
     assert assets_env[:mascots] == [a: 1, b: 2]
   end
 
+  test "does not transfer static search configuration" do
+    search_config = Application.get_env(:pleroma, Pleroma.Search)
+    parade_config = Application.get_env(:pleroma, Pleroma.Search.ParadeDB)
+
+    clear_config(:database_config_blacklist, [])
+
+    insert(:config, key: Pleroma.Search, value: [module: Pleroma.Search.ParadeDB])
+
+    insert(:config,
+      key: Pleroma.Search.ParadeDB,
+      value: [url: "postgres://localhost/paradedb"]
+    )
+
+    insert(:config,
+      key: Pleroma.Search.ParadeDB.Repo,
+      value: [pool_size: 50]
+    )
+
+    TransferTask.start_link([])
+
+    assert Application.get_env(:pleroma, Pleroma.Search) == search_config
+    assert Application.get_env(:pleroma, Pleroma.Search.ParadeDB) == parade_config
+    assert Application.get_env(:pleroma, Pleroma.Search.ParadeDB.Repo)[:pool_size] == 2
+  end
+
   describe "pleroma restart" do
     setup do
       on_exit(fn ->

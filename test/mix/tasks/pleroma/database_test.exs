@@ -417,7 +417,8 @@ defmodule Mix.Tasks.Pleroma.DatabaseTest do
                ["user_invite_tokens"],
                ["user_notes"],
                ["user_relationships"],
-               ["users"]
+               ["users"],
+               ["webhooks"]
              ]
     end
 

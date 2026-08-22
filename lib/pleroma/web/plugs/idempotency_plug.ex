@@ -6,6 +6,8 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
   import Phoenix.Controller, only: [json: 2]
   import Plug.Conn
 
+  alias Pleroma.Config
+
   @behaviour Plug
 
   @cachex Pleroma.Config.get([:cachex, :provider], Cachex)
@@ -27,9 +29,11 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
   def call(conn, _), do: conn
 
   def process_request(conn, key) do
-    case @cachex.get(:idempotency_cache, key) do
+    cache_key = {conn.method, conn.request_path, actor_key(conn), key}
+
+    case @cachex.get(:idempotency_cache, cache_key) do
       {:ok, nil} ->
-        cache_resposnse(conn, key)
+        cache_resposnse(conn, key, cache_key)
 
       {:ok, record} ->
         send_cached(conn, key, record)
@@ -39,18 +43,48 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
     end
   end
 
-  defp cache_resposnse(conn, key) do
-    register_before_send(conn, fn conn ->
-      [request_id] = get_resp_header(conn, "x-request-id")
-      content_type = get_content_type(conn)
+  defp cache_resposnse(conn, key, cache_key) do
+    register_before_send(conn, &maybe_cache_response(&1, key, cache_key))
+  end
 
-      record = {request_id, content_type, conn.status, conn.resp_body}
-      {:ok, _} = @cachex.put(:idempotency_cache, key, record)
+  defp maybe_cache_response(
+         %{private: %{skip_idempotency_cache: true}} = conn,
+         _key,
+         _cache_key
+       ),
+       do: conn
 
-      conn
-      |> put_resp_header("idempotency-key", key)
-      |> put_resp_header("x-original-request-id", request_id)
-    end)
+  defp maybe_cache_response(conn, key, cache_key) do
+    [request_id] = get_resp_header(conn, "x-request-id")
+    content_type = get_content_type(conn)
+
+    record = {request_id, content_type, conn.status, conn.resp_body}
+    {:ok, _} = @cachex.put(:idempotency_cache, cache_key, record)
+
+    conn
+    |> put_resp_header("idempotency-key", key)
+    |> put_resp_header("x-original-request-id", request_id)
+  end
+
+  defp actor_key(%{assigns: assigns}) do
+    {principal_key(assigns), token_key(assigns[:token]), staff_privileges()}
+  end
+
+  defp principal_key(%{user: %{id: id} = user}) do
+    {:user, id, Map.get(user, :is_admin), Map.get(user, :is_moderator)}
+  end
+
+  defp principal_key(%{app: %{id: id}}), do: {:app, id}
+  defp principal_key(_assigns), do: nil
+
+  defp token_key(%{id: id} = token), do: {id, token |> Map.get(:scopes, []) |> Enum.sort()}
+  defp token_key(_token), do: nil
+
+  defp staff_privileges do
+    {
+      Config.get([:instance, :admin_privileges], []) |> Enum.sort(),
+      Config.get([:instance, :moderator_privileges], []) |> Enum.sort()
+    }
   end
 
   defp send_cached(conn, key, record) do

@@ -15,6 +15,13 @@ defmodule Pleroma.Mixfile do
       aliases: aliases(),
       deps: deps(),
       test_coverage: [tool: :covertool, summary: true],
+      test_ignore_filters: [
+        "test/credo/check/consistency/file_location.ex",
+        "test/fixtures/config/temp.exported_from_db.secret.exs",
+        "test/fixtures/config/temp.secret.exs",
+        "test/fixtures/modules/good_mrf.ex",
+        "test/fixtures/modules/runtime_module.ex"
+      ],
       # Docs
       name: "Pleroma",
       homepage_url: "https://pleroma.social/",
@@ -147,8 +154,8 @@ defmodule Pleroma.Mixfile do
       {:cachex, "~> 3.6"},
       {:tesla, "~> 1.15"},
       {:castore, "~> 1.0"},
-      {:cowlib, "~> 2.15"},
-      {:gun, "~> 2.2"},
+      {:cowlib, "~> 2.17.1"},
+      {:gun, "~> 2.4.1"},
       {:finch, "~> 0.20"},
       {:jason, "~> 1.4"},
       {:mogrify, "~> 0.9.3", override: true},
@@ -165,6 +172,14 @@ defmodule Pleroma.Mixfile do
       {:gen_smtp, "~> 0.15"},
       {:mua, "~> 0.2.4"},
       {:mail, "~> 0.3.1"},
+      # Fixes intermittent failure to compile due to an old pc version,
+      # upstream hasn't made a release with the fix yet.
+      # https://github.com/Vagabond/erlang-syslog/pull/44
+      {:syslog,
+       git: "https://github.com/Vagabond/erlang-syslog",
+       ref: "614a1fde7a8654bee2815b599bbdaae1bb0323b5",
+       override: true,
+       runtime: false},
       {:ex_syslogger, "~> 1.5"},
       {:floki, "~> 0.38"},
       {:timex, "~> 3.7"},
