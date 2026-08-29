@@ -175,12 +175,11 @@ defmodule Mix.Tasks.Pleroma.Database do
       # Without the --keep-threads option, it's possible that bookmarked
       # objects have been deleted. We remove the corresponding bookmarks.
       """
-      delete from public.bookmarks
-      where id in (
-        select b.id from public.bookmarks b
-        left join public.activities a on b.activity_id = a.id
-        left join public.objects o on a."data" ->> 'object' = o.data ->> 'id'
-        where o.id is null
+      delete from public.bookmarks b
+      where not exists (
+        select 1 from public.activities a
+        where b.activity_id = a.id
+        and not exists (select 1 from public.objects o where a.data ->> 'object' = o.data ->> 'id')
       )
       """
       |> Repo.query([], timeout: :infinity)
@@ -189,34 +188,25 @@ defmodule Mix.Tasks.Pleroma.Database do
     if Keyword.get(options, :prune_orphaned_activities) do
       # Prune activities who link to a single object
       """
-      delete from public.activities
-      where id in (
-        select a.id from public.activities a
-        left join public.objects o on a.data ->> 'object' = o.data ->> 'id'
-        left join public.activities a2 on a.data ->> 'object' = a2.data ->> 'id'
-        left join public.users u  on a.data ->> 'object' = u.ap_id
-        where not a.local
-        and jsonb_typeof(a."data" -> 'object') = 'string'
-        and o.id is null
-        and a2.id is null
-        and u.id is null
-      )
+      delete from public.activities a
+      where not a.local
+      and jsonb_typeof(a."data" -> 'object') = 'string'
+      and not exists (select 1 from public.objects o where a.data ->> 'object' = o.data ->> 'id')
+      and not exists (select 1 from public.activities a2 where a.data ->> 'object' = a2.data ->> 'id')
+      and not exists (select 1 from public.users u where a.data ->> 'object' = u.ap_id)
       """
       |> Repo.query([], timeout: :infinity)
 
       # Prune activities who link to an array of objects
       """
-      delete from public.activities
-      where id in (
-        select a.id from public.activities a
-        join json_array_elements_text((a."data" -> 'object')::json) as j on jsonb_typeof(a."data" -> 'object') = 'array'
-        left join public.objects o on j.value = o.data ->> 'id'
-        left join public.activities a2 on j.value = a2.data ->> 'id'
-        left join public.users u  on j.value = u.ap_id
-        group by a.id
-        having max(o.data ->> 'id') is null
-        and max(a2.data ->> 'id') is null
-        and max(u.ap_id) is null
+      delete from public.activities a
+      where not a.local
+      and jsonb_typeof(a."data" -> 'object') = 'array'
+      and not exists (
+        select 1 from json_array_elements_text((a."data" -> 'object')::json) j
+        where not exists (select 1 from public.objects o where j.value = o.data ->> 'id')
+        and not exists (select 1 from public.activities a2 where j.value = a2.data ->> 'id')
+        and not exists (select 1 from public.users u where j.value = u.ap_id)
       )
       """
       |> Repo.query([], timeout: :infinity)
