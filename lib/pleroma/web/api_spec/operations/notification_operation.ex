@@ -8,6 +8,7 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
   alias Pleroma.Web.ApiSpec.Schemas.Account
   alias Pleroma.Web.ApiSpec.Schemas.ApiError
   alias Pleroma.Web.ApiSpec.Schemas.BooleanLike
+  alias Pleroma.Web.ApiSpec.Schemas.ChatMessage
   alias Pleroma.Web.ApiSpec.Schemas.Status
   alias Pleroma.Web.ApiSpec.Schemas.VisibilityScope
 
@@ -304,7 +305,25 @@ defmodule Pleroma.Web.ApiSpec.NotificationOperation do
         page_max_id: %Schema{type: :string, nullable: true},
         latest_page_notification_at: %Schema{type: :string, format: :"date-time", nullable: true},
         sample_account_ids: %Schema{type: :array, items: %Schema{type: :string}},
-        status_id: %Schema{type: :string, nullable: true}
+        status_id: %Schema{type: :string, nullable: true},
+        target_id: %Schema{
+          type: :string,
+          description: "ID of the target account for a move notification"
+        },
+        emoji: %Schema{
+          type: :string,
+          description: "Emoji used for an emoji reaction notification"
+        },
+        emoji_url: %Schema{
+          type: :string,
+          nullable: true,
+          description: "URL of the custom emoji used for an emoji reaction notification"
+        },
+        chat_message: ChatMessage,
+        report: %Schema{
+          type: :object,
+          description: "Report embedded in a report notification"
+        }
       },
       required: [
         :group_key,
