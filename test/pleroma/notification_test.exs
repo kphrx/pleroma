@@ -1028,6 +1028,21 @@ defmodule Pleroma.NotificationTest do
       assert Notification.for_user(user) == []
     end
 
+    test "it doesn't return notifications from a blocked domain unless the actor is followed",
+         %{user: user} do
+      blocked_domain = "blocked.example"
+      stranger = insert(:user, local: false, domain: blocked_domain)
+      followed = insert(:user, local: false, domain: blocked_domain)
+      {:ok, user, followed} = User.follow(user, followed)
+      {:ok, user} = User.block_domain(user, blocked_domain)
+
+      {:ok, _} = CommonAPI.post(stranger, %{status: "hey @#{user.nickname}"})
+      {:ok, followed_activity} = CommonAPI.post(followed, %{status: "hey @#{user.nickname}"})
+
+      assert [%{activity: %{id: followed_id}}] = Notification.for_user(user)
+      assert followed_id == followed_activity.id
+    end
+
     test "it doesn't return notifications for domain-blocked non-followed user", %{user: user} do
       blocked = insert(:user, ap_id: "http://some-domain.com")
       {:ok, user} = User.block_domain(user, "some-domain.com")

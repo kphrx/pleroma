@@ -1,0 +1,1 @@
+Fix notification and timeline queries for users with domain blocks choosing a plan that scans every active user per row; the followed-accounts exception is now an `ARRAY(SELECT ...)` InitPlan that the planner costs once.
