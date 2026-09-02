@@ -33,7 +33,7 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
 
     case @cachex.get(:idempotency_cache, cache_key) do
       {:ok, nil} ->
-        cache_resposnse(conn, key, cache_key)
+        cache_response(conn, key, cache_key)
 
       {:ok, record} ->
         send_cached(conn, key, record)
@@ -43,7 +43,7 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
     end
   end
 
-  defp cache_resposnse(conn, key, cache_key) do
+  defp cache_response(conn, key, cache_key) do
     register_before_send(conn, &maybe_cache_response(&1, key, cache_key))
   end
 
