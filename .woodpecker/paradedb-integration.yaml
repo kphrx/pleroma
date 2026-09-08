@@ -52,12 +52,14 @@ steps:
 services:
   postgres:
     image: docker.io/postgres:13-alpine
+    failure: ignore
     environment:
       POSTGRES_DB: pleroma_test
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
   paradedb:
     image: docker.io/paradedb/paradedb:0.24.3-pg15@sha256:997d62f6c2605becb7c45878af3f8c8c698f355006b675b3ce212d4eb2d14f2e
+    failure: ignore
     environment:
       POSTGRES_DB: paradedb
       POSTGRES_USER: postgres

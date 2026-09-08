@@ -258,10 +258,16 @@ defmodule Pleroma.FollowingRelationship do
       [_, user_actor: user_actor],
       fragment(
         # "(actor's domain NOT in domain_blocks) OR (actor IS in followed AP IDs)"
+        #
+        # ARRAY(SELECT ...) makes the followed-ids lookup an InitPlan that is
+        # evaluated and costed once. As a plain subselect, the planner charges
+        # its startup cost on every rescan of the actor lookup, which inflates
+        # the cost of the index plan enough for it to lose to a plan that
+        # materialises every active user for every candidate row.
         """
         NOT (substring(? from '.*://([^/]*)') = ANY(?)) OR
-          ? = ANY(SELECT ap_id FROM users AS u INNER JOIN following_relationships AS fr
-            ON u.id = fr.following_id WHERE fr.follower_id = ? AND fr.state = ?)
+          ? = ANY(ARRAY(SELECT ap_id FROM users AS u INNER JOIN following_relationships AS fr
+            ON u.id = fr.following_id WHERE fr.follower_id = ? AND fr.state = ?))
         """,
         user_actor.ap_id,
         ^user.domain_blocks,
