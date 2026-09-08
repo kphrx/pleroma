@@ -169,7 +169,7 @@ defmodule Pleroma.Mixfile do
       {:cors_plug, "~> 2.0"},
       {:web_push_encryption, "~> 0.3.1"},
       {:httpoison, "~> 3.0", override: true},
-      {:swoosh, "~> 1.16.12"},
+      {:swoosh, "~> 1.28"},
       {:phoenix_swoosh, "~> 1.2"},
       {:gen_smtp, "~> 0.15"},
       {:mua, "~> 0.2.4"},
