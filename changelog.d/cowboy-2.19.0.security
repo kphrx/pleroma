@@ -1,0 +1,1 @@
+Update cowboy to version 2.19.0 which fixes a memory exhaustion DoS
