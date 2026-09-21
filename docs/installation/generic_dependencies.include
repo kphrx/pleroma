@@ -1,8 +1,7 @@
 ## Required dependencies
 
+{! backend/installation/erlang_elixir_requirements.include !}
 * PostgreSQL >=11.0
-* Elixir >=1.15.0, <1.20
-* Erlang OTP >=24.0.0 (supported: <29)
 * git
 * file / libmagic
 * gcc or clang
@@ -14,3 +13,7 @@
 * ImageMagick
 * FFmpeg
 * exiftool
+
+!!!info
+    **Source installs only**  
+    If your operating system repositories don't meet the Elixir/Erlang requirements, check [Installing newer versions of Elixir and Erlang](./installing_newer_elixir_erlang.md).
