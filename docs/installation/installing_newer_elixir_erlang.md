@@ -281,8 +281,28 @@ ExecStart=/var/lib/pleroma/pleroma.sh
 You can now start the Pleroma service.
 If you are installing Pleroma, continue with creating your first user according to the install guide.
 
+## Maintenance
+
+Since Elixir and Erlang is no longer managed by the system package manager after following this guide, it is recommended to periodically check their respective websites/repositories for newer versions with security bug fixes.
+When updating Elixir, Erlang or both, stop Pleroma before proceeding with the update.
+
+Pleroma will likely need to be recompiled after the update by running the following command in the Pleroma source code directory as the Pleroma user:
+```sh
+MIX_ENV=prod mix compile
+```
+
+If Pleroma fails to compile or start after upgrading Elixir/Erlang, run the following as a troubleshooting step in the Pleroma source code directory as the Pleroma user:
+```sh
+mix clean
+mix deps.clean --all
+mix deps.get
+MIX_ENV=prod mix compile
+```
+
+Then try to start Pleroma again. If that doesn't help, join the Matrix room or IRC channel mentioned below, or make an issue on [git.pleroma.social/pleroma/pleroma](https://git.pleroma.social/pleroma/pleroma/issues/new/choose) explaining the problem.
+
 ## Questions
 
-Questions about the installation or didn’t it work as it should be, ask in [#pleroma:libera.chat](https://matrix.to/#/#pleroma:libera.chat) via Matrix or **#pleroma** on **libera.chat** via IRC.
+Questions about the guide or it didn’t work as it should, ask in [#pleroma:libera.chat](https://matrix.to/#/#pleroma:libera.chat) via Matrix or **#pleroma** on **libera.chat** via IRC.
 
 <!-- vim ts=4:sw=4 -->
