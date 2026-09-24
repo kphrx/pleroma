@@ -19,9 +19,9 @@ Shell commands prepended with `#` in this page are supposed to be ran with root 
 
 {! backend/installation/erlang_elixir_requirements.include !}
 
-Choose one of the following install methods:
-
 ## Install methods
+
+Choose one of the following install methods:
 
 * User level:
     * mise (Erlang and Elixir install methods are built-in; downloads binaries both for Elixir and Erlang)
