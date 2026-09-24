@@ -3,6 +3,7 @@
 This guide is for installing newer versions of Elixir and/or Erlang on your system when installing Pleroma from source and your operating system repositories don't meet the minimum requirements listed below.
 This guide assumes you are using Debian or Ubuntu.
 **Using the system repositories is recommended if possible.**
+**If a newer release of your operating system would meet the requirements, consider upgrading instead.**
 
 Shell commands prepended with `#` in this page are supposed to be ran with root privileges, commands prepended with `$` are supposed to be ran as the Pleroma user unless noted otherwise.
 
