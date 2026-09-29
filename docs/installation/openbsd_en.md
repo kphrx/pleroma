@@ -74,6 +74,12 @@ pleroma:\
 	:tc=daemon:
 ```
 
+Then run:
+
+```
+# cap_mkdb /etc/login.conf
+```
+
 This creates a "pleroma" login class and sets higher values than default for datasize and openfiles (see [login.conf(5)](https://man.openbsd.org/login.conf)), this is required to avoid having Pleroma crash some time after starting.
 
 Create the \_pleroma user, assign it the pleroma login class and create its home directory (/home/\_pleroma/):
