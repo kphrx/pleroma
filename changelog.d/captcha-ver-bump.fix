@@ -1,0 +1,1 @@
+Updated the captcha package to fix compilation failure on BSD-based systems

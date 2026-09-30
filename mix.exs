@@ -198,7 +198,7 @@ defmodule Pleroma.Mixfile do
       {:concurrent_limiter, "~> 0.1.1"},
       {:remote_ip, "~> 1.2.0"},
       {:inet_cidr, "~> 1.0"},
-      {:captcha, "~> 1.0.3", hex: :pleroma_captcha},
+      {:captcha, "~> 1.0.4", hex: :pleroma_captcha},
       {:restarter, path: "./restarter"},
       {:majic, "~> 1.2"},
       {:open_api_spex, "~> 3.22"},
