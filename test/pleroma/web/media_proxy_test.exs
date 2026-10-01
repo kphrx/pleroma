@@ -252,4 +252,16 @@ defmodule Pleroma.Web.MediaProxyTest do
       assert String.starts_with?(encoded, media_url)
     end
   end
+
+  describe "image_sizes/0" do
+    test "gives the configured sizes as integers, also when stored as strings" do
+      clear_config([:media_preview_proxy, :image_sizes], [960, "1600", "x", 0, -5])
+      assert MediaProxy.image_sizes() == [960, 1600]
+    end
+
+    test "gives none when unset" do
+      clear_config([:media_preview_proxy, :image_sizes], nil)
+      assert MediaProxy.image_sizes() == []
+    end
+  end
 end

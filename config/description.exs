@@ -1663,6 +1663,13 @@ config :pleroma, :config_description, [
         type: :integer,
         description:
           "Min content length (in bytes) to perform preview. Media smaller in size will be served without thumbnailing."
+      },
+      %{
+        key: :image_sizes,
+        type: {:list, :integer},
+        description:
+          "Sizes (the longer side, in pixels) of image previews besides the thumbnail, offered to clients so they can show an image fitting the screen instead of the original. Only these sizes are served. An empty list turns them off.",
+        suggestions: [[960, 1600, 2560]]
       }
     ]
   },

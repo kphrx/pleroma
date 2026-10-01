@@ -338,6 +338,96 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyControllerTest do
       assert response.resp_body != ""
     end
 
+    defp long_side(binary) do
+      {:ok, image} = Vix.Vips.Image.new_from_buffer(binary)
+      max(Vix.Vips.Image.width(image), Vix.Vips.Image.height(image))
+    end
+
+    defp mock_image(media_proxy_url, content_type, fixture) do
+      Tesla.Mock.mock(fn
+        %{method: :head, url: ^media_proxy_url} ->
+          %Tesla.Env{status: 200, body: "", headers: [{"content-type", content_type}]}
+
+        %{method: :get, url: ^media_proxy_url} ->
+          %Tesla.Env{status: 200, body: File.read!(fixture)}
+      end)
+    end
+
+    test "without `size`, the preview fits the thumbnail dimensions", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      assert_dependencies_installed()
+      mock_image(media_proxy_url, "image/jpeg", "test/fixtures/image.jpg")
+
+      response = get(conn, url)
+
+      assert response.status == 200
+      assert long_side(response.resp_body) == 600
+    end
+
+    test "with a configured `size`, the preview fits that size", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      assert_dependencies_installed()
+      clear_config([:media_preview_proxy, :image_sizes], [300, 800])
+      mock_image(media_proxy_url, "image/jpeg", "test/fixtures/image.jpg")
+
+      response = get(conn, url <> "?size=800")
+
+      assert response.status == 200
+      assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+      assert long_side(response.resp_body) == 800
+    end
+
+    test "with a configured `size`, a PNG stays a PNG", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      assert_dependencies_installed()
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+      mock_image(media_proxy_url, "image/png", "test/fixtures/image.png")
+
+      response = get(conn, url <> "?size=300")
+
+      assert response.status == 200
+      assert Conn.get_resp_header(response, "content-type") == ["image/png"]
+      assert long_side(response.resp_body) == 300
+    end
+
+    test "accepts a `size` only as written in the config", %{conn: conn, url: url} do
+      clear_config([:media_preview_proxy, :image_sizes], [800])
+
+      for size <- ["+800", "0800", "800.0", " 800", "800abc"] do
+        response = get(conn, url <> "?size=" <> URI.encode_www_form(size))
+        refute redirected_to(response, 302) =~ "size="
+      end
+    end
+
+    test "redirects a `size` that is not a string", %{conn: conn, url: url} do
+      clear_config([:media_preview_proxy, :image_sizes], [800])
+
+      response = get(conn, url <> "?size[]=800")
+
+      assert response.status == 302
+    end
+
+    test "with a `size` that is not configured, redirects to the preview without it", %{
+      conn: conn,
+      url: url
+    } do
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+
+      response = get(conn, url <> "?size=301")
+
+      assert redirected_to(response, 302) =~ url
+      refute redirected_to(response, 302) =~ "size="
+    end
+
     test "redirects to media proxy URI in case of thumbnailing error", %{
       conn: conn,
       url: url,
