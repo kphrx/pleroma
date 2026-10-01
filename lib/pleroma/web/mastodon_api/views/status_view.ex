@@ -657,6 +657,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     pleroma =
       %{mime_type: media_type}
       |> Maps.put_if_present(:name, name)
+      |> Maps.put_if_present(:image_sizes, image_sizes(href_remote, media_type, attachment_url))
 
     %{
       id: attachment_id,
@@ -890,6 +891,55 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       list_id
     else
       _ -> nil
+    end
+  end
+
+  # An image as previews of the configured sizes (the long side), for a
+  # client to pick from (srcset). Only the sizes smaller than the image,
+  # when its dimensions are known; nil when there are none. Not for GIFs
+  # and APNGs: the previews are still images.
+  defp image_sizes(href, "image/" <> _ = media_type, url)
+       when media_type not in ["image/gif", "image/apng"] do
+    if MediaProxy.preview_enabled?() do
+      dimensions = known_dimensions(url["width"], url["height"])
+
+      MediaProxy.image_sizes()
+      |> Enum.sort()
+      |> Enum.flat_map(fn size ->
+        case scaled_dimensions(dimensions, size) do
+          :larger ->
+            []
+
+          scaled ->
+            [Map.merge(%{size: size, url: MediaProxy.preview_url(href, size: size)}, scaled)]
+        end
+      end)
+      |> case do
+        [] -> nil
+        sizes -> sizes
+      end
+    end
+  end
+
+  defp image_sizes(_href, _media_type, _url), do: nil
+
+  defp known_dimensions(width, height)
+       when is_integer(width) and is_integer(height) and width > 0 and height > 0,
+       do: {width, height}
+
+  defp known_dimensions(_width, _height), do: nil
+
+  # a preview's dimensions in a box of `size`; :larger when the image is not
+  # larger than the box (no preview needed)
+  defp scaled_dimensions(nil, _size), do: %{}
+
+  defp scaled_dimensions({width, height}, size) do
+    long_side = max(width, height)
+
+    if size < long_side do
+      %{width: round(width * size / long_side), height: round(height * size / long_side)}
+    else
+      :larger
     end
   end
 end
