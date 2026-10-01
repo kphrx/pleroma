@@ -399,6 +399,104 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyControllerTest do
       assert long_side(response.resp_body) == 300
     end
 
+    @avif_skip if(Pleroma.Helpers.MediaHelper.avif_supported?(),
+                 do: false,
+                 else: "this libvips cannot encode AVIF"
+               )
+
+    @tag skip: @avif_skip
+    test "with AVIF on and accepted, a size comes as AVIF", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+      clear_config([:media_preview_proxy, :avif], true)
+      mock_image(media_proxy_url, "image/jpeg", "test/fixtures/image.jpg")
+
+      response =
+        conn
+        |> put_req_header("accept", "image/avif,image/webp,*/*")
+        |> get(url <> "?size=300")
+
+      assert response.status == 200
+      assert Conn.get_resp_header(response, "content-type") == ["image/avif"]
+      assert Conn.get_resp_header(response, "vary") == ["accept"]
+      assert long_side(response.resp_body) == 300
+    end
+
+    @tag skip: @avif_skip
+    test "with AVIF on and accepted, a PNG size comes as AVIF too", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+      clear_config([:media_preview_proxy, :avif], true)
+      mock_image(media_proxy_url, "image/png", "test/fixtures/image.png")
+
+      response =
+        conn
+        |> put_req_header("accept", "image/avif,*/*")
+        |> get(url <> "?size=300")
+
+      assert Conn.get_resp_header(response, "content-type") == ["image/avif"]
+      assert long_side(response.resp_body) == 300
+    end
+
+    @tag skip: @avif_skip
+    test "with AVIF on but not accepted, a size stays JPEG and varies on Accept", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+      clear_config([:media_preview_proxy, :avif], true)
+      mock_image(media_proxy_url, "image/jpeg", "test/fixtures/image.jpg")
+
+      response =
+        conn
+        |> put_req_header("accept", "image/webp,*/*")
+        |> get(url <> "?size=300")
+
+      assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+      assert Conn.get_resp_header(response, "vary") == ["accept"]
+    end
+
+    test "with AVIF off, a size stays JPEG and does not vary", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+      clear_config([:media_preview_proxy, :avif], false)
+      mock_image(media_proxy_url, "image/jpeg", "test/fixtures/image.jpg")
+
+      response =
+        conn
+        |> put_req_header("accept", "image/avif,*/*")
+        |> get(url <> "?size=300")
+
+      assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+      assert Conn.get_resp_header(response, "vary") == []
+    end
+
+    test "a thumbnail is never AVIF", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      clear_config([:media_preview_proxy, :avif], true)
+      mock_image(media_proxy_url, "image/jpeg", "test/fixtures/image.jpg")
+
+      response =
+        conn
+        |> put_req_header("accept", "image/avif,*/*")
+        |> get(url)
+
+      assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+    end
+
     test "accepts a `size` only as written in the config", %{conn: conn, url: url} do
       clear_config([:media_preview_proxy, :image_sizes], [800])
 

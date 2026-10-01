@@ -1,1 +1,1 @@
-Media preview proxy: image previews in configured sizes besides the thumbnail (`image_sizes`), listed on image attachments as `pleroma.image_sizes`.
+Media preview proxy: image previews in configured sizes besides the thumbnail (`image_sizes`), listed on image attachments as `pleroma.image_sizes`, optionally as AVIF (`avif`); the Docker image adds `vips-heif` for it.

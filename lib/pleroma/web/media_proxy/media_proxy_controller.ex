@@ -40,7 +40,9 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
          {:ok, url} <- MediaProxy.decode_url(sig64, url64),
          :ok <- MediaProxy.verify_request_path_and_url(conn, url),
          {:ok, dimensions} <- preview_dimensions(conn.params["size"]) do
-      handle_preview(conn, url, dimensions)
+      conn
+      |> choose_avif(conn.params["size"])
+      |> handle_preview(url, dimensions)
     else
       {:enabled, false} ->
         send_resp(conn, 404, Conn.Status.reason_phrase(404))
@@ -72,6 +74,27 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
   end
 
   defp preview_dimensions(_size), do: :unknown_size
+
+  # A size (not the thumbnail) as AVIF, when it is on, this libvips can
+  # encode it and the client takes it. The answer then depends on Accept:
+  # caches must keep the formats apart.
+  defp choose_avif(conn, nil), do: conn
+
+  defp choose_avif(conn, _size) do
+    if Keyword.get(media_preview_proxy_config(), :avif, false) and
+         MediaHelper.avif_supported?() do
+      accepts_avif? =
+        conn
+        |> get_req_header("accept")
+        |> Enum.any?(&String.contains?(&1, "image/avif"))
+
+      conn
+      |> put_resp_header("vary", "accept")
+      |> assign(:preview_avif, accepts_avif?)
+    else
+      conn
+    end
+  end
 
   defp handle_preview(conn, url, dimensions) do
     media_proxy_url = MediaProxy.url(url)
@@ -118,6 +141,30 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
     end
   end
 
+  defp handle_preview(
+         "image/" <> _ = content_type,
+         %{assigns: %{preview_avif: true}} = conn,
+         media_proxy_url,
+         dimensions
+       ) do
+    case avif_preview(media_proxy_url, dimensions) do
+      {:ok, binary} ->
+        conn
+        |> put_preview_response_headers(["image/avif", "preview.avif"])
+        |> send_resp(200, binary)
+
+      # an encoder that fails (a libheif without AV1): JPEG/PNG, not the
+      # original
+      _ ->
+        handle_preview(
+          content_type,
+          assign(conn, :preview_avif, false),
+          media_proxy_url,
+          dimensions
+        )
+    end
+  end
+
   defp handle_preview("image/png" <> _ = _content_type, conn, media_proxy_url, dimensions) do
     handle_png_preview(conn, media_proxy_url, dimensions)
   end
@@ -154,6 +201,18 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
       _ ->
         fallback_on_preview_error(conn, media_proxy_url)
     end
+  end
+
+  defp avif_preview(media_proxy_url, {max_width, max_height}) do
+    config = media_preview_proxy_config()
+
+    MediaHelper.image_resize(media_proxy_url, %{
+      max_width: max_width,
+      max_height: max_height,
+      quality: Keyword.get(config, :avif_quality, 55),
+      effort: Keyword.get(config, :avif_effort, 3),
+      format: "avif"
+    })
   end
 
   defp handle_jpeg_preview(conn, media_proxy_url, {thumbnail_max_width, thumbnail_max_height}) do

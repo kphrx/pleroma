@@ -501,7 +501,10 @@ config :pleroma, :media_preview_proxy,
   thumbnail_max_height: 600,
   image_quality: 85,
   min_content_length: 100 * 1024,
-  image_sizes: [960, 1600, 2560]
+  image_sizes: [960, 1600, 2560],
+  avif: false,
+  avif_quality: 55,
+  avif_effort: 3
 
 config :pleroma, :shout,
   enabled: true,

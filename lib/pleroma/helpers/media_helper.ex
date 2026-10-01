@@ -31,14 +31,37 @@ defmodule Pleroma.Helpers.MediaHelper do
              height: options.max_height,
              size: :VIPS_SIZE_DOWN
            ) do
-      if options[:format] == "png" do
-        Operation.pngsave_buffer(resized, Q: options[:quality])
-      else
-        Operation.jpegsave_buffer(resized, Q: options[:quality], interlace: true)
+      case options[:format] do
+        "png" -> Operation.pngsave_buffer(resized, Q: options[:quality])
+        "avif" -> avif_save(resized, options)
+        _ -> Operation.jpegsave_buffer(resized, Q: options[:quality], interlace: true)
       end
     else
       {:error, _} = error -> error
     end
+  end
+
+  @doc """
+  Whether this libvips can encode AVIF. Vix makes its operations from the
+  libvips it is compiled against; the bundled one has no HEIF encoder, a
+  platform libvips with libheif and an AV1 encoder (libaom) has.
+  """
+  @spec avif_supported?() :: boolean()
+  def avif_supported? do
+    Code.ensure_loaded?(Operation) and function_exported?(Operation, :heifsave_buffer, 2)
+  end
+
+  # called through apply/3: without libheif the function does not exist
+  defp avif_save(image, options) do
+    # credo:disable-for-next-line Credo.Check.Refactor.Apply
+    apply(Operation, :heifsave_buffer, [
+      image,
+      [
+        Q: options[:quality],
+        effort: options[:effort],
+        compression: :VIPS_FOREIGN_HEIF_COMPRESSION_AV1
+      ]
+    ])
   end
 
   # Note: video thumbnail is intentionally not resized (always has original dimensions)

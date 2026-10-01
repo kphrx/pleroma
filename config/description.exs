@@ -1670,6 +1670,25 @@ config :pleroma, :config_description, [
         description:
           "Sizes (the longer side, in pixels) of image previews besides the thumbnail, offered to clients so they can show an image fitting the screen instead of the original. Only these sizes are served. An empty list turns them off.",
         suggestions: [[960, 1600, 2560]]
+      },
+      %{
+        key: :avif,
+        type: :boolean,
+        description:
+          "Serve the image sizes as AVIF to clients that accept it (about 40% smaller than JPEG at the same quality, but several times slower to encode: put a cache in front). Needs a libvips with libheif and an AV1 encoder (the Docker image has them); without one, the sizes stay JPEG/PNG."
+      },
+      %{
+        key: :avif_quality,
+        type: :integer,
+        description: "Quality of AVIF previews, 0 to 100.",
+        suggestions: [55]
+      },
+      %{
+        key: :avif_effort,
+        type: :integer,
+        description:
+          "CPU effort of the AVIF encoder, 0 (fastest) to 9 (smallest files). Each step up costs much more time for a little less size.",
+        suggestions: [3]
       }
     ]
   },
