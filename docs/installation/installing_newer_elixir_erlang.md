@@ -117,7 +117,7 @@ Then follow the install and configure steps from asdf documentation and install 
 
 Install dependencies:
 ```
-# apt install build-essential libssl-dev libncurses-dev git unzip
+# apt install build-essential libssl-dev libncurses-dev git unzip curl
 ```
 
 Add Erlang autotools configure options to Pleroma user's shell config (`.bashrc` for bash):
