@@ -24,14 +24,16 @@ Shell commands prepended with `#` in this page are supposed to be ran with root 
 Choose one of the following install methods:
 
 * User level:
-    * mise (Erlang and Elixir install methods are built-in; downloads binaries both for Elixir and Erlang)
+    * mise (Erlang and Elixir install methods are built-in[^1])
     * asdf (plugin-based, plugins are shells scripts; builds Erlang from source)
     * pkgsrc (for advanced users, harder to install and maintain; builds Elixir and Erlang from source)
 * System-wide:
     * pkgsrc (for advanced users, harder to install and maintain; builds Elixir and Erlang from source)
 
+[^1]: On Ubuntu downloads binaries both for Elixir and Erlang. On Debian builds Erlang from source and downloads binaries for Elixir.
+
 !!!warning
-    **Ignore if using mise.**  
+    **Ignore if using mise on Ubuntu.**  
     You are about to compile Erlang on your server.
     If you are planning to run Pleroma on a VPS virtual machine, make sure you have enough disk space and system resources available.
     At least 2GB of RAM and 8GB of extra free disk space is required to continue in this guide.
@@ -44,8 +46,30 @@ Choose one of the following install methods:
 
 ## mise
 
-To start, create the Pleroma user according to the [source install guide](./debian_based_en.md#install-pleromabe) and switch to the user using `sudo -Hu pleroma /bin/bash`.
-Then follow the install steps from mise documentation and install it for the user Pleroma: [https://mise.jdx.dev/getting-started.html](https://mise.jdx.dev/getting-started.html)
+To start, create the Pleroma user according to the [source install guide](./debian_based_en.md#install-pleromabe).
+
+### Debian-only preparation
+
+If you are using Ubuntu, skip to the [next section](./installing_newer_elixir_erlang.md#elixirerlang-installation).
+
+Install dependencies:
+```
+# apt install build-essential libssl-dev libncurses-dev git unzip
+```
+
+Add Erlang autotools configure options to Pleroma user's shell config (`.bashrc` for bash):
+```sh
+export KERL_CONFIGURE_OPTIONS="--without-javac --without-odbc --without-wx --without-ssh"
+```
+
+### Elixir/Erlang installation
+
+Install curl (for the mise installer):
+```
+# apt install curl
+```
+
+Switch to the Pleroma user using `sudo -Hu pleroma /bin/bash` and follow the install steps from mise documentation and install it for the user Pleroma: [https://mise.jdx.dev/getting-started.html](https://mise.jdx.dev/getting-started.html)
 
 Add the following to activate mise in the Pleroma user's shell configuration (`.bashrc` for bash):
 ```sh
@@ -117,7 +141,7 @@ Then follow the install and configure steps from asdf documentation and install 
 
 Install dependencies:
 ```
-# apt install build-essential libssl-dev libncurses-dev git unzip
+# apt install build-essential libssl-dev libncurses-dev git unzip curl
 ```
 
 Add Erlang autotools configure options to Pleroma user's shell config (`.bashrc` for bash):
