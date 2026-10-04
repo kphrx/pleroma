@@ -426,7 +426,8 @@ defmodule Pleroma.Web.ApiSpec.Admin.UserOperation do
             type: :array,
             items: %Schema{type: :string}
           }),
-        403 => Operation.response("Forbidden", "application/json", ApiError)
+        403 => Operation.response("Forbidden", "application/json", ApiError),
+        404 => Operation.response("Not Found", "application/json", ApiError)
       }
     }
   end
