@@ -66,14 +66,16 @@ defmodule Pleroma.HTML do
   end
 
   @spec extract_first_external_url_from_object(Pleroma.Object.t()) :: String.t() | nil
-  def extract_first_external_url_from_object(%{data: %{"content" => content}})
+  def extract_first_external_url_from_object(%{data: %{"content" => content} = data})
       when is_binary(content) do
+    # A quote post's fallback link ("RE: <url>", in a .quote-inline element or
+    # bare) points at the quoted post, which is shown already.
     content
     |> Floki.parse_fragment!()
+    |> Floki.filter_out(".quote-inline")
     |> Floki.find("a:not(.mention,.hashtag,.attachment,[rel~=\"tag\"])")
-    |> Enum.take(1)
     |> Floki.attribute("href")
-    |> Enum.at(0)
+    |> Enum.find(&(&1 != data["quoteUrl"]))
   end
 
   def extract_first_external_url_from_object(_), do: nil

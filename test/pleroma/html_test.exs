@@ -299,5 +299,42 @@ defmodule Pleroma.HTMLTest do
 
       assert nil == HTML.extract_first_external_url_from_object(object)
     end
+
+    test "skips the link in a Mastodon quote fallback paragraph" do
+      object = %Object{
+        data: %{
+          "quoteUrl" => "https://raru.re/users/ocean/statuses/116235427788617987",
+          "content" =>
+            "<p class=\"quote-inline\">RE: <a href=\"https://raru.re/@ocean/116235427788617987\">raru.re/@ocean/116235427788617987</a></p>" <>
+              "<p>Berapa lapis?</p><p><a href=\"https://www.youtube.com/watch?v=S0dJMhWDRDE\">youtube.com/watch?v=S0dJMhWDRDE</a></p>"
+        }
+      }
+
+      assert HTML.extract_first_external_url_from_object(object) ==
+               "https://www.youtube.com/watch?v=S0dJMhWDRDE"
+    end
+
+    test "skips the link in a quote fallback span (Misskey, InlineQuotePolicy)" do
+      object = %Object{
+        data: %{
+          "content" =>
+            "hello<span class=\"quote-inline\"><br/><br/>RE: <a href=\"https://misskey.example/notes/abc\">https://misskey.example/notes/abc</a></span>"
+        }
+      }
+
+      assert nil == HTML.extract_first_external_url_from_object(object)
+    end
+
+    test "skips a link to the quoted post without fallback markup" do
+      object = %Object{
+        data: %{
+          "quoteUrl" => "https://remote.example/objects/1",
+          "content" =>
+            "RE: <a href=\"https://remote.example/objects/1\">https://remote.example/objects/1</a> <a href=\"https://cofe.example/\">cofe</a>"
+        }
+      }
+
+      assert HTML.extract_first_external_url_from_object(object) == "https://cofe.example/"
+    end
   end
 end
