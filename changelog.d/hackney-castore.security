@@ -1,0 +1,1 @@
+Hackney now trusts only the CAStore certificate bundle instead of its outdated certifi bundle, which still trusted the compromised eMudhra intermediate CAs

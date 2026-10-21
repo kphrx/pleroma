@@ -39,5 +39,20 @@ defmodule Pleroma.HTTP.AdapterHelper.HackneyTest do
       assert opts[:b] == 1
       refute Keyword.has_key?(opts, :proxy)
     end
+
+    test "trusts the CAStore bundle", %{uri: uri} do
+      opts = Hackney.options([], uri)
+
+      assert opts[:ssl_options] == Pleroma.HTTP.TLS.ssl_options()
+    end
+
+    test "keeps the CAStore bundle with configured ssl_options", %{uri: uri} do
+      clear_config([:http, :adapter], ssl_options: [versions: [:"tlsv1.2"]])
+
+      opts = Hackney.options([], uri)
+
+      assert opts[:ssl_options][:versions] == [:"tlsv1.2"]
+      assert opts[:ssl_options][:cacertfile] == CAStore.file_path()
+    end
   end
 end

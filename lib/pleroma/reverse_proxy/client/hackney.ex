@@ -28,9 +28,9 @@ defmodule Pleroma.ReverseProxy.Client.Hackney do
   @impl true
   def request(method, url, headers, body, opts \\ []) do
     opts =
-      Keyword.put_new(opts, :path_encode_fun, fn path ->
-        path
-      end)
+      opts
+      |> Keyword.put_new(:path_encode_fun, fn path -> path end)
+      |> Pleroma.HTTP.TLS.put_hackney_ssl_options()
 
     if opts[:follow_redirect] != false do
       {_state, req_opts} = Access.get_and_update(opts, :follow_redirect, fn a -> {a, false} end)
