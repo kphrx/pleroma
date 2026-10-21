@@ -1,0 +1,2 @@
+* Elixir >=1.15.0, <1.20
+* Erlang OTP >=24.0.0 (supported: <29)

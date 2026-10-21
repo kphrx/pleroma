@@ -67,11 +67,17 @@ Pleroma will be run by a dedicated \_pleroma user. Before creating it, insert th
 
 ```
 pleroma:\
-	:datasize=1536M:\
+	:datasize=4096M:\
 	:openfiles-max=4096:\
 	:openfiles-cur=1024:\
 	:setenv=LC_ALL=en_US.UTF-8,VIX_COMPILATION_MODE=PLATFORM_PROVIDED_LIBVIPS,MIX_ENV=prod:\
 	:tc=daemon:
+```
+
+Then run:
+
+```
+# cap_mkdb /etc/login.conf
 ```
 
 This creates a "pleroma" login class and sets higher values than default for datasize and openfiles (see [login.conf(5)](https://man.openbsd.org/login.conf)), this is required to avoid having Pleroma crash some time after starting.
