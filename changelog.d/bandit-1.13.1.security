@@ -1,0 +1,1 @@
+Update bandit to version 1.13.1 resolving a stuck process and unvalidated HTTP/1 headers vulnerabilities
