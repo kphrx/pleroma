@@ -1,0 +1,1 @@
+Fix Swoosh HTTP mail adapters failing with `cacerts: :undefined` on OTP 26+
