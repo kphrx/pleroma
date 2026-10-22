@@ -802,7 +802,7 @@ config :pleroma, :frontends,
       "name" => "admin-fe",
       "git" => "https://git.pleroma.social/pleroma/admin-fe",
       "build_url" =>
-        "https://git.pleroma.social/pleroma/admin-fe/-/jobs/artifacts/${ref}/download?job=build",
+        "https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip",
       "ref" => "develop"
     },
     "soapbox" => %{

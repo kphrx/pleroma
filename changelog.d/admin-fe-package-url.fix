@@ -1,0 +1,1 @@
+Fix Admin-FE installation by downloading builds from the package registry instead of GitLab job artifacts.
