@@ -232,7 +232,7 @@ defmodule Pleroma.Web.CommonAPI.UtilsTest do
       code = ~s|[click](http://example.com/?a=x" onerror="alert(1))|
       {result, [], []} = Utils.format_input(code, "text/markdown")
 
-      assert result =~ ~s(<a href="http://example.com/?a=x">)
+      assert result =~ ~s|<a href="http://example.com/?a=x%22 onerror=%22alert(1)">|
       refute result =~ ~s|onerror="alert(1)|
       refute result =~ ~s(<a href="http://example.com/?a=x" onerror=)
     end

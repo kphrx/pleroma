@@ -1,0 +1,1 @@
+Hackney: use the configured proxy when its host is an IP address; Hackney 4 ignored such proxies and connected directly

@@ -375,13 +375,22 @@ defmodule Pleroma.FormatterTest do
   end
 
   describe "markdown_to_html/2" do
+    test "keeps formatted link text when stripping email autolinks" do
+      opts = %{breaks: true, strip_email_autolinks: true}
+
+      assert Formatter.markdown_to_html("[**hello**](https://example.org/)", opts) ==
+               ~s(<p><a href="https://example.org/"><strong>hello</strong></a></p>)
+
+      assert Formatter.markdown_to_html("[`code`](https://example.org/)", opts) ==
+               ~s(<p><a href="https://example.org/"><code class="inline">code</code></a></p>)
+    end
+
     test "escapes link attribute values" do
       markdown = ~s|[click](http://example.com/?a=x" onerror="alert(1))|
 
-      html = Formatter.markdown_to_html(markdown)
-
-      assert html =~ ~s|href="http://example.com/?a=x"|
-      refute html =~ "onerror"
+      # The quotes are percent-encoded, so everything stays inside href.
+      assert Formatter.markdown_to_html(markdown) ==
+               ~s|<p><a href="http://example.com/?a=x%22 onerror=%22alert(1)">click</a></p>|
     end
 
     test "preserves entities without rendering dangerous raw HTML" do
@@ -406,10 +415,15 @@ defmodule Pleroma.FormatterTest do
     test "rejects entity-encoded URL delimiters" do
       markdown = "[click](http://example.com/?a=x&#34;onerror=alert(1))"
 
-      html = Formatter.markdown_to_html(markdown)
+      assert Formatter.markdown_to_html(markdown) ==
+               ~s|<p><a href="http://example.com/?a=x%22onerror=alert(1)">click</a></p>|
+    end
 
-      assert html =~ ~s|href="http://example.com/?a=x"|
-      refute html =~ "onerror"
+    test "keeps URLs with encoded quotes complete" do
+      markdown = "[search](https://example.org/?q=&quot;cat&quot;&page=2)"
+
+      assert Formatter.markdown_to_html(markdown) ==
+               ~s(<p><a href="https://example.org/?q=%22cat%22&amp;page=2">search</a></p>)
     end
 
     test "strips email autolinks without changing explicit mailto links" do

@@ -13,6 +13,12 @@ defmodule Pleroma.HTTP.AdapterHelper.HackneyTest do
     {:ok, uri: uri}
   end
 
+  # Hackney 4 shares one HTTP/2 connection per host, and closing a response
+  # stops that connection for every stream on it.
+  test "Hackney only speaks HTTP/1.1" do
+    assert :hackney_util.default_protocols() == [:http1]
+  end
+
   describe "options/2" do
     setup do: clear_config([:http, :adapter], a: 1, b: 2)
 
@@ -37,6 +43,19 @@ defmodule Pleroma.HTTP.AdapterHelper.HackneyTest do
       assert opts[:a] == 1
       assert opts[:b] == 2
       assert opts[:proxy] == "localhost:8123"
+    end
+
+    test "gives Hackney a string host for a proxy with an IP address", %{uri: uri} do
+      clear_config([:http, :proxy_url], {:socks5, {127, 0, 0, 1}, 9050})
+      assert Hackney.options([], uri)[:proxy] == {:socks5, ~c"127.0.0.1", 9050}
+
+      clear_config([:http, :proxy_url], {{10, 0, 0, 1}, 8123})
+      assert Hackney.options([], uri)[:proxy] == {~c"10.0.0.1", 8123}
+
+      clear_config([:http, :proxy_url], nil)
+
+      assert Hackney.options([proxy: {:socks5, {0, 0, 0, 0, 0, 0, 0, 1}, 9050}], uri)[:proxy] ==
+               {:socks5, ~c"::1", 9050}
     end
 
     test "respect connection opts and no proxy", %{uri: uri} do

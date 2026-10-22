@@ -169,7 +169,8 @@ defmodule Pleroma.Formatter do
     Enum.map(nodes, &strip_email_autolinks(&1, emails))
   end
 
-  defp strip_email_autolinks({"a", attrs, [email], _meta} = node, emails) do
+  defp strip_email_autolinks({"a", attrs, [email], _meta} = node, emails)
+       when is_binary(email) do
     if List.keyfind(attrs, "href", 0) == {"href", "mailto:" <> email} and
          MapSet.member?(emails, email) do
       email
@@ -251,9 +252,13 @@ defmodule Pleroma.Formatter do
 
   defp sanitize_markdown_url(value, name) do
     if String.downcase(to_string(name)) in ["href", "src"] do
-      value
-      |> String.split(~r/["<>]/, parts: 2)
-      |> hd()
+      # Percent-encode instead of cutting, so the URL stays complete but can
+      # never close the attribute or open a tag.
+      String.replace(value, ~r/["<>]/, fn
+        "\"" -> "%22"
+        "<" -> "%3C"
+        ">" -> "%3E"
+      end)
     else
       value
     end
