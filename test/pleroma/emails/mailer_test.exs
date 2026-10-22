@@ -59,6 +59,6 @@ defmodule Pleroma.Emails.MailerTest do
     assert_received {:email, %Swoosh.Email{private: %{hackney_options: hackney_options}}}
 
     assert hackney_options[:ssl_options] ==
-             Pleroma.HTTP.TLS.ssl_options(versions: [:"tlsv1.2"])
+             Pleroma.HTTP.TLS.ssl_options()
   end
 end
