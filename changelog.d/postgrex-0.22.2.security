@@ -1,0 +1,1 @@
+Update Postgrex to address notification channel-name SQL injection vulnerabilities.

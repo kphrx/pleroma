@@ -1,0 +1,1 @@
+Update gun to version 2.6.0 which fixes an HTTP request/response smuggling vulnerability

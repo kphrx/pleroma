@@ -1,0 +1,1 @@
+Update swoosh to version 1.28.0 which fixes a url injection vulnerability for the Microsoft Graph adapter

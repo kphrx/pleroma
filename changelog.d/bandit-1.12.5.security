@@ -1,0 +1,1 @@
+Update bandit to version 1.12.5 to fix an HTTP/2 DoS vulnerability
