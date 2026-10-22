@@ -81,16 +81,16 @@ Careful: This folder will be completely replaced on installation.
 === "OTP"
 
     ```sh
-    ./bin/pleroma_ctl frontend install admin-fe --ref develop
+    ./bin/pleroma_ctl frontend install admin-fe --ref stable
     ```
 
 === "From Source"
 
     ```sh
-    mix pleroma.frontend install admin-fe --ref develop
+    mix pleroma.frontend install admin-fe --ref stable
     ```
 
-Builds come from the package registry: `https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip`. At the moment only `develop` is published. A `stable` branch or a release tag works as `--ref` once a build for it is published.
+Builds come from the package registry: `https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip`. `stable` and `develop` are published; `stable` is the better choice for production. A release tag works as `--ref` once a build for it is published.
 
 ## Example installation for an unknown frontend
 

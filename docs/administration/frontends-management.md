@@ -56,7 +56,7 @@ Due to aforementioned bug, preferred way of installing frontends in AdminFE is b
 ![screenshot of admin-fe with instructions on how to install a frontend](../assets/way_to_install_frontends.png)
 and filling in the fields. Unfortunately AdminFE does not provide the raw data necessary for you to fill those fields, so your best bet is to see what backend returns in browser's devtools or refer to the [source code](https://git.pleroma.social/pleroma/pleroma/-/blob/develop/config/config.exs?ref_type=heads#L742-791). For the most part, only **Name**, **Ref** (i.e. version) and **Build URL** fields are required, although some frontends might also require **Build Directory** to work. 
 
-Pleroma-FE and Admin-FE builds come from the package registry, not from GitLab job artifacts. For Admin-FE, set **Name** to `admin-fe`, **Ref** to `develop` and **Build URL** to `https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip`. Only refs with a published build can be installed; at the moment that is `develop`.
+Pleroma-FE and Admin-FE builds come from the package registry, not from GitLab job artifacts. For Admin-FE, set **Name** to `admin-fe`, **Ref** to `stable` (or `develop`) and **Build URL** to `https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip`. Only refs with a published build can be installed: `stable`, `develop`, and release tags once they are published.
 
 ### Selecting default frontend
 
