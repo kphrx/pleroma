@@ -68,6 +68,21 @@ defmodule Pleroma.Emails.Mailer do
   end
 
   defp parse_config(config) do
-    Swoosh.Mailer.parse_config(@otp_app, __MODULE__, @mailer_config, config)
+    @otp_app
+    |> Swoosh.Mailer.parse_config(__MODULE__, @mailer_config, config)
+    |> put_mua_cacertfile()
+  end
+
+  @doc false
+  # Mua otherwise trusts the OS CA store. Keep a CA that the admin set.
+  def put_mua_cacertfile(config) do
+    ssl = Keyword.get(config, :ssl, [])
+
+    if config[:adapter] == Swoosh.Adapters.Mua and
+         not Keyword.has_key?(ssl, :cacertfile) and not Keyword.has_key?(ssl, :cacerts) do
+      Keyword.put(config, :ssl, [{:cacertfile, CAStore.file_path()} | ssl])
+    else
+      config
+    end
   end
 end
