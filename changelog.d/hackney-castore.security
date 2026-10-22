@@ -1,1 +1,0 @@
-Hackney, Finch, Mua and the Swoosh HTTP mail adapters now trust only the CAStore certificate bundle, which rejects the compromised eMudhra intermediate CAs

@@ -1,1 +1,0 @@
-Stop leaking a Hackney connection process for every media proxy response that was streamed to the end

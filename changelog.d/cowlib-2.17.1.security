@@ -1,1 +1,0 @@
-Update Cowlib to address HTTP parsing resource exhaustion and injection vulnerabilities.

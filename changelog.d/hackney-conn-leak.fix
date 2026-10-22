@@ -1,1 +1,0 @@
-Stop leaking a Hackney connection process, and the response bytes it read, for every unpooled request that ends without a reusable socket

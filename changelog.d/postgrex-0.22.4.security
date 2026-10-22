@@ -1,1 +1,0 @@
-Update postgrex to version 0.22.4 to fix an SQL injection vulnerability

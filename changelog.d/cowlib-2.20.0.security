@@ -1,1 +1,0 @@
-Update cowlib to version 2.20.0 which fixes HTTP splitting and header smuggling/injection vulnerabilities

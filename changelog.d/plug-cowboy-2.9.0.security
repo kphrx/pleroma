@@ -1,1 +1,0 @@
-Update Plug.Cowboy to address HTTP/2 scheme atom exhaustion denial-of-service vulnerabilities.

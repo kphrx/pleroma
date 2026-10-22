@@ -1,1 +1,0 @@
-Enforce the max_body HTTP option again, which Hackney 4 silently stopped honouring because it always returns a fully read body

@@ -1,1 +1,0 @@
-Changed how Logger is configured due to changes in Elixir and added deprecation warnings for the old configuration format

@@ -1,1 +1,0 @@
-Replace retired Earmark rendering with the maintained EarmarkParser and an attribute-escaping renderer.
