@@ -16,8 +16,9 @@ defmodule Pleroma.HTTP.AdapterHelper.TeslaAdapterTest do
   test "adds the TLS options to Hackney" do
     Application.put_env(:tesla, :adapter, Tesla.Adapter.Hackney)
 
-    assert AdapterHelper.tesla_adapter() ==
-             {Tesla.Adapter.Hackney, ssl_options: TLS.ssl_options()}
+    assert {Tesla.Adapter.Hackney, opts} = AdapterHelper.tesla_adapter()
+    assert opts[:ssl_options] == TLS.ssl_options()
+    assert opts[:proxy_ssl_options] == TLS.ssl_options()
   end
 
   test "turns on certificate checks for Gun" do
