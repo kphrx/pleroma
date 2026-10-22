@@ -1,0 +1,1 @@
+Scrubbers: remove links and images whose scheme is hidden with tabs, newlines or leading control characters (for example java<TAB>script:), which browsers still run as javascript:. Custom scrubbers should use Pleroma.HTML.URIAttributes.allow_tag_with_uri_attributes instead of the FastSanitize macro
