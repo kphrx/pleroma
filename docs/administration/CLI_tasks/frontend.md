@@ -78,25 +78,19 @@ Careful: This folder will be completely replaced on installation.
 
 ## Installing Admin-FE
 
-Install the latest published `develop` build using the configured package URL:
-
 === "OTP"
 
     ```sh
     ./bin/pleroma_ctl frontend install admin-fe --ref develop
-    # Or pin a release (replace <published-tag> with its exact tag):
-    ./bin/pleroma_ctl frontend install admin-fe --ref <published-tag>
     ```
 
 === "From Source"
 
     ```sh
     mix pleroma.frontend install admin-fe --ref develop
-    # Or pin a release (replace <published-tag> with its exact tag):
-    mix pleroma.frontend install admin-fe --ref <published-tag>
     ```
 
-Use `--ref stable` for the latest published stable branch build, or replace `develop` with an exact published release tag to pin a version. The ref selects the package version in `https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip`; it must have a published package. The archive's `dist/` directory matches the default build directory, so no `--build-url` or `--build-dir` override is needed.
+Builds come from the package registry: `https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip`. At the moment only `develop` is published. A `stable` branch or a release tag works as `--ref` once a build for it is published.
 
 ## Example installation for an unknown frontend
 
