@@ -52,4 +52,13 @@ defmodule Pleroma.Emails.MailerTest do
       subject: "Pleroma test email"
     )
   end
+
+  test "keeps certificate checks for HTTP API adapters" do
+    Mailer.deliver(@email)
+
+    assert_received {:email, %Swoosh.Email{private: %{hackney_options: hackney_options}}}
+
+    assert hackney_options[:ssl_options] ==
+             Pleroma.HTTP.TLS.ssl_options()
+  end
 end

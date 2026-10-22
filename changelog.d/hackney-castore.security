@@ -1,0 +1,1 @@
+Hackney and Finch now trust only the CAStore certificate bundle, which rejects the compromised eMudhra intermediate CAs

@@ -30,6 +30,7 @@ defmodule Pleroma.HTTP.AdapterHelper.Hackney do
     |> Pleroma.HTTP.AdapterHelper.maybe_add_proxy(proxy)
     |> Keyword.put(:follow_redirect, false)
     |> Keyword.put(:force_redirect, false)
+    |> Pleroma.HTTP.TLS.put_hackney_ssl_options()
   end
 
   defp add_scheme_opts(opts, _), do: opts
