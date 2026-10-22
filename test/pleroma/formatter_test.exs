@@ -375,6 +375,16 @@ defmodule Pleroma.FormatterTest do
   end
 
   describe "markdown_to_html/2" do
+    test "keeps formatted link text when stripping email autolinks" do
+      opts = %{breaks: true, strip_email_autolinks: true}
+
+      assert Formatter.markdown_to_html("[**hello**](https://example.org/)", opts) ==
+               ~s(<p><a href="https://example.org/"><strong>hello</strong></a></p>)
+
+      assert Formatter.markdown_to_html("[`code`](https://example.org/)", opts) ==
+               ~s(<p><a href="https://example.org/"><code class="inline">code</code></a></p>)
+    end
+
     test "escapes link attribute values" do
       markdown = ~s|[click](http://example.com/?a=x" onerror="alert(1))|
 

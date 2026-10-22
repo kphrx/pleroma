@@ -169,7 +169,8 @@ defmodule Pleroma.Formatter do
     Enum.map(nodes, &strip_email_autolinks(&1, emails))
   end
 
-  defp strip_email_autolinks({"a", attrs, [email], _meta} = node, emails) do
+  defp strip_email_autolinks({"a", attrs, [email], _meta} = node, emails)
+       when is_binary(email) do
     if List.keyfind(attrs, "href", 0) == {"href", "mailto:" <> email} and
          MapSet.member?(emails, email) do
       email
