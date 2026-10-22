@@ -17,6 +17,12 @@ defmodule Pleroma.HTTP.TLSTest do
       assert is_function(match_fun, 2)
     end
 
+    test "does not accept certificates from the peer chain as trust anchors" do
+      partial_chain = TLS.ssl_options()[:partial_chain]
+
+      assert partial_chain.([:certificate]) == :unknown_ca
+    end
+
     test "keeps the CA bundle when other options are given" do
       opts = TLS.ssl_options(versions: [:"tlsv1.2"])
 
