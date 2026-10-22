@@ -105,6 +105,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fix inconsistent User cache keys and invalidate numeric ID aliases.
 - Include arm32v7 in multi-arch Docker images
 - RichMedia: Fix backfill causing old posts to show up on timelines by disabling it in MastoAPI StatusView
+- Fix Admin-FE installation by downloading builds from the package registry instead of GitLab job artifacts.
 
 ## 2.10.2
 
