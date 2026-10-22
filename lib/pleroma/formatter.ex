@@ -252,9 +252,13 @@ defmodule Pleroma.Formatter do
 
   defp sanitize_markdown_url(value, name) do
     if String.downcase(to_string(name)) in ["href", "src"] do
-      value
-      |> String.split(~r/["<>]/, parts: 2)
-      |> hd()
+      # Percent-encode instead of cutting, so the URL stays complete but can
+      # never close the attribute or open a tag.
+      String.replace(value, ~r/["<>]/, fn
+        "\"" -> "%22"
+        "<" -> "%3C"
+        ">" -> "%3E"
+      end)
     else
       value
     end
