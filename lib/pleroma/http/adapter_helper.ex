@@ -46,6 +46,24 @@ defmodule Pleroma.HTTP.AdapterHelper do
     |> adapter_helper().options(uri)
   end
 
+  @doc """
+  The configured Tesla adapter with TLS options, for clients that do not go
+  through `Pleroma.HTTP`.
+  """
+  @spec tesla_adapter() :: module() | {module(), keyword()}
+  def tesla_adapter do
+    case adapter() do
+      Tesla.Adapter.Hackney ->
+        {Tesla.Adapter.Hackney, Pleroma.HTTP.TLS.put_hackney_ssl_options([])}
+
+      Tesla.Adapter.Gun ->
+        {Tesla.Adapter.Gun, certificates_verification: true}
+
+      adapter ->
+        adapter
+    end
+  end
+
   defp adapter, do: Application.get_env(:tesla, :adapter)
 
   defp adapter_helper do
