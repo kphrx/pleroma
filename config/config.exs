@@ -161,7 +161,7 @@ config :mime, :types, %{
   "image/apng" => ["apng"]
 }
 
-config :tesla, adapter: Tesla.Adapter.Hackney
+config :tesla, adapter: Tesla.Adapter.Gun
 
 # Hackney 4 shares one HTTP/2 connection per host, and closing one response
 # (as the media proxy does) stops it for every other stream on it.
