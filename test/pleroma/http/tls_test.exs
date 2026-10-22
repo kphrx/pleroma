@@ -23,6 +23,13 @@ defmodule Pleroma.HTTP.TLSTest do
       assert partial_chain.([:certificate]) == :unknown_ca
     end
 
+    test "keeps CA certificates that the admin set" do
+      opts = TLS.ssl_options(cacerts: [:private_ca])
+
+      assert opts[:cacerts] == [:private_ca]
+      refute Keyword.has_key?(opts, :cacertfile)
+    end
+
     test "keeps the CA bundle when other options are given" do
       opts = TLS.ssl_options(versions: [:"tlsv1.2"])
 
@@ -38,6 +45,7 @@ defmodule Pleroma.HTTP.TLSTest do
 
       assert opts[:pool] == :media
       assert opts[:ssl_options] == TLS.ssl_options()
+      assert opts[:proxy_ssl_options] == TLS.ssl_options()
     end
 
     test "merges given ssl_options into the TLS options" do
@@ -46,8 +54,17 @@ defmodule Pleroma.HTTP.TLSTest do
       assert opts[:ssl_options] == TLS.ssl_options(versions: [:"tlsv1.2"])
     end
 
-    test "leaves insecure requests alone" do
-      assert TLS.put_hackney_ssl_options(insecure: true) == [insecure: true]
+    test "turns insecure into an explicit verify_none" do
+      opts = TLS.put_hackney_ssl_options(insecure: true)
+
+      assert opts[:ssl_options] == [verify: :verify_none]
+      refute Keyword.has_key?(opts, :proxy_ssl_options)
+    end
+
+    test "secures the connection to an HTTPS proxy" do
+      opts = TLS.put_hackney_ssl_options(proxy_ssl_options: [versions: [:"tlsv1.3"]])
+
+      assert opts[:proxy_ssl_options] == TLS.ssl_options(versions: [:"tlsv1.3"])
     end
   end
 end
