@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Update postgrex to version 0.22.4 to fix an SQL injection vulnerability
 - Remove unused QUIC lockfile entry with vulnerable TLS verification behavior.
 - Update swoosh to version 1.28.0 which fixes a url injection vulnerability for the Microsoft Graph adapter
+- Scrubbers: remove links and images whose scheme is hidden with tabs, newlines or leading control characters (for example java<TAB>script:), which browsers still run as javascript:. Custom scrubbers should use Pleroma.HTML.URIAttributes.allow_tag_with_uri_attributes instead of the FastSanitize macro
 
 ### Changed
 
@@ -55,6 +56,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add optional migrations for rollback from Rebased
 - Use upstream Hex releases for the `remote_ip` dependency and expose client IP ranges for remote IP resolution.
 - Improve user search / autocompletion ordering.
+- Gun is now the default HTTP client instead of Hackney
 
 ### Added
 
@@ -106,6 +108,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Include arm32v7 in multi-arch Docker images
 - RichMedia: Fix backfill causing old posts to show up on timelines by disabling it in MastoAPI StatusView
 - Fix Admin-FE installation by downloading builds from the package registry instead of GitLab job artifacts.
+- Hackney: use HTTP/1.1 only, so closing one media proxy response no longer breaks other downloads from the same host
+- Hackney: use the configured proxy when its host is an IP address; Hackney 4 ignored such proxies and connected directly
 
 ## 2.10.2
 
