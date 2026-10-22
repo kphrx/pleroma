@@ -1,0 +1,2 @@
+var e=e=>{let t;return{timeoutId:t,promise:()=>new Promise(n=>{t=window.setTimeout(()=>n(),e)})}},t=(t,n)=>{let r=!1,i=null;return(async()=>{for(;!r;){await t();let{timeoutId:r,promise:a}=e(n);i=r,await a()}})().then(),{stop:()=>{r=!0,window.clearTimeout(i)}}};export{t};
+//# sourceMappingURL=promise_interval.BgbE32Aa.js.map
