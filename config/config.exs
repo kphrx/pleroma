@@ -163,6 +163,10 @@ config :mime, :types, %{
 
 config :tesla, adapter: Tesla.Adapter.Hackney
 
+# Hackney 4 shares one HTTP/2 connection per host, and closing one response
+# (as the media proxy does) stops it for every other stream on it.
+config :hackney, default_protocols: [:http1]
+
 # Configures http settings, upstream proxy etc.
 config :pleroma, :http,
   proxy_url: nil,

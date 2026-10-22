@@ -13,6 +13,12 @@ defmodule Pleroma.HTTP.AdapterHelper.HackneyTest do
     {:ok, uri: uri}
   end
 
+  # Hackney 4 shares one HTTP/2 connection per host, and closing a response
+  # stops that connection for every stream on it.
+  test "Hackney only speaks HTTP/1.1" do
+    assert :hackney_util.default_protocols() == [:http1]
+  end
+
   describe "options/2" do
     setup do: clear_config([:http, :adapter], a: 1, b: 2)
 

@@ -1,0 +1,1 @@
+Hackney: use HTTP/1.1 only, so closing one media proxy response no longer breaks other downloads from the same host
