@@ -1,0 +1,1 @@
+Update plug_crypto to version 2.2.1, so a malformed shout socket token no longer writes the secret key base to the error log
