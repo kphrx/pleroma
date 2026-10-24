@@ -324,7 +324,7 @@ defmodule Pleroma.Web.CommonAPI.Utils do
 
   def format_input(text, "text/x.misskeymarkdown", options) do
     text
-    |> Formatter.markdown_to_html(%{breaks: true})
+    |> Formatter.markdown_to_html(%{breaks: true, strip_email_autolinks: true})
     |> safe_mfm_to_html()
     |> Formatter.linkify(options)
     |> Formatter.html_escape("text/x.misskeymarkdown")

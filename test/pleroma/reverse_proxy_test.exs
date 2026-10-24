@@ -27,6 +27,21 @@ defmodule Pleroma.ReverseProxyTest do
 
   setup :verify_on_exit!
 
+  # Every path that obtains a client ref releases it, so tests that do not assert
+  # on the release still need close/1 to be callable. Recording each call lets
+  # the tests below pin *exactly* once: a Mox `expect` would silently fall
+  # through to this stub on a second call.
+  setup do
+    test_pid = self()
+
+    stub(ClientMock, :close, fn client ->
+      send(test_pid, {:closed, client})
+      :ok
+    end)
+
+    :ok
+  end
+
   defp start_bandit(url, opts \\ []) do
     start_supervised!(
       {Bandit,
@@ -182,6 +197,100 @@ defmodule Pleroma.ReverseProxyTest do
 
       assert conn.status == 200
       assert Cachex.get(:failed_proxy_url_cache, url) == {:ok, nil}
+    end
+
+    test "uses max_read_duration as the default HTTP receive timeout", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/timeout", _, _, opts ->
+        assert opts[:recv_timeout] == 123
+        {:error, :timeout}
+      end)
+
+      capture_log(fn -> ReverseProxy.call(conn, "/timeout", max_read_duration: 123) end)
+    end
+
+    test "preserves an explicit HTTP receive timeout", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/timeout", _, _, opts ->
+        assert opts[:recv_timeout] == 456
+        {:error, :timeout}
+      end)
+
+      capture_log(fn ->
+        ReverseProxy.call(conn, "/timeout", max_read_duration: 123, http: [recv_timeout: 456])
+      end)
+    end
+
+    test "keeps unlimited read durations unlimited", %{conn: conn} do
+      for {max_read_duration, url} <- [{0, "/zero-timeout"}, {:infinity, "/infinite-timeout"}] do
+        ClientMock
+        |> expect(:request, fn :get, ^url, _, _, opts ->
+          assert opts[:recv_timeout] == :infinity
+          {:error, :timeout}
+        end)
+
+        capture_log(fn ->
+          ReverseProxy.call(conn, url, max_read_duration: max_read_duration)
+        end)
+      end
+    end
+  end
+
+  # ReverseProxy releases exactly what it abandons. A body it streamed to the end
+  # is the client's to release, mirroring how the gun client frees its stream on
+  # :done -- see Pleroma.ReverseProxy.Client.Hackney.stream_body/1 for why an
+  # abandoned Hackney ref never gets reaped on its own.
+  describe "client ref release" do
+    test "leaves a fully streamed body for the client to release", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/release", _, _, _ ->
+        {:ok, 200, [{"content-type", "image/png"}], %{url: "/release"}}
+      end)
+      |> expect(:stream_body, fn _ -> :done end)
+
+      conn = ReverseProxy.call(conn, "/release")
+
+      assert conn.halted
+      refute_received {:closed, _}
+    end
+
+    test "releases the client when content-length exceeds max_body_length", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/release-huge", _, _, _ ->
+        {:ok, 200, [{"content-length", "102227307"}], %{url: "/release-huge"}}
+      end)
+
+      assert capture_log(fn ->
+               ReverseProxy.call(conn, "/release-huge", max_body_length: 25 * 1_048_576)
+             end) =~ ":body_too_large"
+
+      assert_received {:closed, %{url: "/release-huge"}}
+      refute_received {:closed, _}
+    end
+
+    test "releases the client when the upstream status is not proxiable", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :get, "/release-418", _, _, _ ->
+        {:ok, 418, [], %{url: "/release-418"}}
+      end)
+
+      assert capture_log(fn -> ReverseProxy.call(conn, "/release-418") end) =~
+               "failed with HTTP status 418"
+
+      assert_received {:closed, %{url: "/release-418"}}
+      refute_received {:closed, _}
+    end
+
+    test "has nothing to release when the reply carries no ref", %{conn: conn} do
+      ClientMock
+      |> expect(:request, fn :head, "/release-headless", _, _, _ ->
+        {:ok, 200, [{"content-type", "image/png"}]}
+      end)
+
+      conn = ReverseProxy.call(Map.put(conn, :method, "HEAD"), "/release-headless")
+
+      assert conn.status == 200
+      refute_received {:closed, _}
     end
   end
 
@@ -398,7 +507,7 @@ defmodule Pleroma.ReverseProxyTest do
     refute :timeout in responses
   end
 
-  defp stream_mock(invokes, with_close? \\ false) do
+  defp stream_mock(invokes) do
     ClientMock
     |> expect(:request, fn :get, "/stream-bytes/" <> length, _, _, _ ->
       Registry.register(ClientMock, "/stream-bytes/" <> length, 0)
@@ -424,10 +533,6 @@ defmodule Pleroma.ReverseProxyTest do
           :done
       end
     end)
-
-    if with_close? do
-      expect(ClientMock, :close, fn _ -> :ok end)
-    end
   end
 
   describe "max_body" do
@@ -458,7 +563,7 @@ defmodule Pleroma.ReverseProxyTest do
     end
 
     test "max_body_length returns error if streaming body more than that option", %{conn: conn} do
-      stream_mock(3, true)
+      stream_mock(3)
 
       log =
         capture_log(fn ->
@@ -469,6 +574,9 @@ defmodule Pleroma.ReverseProxyTest do
 
       assert log =~
                "Elixir.Pleroma.ReverseProxy request to /stream-bytes/50 failed while reading/chunking: :body_too_large"
+
+      assert_received {:closed, %{url: "/stream-bytes/50"}}
+      refute_received {:closed, _}
     end
 
     test "max_body_length accepts a body exactly at the limit", %{conn: conn} do

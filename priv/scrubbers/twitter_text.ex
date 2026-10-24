@@ -11,12 +11,17 @@ defmodule Pleroma.HTML.Scrubber.TwitterText do
   @valid_schemes Pleroma.Config.get([:uri_schemes, :valid_schemes], [])
 
   require FastSanitize.Sanitizer.Meta
+  require Pleroma.HTML.URIAttributes
   alias FastSanitize.Sanitizer.Meta
 
   Meta.strip_comments()
 
   # links
-  Meta.allow_tag_with_uri_attributes(:a, ["href", "data-user", "data-tag"], @valid_schemes)
+  Pleroma.HTML.URIAttributes.allow_tag_with_uri_attributes(
+    :a,
+    ["href", "data-user", "data-tag"],
+    @valid_schemes
+  )
 
   Meta.allow_tag_with_this_attribute_values(:a, "class", [
     "hashtag",
@@ -49,7 +54,7 @@ defmodule Pleroma.HTML.Scrubber.TwitterText do
     Meta.allow_tag_with_this_attribute_values(:img, "class", ["emoji"])
 
     # restrict img tags to http/https only, because of MediaProxy.
-    Meta.allow_tag_with_uri_attributes(:img, ["src"], ["http", "https"])
+    Pleroma.HTML.URIAttributes.allow_tag_with_uri_attributes(:img, ["src"], ["http", "https"])
 
     Meta.allow_tag_with_these_attributes(:img, [
       "width",

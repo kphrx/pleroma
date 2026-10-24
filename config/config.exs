@@ -161,7 +161,11 @@ config :mime, :types, %{
   "image/apng" => ["apng"]
 }
 
-config :tesla, adapter: Tesla.Adapter.Hackney
+config :tesla, adapter: Tesla.Adapter.Gun
+
+# Hackney 4 shares one HTTP/2 connection per host, and closing one response
+# (as the media proxy does) stops it for every other stream on it.
+config :hackney, default_protocols: [:http1]
 
 # Configures http settings, upstream proxy etc.
 config :pleroma, :http,
@@ -802,7 +806,7 @@ config :pleroma, :frontends,
       "name" => "admin-fe",
       "git" => "https://git.pleroma.social/pleroma/admin-fe",
       "build_url" =>
-        "https://git.pleroma.social/pleroma/admin-fe/-/jobs/artifacts/${ref}/download?job=build",
+        "https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip",
       "ref" => "develop"
     },
     "soapbox" => %{
