@@ -17,6 +17,11 @@ defmodule Pleroma.FrontendTest do
     end)
   end
 
+  test "admin-fe uses package builds" do
+    assert Pleroma.Config.get([:frontends, :available, "admin-fe", "build_url"]) ==
+             "https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip"
+  end
+
   test "it downloads and unzips a known frontend" do
     clear_config([:frontends, :available], %{
       "pleroma" => %{

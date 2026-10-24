@@ -1,0 +1,40 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/attachment-url-list",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:43:02Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-attachment-url-list",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:43:02Z",
+    "content": "url is array of two Link objects",
+    "attachment": {
+      "type": "Image",
+      "url": [
+        {
+          "type": "Link",
+          "href": "https://fedidev.fun/images/007.png",
+          "mediaType": "image/png"
+        },
+        {
+          "type": "Link",
+          "href": "https://fedidev.fun/images/008.jpg",
+          "mediaType": "image/jpeg"
+        }
+      ]
+    }
+  }
+}
+

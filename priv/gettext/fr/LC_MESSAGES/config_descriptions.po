@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2022-07-22 02:09+0300\n"
-"PO-Revision-Date: 2024-10-13 21:03+0000\n"
+"PO-Revision-Date: 2025-12-27 07:08+0000\n"
 "Last-Translator: Codimp <contact@lithio.fr>\n"
 "Language-Team: French <https://translate.pleroma.social/projects/pleroma/"
 "pleroma-backend-domain-config_descriptions/fr/>\n"
@@ -280,7 +280,7 @@ msgstr ""
 "Rejeter, Enlever de TWKN ou marquer comme contenu sensible les messages avec "
 "des mots-croisillons (sans mettre le # du début)\n"
 "\n"
-"Note: cette politique MRF est toujours activée. Si vous voulez la "
+"Note : cette politique MRF est toujours activée. Si vous voulez la "
 "désactiver, vous devez configurer des listes vides.\n"
 
 #: lib/pleroma/docs/translator.ex:5
@@ -402,7 +402,7 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-:shout"
 msgid "Pleroma shout settings"
-msgstr ""
+msgstr "Paramètre de Pleroma shout"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
@@ -416,7 +416,7 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-:streamer"
 msgid "Settings for notifications streamer"
-msgstr ""
+msgstr "Paramètres des streamers de notifications"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
@@ -429,12 +429,14 @@ msgstr "Paramètres liés au schémas d'URI"
 msgctxt "config description at :pleroma-:web_cache_ttl"
 msgid "The expiration time for the web responses cache. Values should be in milliseconds or `nil` to disable expiration."
 msgstr ""
+"Temps d'expiration pour le cache des réponses web. Les valeurs doivent être "
+"en millisecondes ou `nil`pour désactiver l'expiration."
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-:welcome"
 msgid "Welcome messages settings"
-msgstr ""
+msgstr "Paramètres de messages de bienvenue"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
@@ -458,133 +460,146 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Captcha"
 msgid "Captcha-related settings"
-msgstr ""
+msgstr "Paramètres liés au Captcha"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Captcha.Kocaptcha"
 msgid "Kocaptcha is a very simple captcha service with a single API endpoint, the source code is here: https://github.com/koto-bank/kocaptcha. The default endpoint (https://captcha.kotobank.ch) is hosted by the developer."
 msgstr ""
+"Kocaptcha est un service de captcha très simple avec une API n'utilisant "
+"qu'une seule ressource, le code source est ici : https://github.com/"
+"koto-bank/kocaptcha. La ressource par défaut (https://captcha.kotobank.ch) "
+"est hébergée par son développeur."
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Emails.Mailer"
 msgid "Mailer-related settings"
-msgstr ""
+msgstr "Paramètres liés à l'envoyeur d'email"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Emails.NewUsersDigestEmail"
 msgid "New users admin email digest"
-msgstr ""
+msgstr "Email à l'administrateur de résumé des nouveaux utilisateurs"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Emails.UserEmail"
 msgid "Email template settings"
-msgstr ""
+msgstr "Paramètres de template d'email"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Formatter"
 msgid "Configuration for Pleroma's link formatter which parses mentions, hashtags, and URLs."
 msgstr ""
+"Configuration du formateur de lien Pleroma qui interprète les mentions, "
+"hashtags et URLs."
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.ScheduledActivity"
 msgid "Scheduled activities settings"
-msgstr ""
+msgstr "Paramètres des activités planifiées"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Upload"
 msgid "Upload general settings"
-msgstr ""
+msgstr "Paramètres généraux d'upload"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Upload.Filter.AnonymizeFilename"
 msgid "Filter replaces the filename of the upload"
-msgstr ""
+msgstr "Filtre de remplacement du nom de fichier de l'upload"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Upload.Filter.Mogrify"
 msgid "Uploads mogrify filter settings"
-msgstr ""
+msgstr "Paramètres de filtre mogrify pour les uploads"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Uploaders.Local"
 msgid "Local uploader-related settings"
-msgstr ""
+msgstr "Paramètres liés aux uploads locaux"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Uploaders.S3"
 msgid "S3 uploader-related settings"
-msgstr ""
+msgstr "Paramètres liés à l'uploader S3"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.User.Backup"
 msgid "Account Backup"
-msgstr ""
+msgstr "Sauvegarde de Comptes"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Web.MediaProxy.Invalidation.Http"
 msgid "HTTP invalidate settings"
-msgstr ""
+msgstr "Paramètres d'invalidation HTTP"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Web.MediaProxy.Invalidation.Script"
 msgid "Invalidation script settings"
-msgstr ""
+msgstr "Paramètres du script d'invalidation"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Web.Metadata"
 msgid "Metadata-related settings"
-msgstr ""
+msgstr "Paramètres liés aux métadonnées"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Web.Plugs.RemoteIp"
 msgid "`Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://git.pleroma.social/pleroma/remote_ip) but with runtime configuration.\n**If your instance is not behind at least one reverse proxy, you should not enable this plug.**\n"
 msgstr ""
+"`Pleroma.Web.Plugs.RemoteIp` est un shim pour invoquer "
+"[`RemoteIp`](https://git.pleroma.social/pleroma/remote_ip) mais avec une "
+"configuration au runtime.\n"
+"**Si votre instance n'est pas derrière au moins un proxy inverse, vous ne "
+"devriez pas activer ce plug.**\n"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Web.Preload"
 msgid "Preload-related settings"
-msgstr ""
+msgstr "Paramètres liés au préchargement"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :pleroma-Pleroma.Workers.PurgeExpiredActivity"
 msgid "Expired activities settings"
-msgstr ""
+msgstr "Paramètres des activités expirées"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :prometheus-Pleroma.Web.Endpoint.MetricsExporter"
 msgid "Prometheus app metrics endpoint configuration"
-msgstr ""
+msgstr "Configuration des endpoints de métriques Prometheus"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config description at :web_push_encryption-:vapid_details"
 msgid "Web Push Notifications configuration. You can use the mix task mix web_push.gen.keypair to generate it."
 msgstr ""
+"Configuration des notifications Web Push. Vous pouvez utiliser la tâche mix "
+"web_push.gen.keypair pour le générer."
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :ex_aws-:s3"
 msgid "S3"
-msgstr ""
+msgstr "S3"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
@@ -596,13 +611,13 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgctxt "config label at :logger-:ex_syslogger"
 msgid "ExSyslogger"
-msgstr ""
+msgstr "ExSyslogger"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:activitypub"
 msgid "ActivityPub"
-msgstr ""
+msgstr "ActivityPub"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
@@ -620,151 +635,151 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:connections_pool"
 msgid "Connections pool"
-msgstr ""
+msgstr "Pool de connexions"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:email_notifications"
 msgid "Email notifications"
-msgstr ""
+msgstr "Notifications email"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:emoji"
 msgid "Emoji"
-msgstr ""
+msgstr "Emoji"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:features"
 msgid "Features"
-msgstr ""
+msgstr "Fonctionnalités"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:feed"
 msgid "Feed"
-msgstr ""
+msgstr "Flux"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:frontend_configurations"
 msgid "Frontend configurations"
-msgstr ""
+msgstr "Configurations des frontends"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:frontends"
 msgid "Frontends"
-msgstr ""
+msgstr "Frontends"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:gopher"
 msgid "Gopher"
-msgstr ""
+msgstr "Gopher"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:hackney_pools"
 msgid "Hackney pools"
-msgstr ""
+msgstr "Bacs (pools) d'Hackney"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:http"
 msgid "HTTP"
-msgstr ""
+msgstr "HTTP"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:http_security"
 msgid "HTTP security"
-msgstr ""
+msgstr "Sécurité HTTP"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:instance"
 msgid "Instance"
-msgstr ""
+msgstr "Instance"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:instances_favicons"
 msgid "Instances favicons"
-msgstr ""
+msgstr "Favicons des instances"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:ldap"
 msgid "LDAP"
-msgstr ""
+msgstr "LDAP"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:majic_pool"
 msgid "Majic pool"
-msgstr ""
+msgstr "Bac (pool) de Majic"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:manifest"
 msgid "Manifest"
-msgstr ""
+msgstr "Manifeste"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:markup"
 msgid "Markup Settings"
-msgstr ""
+msgstr "Paramètres des Balises"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:media_preview_proxy"
 msgid "Media preview proxy"
-msgstr ""
+msgstr "Proxy de prévisualisation média"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:media_proxy"
 msgid "Media proxy"
-msgstr ""
+msgstr "Proxy média"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:modules"
 msgid "Modules"
-msgstr ""
+msgstr "Modules"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:mrf"
 msgid "MRF"
-msgstr ""
+msgstr "MRF"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:mrf_activity_expiration"
 msgid "MRF Activity Expiration Policy"
-msgstr ""
+msgstr "Politique MRF d'Expiration des Activités"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:mrf_follow_bot"
 msgid "MRF FollowBot Policy"
-msgstr ""
+msgstr "Politique MRF FollowBot"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:mrf_hashtag"
 msgid "MRF Hashtag"
-msgstr ""
+msgstr "Politique MRF hashtag"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format
 msgctxt "config label at :pleroma-:mrf_hellthread"
 msgid "MRF Hellthread"
-msgstr ""
+msgstr "MRF Hellthread"
 
 #: lib/pleroma/docs/translator.ex:5
 #, elixir-autogen, elixir-format

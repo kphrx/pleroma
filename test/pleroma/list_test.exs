@@ -23,6 +23,29 @@ defmodule Pleroma.ListTest do
     assert changeset.errors == [title: {"can't be blank", [validation: :required]}]
   end
 
+  test "creating a list with an emoji" do
+    user = insert(:user)
+    {:ok, %Pleroma.List{} = list} = Pleroma.List.create(%{title: "title", emoji: "🕓"}, user)
+    %Pleroma.List{emoji: emoji} = Pleroma.List.get(list.id, user)
+    assert emoji == "🕓"
+  end
+
+  test "validates emoji" do
+    user = insert(:user)
+
+    assert {:error, changeset} =
+             Pleroma.List.create(%{title: "title", emoji: "not an emoji"}, user)
+
+    assert changeset.errors == [emoji: {"Invalid emoji", []}]
+  end
+
+  test "updating a list's emoji" do
+    user = insert(:user)
+    {:ok, list} = Pleroma.List.create(%{title: "title"}, user)
+    {:ok, %{emoji: emoji}} = Pleroma.List.update(list, %{emoji: "🕓"})
+    assert "🕓" == emoji
+  end
+
   test "getting a list not belonging to the user" do
     user = insert(:user)
     other_user = insert(:user)

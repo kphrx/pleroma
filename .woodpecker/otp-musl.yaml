@@ -33,10 +33,10 @@ variables:
     - mkdir release
     - export PLEROMA_BUILD_BRANCH=${CI_COMMIT_BRANCH}
     - mix release --path release
-  build_image_amd64: &build_image_amd64 docker.io/hexpm/elixir-amd64:1.17.3-erlang-27.3.4.2-alpine-3.22.1
+  build_image_amd64: &build_image_amd64 docker.io/hexpm/elixir:1.17.3-erlang-27.3.4.17-alpine-3.22.5
   build_image_arm: &build_image_arm docker.io/arm32v7/elixir:1.17.3-alpine
-  build_image_arm64: &build_image_arm64 docker.io/hexpm/elixir-arm64:1.17.3-erlang-27.3.4.2-alpine-3.22.1
-  artifacts_uploader_image: &artifacts_uploader_image docker.io/woodpeckercommunity/plugin-gitea-package:0.5.0
+  build_image_arm64: &build_image_arm64 docker.io/hexpm/elixir:1.17.3-erlang-27.3.4.17-alpine-3.22.5
+  artifacts_uploader_image: &artifacts_uploader_image docker.io/woodpeckercommunity/plugin-gitea-package:0.5.1
   artifacts_uploader_settings: &artifacts_uploader_settings
     user:
       from_secret: pleroma-ci-user

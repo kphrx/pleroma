@@ -3,9 +3,12 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.ForceBotUnlistedPolicy do
-  alias Pleroma.User
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
   @moduledoc "Remove bot posts from federated timeline"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
+  alias Pleroma.User
+
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   require Pleroma.Constants
 

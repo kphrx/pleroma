@@ -1,0 +1,286 @@
+# Pleroma: A lightweight social networking server
+# Copyright © 2017-2022 Pleroma Authors <https://pleroma.social/>
+# SPDX-License-Identifier: AGPL-3.0-only
+
+defmodule Pleroma.Search.ParadeDBTest do
+  use Pleroma.DataCase, async: true
+  use Oban.Testing, repo: Pleroma.Repo
+
+  import Mox
+  import Pleroma.Factory
+
+  alias Pleroma.Search.ParadeDB
+  alias Pleroma.Search.ParadeDB.ClientMock
+  alias Pleroma.UnstubbedConfigMock, as: Config
+  alias Pleroma.Web.CommonAPI
+  alias Pleroma.Workers.SearchIndexingWorker
+
+  describe "ParadeDB" do
+    test "indexes a public post on creation" do
+      user = insert(:user)
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: "guys i just don't wanna leave the swamp",
+          visibility: "public"
+        })
+
+      args = %{"op" => "add_to_index", "activity" => activity.id}
+
+      assert_enqueued(worker: SearchIndexingWorker, args: args)
+
+      ClientMock
+      |> expect(:query, fn sql, params ->
+        assert sql =~ "INSERT INTO pleroma_search_documents"
+
+        [activity_id, object_id, object_ap_id, actor_ap_id, content, published_at] = params
+
+        {:ok, dumped_activity_id} = FlakeId.Ecto.CompatType.dump(activity.id)
+
+        assert activity_id == dumped_activity_id
+        assert is_integer(object_id)
+        assert is_binary(object_ap_id)
+        assert actor_ap_id == activity.data["actor"]
+        assert content == "guys i just don&#39;t wanna leave the swamp"
+        assert %DateTime{} = published_at
+
+        send(self(), :inserted)
+        {:ok, %{}}
+      end)
+
+      Config
+      |> expect(:get, 3, fn
+        [Pleroma.Search, :module], nil ->
+          ParadeDB
+
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+      end)
+
+      assert :ok = perform_job(SearchIndexingWorker, args)
+      assert_received(:inserted)
+    end
+
+    test "doesn't index posts that are not public" do
+      user = insert(:user)
+
+      Enum.each(["private", "direct"], fn visibility ->
+        {:ok, activity} =
+          CommonAPI.post(user, %{
+            status: "guys i just don't wanna leave the swamp",
+            visibility: visibility
+          })
+
+        args = %{"op" => "add_to_index", "activity" => activity.id}
+        refute_enqueued(worker: SearchIndexingWorker, args: args)
+      end)
+    end
+
+    test "backend skips non-public posts when called directly" do
+      user = insert(:user)
+
+      Enum.each(["private", "direct"], fn visibility ->
+        {:ok, activity} =
+          CommonAPI.post(user, %{
+            status: "guys i just don't wanna leave the swamp",
+            visibility: visibility
+          })
+
+        assert :ok = ParadeDB.add_to_index(activity)
+      end)
+    end
+
+    test "deletes posts from index when deleted locally" do
+      user = insert(:user)
+
+      ClientMock
+      |> expect(:query, 2, fn sql, params ->
+        cond do
+          String.contains?(sql, "INSERT INTO pleroma_search_documents") ->
+            send(self(), :inserted)
+            {:ok, %{}}
+
+          String.contains?(sql, "DELETE FROM pleroma_search_documents") ->
+            assert [object_id] = params
+            assert is_integer(object_id)
+
+            send(self(), :deleted)
+            {:ok, %{}}
+
+          true ->
+            flunk("Unexpected ParadeDB SQL: #{inspect(sql)}")
+        end
+      end)
+
+      Config
+      |> expect(:get, 6, fn
+        [Pleroma.Search, :module], nil ->
+          ParadeDB
+
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+      end)
+
+      {:ok, activity} =
+        CommonAPI.post(user, %{
+          status: "guys i just don't wanna leave the swamp",
+          visibility: "public"
+        })
+
+      args = %{"op" => "add_to_index", "activity" => activity.id}
+      assert_enqueued(worker: SearchIndexingWorker, args: args)
+      assert :ok = perform_job(SearchIndexingWorker, args)
+      assert_received(:inserted)
+
+      {:ok, _} = CommonAPI.delete(activity.id, user)
+
+      delete_args = %{"op" => "remove_from_index", "object" => activity.object.id}
+      assert_enqueued(worker: SearchIndexingWorker, args: delete_args)
+      assert :ok = perform_job(SearchIndexingWorker, delete_args)
+      assert_received(:deleted)
+    end
+
+    test "search returns activities in backend order" do
+      user = insert(:user)
+
+      {:ok, activity1} = CommonAPI.post(user, %{status: "first swamp", visibility: "public"})
+      {:ok, activity2} = CommonAPI.post(user, %{status: "second swamp", visibility: "public"})
+
+      activity1_id = activity1.id
+      activity2_id = activity2.id
+
+      {:ok, dumped_activity1_id} = FlakeId.Ecto.CompatType.dump(activity1_id)
+      {:ok, dumped_activity2_id} = FlakeId.Ecto.CompatType.dump(activity2_id)
+
+      ClientMock
+      |> expect(:query, fn sql, params ->
+        assert sql =~ "SELECT id FROM pleroma_search_documents"
+        assert ["swamp", _limit, _offset] = params
+
+        {:ok, %{rows: [[dumped_activity2_id], [dumped_activity1_id]]}}
+      end)
+
+      Config
+      |> expect(:get, 3, fn
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+
+        [Pleroma.Search.ParadeDB, :fuzzy_distance], 0 ->
+          0
+      end)
+
+      assert [%{id: ^activity2_id}, %{id: ^activity1_id}] =
+               ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
+    end
+
+    test "search excludes non-public activities from backend hits" do
+      user = insert(:user)
+
+      {:ok, public_activity} =
+        CommonAPI.post(user, %{status: "public swamp", visibility: "public"})
+
+      {:ok, private_activity} =
+        CommonAPI.post(user, %{status: "private swamp", visibility: "private"})
+
+      public_activity_id = public_activity.id
+
+      {:ok, dumped_public_id} = FlakeId.Ecto.CompatType.dump(public_activity.id)
+      {:ok, dumped_private_id} = FlakeId.Ecto.CompatType.dump(private_activity.id)
+
+      ClientMock
+      |> expect(:query, fn sql, params ->
+        assert sql =~ "SELECT id FROM pleroma_search_documents"
+        assert ["swamp", _limit, _offset] = params
+
+        {:ok, %{rows: [[dumped_private_id], [dumped_public_id]]}}
+      end)
+
+      Config
+      |> expect(:get, 3, fn
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+
+        [Pleroma.Search.ParadeDB, :fuzzy_distance], 0 ->
+          0
+      end)
+
+      assert [%{id: ^public_activity_id}] = ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
+    end
+
+    test "search supports backend ids returned as uuid strings" do
+      user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "uuid swamp", visibility: "public"})
+
+      activity_id = activity.id
+      {:ok, dumped_id} = FlakeId.Ecto.CompatType.dump(activity_id)
+      {:ok, uuid_string} = Ecto.UUID.load(dumped_id)
+
+      ClientMock
+      |> expect(:query, fn sql, params ->
+        assert sql =~ "SELECT id FROM pleroma_search_documents"
+        assert ["swamp", _limit, _offset] = params
+
+        {:ok, %{rows: [[uuid_string]]}}
+      end)
+
+      Config
+      |> expect(:get, 3, fn
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+
+        [Pleroma.Search.ParadeDB, :fuzzy_distance], 0 ->
+          0
+      end)
+
+      assert [%{id: ^activity_id}] = ParadeDB.search(nil, "swamp", limit: 40, offset: 0)
+    end
+
+    test "search uses configured fuzzy distance" do
+      user = insert(:user)
+
+      {:ok, activity} = CommonAPI.post(user, %{status: "runing shoes", visibility: "public"})
+
+      activity_id = activity.id
+      {:ok, dumped_id} = FlakeId.Ecto.CompatType.dump(activity_id)
+
+      ClientMock
+      |> expect(:query, fn sql, params ->
+        assert sql =~ "SELECT id FROM pleroma_search_documents"
+        assert sql =~ "($1::text)::pdb.fuzzy(1)"
+        assert ["running shoes", _limit, _offset] = params
+
+        {:ok, %{rows: [[dumped_id]]}}
+      end)
+
+      Config
+      |> expect(:get, 3, fn
+        [Pleroma.Search.ParadeDB, :client_impl], nil ->
+          ClientMock
+
+        [Pleroma.Search.ParadeDB, :table], "pleroma_search_documents" ->
+          "pleroma_search_documents"
+
+        [Pleroma.Search.ParadeDB, :fuzzy_distance], 0 ->
+          1
+      end)
+
+      assert [%{id: ^activity_id}] = ParadeDB.search(nil, "running shoes", limit: 40, offset: 0)
+    end
+  end
+end

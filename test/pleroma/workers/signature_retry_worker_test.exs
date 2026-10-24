@@ -16,12 +16,13 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
   alias Pleroma.Signature
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.UserView
+  alias Pleroma.Web.Endpoint
   alias Pleroma.Web.Federator
   alias Pleroma.Workers.SignatureRetryWorker
 
   defp signature_headers_for(%User{} = signer) do
     [
-      {"host", "local.test"},
+      {"host", "#{URI.parse(Endpoint.url()).host}"},
       {"date", "Thu, 25 Jul 2024 13:33:31 GMT"},
       {"digest", "SHA-256=fake-digest"},
       {"content-type", "application/activity+json"},
@@ -245,6 +246,66 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
     refute Activity.get_by_ap_id(create["id"])
   end
 
+  test "cancels when the Host header does not match Endpoint" do
+    alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
+
+    create = %{
+      "type" => "Create",
+      "actor" => alice.ap_id,
+      "id" => "https://one.com/activities/invalid-signature-create",
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [],
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://one.com/objects/invalid-signature-note",
+        "actor" => alice.ap_id,
+        "attributedTo" => alice.ap_id,
+        "content" => "forged post",
+        "published" => "2024-07-25T13:33:31Z",
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+        "cc" => []
+      }
+    }
+
+    expect_signature_from(alice)
+
+    headers =
+      [
+        {"host", "invalid.example.com"},
+        {"date", "Thu, 25 Jul 2024 13:33:31 GMT"},
+        {"digest", "SHA-256=fake-digest"},
+        {"content-type", "application/activity+json"},
+        {
+          "signature",
+          "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+        }
+      ]
+
+    assert {:ok, oban_job} =
+             Federator.incoming_failed_signature_ap_doc(%{
+               method: "POST",
+               req_headers: headers,
+               request_path: "/inbox",
+               params: create,
+               query_string: ""
+             })
+
+    log =
+      capture_log([level: :warning], fn ->
+        assert {:cancel, :host_header_mismatch} = SignatureRetryWorker.perform(oban_job)
+      end)
+
+    assert log =~ "Failed-signature inbox retry rejected"
+    assert log =~ "reason=:host_header_mismatch"
+    assert log =~ "payload_actor=\"https://one.com/users/alice\""
+    assert log =~ "signature_actor=\"https://one.com/users/alice\""
+    assert log =~ "activity_id=\"https://one.com/activities/invalid-signature-create\""
+    assert log =~ "type=\"Create\""
+    assert log =~ "request_path=\"/inbox\""
+
+    refute Activity.get_by_ap_id(create["id"])
+  end
+
   test "processes the activity after refetching a valid matching signature" do
     alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
 
@@ -309,11 +370,11 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
         "content-type" => "application/activity+json",
         date: date,
         digest: digest,
-        host: "local.test"
+        host: "#{URI.parse(Endpoint.url()).host}"
       })
 
     req_headers = [
-      ["host", "local.test"],
+      ["host", "#{URI.parse(Endpoint.url()).host}"],
       ["date", date],
       ["digest", digest],
       ["content-type", "application/activity+json"],

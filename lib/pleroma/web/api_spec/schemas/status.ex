@@ -9,6 +9,7 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Status do
   alias Pleroma.Web.ApiSpec.Schemas.Emoji
   alias Pleroma.Web.ApiSpec.Schemas.FlakeID
   alias Pleroma.Web.ApiSpec.Schemas.Poll
+  alias Pleroma.Web.ApiSpec.Schemas.PreviewCard
   alias Pleroma.Web.ApiSpec.Schemas.Tag
   alias Pleroma.Web.ApiSpec.Schemas.VisibilityScope
 
@@ -31,40 +32,8 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Status do
       },
       bookmarked: %Schema{type: :boolean, description: "Have you bookmarked this status?"},
       card: %Schema{
-        type: :object,
-        nullable: true,
-        description: "Preview card for links included within status content",
-        required: [:url, :title, :description, :type],
-        properties: %{
-          type: %Schema{
-            type: :string,
-            enum: ["link", "photo", "video", "rich"],
-            description: "The type of the preview card"
-          },
-          provider_name: %Schema{
-            type: :string,
-            nullable: true,
-            description: "The provider of the original resource"
-          },
-          provider_url: %Schema{
-            type: :string,
-            format: :uri,
-            description: "A link to the provider of the original resource"
-          },
-          url: %Schema{type: :string, format: :uri, description: "Location of linked resource"},
-          image: %Schema{
-            type: :string,
-            nullable: true,
-            format: :uri,
-            description: "Preview thumbnail"
-          },
-          image_description: %Schema{
-            type: :string,
-            description: "Alternate text that describes what is in the thumbnail"
-          },
-          title: %Schema{type: :string, description: "Title of linked resource"},
-          description: %Schema{type: :string, description: "Description of preview"}
-        }
+        allOf: [PreviewCard],
+        nullable: true
       },
       content: %Schema{type: :string, format: :html, description: "HTML-encoded status content"},
       text: %Schema{

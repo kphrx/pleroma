@@ -38,6 +38,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.NsfwApiPolicy do
   - `unlist`: Unlist all detected NSFW content? Default: `false`
   - `reject`: Reject all detected NSFW content (takes precedence)? Default: `false`
   """
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.Config
   alias Pleroma.Constants
   alias Pleroma.HTTP
@@ -46,7 +48,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.NsfwApiPolicy do
   require Logger
   require Pleroma.Constants
 
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   @policy :mrf_nsfw_api
 
   def build_request_url(url) do

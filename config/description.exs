@@ -815,7 +815,8 @@ config :pleroma, :config_description, [
           "text/plain",
           "text/html",
           "text/markdown",
-          "text/bbcode"
+          "text/bbcode",
+          "text/x.misskeymarkdown"
         ]
       },
       %{
@@ -1394,7 +1395,13 @@ config :pleroma, :config_description, [
             label: "Post Content Type",
             type: {:dropdown, :atom},
             description: "Default post formatting option",
-            suggestions: ["text/plain", "text/html", "text/markdown", "text/bbcode"]
+            suggestions: [
+              "text/plain",
+              "text/html",
+              "text/markdown",
+              "text/bbcode",
+              "text/x.misskeymarkdown"
+            ]
           },
           %{
             key: :redirectRootNoLogin,
@@ -2721,6 +2728,19 @@ config :pleroma, :config_description, [
   },
   %{
     group: :pleroma,
+    key: Pleroma.Chat,
+    type: :group,
+    description: "Pleroma Chat settings",
+    children: [
+      %{
+        key: :enabled,
+        type: :boolean,
+        description: "Enables the chats API."
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
     key: :http,
     label: "HTTP",
     type: :group,
@@ -2903,7 +2923,7 @@ config :pleroma, :config_description, [
     key: Pleroma.Web.Plugs.RemoteIp,
     type: :group,
     description: """
-    `Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://git.pleroma.social/pleroma/remote_ip) but with runtime configuration.
+    `Pleroma.Web.Plugs.RemoteIp` is a shim to call [`RemoteIp`](https://hex.pm/packages/remote_ip) but with runtime configuration.
     **If your instance is not behind at least one reverse proxy, you should not enable this plug.**
     """,
     children: [
@@ -2918,6 +2938,12 @@ config :pleroma, :config_description, [
         description: """
           A list of strings naming the HTTP headers to use when deriving the true client IP. Default: `["x-forwarded-for"]`.
         """
+      },
+      %{
+        key: :clients,
+        type: {:list, :string},
+        description:
+          "A list of client IPs or subnets in CIDR notation. These will not be treated as proxies or reserved ranges. Defaults to `[]`. IPv4 entries without a bitmask will be assumed to be /32 and IPv6 /128."
       },
       %{
         key: :proxies,
@@ -3072,8 +3098,15 @@ config :pleroma, :config_description, [
       %{
         key: :max_connections,
         type: :integer,
-        description: "Maximum number of connections in the pool. Default: 250 connections.",
+        description:
+          "Maximum total number of connections in the pool. HTTP/1 origins may use multiple connections within this limit, while HTTP/2 connections are multiplexed. Default: 250 connections.",
         suggestions: [250]
+      },
+      %{
+        key: :max_idle_time,
+        type: :integer,
+        description: "Time before an unused connection is closed. Default: 30000ms.",
+        suggestions: [30_000]
       },
       %{
         key: :connect_timeout,
@@ -3490,6 +3523,26 @@ config :pleroma, :config_description, [
             suggestion: [5]
           }
         ]
+      },
+      %{
+        key: Pleroma.Webhook.Notify,
+        type: :keyword,
+        description: "Concurrent limits configuration for webhooks.",
+        suggestions: [max_running: 5, max_waiting: 200],
+        children: [
+          %{
+            key: :max_running,
+            type: :integer,
+            description: "Max running concurrently jobs.",
+            suggestion: [5]
+          },
+          %{
+            key: :max_waiting,
+            type: :integer,
+            description: "Max waiting jobs.",
+            suggestion: [200]
+          }
+        ]
       }
     ]
   },
@@ -3503,7 +3556,12 @@ config :pleroma, :config_description, [
         key: :module,
         type: :keyword,
         description: "Selected search module.",
-        suggestion: [Pleroma.Search.DatabaseSearch, Pleroma.Search.Meilisearch]
+        suggestion: [
+          Pleroma.Search.DatabaseSearch,
+          Pleroma.Search.Meilisearch,
+          Pleroma.Search.QdrantSearch,
+          Pleroma.Search.ParadeDB
+        ]
       }
     ]
   },
@@ -3533,6 +3591,34 @@ config :pleroma, :config_description, [
           "Amount of posts in a batch when running the initial indexing operation. Should probably not be more than 100000" <>
             " since there's a limit on maximum insert size",
         suggestion: [100_000]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Search.ParadeDB,
+    type: :group,
+    description: "ParadeDB settings.",
+    children: [
+      %{
+        key: :url,
+        type: :string,
+        description:
+          "ParadeDB database URL (separate Postgres instance). " <>
+            "Can also be set via `PARADEDB_DATABASE_URL`.",
+        suggestion: ["postgres://postgres:postgres@127.0.0.1:5432/paradedb"]
+      },
+      %{
+        key: :table,
+        type: :string,
+        description: "Table name used for search documents.",
+        suggestion: ["pleroma_search_documents"]
+      },
+      %{
+        key: :fuzzy_distance,
+        type: :integer,
+        description: "Edit-distance used for fuzzy token matching (0 disables fuzziness, max 2).",
+        suggestion: [0, 1, 2]
       }
     ]
   },

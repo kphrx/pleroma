@@ -1,0 +1,1 @@
+.image-cropper{flex-direction:column;display:flex}.image-cropper-canvas,.image-cropper .image{height:100%}.image-cropper .image-cropper-img-input{display:none}.image-cropper-buttons-wrapper{grid-gap:.5em;grid-template-columns:1fr 1fr 1fr;display:grid}.image-cropper-buttons-wrapper button{margin-top:1em}

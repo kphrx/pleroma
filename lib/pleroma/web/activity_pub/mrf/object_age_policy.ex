@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Web.ActivityPub.MRF.ObjectAgePolicy do
+  @moduledoc "Filter activities depending on their age"
+  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.Config
   alias Pleroma.User
 
   require Pleroma.Constants
 
-  @moduledoc "Filter activities depending on their age"
-  @behaviour Pleroma.Web.ActivityPub.MRF.Policy
+  use Pleroma.Web.ActivityPub.MRF.Policy
 
   defp check_date(%{"object" => %{"published" => published}} = activity) do
     with %DateTime{} = now <- DateTime.utc_now(),

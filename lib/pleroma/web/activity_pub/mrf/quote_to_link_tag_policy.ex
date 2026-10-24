@@ -6,6 +6,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.QuoteToLinkTagPolicy do
   @moduledoc "Force a Link tag for posts quoting another post. (may break outgoing federation of quote posts with older Pleroma versions)"
   @behaviour Pleroma.Web.ActivityPub.MRF.Policy
 
+  use Pleroma.Web.ActivityPub.MRF.Policy
+
   alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
 
   require Pleroma.Constants

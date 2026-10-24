@@ -50,6 +50,15 @@ defmodule Pleroma.HTTP.AdapterHelper.GunTest do
       assert Keyword.has_key?(defaults, :b)
     end
 
+    test "uses Hackney's ssl_options from the config as Gun's tls_opts" do
+      clear_config([:http, :adapter], ssl_options: [versions: [:"tlsv1.3"]])
+
+      opts = Gun.options([], URI.parse("https://example.com"))
+
+      assert opts[:tls_opts] == [versions: [:"tlsv1.3"]]
+      refute Keyword.has_key?(opts, :ssl_options)
+    end
+
     test "parses string proxy host & port" do
       clear_config([:http, :proxy_url], "localhost:8123")
 
@@ -72,6 +81,12 @@ defmodule Pleroma.HTTP.AdapterHelper.GunTest do
       opts = Gun.options([receive_conn: false, proxy: {~c"example.com", 4321}], uri)
 
       assert opts[:proxy] == {~c"example.com", 4321}
+    end
+
+    test "uses managed chunks for streamed responses" do
+      opts = Gun.options([stream: true], URI.parse("https://example.com"))
+
+      assert opts[:body_as] == :chunks
     end
   end
 end

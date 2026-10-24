@@ -30,9 +30,18 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
         %{
           "url" => [
             %{
-              "href" =>
-                "https://peertube.moe/static/webseed/df5f464b-be8d-46fb-ad81-2d4c2d1630e3-480.mp4",
+              "href" => "https://peertube.moe/video.mp4?first=one&second=two",
               "mediaType" => "video/mp4",
+              "size" => "123",
+              "type" => "Link"
+            }
+          ]
+        },
+        %{
+          "url" => [
+            %{
+              "href" => "https://peertube.moe/notes.pdf",
+              "mediaType" => "application/pdf",
               "type" => "Link"
             }
           ]
@@ -63,6 +72,15 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
            ]
 
     assert xpath(xml, ~x"//feed/entry/author/name/text()"ls) == [user.nickname, user.nickname]
+    assert xpath(xml, ~x"//feed/entry/link[@rel='self']/@href"sl) == []
+    assert length(xpath(xml, ~x"//feed/entry/link[@rel='alternate']/@href"sl)) == 2
+
+    assert xpath(xml, ~x"//feed/entry/link[@rel='enclosure']/@href"sl) == [
+             "https://peertube.moe/video.mp4?first=one&second=two",
+             "https://peertube.moe/notes.pdf"
+           ]
+
+    assert xpath(xml, ~x"//feed/entry/link[@rel='enclosure']/@length"sl) == ["123"]
 
     conn =
       conn
@@ -96,17 +114,28 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
         %{
           "url" => [
             %{
-              "href" =>
-                "https://peertube.moe/static/webseed/df5f464b-be8d-46fb-ad81-2d4c2d1630e3-480.mp4",
+              "href" => "https://peertube.moe/video.mp4?first=one&second=two",
               "mediaType" => "video/mp4",
+              "size" => "123",
+              "type" => "Link"
+            }
+          ]
+        },
+        %{
+          "url" => [
+            %{
+              "href" => "https://peertube.moe/notes.pdf",
+              "mediaType" => "application/pdf",
               "type" => "Link"
             }
           ]
         }
       ])
 
+    edited_at = NaiveDateTime.add(object.updated_at, 60)
+
     object
-    |> Ecto.Changeset.change(data: object_data)
+    |> Ecto.Changeset.change(data: object_data, updated_at: edited_at)
     |> Pleroma.Repo.update()
 
     {:ok, activity2} = CommonAPI.post(user, %{status: "42 This is :moominmamma #PleromaArt"})
@@ -136,14 +165,26 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
              ~c"yeah #PleromaArt"
            ]
 
+    assert xpath(xml, ~x"//channel/item/guid/@isPermaLink"sl) == ["true", "true"]
+
     assert xpath(xml, ~x"//channel/item/pubDate/text()"sl) == [
              FeedView.to_rfc2822(activity2.data["published"]),
              FeedView.to_rfc2822(activity1.data["published"])
            ]
 
-    assert xpath(xml, ~x"//channel/item/enclosure/@url"sl) == [
-             "https://peertube.moe/static/webseed/df5f464b-be8d-46fb-ad81-2d4c2d1630e3-480.mp4"
+    assert xpath(xml, ~x"//channel/lastBuildDate/text()"s) ==
+             FeedView.to_rfc2822(edited_at)
+
+    assert xpath(xml, ~x"//channel/item/media:content/@url"sl) == [
+             "https://peertube.moe/video.mp4?first=one&second=two",
+             "https://peertube.moe/notes.pdf"
            ]
+
+    assert xpath(xml, ~x"//channel/item/enclosure/@url"sl) == [
+             "https://peertube.moe/video.mp4?first=one&second=two"
+           ]
+
+    assert xpath(xml, ~x"//channel/item/enclosure/@length"sl) == ["123"]
 
     obj1 = Object.normalize(activity1, fetch: false)
     obj2 = Object.normalize(activity2, fetch: false)
@@ -179,6 +220,90 @@ defmodule Pleroma.Web.Feed.TagControllerTest do
     assert xpath(xml, ~x"//channel/item/title/text()"l) == [
              ~c"yeah #PleromaArt"
            ]
+  end
+
+  test "does not fabricate lastBuildDate for an empty RSS feed", %{conn: conn} do
+    response =
+      conn
+      |> put_req_header("accept", "application/rss+xml")
+      |> get(tag_feed_path(conn, :feed, "empty.rss"))
+      |> response(200)
+
+    refute response =~ "<lastBuildDate>"
+  end
+
+  test "provides a valid updated timestamp for an empty Atom feed", %{conn: conn} do
+    response =
+      conn
+      |> put_req_header("accept", "application/atom+xml")
+      |> get(tag_feed_path(conn, :feed, "empty.atom"))
+      |> response(200)
+
+    updated = response |> parse() |> xpath(~x"//feed/updated/text()"s)
+    assert {:ok, _datetime, 0} = DateTime.from_iso8601(updated)
+  end
+
+  test "escapes Atom IDs and tag feed self links", %{conn: conn} do
+    user = insert(:user, local: false)
+    object_id = "https://remote.example/object?first=one&second=two"
+
+    note =
+      insert(:note,
+        user: user,
+        object_local: false,
+        data: %{
+          "content" => "remote #atomlink",
+          "external_url" => object_id,
+          "id" => object_id,
+          "summary" => "",
+          "tag" => ["atomlink"]
+        }
+      )
+
+    insert(:note_activity, user: user, note: note, local: false, object_local: false)
+
+    response =
+      conn
+      |> put_req_header("accept", "application/atom+xml")
+      |> get("/tags/atomlink.atom?third=three&fourth=four")
+      |> response(200)
+
+    assert response =~ "https://remote.example/object?first=one&amp;second=two"
+    assert response =~ "third=three&amp;fourth=four"
+
+    xml = parse(response)
+    assert xpath(xml, ~x"//feed/entry/id/text()"s) == object_id
+  end
+
+  test "escapes and round-trips RSS item permalinks", %{conn: conn} do
+    user = insert(:user, local: false)
+    permalink = "https://remote.example/post?first=one&second=two"
+
+    note =
+      insert(:note,
+        user: user,
+        object_local: false,
+        data: %{
+          "content" => "remote #rsslink",
+          "external_url" => permalink,
+          "summary" => "",
+          "tag" => ["rsslink"]
+        }
+      )
+
+    insert(:note_activity, user: user, note: note, local: false, object_local: false)
+
+    response =
+      conn
+      |> put_req_header("accept", "application/rss+xml")
+      |> get(tag_feed_path(conn, :feed, "rsslink.rss"))
+      |> response(200)
+
+    assert response =~ "https://remote.example/post?first=one&amp;second=two"
+
+    xml = parse(response)
+    assert xpath(xml, ~x"//channel/item/guid/text()"s) == permalink
+    assert xpath(xml, ~x"//channel/item/link/text()"s) == permalink
   end
 
   describe "private instance" do

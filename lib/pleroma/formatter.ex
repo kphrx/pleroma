@@ -3,12 +3,15 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Formatter do
+  require Logger
+
   alias Pleroma.HTML
   alias Pleroma.User
 
   @safe_mention_regex ~r/^(\s*(?<mentions>(@.+?\s+){1,})+)(?<rest>.*)/s
   @link_regex ~r"((?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~%:/?#[\]@!\$&'\(\)\*\+,;=.]+)|[0-9a-z+\-\.]+:[0-9a-z$-_.+!*'(),]+"ui
   @markdown_characters_regex ~r/(`|\*|_|{|}|[|]|\(|\)|#|\+|-|\.|!)/
+  @markdown_void_elements ~w[area base br col command embed hr img input keygen link meta param source track wbr]
 
   defp linkify_opts do
     Pleroma.Config.get(Pleroma.Formatter) ++
@@ -124,7 +127,157 @@ defmodule Pleroma.Formatter do
   end
 
   def markdown_to_html(text) do
-    Earmark.as_html!(text, %Earmark.Options{compact_output: true, smartypants: false})
+    markdown_to_html(text, %{})
+  end
+
+  def markdown_to_html(text, opts) do
+    breaks = Map.get(opts, :breaks, false)
+
+    {_status, ast, _messages} = EarmarkParser.as_ast(text, breaks: breaks, gfm: true)
+
+    ast
+    |> maybe_strip_email_autolinks(text, Map.get(opts, :strip_email_autolinks, false))
+    |> render_markdown_nodes(false)
+    |> IO.iodata_to_binary()
+  rescue
+    exception ->
+      Logger.warning("Markdown rendering failed in #{inspect(exception.__struct__)}")
+      markdown_fallback(text, Map.get(opts, :breaks, false))
+  end
+
+  defp markdown_fallback(text, breaks) do
+    text = text |> escape_html() |> IO.iodata_to_binary() |> maybe_render_markdown_breaks(breaks)
+    "<p>" <> text <> "</p>"
+  end
+
+  defp maybe_render_markdown_breaks(text, true), do: String.replace(text, ~r/\r?\n/, "<br>")
+  defp maybe_render_markdown_breaks(text, false), do: text
+
+  defp maybe_strip_email_autolinks(ast, _text, false), do: ast
+
+  defp maybe_strip_email_autolinks(ast, text, true) do
+    emails =
+      ~r/<([^ >]+@[^ >]+)>/
+      |> Regex.scan(text, capture: :all_but_first)
+      |> Enum.map(fn [email] -> String.replace_prefix(email, "mailto:", "") end)
+      |> MapSet.new()
+
+    strip_email_autolinks(ast, emails)
+  end
+
+  defp strip_email_autolinks(nodes, emails) when is_list(nodes) do
+    Enum.map(nodes, &strip_email_autolinks(&1, emails))
+  end
+
+  defp strip_email_autolinks({"a", attrs, [email], _meta} = node, emails)
+       when is_binary(email) do
+    if List.keyfind(attrs, "href", 0) == {"href", "mailto:" <> email} and
+         MapSet.member?(emails, email) do
+      email
+    else
+      node
+    end
+  end
+
+  defp strip_email_autolinks({tag, attrs, children, meta}, emails) do
+    {tag, attrs, strip_email_autolinks(children, emails), meta}
+  end
+
+  defp strip_email_autolinks(text, _emails) when is_binary(text), do: text
+
+  defp render_markdown_nodes(nodes, verbatim) when is_list(nodes) do
+    Enum.map(nodes, &render_markdown_node(&1, verbatim))
+  end
+
+  defp render_markdown_node(text, true) when is_binary(text),
+    do: strip_dangerous_markdown_html(text)
+
+  defp render_markdown_node(text, false) when is_binary(text) do
+    text
+    |> strip_dangerous_markdown_html()
+    |> escape_markdown_html()
+  end
+
+  defp render_markdown_node({:comment, _attrs, _children, _meta}, _verbatim), do: []
+
+  defp render_markdown_node({tag, attrs, children, meta}, verbatim) do
+    normalized_tag = String.downcase(tag)
+
+    if normalized_tag in ["script", "style"] do
+      []
+    else
+      render_markdown_element(tag, normalized_tag, attrs, children, meta, verbatim)
+    end
+  end
+
+  defp render_markdown_element("code", _normalized_tag, attrs, children, _meta, _verbatim) do
+    ["<code", render_markdown_attrs(attrs), ">", render_markdown_code(children), "</code>"]
+  end
+
+  defp render_markdown_element(tag, "hr", attrs, _children, _meta, _verbatim) do
+    attrs = Enum.reject(attrs, &match?({"class", class} when class in ~w[thin medium thick], &1))
+    ["<", tag, render_markdown_attrs(attrs), "/>"]
+  end
+
+  defp render_markdown_element(tag, normalized_tag, attrs, _children, _meta, _verbatim)
+       when normalized_tag in @markdown_void_elements do
+    ["<", tag, render_markdown_attrs(attrs), ">"]
+  end
+
+  defp render_markdown_element(tag, _normalized_tag, attrs, children, meta, verbatim) do
+    children_verbatim = verbatim or Map.get(meta, :verbatim, false)
+
+    [
+      "<",
+      tag,
+      render_markdown_attrs(attrs),
+      ">",
+      render_markdown_nodes(children, children_verbatim),
+      "</",
+      tag,
+      ">"
+    ]
+  end
+
+  defp render_markdown_attrs(attrs) do
+    Enum.map(attrs, fn {name, value} ->
+      value = value |> to_string() |> HtmlEntities.decode() |> sanitize_markdown_url(name)
+      [" ", to_string(name), "=\"", escape_html(value), "\""]
+    end)
+  end
+
+  defp render_markdown_code(children) do
+    Enum.map(children, &escape_html/1)
+  end
+
+  defp sanitize_markdown_url(value, name) do
+    if String.downcase(to_string(name)) in ["href", "src"] do
+      # Percent-encode instead of cutting, so the URL stays complete but can
+      # never close the attribute or open a tag.
+      String.replace(value, ~r/["<>]/, fn
+        "\"" -> "%22"
+        "<" -> "%3C"
+        ">" -> "%3E"
+      end)
+    else
+      value
+    end
+  end
+
+  defp strip_dangerous_markdown_html(text) do
+    text
+    |> String.replace(~r/<(script|style)\b[^>]*>.*?<\/\1>/is, "")
+    |> String.replace(~r/<(script|style)\b[^>]*>.*\z/is, "")
+    |> String.replace(~r/<\/(script|style)\s*>/i, "")
+  end
+
+  defp escape_markdown_html(text) do
+    text |> HtmlEntities.decode() |> escape_html()
+  end
+
+  defp escape_html(text) do
+    {:safe, escaped} = Phoenix.HTML.html_escape(text)
+    escaped
   end
 
   def html_escape({text, mentions, hashtags}, type) do
@@ -132,6 +285,10 @@ defmodule Pleroma.Formatter do
   end
 
   def html_escape(text, "text/html") do
+    HTML.filter_tags(text)
+  end
+
+  def html_escape(text, "text/x.misskeymarkdown") do
     HTML.filter_tags(text)
   end
 

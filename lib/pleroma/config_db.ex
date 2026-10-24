@@ -23,6 +23,12 @@ defmodule Pleroma.ConfigDB do
     {:pleroma, :mrf_keyword, :replace}
   ]
 
+  @static_config [
+    {:pleroma, Pleroma.Search},
+    {:pleroma, Pleroma.Search.ParadeDB},
+    {:pleroma, Pleroma.Search.ParadeDB.Repo}
+  ]
+
   schema "config" do
     field(:key, Pleroma.EctoType.Config.Atom)
     field(:group, Pleroma.EctoType.Config.Atom)
@@ -32,15 +38,31 @@ defmodule Pleroma.ConfigDB do
     timestamps()
   end
 
-  @spec get_all_as_keyword() :: keyword()
-  def get_all_as_keyword do
+  @spec get_all_as_keyword(keyword()) :: keyword()
+  def get_all_as_keyword(options \\ []) do
     ConfigDB
     |> select([c], {c.group, c.key, c.value})
     |> Repo.all()
+    |> maybe_reject_static(options)
     |> Enum.reduce([], fn {group, key, value}, acc ->
       Keyword.update(acc, group, [{key, value}], &Keyword.merge(&1, [{key, value}]))
     end)
   end
+
+  def static?(%{group: group, key: key}), do: static?(group, key)
+  def static?(_config), do: false
+
+  def static?(group, key) do
+    Enum.any?(@static_config, fn {static_group, static_key} ->
+      group in [static_group, inspect(static_group)] and key in [static_key, inspect(static_key)]
+    end)
+  end
+
+  defp maybe_reject_static(configs, exclude_static: true) do
+    Enum.reject(configs, fn {group, key, _value} -> static?(group, key) end)
+  end
+
+  defp maybe_reject_static(configs, _options), do: configs
 
   @spec get_all_by_group(atom() | String.t()) :: [t()]
   def get_all_by_group(group) do

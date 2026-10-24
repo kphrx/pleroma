@@ -3,16 +3,16 @@ msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2021-08-15 15:40+0000\n"
-"PO-Revision-Date: 2021-09-03 06:45+0000\n"
-"Last-Translator: @liimee <alt3753.7@gmail.com>\n"
+"PO-Revision-Date: 2025-07-31 05:58+0000\n"
+"Last-Translator: Neko Nekowazarashi <kodra@nekoweb.my.id>\n"
 "Language-Team: Indonesian <https://translate.pleroma.social/projects/pleroma/"
-"pleroma/id/>\n"
+"pleroma-backend-domain-errors/id/>\n"
 "Language: id\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
-"X-Generator: Weblate 4.6.2\n"
+"X-Generator: Weblate 4.13.1\n"
 
 ## This file is a PO Template file.
 ##
@@ -41,7 +41,7 @@ msgstr "memiliki format yang tidak valid"
 
 ## From Ecto.Changeset.validate_subset/3
 msgid "has an invalid entry"
-msgstr ""
+msgstr "ada yang tidak valid"
 
 ## From Ecto.Changeset.validate_exclusion/3
 msgid "is reserved"
@@ -49,7 +49,7 @@ msgstr ""
 
 ## From Ecto.Changeset.validate_confirmation/3
 msgid "does not match confirmation"
-msgstr ""
+msgstr "tidak sama dengan konfirmasi"
 
 ## From Ecto.Changeset.no_assoc_constraint/3
 msgid "is still associated with this entry"
@@ -61,19 +61,19 @@ msgstr ""
 ## From Ecto.Changeset.validate_length/3
 msgid "should be %{count} character(s)"
 msgid_plural "should be %{count} character(s)"
-msgstr[0] "harus memiliki %{count} karakter"
+msgstr[0] "harus ada %{count} karakter"
 
 msgid "should have %{count} item(s)"
 msgid_plural "should have %{count} item(s)"
-msgstr[0] "harus memiliki %{count} item"
+msgstr[0] "harus ada %{count} item"
 
 msgid "should be at least %{count} character(s)"
 msgid_plural "should be at least %{count} character(s)"
-msgstr[0] "harus memiliki sekurang-kurangnya %{count} karakter"
+msgstr[0] "harus ada sekurang-kurangnya %{count} karakter"
 
 msgid "should have at least %{count} item(s)"
 msgid_plural "should have at least %{count} item(s)"
-msgstr[0] "harus memiliki sekurang-kurangnya %{count} item"
+msgstr[0] "harus ada sekurang-kurangnya %{count} item"
 
 msgid "should be at most %{count} character(s)"
 msgid_plural "should be at most %{count} character(s)"
@@ -112,7 +112,7 @@ msgstr "Sudah memilih"
 #: lib/pleroma/web/oauth/oauth_controller.ex:359
 #, elixir-format
 msgid "Bad request"
-msgstr "Permintaan buruk (bad request)"
+msgstr "Permintaan buruk"
 
 #: lib/pleroma/web/activity_pub/activity_pub_controller.ex:426
 #, elixir-format
@@ -133,7 +133,7 @@ msgstr "Tidak dapat mencari pengguna"
 #: lib/pleroma/web/pleroma_api/controllers/account_controller.ex:61
 #, elixir-format
 msgid "Can't get favorites"
-msgstr "Tidak dapat mendapatkan favorit"
+msgstr "Tidak dapat mengambil favorit"
 
 #: lib/pleroma/web/activity_pub/activity_pub_controller.ex:438
 #, elixir-format
@@ -143,7 +143,7 @@ msgstr "Tidak dapat menyukai objek"
 #: lib/pleroma/web/common_api/utils.ex:563
 #, elixir-format
 msgid "Cannot post an empty status without attachments"
-msgstr "Tidak dapat memposting status kosong tanpa lampiran"
+msgstr "Tidak dapat mempos status kosong tanpa lampiran"
 
 #: lib/pleroma/web/common_api/utils.ex:511
 #, elixir-format
@@ -206,7 +206,7 @@ msgstr "CAPTCHA tidak valid"
 #: lib/pleroma/web/oauth/oauth_controller.ex:568
 #, elixir-format
 msgid "Invalid credentials"
-msgstr "Kredensian tidak valid"
+msgstr "Kredensial tidak valid"
 
 #: lib/pleroma/plugs/ensure_authenticated_plug.ex:38
 #, elixir-format
@@ -279,12 +279,12 @@ msgstr ""
 #: lib/pleroma/web/ostatus/ostatus_controller.ex:149
 #, elixir-format
 msgid "Something went wrong"
-msgstr "Sesuatu yang salah terjadi"
+msgstr "Ada sesuatu yang salah"
 
 #: lib/pleroma/web/common_api/activity_draft.ex:107
 #, elixir-format
 msgid "The message visibility must be direct"
-msgstr "Visibilitas pesan harus langsung"
+msgstr "Ketampakan pesan harus langsung"
 
 #: lib/pleroma/web/common_api/utils.ex:573
 #, elixir-format
@@ -294,7 +294,7 @@ msgstr "Status lebih dari batas karakter"
 #: lib/pleroma/plugs/ensure_public_or_authenticated_plug.ex:31
 #, elixir-format
 msgid "This resource requires authentication."
-msgstr ""
+msgstr "Autentikasi diperlukan untuk hal ini."
 
 #: lib/pleroma/plugs/rate_limiter/rate_limiter.ex:206
 #, elixir-format
@@ -314,7 +314,7 @@ msgstr ""
 #: lib/pleroma/web/admin_api/controllers/admin_api_controller.ex:485
 #, elixir-format
 msgid "You can't revoke your own admin status."
-msgstr ""
+msgstr "Anda tidak dapat mencabut status admin Anda."
 
 #: lib/pleroma/web/oauth/oauth_controller.ex:221
 #: lib/pleroma/web/oauth/oauth_controller.ex:308
@@ -382,7 +382,7 @@ msgstr "Gagal"
 #: lib/pleroma/web/oauth/oauth_controller.ex:410
 #, elixir-format
 msgid "Failed to authenticate: %{message}."
-msgstr "Gagal mengotentikasi: %{message}."
+msgstr "Gagal mengautentikasi: %{message}."
 
 #: lib/pleroma/web/oauth/oauth_controller.ex:441
 #, elixir-format
@@ -392,7 +392,7 @@ msgstr "Gagal menyiapkan akun pengguna."
 #: lib/pleroma/plugs/oauth_scopes_plug.ex:38
 #, elixir-format
 msgid "Insufficient permissions: %{permissions}."
-msgstr ""
+msgstr "Izin tidak cukup: %{permissions}."
 
 #: lib/pleroma/plugs/uploaded_media.ex:104
 #, elixir-format
@@ -418,12 +418,12 @@ msgstr ""
 #: lib/pleroma/web/oauth/oauth_controller.ex:172
 #, elixir-format
 msgid "This action is outside the authorized scopes"
-msgstr ""
+msgstr "Tindakan ini diluar jangkauan yang terotorisasi"
 
 #: lib/pleroma/web/oauth/fallback_controller.ex:14
 #, elixir-format
 msgid "Unknown error, please check the details and try again."
-msgstr "Kesalahan tidak dikenal, harap periksa keterangannya dan coba lagi."
+msgstr "Kesalahan tidak dikenal, harap periksa detailnya dan coba lagi."
 
 #: lib/pleroma/web/oauth/oauth_controller.ex:119
 #: lib/pleroma/web/oauth/oauth_controller.ex:158
@@ -444,7 +444,7 @@ msgstr ""
 #: lib/pleroma/web/uploader_controller.ex:23
 #, elixir-format
 msgid "bad request"
-msgstr "permintaan buruk (bad request)"
+msgstr "permintaan buruk"
 
 #: lib/pleroma/web/twitter_api/twitter_api.ex:103
 #, elixir-format
@@ -469,7 +469,7 @@ msgstr "CAPTCHA Tidak Valid (Parameter kurang: %{name})"
 #: lib/pleroma/web/mastodon_api/controllers/list_controller.ex:92
 #, elixir-format
 msgid "List not found"
-msgstr ""
+msgstr "Daftar tidak ditemukan"
 
 #: lib/pleroma/web/mastodon_api/controllers/account_controller.ex:123
 #, elixir-format
@@ -480,7 +480,7 @@ msgstr "Parameter kurang: %{name}"
 #: lib/pleroma/web/oauth/oauth_controller.ex:321
 #, elixir-format
 msgid "Password reset is required"
-msgstr ""
+msgstr "Diperlukan atur ulang kata sandi"
 
 #: lib/pleroma/tests/auth_test_controller.ex:9
 #: lib/pleroma/web/activity_pub/activity_pub_controller.ex:6 lib/pleroma/web/admin_api/controllers/admin_api_controller.ex:6
@@ -522,7 +522,7 @@ msgstr ""
 #: lib/pleroma/plugs/ensure_authenticated_plug.ex:28
 #, elixir-format
 msgid "Two-factor authentication enabled, you must use a access token."
-msgstr "Otentikasi dua-faktor diaktifkan, Anda harus menggunakan token akses."
+msgstr "Autentikasi dua langkah diaktifkan, Anda harus menggunakan token akses."
 
 #: lib/pleroma/web/pleroma_api/controllers/emoji_pack_controller.ex:210
 #, elixir-format
@@ -552,7 +552,7 @@ msgstr ""
 #: lib/pleroma/web/mastodon_api/controllers/subscription_controller.ex:61
 #, elixir-format
 msgid "Web push subscription is disabled on this Pleroma instance"
-msgstr ""
+msgstr "Langganan push web dinonaktifkan untuk peladen Pleroma ini"
 
 #: lib/pleroma/web/admin_api/controllers/admin_api_controller.ex:451
 #, elixir-format
@@ -562,7 +562,7 @@ msgstr "Anda tidak bisa mencabut status admin/moderator Anda sendiri."
 #: lib/pleroma/web/mastodon_api/controllers/timeline_controller.ex:126
 #, elixir-format
 msgid "authorization required for timeline view"
-msgstr ""
+msgstr "Otorisasi diperlukan untuk tampilan linimasa"
 
 #: lib/pleroma/web/mastodon_api/controllers/fallback_controller.ex:24
 #, elixir-format
@@ -572,7 +572,7 @@ msgstr "Akses ditolak"
 #: lib/pleroma/web/mastodon_api/controllers/account_controller.ex:282
 #, elixir-format
 msgid "This API requires an authenticated user"
-msgstr ""
+msgstr "API ini memerlukan pengguna terautentikasi"
 
 #: lib/pleroma/plugs/user_is_admin_plug.ex:21
 #, elixir-format

@@ -41,21 +41,33 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   def fix_object_defaults(data) do
     data = Maps.filter_empty_values(data)
 
+    in_reply_to_id = in_reply_to_id(data["inReplyTo"])
+
     context =
       Utils.maybe_create_context(
-        data["context"] || data["conversation"] || data["inReplyTo"] || data["id"]
+        data["context"] || data["conversation"] || in_reply_to_id || data["id"]
       )
 
-    %User{follower_address: follower_collection} = User.get_cached_by_ap_id(data["attributedTo"])
+    data = Map.put(data, "context", context)
 
-    data
-    |> Map.put("context", context)
-    |> cast_and_filter_recipients("to", follower_collection)
-    |> cast_and_filter_recipients("cc", follower_collection)
-    |> cast_and_filter_recipients("bto", follower_collection)
-    |> cast_and_filter_recipients("bcc", follower_collection)
-    |> Transmogrifier.fix_implicit_addressing(follower_collection)
+    with attributed_to when is_binary(attributed_to) <- data["attributedTo"],
+         %User{follower_address: follower_collection} <- User.get_cached_by_ap_id(attributed_to) do
+      data
+      |> cast_and_filter_recipients("to", follower_collection)
+      |> cast_and_filter_recipients("cc", follower_collection)
+      |> cast_and_filter_recipients("bto", follower_collection)
+      |> cast_and_filter_recipients("bcc", follower_collection)
+      |> Transmogrifier.fix_implicit_addressing(follower_collection)
+    else
+      _ -> data
+    end
   end
+
+  defp in_reply_to_id(in_reply_to) when is_binary(in_reply_to), do: in_reply_to
+  defp in_reply_to_id(%{"id" => in_reply_to}) when is_binary(in_reply_to), do: in_reply_to
+  defp in_reply_to_id(%{"href" => in_reply_to}) when is_binary(in_reply_to), do: in_reply_to
+  defp in_reply_to_id([in_reply_to | _]), do: in_reply_to_id(in_reply_to)
+  defp in_reply_to_id(_), do: nil
 
   def fix_activity_addressing(activity) do
     %User{follower_address: follower_collection} = User.get_cached_by_ap_id(activity["actor"])
@@ -79,6 +91,17 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
     |> Map.put("attributedTo", actor)
   end
 
+  def maybe_set_attributed_to_from_activity(object, activity) when is_map(object) do
+    if is_nil(object["attributedTo"]) and is_nil(object["actor"]) do
+      case Containment.get_actor(activity) do
+        actor when is_binary(actor) -> Map.put(object, "attributedTo", actor)
+        _ -> object
+      end
+    else
+      object
+    end
+  end
+
   def fix_activity_context(data, %Object{data: %{"context" => object_context}}) do
     data
     |> Map.put("context", object_context)
@@ -96,23 +119,37 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
     Map.put(data, "to", to)
   end
 
-  def fix_quote_url(%{"quoteUrl" => _quote_url} = data), do: data
+  def fix_quote_url(%{"quoteUrl" => quote_url} = data) do
+    case normalize_object_id(quote_url) do
+      quote_url when is_binary(quote_url) -> Map.put(data, "quoteUrl", quote_url)
+      _ -> Map.delete(data, "quoteUrl")
+    end
+  end
 
   # Fedibird
   # https://github.com/fedibird/mastodon/commit/dbd7ae6cf58a92ec67c512296b4daaea0d01e6ac
   def fix_quote_url(%{"quoteUri" => quote_url} = data) do
-    Map.put(data, "quoteUrl", quote_url)
+    case normalize_object_id(quote_url) do
+      quote_url when is_binary(quote_url) -> Map.put(data, "quoteUrl", quote_url)
+      _ -> data
+    end
   end
 
   # Old Fedibird (bug)
   # https://github.com/fedibird/mastodon/issues/9
   def fix_quote_url(%{"quoteURL" => quote_url} = data) do
-    Map.put(data, "quoteUrl", quote_url)
+    case normalize_object_id(quote_url) do
+      quote_url when is_binary(quote_url) -> Map.put(data, "quoteUrl", quote_url)
+      _ -> data
+    end
   end
 
   # Misskey fallback
   def fix_quote_url(%{"_misskey_quote" => quote_url} = data) do
-    Map.put(data, "quoteUrl", quote_url)
+    case normalize_object_id(quote_url) do
+      quote_url when is_binary(quote_url) -> Map.put(data, "quoteUrl", quote_url)
+      _ -> data
+    end
   end
 
   def fix_quote_url(%{"tag" => [_ | _] = tags} = data) do
@@ -127,6 +164,11 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes do
   end
 
   def fix_quote_url(data), do: data
+
+  defp normalize_object_id(object_id) when is_binary(object_id), do: object_id
+  defp normalize_object_id(%{"id" => object_id}) when is_binary(object_id), do: object_id
+  defp normalize_object_id([object_id | _]) when is_binary(object_id), do: object_id
+  defp normalize_object_id(_), do: nil
 
   # On Mastodon, `"likes"` attribute includes an inlined `Collection` with `totalItems`,
   # not a list of users.

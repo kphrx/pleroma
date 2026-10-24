@@ -160,7 +160,7 @@ defmodule Pleroma.Search.QdrantSearch.OpenAIClient do
   end
 
   defp client do
-    Tesla.client(middleware())
+    Tesla.client(middleware(), Pleroma.HTTP.AdapterHelper.tesla_adapter())
   end
 
   defp middleware do
@@ -191,7 +191,7 @@ defmodule Pleroma.Search.QdrantSearch.QdrantClient do
   end
 
   defp client do
-    Tesla.client(middleware())
+    Tesla.client(middleware(), Pleroma.HTTP.AdapterHelper.tesla_adapter())
   end
 
   defp middleware do

@@ -700,7 +700,7 @@ defmodule Pleroma.Web.CommonAPI do
   end
 
   def update_report_state(activity_id, state) do
-    with %Activity{} = activity <- Activity.get_by_id(activity_id, filter: []) do
+    with %Activity{} = activity <- Activity.get_report(activity_id) do
       Utils.update_report_state(activity, state)
     else
       nil -> {:error, :not_found}
@@ -715,7 +715,7 @@ defmodule Pleroma.Web.CommonAPI do
   end
 
   def assign_report_to_account(activity_id, user) do
-    with %Activity{} = activity <- Activity.get_by_id(activity_id) do
+    with %Activity{} = activity <- Activity.get_report(activity_id) do
       Utils.assign_report_to_account(activity, user)
     else
       nil -> {:error, :not_found}

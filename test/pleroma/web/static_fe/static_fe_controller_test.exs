@@ -28,6 +28,15 @@ defmodule Pleroma.Web.StaticFE.StaticFEControllerTest do
       assert html_response(conn, 200) =~ user.nickname
     end
 
+    test "renders profile HTML inside the default app layout", %{conn: conn, user: user} do
+      conn = get(conn, "/users/#{user.nickname}")
+
+      html = html_response(conn, 200)
+      assert html =~ "<!DOCTYPE html>"
+      assert html =~ ~s(class="instance-header")
+      assert html =~ ~s(<link rel="stylesheet" href="/instance/static.css">)
+    end
+
     test "404 when user not found", %{conn: conn} do
       conn = get(conn, "/users/limpopo")
 

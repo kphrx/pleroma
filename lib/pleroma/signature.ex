@@ -104,7 +104,7 @@ defmodule Pleroma.Signature do
       |> put_req_header("(request-target)", request_target)
       |> put_req_header("@request-target", request_target)
 
-    @http_signatures_impl.validate_conn(conn)
+    @http_signatures_impl.validate_conn(conn) == true
   end
 
   @spec validate_signature(Plug.Conn.t()) :: boolean()

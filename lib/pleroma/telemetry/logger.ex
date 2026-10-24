@@ -55,8 +55,8 @@ defmodule Pleroma.Telemetry.Logger do
 
   def handle_event(
         [:pleroma, :connection_pool, :provision_failure],
-        %{opts: [key | _]},
         _,
+        %{key: key},
         _
       ) do
     Logger.debug(fn ->

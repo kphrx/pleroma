@@ -4,46 +4,55 @@
         "https://w3id.org/security/v1",
         "https://purl.archive.org/socialweb/webfinger",
         {
-            "Emoji": "toot:Emoji",
+            "as": "https://www.w3.org/ns/activitystreams#",
+            "ostatus": "http://ostatus.org#",
+            "schema": "http://schema.org#",
+            "vcard": "http://www.w3.org/2006/vcard/ns#",
+
+            "fedibird": "http://fedibird.com/ns#",
+            "litepub": "http://litepub.social/ns#",
+            "sm": "http://smithereen.software/ns#",
+            "toot": "http://joinmastodon.org/ns#",
+
+            "alsoKnownAs": {
+                "@id": "as:alsoKnownAs",
+                "@type": "@id"
+            },
             "Hashtag": "as:Hashtag",
-            "PropertyValue": "schema:PropertyValue",
+            "manuallyApprovesFollowers": "as:manuallyApprovesFollowers",
+            "quoteUrl": "as:quoteUrl",
+            "sensitive": "as:sensitive",
+
             "atomUri": "ostatus:atomUri",
             "conversation": {
                 "@id": "ostatus:conversation",
                 "@type": "@id"
             },
-            "discoverable": "toot:discoverable",
-            "manuallyApprovesFollowers": "as:manuallyApprovesFollowers",
-            "capabilities": "litepub:capabilities",
-            "ostatus": "http://ostatus.org#",
-            "schema": "http://schema.org#",
-            "toot": "http://joinmastodon.org/ns#",
-            "fedibird": "http://fedibird.com/ns#",
+
+            "PropertyValue": "schema:PropertyValue",
             "value": "schema:value",
-            "sensitive": "as:sensitive",
-            "litepub": "http://litepub.social/ns#",
-            "invisible": "litepub:invisible",
+
+            "quoteUri": "fedibird:quoteUri",
+
+            "capabilities": "litepub:capabilities",
+            "ChatMessage": "litepub:ChatMessage",
             "directMessage": "litepub:directMessage",
+            "EmojiReact": "litepub:EmojiReact",
+            "formerRepresentations": "litepub:formerRepresentations",
+            "invisible": "litepub:invisible",
             "listMessage": {
                 "@id": "litepub:listMessage",
                 "@type": "@id"
             },
-            "quoteUrl": "as:quoteUrl",
-            "quoteUri": "fedibird:quoteUri",
             "oauthRegistrationEndpoint": {
                 "@id": "litepub:oauthRegistrationEndpoint",
                 "@type": "@id"
             },
-            "EmojiReact": "litepub:EmojiReact",
-            "ChatMessage": "litepub:ChatMessage",
-            "alsoKnownAs": {
-                "@id": "as:alsoKnownAs",
-                "@type": "@id"
-            },
-            "vcard": "http://www.w3.org/2006/vcard/ns#",
-            "formerRepresentations": "litepub:formerRepresentations",
-            "sm": "http://smithereen.software/ns#",
-            "nonAnonymous": "sm:nonAnonymous"
+
+            "nonAnonymous": "sm:nonAnonymous",
+
+            "discoverable": "toot:discoverable",
+            "Emoji": "toot:Emoji"
         }
     ]
 }

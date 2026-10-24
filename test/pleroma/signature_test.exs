@@ -11,6 +11,7 @@ defmodule Pleroma.SignatureTest do
   import Mock
 
   alias Pleroma.Signature
+  alias Pleroma.StubbedHTTPSignaturesMock, as: HTTPSignaturesMock
 
   setup do
     mock(fn env -> apply(HttpRequestMock, :request, [env]) end)
@@ -100,6 +101,18 @@ defmodule Pleroma.SignatureTest do
                user,
                %{host: "test.test", "content-length": 100}
              ) == {:error, []}
+    end
+  end
+
+  describe "validate_signature/1" do
+    test "treats HTTP signature errors as failed validation" do
+      conn = %Plug.Conn{method: "GET", request_path: "/inbox", req_headers: []}
+
+      Mox.expect(HTTPSignaturesMock, :validate_conn, fn _conn ->
+        {:error, :request_target_header}
+      end)
+
+      assert Signature.validate_signature(conn) == false
     end
   end
 

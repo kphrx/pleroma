@@ -30,6 +30,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   import Ecto.Query
   import Pleroma.Web.ActivityPub.Utils
   import Pleroma.Web.ActivityPub.Visibility
+  import Pleroma.Webhook.Notify, only: [trigger_webhooks: 2]
 
   require Logger
   require Pleroma.Constants
@@ -415,7 +416,9 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     with flag_data <- make_flag_data(params, additional),
          {:ok, activity} <- insert(flag_data, local),
          _ <- notify_and_stream(activity),
-         :ok <- maybe_federate(activity) do
+         _ <- trigger_webhooks(activity, :"report.created"),
+         :ok <-
+           maybe_federate(activity) do
       User.all_users_with_privilege(:reports_manage_reports)
       |> Enum.filter(fn user -> user.ap_id != actor end)
       |> Enum.filter(fn user -> not is_nil(user.email) end)
@@ -537,8 +540,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     #   and extra sorting on "activities.id DESC NULLS LAST" would worse the query plan
     opts = Map.put(opts, :skip_extra_order, true)
 
-    Pagination.fetch_paginated(query, opts, pagination)
+    Pagination.fetch_paginated(query, opts, pagination, pagination_binding(opts))
   end
+
+  defp pagination_binding(%{favorited_by: _}), do: :favorited_activity
+  defp pagination_binding(_), do: nil
 
   def fetch_activities(recipients, opts \\ %{}, pagination \\ :keyset) do
     list_memberships = Pleroma.List.memberships(opts[:user])
@@ -707,6 +713,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> Map.put(:type, ["Create", "Announce"])
       |> Map.put(:user, reading_user)
       |> Map.put(:actor_id, user.ap_id)
+      |> Map.put(:actor_local, user.local)
       |> Map.put(:pinned_object_ids, Map.keys(user.pinned_objects))
 
     params =
@@ -785,6 +792,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp restrict_announce_object_actor(query, _), do: query
 
   defp restrict_since(query, %{since_id: ""}), do: query
+
+  defp restrict_since(query, %{favorited_by: _, since_id: _}), do: query
 
   defp restrict_since(query, %{since_id: since_id}) do
     from(activity in query, where: activity.id > ^since_id)
@@ -893,14 +902,22 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> Repo.all()
 
     # Note: NO extra ordering should be done on "activities.id desc nulls last" for optimal plan
-    from(
-      [_activity, object] in query,
-      join: hto in "hashtags_objects",
-      on: hto.object_id == object.id,
-      where: hto.hashtag_id in ^hashtag_ids,
-      distinct: [desc: object.id],
-      order_by: [desc: object.id]
-    )
+    query =
+      from(
+        [_activity, object] in query,
+        join: hto in "hashtags_objects",
+        on: hto.object_id == object.id,
+        where: hto.hashtag_id in ^hashtag_ids
+      )
+
+    if is_nil(query.distinct) do
+      from([_activity, object] in query,
+        distinct: [desc: object.id],
+        order_by: [desc: object.id]
+      )
+    else
+      query
+    end
   end
 
   defp restrict_hashtag_any(query, %{tag: tag}) when is_binary(tag) do
@@ -1003,6 +1020,14 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_state(query, _), do: query
 
+  defp restrict_report_target(query, %{report_target_id: actor_id}) do
+    from(activity in query,
+      where: fragment("?->'object'->>0 = ?", activity.data, ^actor_id)
+    )
+  end
+
+  defp restrict_report_target(query, _), do: query
+
   defp restrict_assigned_account(query, %{assigned_account: assigned_account}) do
     from(activity in query,
       where: fragment("?->>'assigned_account' = ?", activity.data, ^assigned_account)
@@ -1012,9 +1037,31 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   defp restrict_assigned_account(query, _), do: query
 
   defp restrict_favorited_by(query, %{favorited_by: ap_id}) do
+    newer_favorite =
+      from(newer_favorite in Activity,
+        where: newer_favorite.actor == ^ap_id,
+        where: newer_favorite.id > parent_as(:favorited_activity).id,
+        where: fragment("?->>'type' = ?", newer_favorite.data, "Like"),
+        where:
+          fragment(
+            "associated_object_id(?) = associated_object_id(?)",
+            newer_favorite.data,
+            parent_as(:favorited_activity).data
+          ),
+        select: 1
+      )
+
     from(
-      [_activity, object] in query,
-      where: fragment("(?)->'likes' \\? (?)", object.data, ^ap_id)
+      [activity, object: object] in query,
+      join: favorited_activity in Activity,
+      as: :favorited_activity,
+      on:
+        favorited_activity.actor == ^ap_id and
+          fragment("?->>'type' = ?", favorited_activity.data, "Like") and
+          fragment("associated_object_id(?) = (?)->>'id'", favorited_activity.data, object.data),
+      where: fragment("(?)->'likes' \\? (?)", object.data, ^ap_id),
+      where: not exists(subquery(newer_favorite)),
+      select: %Activity{activity | pagination_id: favorited_activity.id}
     )
   end
 
@@ -1314,6 +1361,50 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp restrict_unauthenticated(query, _), do: query
 
+  defp restrict_activity_and_object_origin(query, local?) do
+    local_object_prefix = Pleroma.Web.Endpoint.url() <> "/"
+
+    # Keeping the correlated origin checks inside CASE prevents PostgreSQL from choosing a
+    # global bitmap-and-sort plan before applying the account statuses limit.
+    from([activity, object: object] in query,
+      where:
+        fragment(
+          "CASE WHEN ? = ? AND starts_with((?->>'id'), ?) = ? THEN true ELSE false END",
+          activity.local,
+          ^local?,
+          object.data,
+          ^local_object_prefix,
+          ^local?
+        )
+    )
+  end
+
+  defp maybe_restrict_unauthenticated(
+         query,
+         %{restrict_unauthenticated: true, user: nil, actor_local: actor_local}
+       )
+       when is_boolean(actor_local) do
+    local_restricted = Config.restrict_unauthenticated_access?(:activities, :local)
+    remote_restricted = Config.restrict_unauthenticated_access?(:activities, :remote)
+    actor_restricted = if actor_local, do: local_restricted, else: remote_restricted
+
+    cond do
+      actor_restricted ->
+        from(activity in query, where: false)
+
+      local_restricted ->
+        restrict_activity_and_object_origin(query, false)
+
+      remote_restricted ->
+        restrict_activity_and_object_origin(query, true)
+
+      true ->
+        query
+    end
+  end
+
+  defp maybe_restrict_unauthenticated(query, _), do: query
+
   defp restrict_quote_url(query, %{quote_url: quote_url}) do
     from([_activity, object] in query,
       where: fragment("(?)->'quoteUrl' = ?", object.data, ^quote_url)
@@ -1471,6 +1562,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> maybe_preload_report_notes(opts)
       |> maybe_set_thread_muted_field(opts)
       |> maybe_order(opts)
+      |> maybe_restrict_unauthenticated(opts)
       |> restrict_recipients_or_hashtags(recipients, opts[:user], opts[:followed_hashtags])
       |> restrict_replies(opts)
       |> restrict_since(opts)
@@ -1479,6 +1571,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       |> restrict_actor(opts)
       |> restrict_type(opts)
       |> restrict_state(opts)
+      |> restrict_report_target(opts)
       |> restrict_assigned_account(opts)
       |> restrict_favorited_by(opts)
       |> restrict_blocked(restrict_blocked_opts)
@@ -1881,11 +1974,15 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     end
   end
 
+  @featured_collection_types ["OrderedCollection", "Collection"]
+  @featured_collection_page_types ["OrderedCollectionPage", "CollectionPage"]
+  @featured_collection_item_types @featured_collection_types ++ @featured_collection_page_types
+
   def pin_data_from_featured_collection(%{
         "type" => type,
         "orderedItems" => objects
       })
-      when type in ["OrderedCollection", "Collection"] do
+      when type in @featured_collection_item_types do
     Map.new(objects, fn
       %{"id" => object_ap_id} -> {object_ap_id, NaiveDateTime.utc_now()}
       object_ap_id when is_binary(object_ap_id) -> {object_ap_id, NaiveDateTime.utc_now()}
@@ -1903,12 +2000,40 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   def fetch_and_prepare_featured_from_ap_id(ap_id) do
     with {:ok, data} <- Fetcher.fetch_and_contain_remote_object_from_id(ap_id) do
-      {:ok, pin_data_from_featured_collection(data)}
+      {:ok, prepare_featured_collection(data)}
     else
       e ->
         Logger.error("Could not decode featured collection at fetch #{ap_id}, #{inspect(e)}")
         {:ok, %{}}
     end
+  end
+
+  defp prepare_featured_collection(%{"orderedItems" => objects} = data) when is_list(objects) do
+    pin_data_from_featured_collection(data)
+  end
+
+  defp prepare_featured_collection(%{
+         "type" => type,
+         "first" => %{"type" => page_type} = first
+       })
+       when type in @featured_collection_types and page_type in @featured_collection_page_types do
+    pin_data_from_featured_collection(first)
+  end
+
+  defp prepare_featured_collection(%{"type" => type, "first" => first})
+       when type in @featured_collection_types and is_binary(first) do
+    case Fetcher.fetch_and_contain_remote_object_from_id(first) do
+      {:ok, data} ->
+        pin_data_from_featured_collection(data)
+
+      e ->
+        Logger.error("Could not decode featured collection page at fetch #{first}, #{inspect(e)}")
+        %{}
+    end
+  end
+
+  defp prepare_featured_collection(data) do
+    pin_data_from_featured_collection(data)
   end
 
   def enqueue_pin_fetches(%{pinned_objects: pins}) do

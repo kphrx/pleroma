@@ -75,8 +75,8 @@ defmodule Pleroma.Frontend do
   end
 
   defp download_build(frontend_info, dest) do
-    Logger.info("Downloading pre-built bundle for #{frontend_info["name"]}")
     url = String.replace(frontend_info["build_url"], "${ref}", frontend_info["ref"])
+    Logger.info("Downloading pre-built bundle for #{frontend_info["name"]} from #{url}")
 
     with {:ok, %{status: 200, body: zip_body}} <-
            Pleroma.HTTP.get(url, [], pool: :media, recv_timeout: 120_000) do

@@ -46,3 +46,5 @@ Mox.defmock(Pleroma.SignatureMock, for: Pleroma.Signature.API)
 Mox.defmock(Pleroma.Web.ActivityPub.TransmogrifierMock,
   for: Pleroma.Web.ActivityPub.Transmogrifier.API
 )
+
+Mox.defmock(Pleroma.Search.ParadeDB.ClientMock, for: Pleroma.Search.ParadeDB.Client)

@@ -1,0 +1,28 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams"
+  ],
+  "type": "Create",
+  "id": "https://fedidev.fun/activity/quote-uri-list",
+  "actor": "https://fedidev.fun/users/alice",
+  "to": [
+    "https://www.w3.org/ns/activitystreams#Public"
+  ],
+  "cc": [],
+  "published": "2025-11-21T14:43:52Z",
+  "object": {
+    "type": "Note",
+    "id": "https://fedidev.fun/objects/note-quote-uri-list",
+    "attributedTo": "https://fedidev.fun/users/alice",
+    "to": [
+      "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [],
+    "published": "2025-11-21T14:43:52Z",
+    "content": "quoteUri attribute as list",
+    "quoteUri": [
+      "https://fedidev.fun/assets/note1.jsonap",
+      "https://fedidev.fun/assets/note2.jsonap"
+    ]
+  }
+}

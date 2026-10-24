@@ -372,13 +372,21 @@ defmodule Pleroma.Object do
             option
         end)
 
-      voters = [actor | object.data["voters"] || []] |> Enum.uniq()
+      existing_voters = object.data["voters"] || []
+      voters = [actor | existing_voters] |> Enum.uniq()
+      new_voter? = actor not in existing_voters
+      existing_voters_count = object.data["votersCount"]
 
       voters_count =
-        if Map.has_key?(object.data, "votersCount") do
-          object.data["votersCount"] + 1
-        else
-          length(voters)
+        cond do
+          is_integer(existing_voters_count) and new_voter? ->
+            existing_voters_count + 1
+
+          is_integer(existing_voters_count) ->
+            existing_voters_count
+
+          true ->
+            length(voters)
         end
 
       data =

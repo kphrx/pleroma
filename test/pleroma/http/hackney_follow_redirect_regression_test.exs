@@ -19,30 +19,6 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     {:ok, tls_server: tls_server, proxy: proxy}
   end
 
-  test "hackney follow_redirect crashes behind CONNECT proxy on relative redirects", %{
-    tls_server: tls_server,
-    proxy: proxy
-  } do
-    url = "#{tls_server.base_url}/redirect"
-
-    opts = [
-      pool: :media,
-      proxy: proxy.proxy_url,
-      insecure: true,
-      connect_timeout: 1_000,
-      recv_timeout: 1_000,
-      follow_redirect: true,
-      force_redirect: true
-    ]
-
-    {pid, ref} = spawn_monitor(fn -> :hackney.request(:get, url, [], <<>>, opts) end)
-
-    assert_receive {:DOWN, ^ref, :process, ^pid, reason}, 5_000
-
-    assert match?({%FunctionClauseError{}, _}, reason) or match?(%FunctionClauseError{}, reason) or
-             match?({:function_clause, _}, reason)
-  end
-
   test "redirects work via proxy when hackney follow_redirect is disabled", %{
     tls_server: tls_server,
     proxy: proxy
@@ -52,7 +28,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     adapter_opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: false,
@@ -75,7 +51,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: true
@@ -97,7 +73,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: true
@@ -119,7 +95,7 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
     opts = [
       pool: :media,
       proxy: proxy.proxy_url,
-      insecure: true,
+      ssl_options: tls_client_options(tls_server),
       connect_timeout: 1_000,
       recv_timeout: 1_000,
       follow_redirect: true
@@ -129,6 +105,133 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
              Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
 
     Pleroma.ReverseProxy.Client.Hackney.close(ref)
+  end
+
+  test "hackney reverse proxy cancels timed out asynchronous requests", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/delayed"
+
+    opts = [
+      pool: :media,
+      proxy: proxy.proxy_url,
+      ssl_options: tls_client_options(tls_server),
+      connect_timeout: 1_000,
+      recv_timeout: 10,
+      follow_redirect: false
+    ]
+
+    assert {:error, :timeout} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    refute_receive {:hackney_response, _, _}, 150
+  end
+
+  test "hackney reverse proxy normalizes asynchronous connection errors", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/closed"
+
+    opts = [
+      pool: :media,
+      proxy: proxy.proxy_url,
+      ssl_options: tls_client_options(tls_server),
+      connect_timeout: 1_000,
+      recv_timeout: 1_000,
+      follow_redirect: false
+    ]
+
+    assert {:error, :closed} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+  end
+
+  # A pooled connection serving a bodyless response is checked back in by hackney
+  # at header time, so stopping that ref afterwards would evict a connection
+  # another request may already hold. These go direct rather than through the
+  # CONNECT proxy, because a proxy tunnel is never pooled.
+  test "hackney reverse proxy marks a pooled bodyless response as already released",
+       %{tls_server: tls_server} do
+    url = "#{tls_server.base_url}/no_content"
+
+    assert {:ok, 204, _headers, client} =
+             Pleroma.ReverseProxy.Client.Hackney.request(
+               :get,
+               url,
+               [],
+               "",
+               direct_opts(tls_server)
+             )
+
+    assert %{released: true} = client
+    assert :done = Pleroma.ReverseProxy.Client.Hackney.stream_body(client)
+    assert :ok = Pleroma.ReverseProxy.Client.Hackney.close(client)
+  end
+
+  test "hackney reverse proxy still owns a response that carries a body",
+       %{tls_server: tls_server} do
+    url = "#{tls_server.base_url}/final"
+
+    assert {:ok, 200, _headers, client} =
+             Pleroma.ReverseProxy.Client.Hackney.request(
+               :get,
+               url,
+               [],
+               "",
+               direct_opts(tls_server)
+             )
+
+    refute Map.has_key?(client, :released)
+    assert "ok" == collect_body(client)
+
+    # Streaming to the end must stop the conn: hackney only parks it, and this
+    # one has no idle timeout and no live owner monitor to reap it.
+    refute Process.alive?(client.ref)
+  end
+
+  # An unpooled connection is never checked in and parks forever with no idle
+  # timeout, so it stays ours to stop even when the response has no body.
+  test "hackney reverse proxy still owns a bodyless response over a proxy tunnel", %{
+    tls_server: tls_server,
+    proxy: proxy
+  } do
+    url = "#{tls_server.base_url}/no_content"
+
+    opts = Keyword.put(direct_opts(tls_server), :proxy, proxy.proxy_url)
+
+    assert {:ok, 204, _headers, client} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    refute Map.has_key?(client, :released)
+    Pleroma.ReverseProxy.Client.Hackney.close(client)
+  end
+
+  test "hackney reverse proxy still owns a bodyless response when pooling is off", %{
+    tls_server: tls_server
+  } do
+    url = "#{tls_server.base_url}/no_content"
+
+    opts = Keyword.put(direct_opts(tls_server), :pool, false)
+
+    assert {:ok, 204, _headers, client} =
+             Pleroma.ReverseProxy.Client.Hackney.request(:get, url, [], "", opts)
+
+    refute Map.has_key?(client, :released)
+    Pleroma.ReverseProxy.Client.Hackney.close(client)
+  end
+
+  # proxy: false so a proxy in the build environment cannot turn these into
+  # tunnelled requests, which are never pooled and would defeat the point.
+  defp direct_opts(tls_server) do
+    [
+      pool: :media,
+      proxy: false,
+      ssl_options: tls_client_options(tls_server),
+      connect_timeout: 1_000,
+      recv_timeout: 1_000,
+      follow_redirect: false
+    ]
   end
 
   defp collect_body(ref, acc \\ "") do
@@ -161,7 +264,13 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
         accept_tls_loop(listener)
       end)
 
-    {:ok, %{listener: listener, acceptor: acceptor, base_url: "https://127.0.0.1:#{port}"}}
+    {:ok,
+     %{
+       listener: listener,
+       acceptor: acceptor,
+       certfile: certfile,
+       base_url: "https://127.0.0.1:#{port}"
+     }}
   end
 
   defp stop_tls_redirect_server(%{listener: listener, acceptor: acceptor}) do
@@ -191,6 +300,16 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
          {:ok, data} <- recv_ssl_headers(ssl_socket),
          {:ok, path} <- parse_path(data) do
       case path do
+        "/closed" ->
+          :ok
+
+        "/no_content" ->
+          send_ssl_response(ssl_socket, 204, "No Content", [], "")
+
+        "/delayed" ->
+          Process.sleep(100)
+          send_ssl_response(ssl_socket, 200, "OK", [], "ok")
+
         "/infinite_redirect" ->
           send_ssl_response(ssl_socket, 302, "Found", [{"Location", "/infinite_redirect"}], "")
 
@@ -210,10 +329,16 @@ defmodule Pleroma.HTTP.HackneyFollowRedirectRegressionTest do
       :ssl.close(ssl_socket)
     else
       _ ->
-        _ = :gen_tcp.close(tcp_socket)
+        _ = :ssl.close(tcp_socket)
         :ok
     end
   end
+
+  defp tls_client_options(_tls_server) do
+    [server_name_indication: ~c"localhost", verify_fun: {&accept_test_certificate/3, []}]
+  end
+
+  defp accept_test_certificate(_cert, _event, state), do: {:valid, state}
 
   defp recv_ssl_headers(socket, acc \\ <<>>) do
     case :ssl.recv(socket, 0, 1_000) do

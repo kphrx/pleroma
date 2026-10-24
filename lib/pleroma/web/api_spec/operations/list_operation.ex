@@ -41,7 +41,8 @@ defmodule Pleroma.Web.ApiSpec.ListOperation do
       responses: %{
         200 => Operation.response("List", "application/json", List),
         400 => Operation.response("Error", "application/json", ApiError),
-        404 => Operation.response("Error", "application/json", ApiError)
+        404 => Operation.response("Error", "application/json", ApiError),
+        422 => Operation.response("Error", "application/json", ApiError)
       }
     }
   end
@@ -175,7 +176,8 @@ defmodule Pleroma.Web.ApiSpec.ListOperation do
           exclusive: %Schema{
             type: :boolean,
             description: "Whether members of the list should be removed from the “Home” feed"
-          }
+          },
+          emoji: %Schema{type: :string, description: "List emoji", nullable: true}
         },
         required: [:title]
       },
@@ -194,7 +196,8 @@ defmodule Pleroma.Web.ApiSpec.ListOperation do
           exclusive: %Schema{
             type: :boolean,
             description: "Whether members of the list should be removed from the “Home” feed"
-          }
+          },
+          emoji: %Schema{type: :string, description: "List emoji", nullable: true}
         }
       },
       required: true

@@ -8,6 +8,7 @@ defmodule Pleroma.Workers.SignatureRetryWorker do
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.Utils
   alias Pleroma.Web.Federator
+  alias Pleroma.Web.Plugs.EnsureHostMatchesPlug
   alias Pleroma.Web.Plugs.MappedSignatureToIdentityPlug
 
   require Logger
@@ -48,6 +49,7 @@ defmodule Pleroma.Workers.SignatureRetryWorker do
              {:ok, _public_key} <- Signature.refetch_public_key(conn_data),
              {:signature, true} <- {:signature, validate_signature(conn_data)},
              {:same_actor, true} <- {:same_actor, validate_same_actor(conn_data)},
+             {:host_header, true} <- {:host_header, validate_host_header(conn_data)},
              {:ok, res} <- Federator.perform(:incoming_ap_doc, params) do
           unless Instances.reachable?(params["actor"]) do
             domain = URI.parse(params["actor"]).host
@@ -100,6 +102,16 @@ defmodule Pleroma.Workers.SignatureRetryWorker do
     |> case do
       {:ok, headers} -> {:ok, Enum.reverse(headers)}
       error -> error
+    end
+  end
+
+  defp validate_host_header(conn_data) do
+    case EnsureHostMatchesPlug.call(conn_data, []) do
+      %Plug.Conn{assigns: %{valid_signature: true, valid_host_header: true}} ->
+        true
+
+      _ ->
+        false
     end
   end
 
@@ -170,6 +182,10 @@ defmodule Pleroma.Workers.SignatureRetryWorker do
         {:same_actor, false} ->
           {:cancel, :actor_signature_mismatch}
 
+        # Host header from request not for us
+        {:host_header, false} ->
+          {:cancel, :host_header_mismatch}
+
         # Origin / URL validation failed somewhere possibly due to spoofing
         {:error, :origin_containment_failed} ->
           {:cancel, :origin_containment_failed}
@@ -234,6 +250,7 @@ defmodule Pleroma.Workers.SignatureRetryWorker do
   defp log_signature_retry_rejection({:cancel, reason}, context)
        when reason in [
               :actor_signature_mismatch,
+              :host_header_mismatch,
               :invalid_signature,
               :invalid_signature_retry_metadata,
               :missing_signature_retry_metadata,

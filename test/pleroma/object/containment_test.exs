@@ -27,6 +27,11 @@ defmodule Pleroma.Object.ContainmentTest do
                })
     end
 
+    test "rejects an empty actor list without crashing" do
+      assert :error ==
+               Containment.contain_origin("https://example.com/objects/1", %{"actor" => []})
+    end
+
     test "contain_origin_from_id() catches obvious spoofing attempts" do
       data = %{
         "id" => "http://example.com/~alyssa/activities/1234.json"

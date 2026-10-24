@@ -76,35 +76,51 @@ $EDITOR /etc/pleroma/config.exs
 ```
 ## Installing the release
 Before proceeding, get the flavour from [Detecting flavour](otp_en.md#detecting-flavour) section in OTP installation guide.
+
+
+Delete all files in pleroma user's directory:
 ```sh
-# Delete all files in pleroma user's directory
 rm -r ~pleroma/*
+```
 
-# Set the flavour environment variable to the string you got in Detecting flavour section.
-# For example if the flavour is `amd64-musl` the command will be
+Set the flavour environment variable to the string you got in Detecting flavour section.
+For example if the flavour is `amd64-musl` the command will be:
+
+```sh
 export FLAVOUR="amd64-musl"
+```
 
-# Clone the release build into a temporary directory and unpack it
-# Replace `stable` with `unstable` if you want to run the unstable branch
-sudo -Hu pleroma "
-curl 'https://git.pleroma.social/api/v4/projects/2/jobs/artifacts/stable/download?job=$FLAVOUR' -o /tmp/pleroma.zip
-unzip /tmp/pleroma.zip -d /tmp/
-"
+Clone the release build into a temporary directory and unpack it.
+Replace `stable` with `develop`, if you want to run the develop branch.
 
-# Move the release to the home directory and delete temporary files
-sudo -Hu pleroma "
-mv /tmp/release/* ~pleroma/
-rmdir /tmp/release
-rm /tmp/pleroma.zip
-"
+```sh
+sudo -Hu pleroma curl "https://git.pleroma.social/api/packages/pleroma/generic/pleroma-otp-stable-$FLAVOUR/latest/pleroma.zip" -o /tmp/pleroma.zip
+sudo -Hu pleroma unzip /tmp/pleroma.zip -d /tmp/
+```
 
-# Start the instance to verify that everything is working as expected
+Move the release to the home directory and delete temporary files:
+
+```sh
+sudo -Hu pleroma mv /tmp/release/* ~pleroma/
+sudo -Hu pleroma rmdir /tmp/release
+sudo -Hu pleroma rm /tmp/pleroma.zip
+```
+
+Start the instance to verify that everything is working as expected:
+
+```sh
 sudo -Hu pleroma "./bin/pleroma daemon"
+```
 
-# Wait for about 20 seconds and query the instance endpoint, if it shows your uri, name and email correctly, you are configured correctly
+Wait for about 20 seconds and query the instance endpoint, if it shows your uri, name and email correctly, you are configured correctly:
+
+```sh
 sleep 20 && curl http://localhost:4000/api/v1/instance
+```
 
-# Stop the instance
+Stop the instance:
+
+```sh
 sudo -Hu pleroma "./bin/pleroma stop"
 ```
 

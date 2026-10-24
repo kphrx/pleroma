@@ -1,0 +1,45 @@
+when:
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+    path: [ "docs/**" ]
+  - event: tag
+  - event: manual
+    evaluate: 'CI_COMMIT_BRANCH == "stable" || CI_COMMIT_BRANCH == CI_REPO_DEFAULT_BRANCH'
+
+labels:
+  platform: linux/amd64
+
+skip_clone: true
+
+variables:
+  trigger_settings: &trigger_settings
+    deploy: 'docs'
+    last-successful: true
+    token:
+      from_secret: pleroma-ci-woodpecker-token
+    repositories:
+      - pleroma/docs@master
+  docker_image: &docker_image docker.io/woodpeckerci/plugin-trigger:1.1.1
+
+steps:
+  trigger-deploy-stable:
+    when:
+      - event: tag
+      - event: manual
+        branch: stable
+    image: *docker_image
+    settings:
+      <<: *trigger_settings
+      params:
+        - BRANCH=stable
+
+  trigger-deploy-develop:
+    when:
+      - event: push
+      - event: manual
+        branch: ${CI_REPO_DEFAULT_BRANCH}
+    image: *docker_image
+    settings:
+      <<: *trigger_settings
+      params:
+        - BRANCH=develop
