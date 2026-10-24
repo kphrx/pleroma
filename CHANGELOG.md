@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Update bandit to version 1.12.5 to fix an HTTP/2 DoS vulnerability
 - Update bandit to version 1.13.1 resolving a stuck process and unvalidated HTTP/1 headers vulnerabilities
 - Updated CAStore to version 1.0.22 with updated Mozilla certificate bundle after eMudhra Intermediate CA Compromise
+- Update certifi to version 2.18.0, which removes the distrusted emSign roots
 - Update Cowboy to address multipart header parsing denial-of-service vulnerabilities.
 - Update cowboy to version 2.19.0 which fixes a memory exhaustion DoS
 - Update Cowlib to address HTTP parsing resource exhaustion and injection vulnerabilities.
