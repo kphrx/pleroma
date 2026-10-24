@@ -52,8 +52,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Avoid a duplicate user query during OAuth authentication.
 - Use the Hex package for oban_plugins_lazarus.
 - Docs OpenBSD: Increased recommended `datasize` from 1536M to 4096M to avoid Pleroma crashes
-- - OpenRC: Automatically run migrations before starting pleroma
-- - Optimize orphaned OAuth apps cleanup by deleting records in batches instead of one by one.
+- OpenRC: Automatically run migrations before starting pleroma
+- Optimize orphaned OAuth apps cleanup by deleting records in batches instead of one by one.
 - Switch patched Phoenix 1.7.14 back to upstream with Phoenix 1.8.0+
 - Add optional migrations for rollback from Rebased
 - Use upstream Hex releases for the `remote_ip` dependency and expose client IP ranges for remote IP resolution.
