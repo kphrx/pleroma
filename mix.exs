@@ -225,6 +225,8 @@ defmodule Pleroma.Mixfile do
       {:mock, "~> 0.3.9", only: :test},
       {:covertool, "~> 2.0", only: :test},
       {:hackney, "~> 4.7.3", override: true},
+      # Hackney 4.7.3 pins certifi ~> 2.17.0; 2.18.0 drops the distrusted emSign roots.
+      {:certifi, "~> 2.18.0", override: true},
       {:mox, "~> 1.2", only: :test},
       {:websockex, "~> 0.4.3", only: :test},
       {:benchee, "~> 1.4", only: :benchmark},
