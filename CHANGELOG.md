@@ -4,6 +4,115 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 2.11.0
+
+### Security
+
+- Update Bandit to address HTTP request handling vulnerabilities.
+- Update bandit to version 1.12.4 to fix a DoS vulnerability
+- Update bandit to version 1.12.5 to fix an HTTP/2 DoS vulnerability
+- Update bandit to version 1.13.1 resolving a stuck process and unvalidated HTTP/1 headers vulnerabilities
+- Updated CAStore to version 1.0.22 with updated Mozilla certificate bundle after eMudhra Intermediate CA Compromise
+- Update certifi to version 2.18.0, which removes the distrusted emSign roots
+- Update plug_crypto to version 2.2.1, so a malformed shout socket token no longer writes the secret key base to the error log
+- Update Cowboy to address multipart header parsing denial-of-service vulnerabilities.
+- Update cowboy to version 2.19.0 which fixes a memory exhaustion DoS
+- Update Cowlib to address HTTP parsing resource exhaustion and injection vulnerabilities.
+- Update cowlib to version 2.20.0 which fixes HTTP splitting and header smuggling/injection vulnerabilities
+- Update gun to version 2.7.0 and cowlib to version 2.21.0 resolving a header smuggling vulnerability
+- Update Decimal and compatible dependencies to address a rounding vulnerability.
+- Update Decimal to version 3.2.0 resolving an unbounded allocation vulnerability
+- Replace retired Earmark rendering with the maintained EarmarkParser and an attribute-escaping renderer.
+- Update gun to version 2.6.0 which fixes an HTTP request/response smuggling vulnerability
+- Update Hackney and its HTTPoison integration to address SSRF, timeout, and injection vulnerabilities.
+- Hackney, Finch, Mua and the Swoosh HTTP mail adapters now trust only the CAStore certificate bundle, which rejects the compromised eMudhra intermediate CAs
+- Ensure Host header is present and matches instance URI
+- Update mint to version 1.10.0 which fixes multiple DoS vulnerabilities
+- Update mint to version 1.11.0 resolving multiple vulnerabilities
+- Update Phoenix LiveView to version 1.2.9 to fix an open redirect vulnerability
+- Update Phoenix to version 1.8.11 resolving a process-exhaustion DoS vulnerability
+- Update Phoenix to address long-poll NDJSON request denial-of-service vulnerabilities.
+- Update Plug to address multipart header parsing denial-of-service vulnerabilities.
+- Update Plug.Cowboy to address HTTP/2 scheme atom exhaustion denial-of-service vulnerabilities.
+- Update Postgrex to address notification channel-name SQL injection vulnerabilities.
+- Update postgrex to version 0.22.4 to fix an SQL injection vulnerability
+- Remove unused QUIC lockfile entry with vulnerable TLS verification behavior.
+- Update swoosh to version 1.28.0 which fixes a url injection vulnerability for the Microsoft Graph adapter
+- Scrubbers: remove links and images whose scheme is hidden with tabs, newlines or leading control characters (for example java<TAB>script:), which browsers still run as javascript:. Custom scrubbers should use Pleroma.HTML.URIAttributes.allow_tag_with_uri_attributes instead of the FastSanitize macro
+
+### Changed
+
+- Update bundled Pleroma-FE to 2.11.4
+- Allow disabling Chats feature
+- Pleroma now requires Elixir 1.17 or newer and Erlang/OTP 27 or newer
+- Update Debian and Ubuntu installation requirements and OTP dependencies
+- Update Jason to support Decimal 3 dependency resolution.
+- Changed how Logger is configured due to changes in Elixir and added deprecation warnings for the old configuration format
+- Update majic to 1.2.0.
+- Avoid a duplicate user query during OAuth authentication.
+- Use the Hex package for oban_plugins_lazarus.
+- Docs OpenBSD: Increased recommended `datasize` from 1536M to 4096M to avoid Pleroma crashes
+- OpenRC: Automatically run migrations before starting pleroma
+- Optimize orphaned OAuth apps cleanup by deleting records in batches instead of one by one.
+- Switch patched Phoenix 1.7.14 back to upstream with Phoenix 1.8.0+
+- Add optional migrations for rollback from Rebased
+- Use upstream Hex releases for the `remote_ip` dependency and expose client IP ranges for remote IP resolution.
+- Improve user search / autocompletion ordering.
+- Gun is now the default HTTP client instead of Hackney
+
+### Added
+
+- Allow creating accounts without a password in the AdminAPI
+- Implemented ConfigDB configuration blacklist and accompanying Mix task
+- Accept more real-world ActivityPub object shapes collected by fedidev.fun
+- Add Mastodon-compatible grouped notifications API endpoints under `/api/v2/notifications` for newly-created notifications
+- Docs: Added documentation for installing newer version of Elixir/Erlang than what distro ships
+- Allow attaching emojis to user lists
+- Implement basics of Mastodon admin API
+- Add backend support for Misskey Markdown (MFM) posts
+- Add mix_audit for dependency vulnerability checks.
+- Oban: Enabled the Reindexer plugin to reduce oban_jobs index DB bloat
+- Add ParadeDB (pg_search) as an optional external search backend, indexing status content, content warnings, and attachment descriptions.
+- Add support for Mastodon-compatible webhooks
+
+### Fixed
+
+- Fixed `/api/v1/pleroma/accounts/:id/favourites` ordering and pagination to use the favourite date.
+- Reject unsupported or ambiguous inbox signatures instead of queueing a doomed failed-signature retry, allowing clients to fall back to legacy HTTP Signatures.
+- Switch native captcha to the published pleroma_captcha Hex package.
+- Updated the captcha package to fix compilation failure on BSD-based systems
+- Dockerfile: update base images to fix problems with SSL handshakes
+- Docs: Fixed OTP install links in documentation, broke up wall of install commands into smaller chunks, fixed sudo commands execution
+- Fix notification and timeline queries for users with domain blocks choosing a plan that scans every active user per row; the followed-accounts exception is now an `ARRAY(SELECT ...)` InitPlan that the planner costs once.
+- Fixed Elixir 1.19 warnings
+- Support fetching featured collection items from the first collection page
+- Fix preferred frontend not working due to InstanceStatic plug prematurely returning HTTP 404
+- Fixed Gun HTTP/1 concurrency, forwarding and authenticated proxy handling, tunnel requests, and streamed connection cleanup. Updated Gun and Cowlib for HTTP client security fixes.
+- Stop leaking a Hackney connection process, and the response bytes it read, for every unpooled request that ends without a reusable socket
+- Fix hashtag timeline query for additional tag handling
+- Fix compatibility with timestamped HTTP Signatures used by GoToSocial
+- Handle reports with just actor ap id as the object
+- Fix Swoosh HTTP mail adapters failing with `cacerts: :undefined` on OTP 26+
+- Echo Mastodon-style `Sec-WebSocket-Protocol` tokens in streaming WebSocket handshakes.
+- Enforce the max_body HTTP option again, which Hackney 4 silently stopped honouring because it always returns a fully read body
+- Abort incomplete media proxy responses instead of caching partial bodies.
+- Updated Pleroma-FE build URL after Forgejo migration
+- Fix votersCount inflation when same voter picks multiple options
+- Status: Fill all MastoAPI required values in preview cards
+- Avoid creating atoms from serialized PublisherWorker parameters.
+- Reject incoming reports when both the reporter and reported account are remote
+- Fixed account status and media views exposing activities restricted from unauthenticated users.
+- Stop leaking a Hackney connection process for every media proxy response that was streamed to the end
+- Fix RSS feeds to be W3C compliant and render better in RSS readers
+- Keep followed users visible in streams when their domain is blocked.
+- Fix intermittent failure to compile syslog package
+- Fix inconsistent User cache keys and invalidate numeric ID aliases.
+- Include arm32v7 in multi-arch Docker images
+- RichMedia: Fix backfill causing old posts to show up on timelines by disabling it in MastoAPI StatusView
+- Fix Admin-FE installation by downloading builds from the package registry instead of GitLab job artifacts.
+- Hackney: use HTTP/1.1 only, so closing one media proxy response no longer breaks other downloads from the same host
+- Hackney: use the configured proxy when its host is an IP address; Hackney 4 ignored such proxies and connected directly
+
 ## 2.10.2
 
 ### Security

@@ -1,0 +1,2 @@
+import{t as e}from"./lodash.daI9UflD.js";var t=e(),n=(e,n,i)=>{let a=!n||r(n)||(0,t.includes)(i,n);return{name:a?`external-user-profile`:`user-profile`,params:a?{id:e}:{name:n}}},r=e=>e&&e.includes(`@`);export{n as t};
+//# sourceMappingURL=user_profile_link_generator.WrdnW5sg.js.map

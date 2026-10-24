@@ -541,6 +541,15 @@ Available caches:
 
 ## HTTP client
 
+Pleroma uses [Gun](https://github.com/ninenines/gun) for outgoing HTTP requests. To use Hackney instead:
+
+```elixir
+config :tesla, adapter: Tesla.Adapter.Hackney
+```
+
+!!! note
+    With Hackney, size limits for fetched responses (for example for link previews) are checked only after Hackney has read the whole response. They limit what Pleroma keeps, not how much it downloads or holds in memory. Gun stops reading at the limit.
+
 ### :http
 
 * `proxy_url`: an upstream proxy to fetch posts and/or media with, (default: `nil`)
@@ -549,6 +558,8 @@ Available caches:
 * `adapter`: array of adapter options
 
 ### :hackney_pools
+
+*For `hackney` adapter*
 
 Advanced. Tweaks Hackney (http client) connections pools.
 

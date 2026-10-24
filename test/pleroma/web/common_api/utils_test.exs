@@ -125,6 +125,14 @@ defmodule Pleroma.Web.CommonAPI.UtilsTest do
       assert output == expected
     end
 
+    test "MFM keeps bare URLs containing Markdown delimiters intact" do
+      url = "https://example.org/a*b*c"
+
+      {output, [], []} = Utils.format_input(url, "text/x.misskeymarkdown")
+
+      assert output == ~s(<p><a href="#{url}">#{url}</a></p>)
+    end
+
     test "works for bare text/bbcode" do
       text = "[b]hello world[/b]"
       expected = "<strong>hello world</strong>"
@@ -218,6 +226,15 @@ defmodule Pleroma.Web.CommonAPI.UtilsTest do
       code = ~s[<a href="http://example.org/">OwO</a><!-- what's this?-->]
       {result, [], []} = Utils.format_input(code, "text/markdown")
       assert result == ~s[<a href="http://example.org/">OwO</a>]
+    end
+
+    test "markdown links do not allow injected attributes" do
+      code = ~s|[click](http://example.com/?a=x" onerror="alert(1))|
+      {result, [], []} = Utils.format_input(code, "text/markdown")
+
+      assert result =~ ~s|<a href="http://example.com/?a=x%22 onerror=%22alert(1)">|
+      refute result =~ ~s|onerror="alert(1)|
+      refute result =~ ~s(<a href="http://example.com/?a=x" onerror=)
     end
 
     test "rulers" do

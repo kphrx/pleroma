@@ -130,5 +130,9 @@ defmodule Pleroma.HTTP do
   end
 
   defp default_middleware,
-    do: [Tesla.Middleware.FollowRedirects, Pleroma.Tesla.Middleware.EncodeUrl]
+    do: [
+      Tesla.Middleware.FollowRedirects,
+      Pleroma.Tesla.Middleware.EncodeUrl,
+      Pleroma.Tesla.Middleware.MaxBody
+    ]
 end
