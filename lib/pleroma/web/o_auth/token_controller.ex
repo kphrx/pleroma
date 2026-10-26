@@ -13,7 +13,8 @@ defmodule Pleroma.Web.OAuth.TokenController do
   require Logger
 
   plug(:skip_auth when action == :confirm_email)
-  plug(:skip_plug, OAuthScopesPlug when action in [:oauth_tokens, :revoke_token])
+  plug(OAuthScopesPlug, %{scopes: ["read:security"]} when action == :oauth_tokens)
+  plug(OAuthScopesPlug, %{scopes: ["write:security"]} when action == :revoke_token)
 
   action_fallback(:errors)
 
