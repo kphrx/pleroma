@@ -48,7 +48,7 @@ defmodule Pleroma.Web.ApiSpec.AccountOperation do
       description: "Test to make sure that the user token works.",
       summary: "Verify account credentials",
       operationId: "AccountController.verify_credentials",
-      security: [%{"oAuth" => ["read:accounts"]}],
+      security: [%{"oAuth" => ["read:accounts"]}, %{"oAuth" => ["profile"]}],
       responses: %{
         200 => Operation.response("Account", "application/json", Account)
       }
