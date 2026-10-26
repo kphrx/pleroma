@@ -14,16 +14,15 @@
 #
 # Pleroma cannot work around this: since 4.0 Hackney ignores `with_body` and
 # always returns a fully read binary, so a synchronous request never yields a
-# handle to close. Up to 4.8 a truncated read also reported `{:ok, body}`;
-# since 4.9 it is `{:error, {:closed, partial_body}}`.
+# handle to close. Up to 4.8.2 a truncated read also reported `{:ok, body}`;
+# since 4.8.3 it is `{:error, {:closed, partial_body}}`.
 #
 # Media proxy warming hits this whenever an attachment fetch is cut short and
 # the outbound proxy is used as a CONNECT tunnel, since tunnels are never
 # pooled. That is how it was found.
 #
-# Fixed upstream by https://github.com/benoitc/hackney/pull/919; mix.exs pins
-# that commit until it lands in a release. Should this start failing, the pin
-# has been moved to a version without the fix.
+# Fixed upstream by https://github.com/benoitc/hackney/pull/919. Should this
+# start failing, mix.exs has moved to a Hackney version without the fix.
 #
 # https://github.com/benoitc/hackney/issues/918
 defmodule Pleroma.HTTP.HackneyConnLeakTest do

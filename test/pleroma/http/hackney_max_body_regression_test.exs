@@ -44,8 +44,8 @@ defmodule Pleroma.HTTP.HackneyMaxBodyRegressionTest do
              request("#{server.base_url}/big", max_body: 1024)
   end
 
-  # Without a Content-Length the header pre-check cannot fire, so this is the
-  # case that proves hackney's fully-read binary is measured.
+  # Without a Content-Length the header pre-check cannot fire, so only a size
+  # check on the body can refuse this.
   test "a chunked body over max_body is refused on size alone", %{server: server} do
     assert {:error, :body_too_large} =
              request("#{server.base_url}/chunked", max_body: 1024)
@@ -58,7 +58,7 @@ defmodule Pleroma.HTTP.HackneyMaxBodyRegressionTest do
     assert byte_size(body) == @body_bytes
   end
 
-  test "without max_body the body is returned whatever its size", %{server: server} do
+  test "without max_body the body is returned", %{server: server} do
     assert {:ok, %Tesla.Env{status: 200, body: body}} = request("#{server.base_url}/big", [])
     assert byte_size(body) == @body_bytes
   end
