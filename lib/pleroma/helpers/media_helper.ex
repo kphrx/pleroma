@@ -24,8 +24,10 @@ defmodule Pleroma.Helpers.MediaHelper do
     end)
   end
 
+  # an animated WebP stays the original unless a still is asked for
   def image_resize(url, options) do
     with {:ok, env} <- HTTP.get(url, [], http_client_opts()),
+         {:animated, false} <- {:animated, !options[:still] and animated_webp?(env.body)},
          {:ok, resized} <-
            Operation.thumbnail_buffer(env.body, options.max_width,
              height: options.max_height,
@@ -37,9 +39,22 @@ defmodule Pleroma.Helpers.MediaHelper do
         _ -> Operation.jpegsave_buffer(resized, Q: options[:quality], interlace: true)
       end
     else
+      {:animated, true} -> {:error, :animated}
       {:error, _} = error -> error
     end
   end
+
+  @doc """
+  Whether a binary is an animated WebP: a VP8X first chunk with the
+  animation flag.
+  """
+  @spec animated_webp?(binary()) :: boolean()
+  def animated_webp?(
+        <<"RIFF", _::binary-size(4), "WEBP", "VP8X", _::binary-size(4), flags, _::binary>>
+      ),
+      do: Bitwise.band(flags, 0x02) != 0
+
+  def animated_webp?(_binary), do: false
 
   @doc """
   Whether this libvips can encode AVIF. Vix makes its operations from the

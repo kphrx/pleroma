@@ -526,6 +526,107 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyControllerTest do
       refute redirected_to(response, 302) =~ "size="
     end
 
+    # counts the GETs of the image: an animated WebP is downloaded once
+    defp mock_animated_webp(media_proxy_url) do
+      test_pid = self()
+
+      Tesla.Mock.mock(fn
+        %{method: :head, url: ^media_proxy_url} ->
+          %Tesla.Env{status: 200, body: "", headers: [{"content-type", "image/webp"}]}
+
+        %{method: :get, url: ^media_proxy_url} ->
+          send(test_pid, :image_get)
+          %Tesla.Env{status: 200, body: File.read!("test/fixtures/animated.webp")}
+      end)
+    end
+
+    test "with an animated WebP, redirects the thumbnail to media proxy URI", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      mock_animated_webp(media_proxy_url)
+
+      response = get(conn, url)
+
+      assert redirected_to(response, 301) == media_proxy_url
+    end
+
+    test "with an animated WebP, redirects a configured `size` to media proxy URI", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+      mock_animated_webp(media_proxy_url)
+
+      response = get(conn, url <> "?size=300")
+
+      assert redirected_to(response, 301) == media_proxy_url
+    end
+
+    @tag skip: @avif_skip
+    test "with an animated WebP and AVIF accepted, redirects after one download", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+      clear_config([:media_preview_proxy, :avif], true)
+      mock_animated_webp(media_proxy_url)
+
+      response =
+        conn
+        |> put_req_header("accept", "image/avif,*/*")
+        |> get(url <> "?size=300")
+
+      assert redirected_to(response, 301) == media_proxy_url
+      assert_received :image_get
+      refute_received :image_get
+    end
+
+    test "with an animated WebP and `static=true`, responds with a still JPEG", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      mock_animated_webp(media_proxy_url)
+
+      response = get(conn, url <> "?static=true")
+
+      assert response.status == 200
+      assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+      assert {:ok, _} = Vix.Vips.Image.new_from_buffer(response.resp_body)
+    end
+
+    test "thumbnails a still WebP into JPEG", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      mock_image(media_proxy_url, "image/webp", "test/fixtures/still.webp")
+
+      response = get(conn, url)
+
+      assert response.status == 200
+      assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+      assert long_side(response.resp_body) == 600
+    end
+
+    # whether a WebP is animated only shows after the download
+    test "with a still WebP and `static=true`, responds with a still JPEG", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      mock_image(media_proxy_url, "image/webp", "test/fixtures/still.webp")
+
+      response = get(conn, url <> "?static=true")
+
+      assert response.status == 200
+      assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+    end
+
     test "redirects to media proxy URI in case of thumbnailing error", %{
       conn: conn,
       url: url,
