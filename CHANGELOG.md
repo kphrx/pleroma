@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## 2.11.1
+
+### Security
+
+- Update Bandit to version 1.14.0, which fixes HTTP/1.1, HTTP/2 and WebSocket denial-of-service and request smuggling vulnerabilities
+- Update Hackney to version 4.9.1, which fixes unbounded response body buffering and decompression, CA pinning, redirect credential leaks and other vulnerabilities
+
 ## 2.11.0
 
 ### Security
