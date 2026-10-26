@@ -3104,4 +3104,125 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
              obj_id in object_ids
            end)
   end
+
+  describe "OAuth scopes" do
+    setup do
+      Mox.stub_with(Pleroma.StaticStubbedConfigMock, Pleroma.Config)
+      [user: insert(:user)]
+    end
+
+    defp with_token(conn, user, scopes) do
+      token = insert(:oauth_token, user: user, scopes: scopes)
+
+      conn
+      |> put_req_header("authorization", "Bearer #{token.token}")
+      |> put_req_header("accept", "application/activity+json")
+    end
+
+    test "GET /api/ap/whoami needs read:accounts", %{conn: conn, user: user} do
+      assert conn |> with_token(user, ["profile"]) |> get("/api/ap/whoami") |> json_response(403)
+
+      assert %{"id" => id} =
+               conn
+               |> with_token(user, ["read:accounts"])
+               |> get("/api/ap/whoami")
+               |> json_response(200)
+
+      assert id == user.ap_id
+    end
+
+    test "GET /users/:nickname/inbox needs read:statuses", %{conn: conn, user: user} do
+      inbox = "/users/#{user.nickname}/inbox"
+
+      assert conn |> with_token(user, ["read:accounts"]) |> get(inbox) |> json_response(403)
+      assert conn |> with_token(user, ["read:statuses"]) |> get(inbox) |> json_response(200)
+    end
+
+    test "POST /users/:nickname/outbox needs write", %{conn: conn, user: user} do
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "object" => %{
+          "type" => "Note",
+          "content" => "scoped",
+          "to" => "https://www.w3.org/ns/activitystreams#Public",
+          "cc" => []
+        }
+      }
+
+      post = fn scopes ->
+        conn
+        |> with_token(user, scopes)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/outbox", activity)
+      end
+
+      assert post.(["profile", "write:media"]) |> json_response(403)
+      assert post.(["write"]) |> json_response(201)
+    end
+
+    test "POST /api/ap/upload_media is forbidden without write:media", %{conn: conn, user: user} do
+      assert conn
+             |> with_token(user, ["write:statuses"])
+             |> post("/api/ap/upload_media", %{})
+             |> json_response(403)
+    end
+
+    # majic's libmagic port is unavailable on local Darwin runs; Linux CI still runs this test.
+    @tag :skip_darwin
+    test "POST /api/ap/upload_media works with write:media", %{conn: conn, user: user} do
+      image = %Plug.Upload{
+        content_type: "image/jpeg",
+        path: Path.absname("test/fixtures/image.jpg"),
+        filename: "an_image.jpg"
+      }
+
+      assert conn
+             |> with_token(user, ["write:media"])
+             |> post("/api/ap/upload_media", %{"file" => image})
+             |> json_response(201)
+    end
+
+    test "GET /users/:nickname/outbox shows private posts only with read:statuses",
+         %{conn: conn, user: user} do
+      {:ok, activity} = CommonAPI.post(user, %{status: "secret", visibility: "private"})
+      outbox = "/users/#{user.nickname}/outbox?page=true"
+
+      ids = fn scopes ->
+        conn
+        |> with_token(user, scopes)
+        |> get(outbox)
+        |> json_response(200)
+        |> Map.fetch!("orderedItems")
+        |> Enum.map(& &1["id"])
+      end
+
+      refute activity.data["id"] in ids.(["profile"])
+      assert activity.data["id"] in ids.(["read:statuses"])
+    end
+
+    test "GET /users/:nickname/followers shows hidden followers only with read:accounts",
+         %{conn: conn} do
+      user = insert(:user, hide_followers: true)
+      User.follow(insert(:user), user)
+      followers = "/users/#{user.nickname}/followers?page=1"
+
+      assert conn |> with_token(user, ["profile"]) |> get(followers) |> response(403)
+
+      assert %{"orderedItems" => [_]} =
+               conn |> with_token(user, ["read:accounts"]) |> get(followers) |> json_response(200)
+    end
+
+    test "GET /users/:nickname/following shows hidden follows only with read:accounts",
+         %{conn: conn} do
+      user = insert(:user, hide_follows: true)
+      User.follow(user, insert(:user))
+      following = "/users/#{user.nickname}/following?page=1"
+
+      assert conn |> with_token(user, ["profile"]) |> get(following) |> response(403)
+
+      assert %{"orderedItems" => [_]} =
+               conn |> with_token(user, ["read:accounts"]) |> get(following) |> json_response(200)
+    end
+  end
 end
