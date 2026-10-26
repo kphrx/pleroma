@@ -1,1 +1,0 @@
-Update Bandit to version 1.14.0, which fixes HTTP/1.1, HTTP/2 and WebSocket denial-of-service and request smuggling vulnerabilities
