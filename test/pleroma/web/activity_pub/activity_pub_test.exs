@@ -269,6 +269,33 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       refute User.get_by_ap_id(ap_id)
     end
 
+    test "updates the known user when fetched from a display URL" do
+      ap_id = "https://example.com/users/lain"
+      display_url = "https://example.com/@lain"
+      user = insert(:user, local: false, ap_id: ap_id, nickname: "lain@example.com")
+
+      user_data =
+        "test/fixtures/users_mock/user.json"
+        |> File.read!()
+        |> String.replace("{{nickname}}", "lain")
+        |> Jason.decode!()
+        |> Map.merge(%{"featured" => nil, "name" => "new name"})
+        |> Jason.encode!()
+
+      Tesla.Mock.mock(fn %{method: :get, url: url} when url in [ap_id, display_url] ->
+        %Tesla.Env{
+          status: 200,
+          body: user_data,
+          headers: [{"content-type", "application/activity+json"}]
+        }
+      end)
+
+      assert {:ok, %User{id: id, name: "new name"}} =
+               ActivityPub.make_user_from_ap_id(display_url)
+
+      assert id == user.id
+    end
+
     test "fetches user featured collection" do
       ap_id = "https://example.com/users/lain"
 

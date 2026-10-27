@@ -2055,10 +2055,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   def enqueue_pin_fetches(_), do: nil
 
   def make_user_from_ap_id(ap_id, additional \\ []) do
-    user = User.get_cached_by_ap_id(ap_id)
-
     with {:ok, data} <- fetch_and_prepare_user_from_ap_id(ap_id, additional) do
       enqueue_pin_fetches(data)
+
+      # the fetched actor's id differs from ap_id when it was fetched from a display URL
+      user = User.get_cached_by_ap_id(data.ap_id)
 
       if user do
         user
