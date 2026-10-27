@@ -21,6 +21,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Upload
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.MRF
+  alias Pleroma.Web.ActivityPub.ObjectValidators.UserValidator
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.Streamer
   alias Pleroma.Web.WebFinger
@@ -1924,6 +1925,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   def user_data_from_user_object(data, additional \\ []) do
     with {:ok, data} <- MRF.filter(data),
+         {:ok, data, _} <- UserValidator.validate(data, []),
          {:ok, data} <- object_to_user_data(data, additional) do
       {:ok, data}
     else

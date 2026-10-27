@@ -112,4 +112,14 @@ defmodule Pleroma.Object.Containment do
     do: contain_origin(id, object)
 
   def contain_child(_), do: :ok
+
+  @doc "Checks that two URIs are on the same host. URIs without a host never match."
+  def same_origin(id, other_id) when is_binary(id) and is_binary(other_id) do
+    case {URI.parse(id), URI.parse(other_id)} do
+      {%URI{host: host}, %URI{host: host}} when is_binary(host) and host != "" -> :ok
+      _ -> :error
+    end
+  end
+
+  def same_origin(_id, _other_id), do: :error
 end

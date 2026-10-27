@@ -244,6 +244,31 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
              }
     end
 
+    test "rejects actors whose inbox is on another host" do
+      ap_id = "https://example.com/users/evil"
+
+      user_data =
+        "test/fixtures/users_mock/user.json"
+        |> File.read!()
+        |> String.replace("{{nickname}}", "evil")
+        |> Jason.decode!()
+        |> Map.put("inbox", "https://victim.example/inbox")
+        |> Map.put("featured", nil)
+        |> Jason.encode!()
+
+      Tesla.Mock.mock(fn
+        %{method: :get, url: ^ap_id} ->
+          %Tesla.Env{
+            status: 200,
+            body: user_data,
+            headers: [{"content-type", "application/activity+json"}]
+          }
+      end)
+
+      assert {:error, _} = ActivityPub.make_user_from_ap_id(ap_id)
+      refute User.get_by_ap_id(ap_id)
+    end
+
     test "fetches user featured collection" do
       ap_id = "https://example.com/users/lain"
 
