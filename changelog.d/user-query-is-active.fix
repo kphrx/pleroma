@@ -1,0 +1,1 @@
+Fix deactivated users being counted in followers collections and getting admin emails, because User.Query ignored the is_active key

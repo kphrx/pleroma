@@ -3009,6 +3009,18 @@ defmodule Pleroma.UserTest do
 
       assert [%{id: ^id2}] = User.get_familiar_followers(user3, user1)
     end
+
+    test "does not return deactivated users" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      user3 = insert(:user)
+
+      User.follow(user1, user2)
+      User.follow(user2, user3)
+      {:ok, _} = User.set_activation(user2, false)
+
+      assert [] = User.get_familiar_followers(user3, user1)
+    end
   end
 
   describe "account endorsements" do

@@ -1476,7 +1476,7 @@ defmodule Pleroma.User do
       |> where([u], not u.hide_follows)
       |> select([u], u.id)
 
-    User.Query.build(%{is_active: true})
+    User.Query.build(%{deactivated: false})
     |> where([u], u.id not in ^[user.id, current_user.id])
     |> join(:inner, [u], r in FollowingRelationship,
       as: :followers_relationships,
