@@ -465,7 +465,7 @@ defmodule Pleroma.Web.CommonAPI.Utils do
 
       true ->
         author = User.get_cached_by_ap_id(actor)
-        to_followers = author.follower_address in recipients
+        to_followers = match?(%User{}, author) and author.follower_address in recipients
 
         Enum.filter(tagged_mentions, fn tagged ->
           cond do
@@ -473,8 +473,10 @@ defmodule Pleroma.Web.CommonAPI.Utils do
               true
 
             to_followers ->
-              tagged_user = User.get_cached_by_ap_id(tagged)
-              User.following?(tagged_user, author)
+              case User.get_cached_by_ap_id(tagged) do
+                %User{} = tagged_user -> User.following?(tagged_user, author)
+                _ -> false
+              end
 
             true ->
               false
