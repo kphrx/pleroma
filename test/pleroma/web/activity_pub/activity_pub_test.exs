@@ -541,7 +541,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     end
 
     test "fetches user birthday information from misskey" do
-      user_id = "https://misskey.io/@mkljczk"
+      user_id = "https://misskey.io/users/8dhi2ne167"
 
       Tesla.Mock.mock(fn
         %{
@@ -2058,7 +2058,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
             json(
               %{
                 "@context" => "https://www.w3.org/ns/activitystreams",
-                "id" => "https://remote.org/users/masto_hidden_counters/followers"
+                "id" => "https://remote.org/users/masto_hidden_counters/following"
               },
               headers: HttpRequestMock.activitypub_object_headers()
             )
@@ -2070,7 +2070,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
             json(
               %{
                 "@context" => "https://www.w3.org/ns/activitystreams",
-                "id" => "https://remote.org/users/masto_hidden_counters/following"
+                "id" => "https://remote.org/users/masto_hidden_counters/followers"
               },
               headers: HttpRequestMock.activitypub_object_headers()
             )

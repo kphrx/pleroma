@@ -48,6 +48,8 @@ defmodule Pleroma.Object.FetcherTest do
         %{method: :get, url: "https://social.sakamoto.gq/notice/9wTkLEnuq47B25EehM"} ->
           %Tesla.Env{
             status: 200,
+            # Pleroma redirects /notice/:id to the object id
+            url: "https://social.sakamoto.gq/objects/f20f2497-66d9-4a52-a2e1-1be2a39c32c1",
             body: File.read!("test/fixtures/fetch_mocks/9wTkLEnuq47B25EehM.json"),
             headers: HttpRequestMock.activitypub_object_headers()
           }
@@ -642,7 +644,23 @@ defmodule Pleroma.Object.FetcherTest do
               })
           }
 
-        # No redirect - same domain
+        # Same-domain redirect to the object id
+        %{method: :get, url: "https://original.test/@actor/redirect"} ->
+          %Tesla.Env{
+            status: 200,
+            url: "https://original.test/objects/redirect-target",
+            headers: [{"content-type", "application/activity+json"}],
+            body:
+              Jason.encode!(%{
+                "id" => "https://original.test/objects/redirect-target",
+                "type" => "Note",
+                "content" => "This has a same-domain redirect",
+                "actor" => "https://original.test/users/actor",
+                "attributedTo" => "https://original.test/users/actor"
+              })
+          }
+
+        # Same-domain redirect to a document claiming the original URL as id
         %{method: :get, url: "https://original.test/objects/same-domain-redirect"} ->
           %Tesla.Env{
             status: 200,
@@ -695,10 +713,17 @@ defmodule Pleroma.Object.FetcherTest do
     test "it accepts objects with same-domain redirects" do
       assert {:ok, data} =
                Fetcher.fetch_and_contain_remote_object_from_id(
-                 "https://original.test/objects/same-domain-redirect"
+                 "https://original.test/@actor/redirect"
                )
 
       assert data["content"] == "This has a same-domain redirect"
+    end
+
+    test "it rejects redirect targets that claim the original URL as id" do
+      assert {:error, _} =
+               Fetcher.fetch_and_contain_remote_object_from_id(
+                 "https://original.test/objects/same-domain-redirect"
+               )
     end
 
     test "it handles responses without URL field (common in tests)" do
@@ -708,6 +733,131 @@ defmodule Pleroma.Object.FetcherTest do
                )
 
       assert data["content"] == "This has no URL field in response"
+    end
+  end
+
+  describe "id containment" do
+    setup do
+      note = fn id, content ->
+        %Tesla.Env{
+          status: 200,
+          headers: [{"content-type", "application/activity+json"}],
+          body:
+            Jason.encode!(%{
+              "id" => id,
+              "type" => "Note",
+              "content" => content,
+              "actor" => "https://host.test/users/actor",
+              "attributedTo" => "https://host.test/users/actor"
+            })
+        }
+      end
+
+      mock(fn
+        # display URL serving the canonical object
+        %{method: :get, url: "https://host.test/@actor/1"} ->
+          note.("https://host.test/objects/1", "display")
+
+        %{method: :get, url: "https://host.test/objects/1"} ->
+          note.("https://host.test/objects/1", "canonical")
+
+        # uploaded file claiming to be another object on the same host
+        %{method: :get, url: "https://host.test/media/evil.json"} ->
+          note.("https://host.test/objects/2", "spoofed")
+
+        %{method: :get, url: "https://host.test/objects/2"} ->
+          note.("https://host.test/objects/2", "real")
+
+        # canonical id does not serve itself
+        %{method: :get, url: "https://host.test/media/loop.json"} ->
+          note.("https://host.test/objects/3", "loop")
+
+        %{method: :get, url: "https://host.test/objects/3"} ->
+          note.("https://host.test/objects/4", "other")
+
+        # canonical id redirects
+        %{method: :get, url: "https://host.test/media/redirect.json"} ->
+          note.("https://host.test/objects/5", "redirect")
+
+        %{method: :get, url: "https://host.test/objects/5"} ->
+          %{note.("https://host.test/objects/5", "moved") | url: "https://host.test/media/x"}
+
+        %{method: :get, url: "https://host.test/objects/slash"} ->
+          note.("https://host.test/objects/slash/", "slash")
+
+        %{method: :get, url: "https://host.test/objects/no-id"} ->
+          note.(nil, "no id")
+      end)
+
+      :ok
+    end
+
+    test "it refetches display URLs from the canonical id" do
+      assert {:ok, %{"id" => "https://host.test/objects/1", "content" => "canonical"}} =
+               Fetcher.fetch_and_contain_remote_object_from_id("https://host.test/@actor/1")
+    end
+
+    test "it does not trust a document claiming another id on the same host" do
+      assert {:ok, %{"id" => "https://host.test/objects/2", "content" => "real"}} =
+               Fetcher.fetch_and_contain_remote_object_from_id(
+                 "https://host.test/media/evil.json"
+               )
+    end
+
+    test "it refetches at most once" do
+      assert {:error, :id_mismatch} =
+               Fetcher.fetch_and_contain_remote_object_from_id(
+                 "https://host.test/media/loop.json"
+               )
+    end
+
+    test "it does not follow redirects when refetching from the canonical id" do
+      assert {:error, _} =
+               Fetcher.fetch_and_contain_remote_object_from_id(
+                 "https://host.test/media/redirect.json"
+               )
+    end
+
+    test "it ignores a trailing slash" do
+      assert {:ok, %{"content" => "slash"}} =
+               Fetcher.fetch_and_contain_remote_object_from_id("https://host.test/objects/slash")
+    end
+
+    test "it accepts ids that only differ by URL encoding" do
+      clear_config(:test_url_encoding, true)
+
+      mock(fn %{method: :get, url: url} ->
+        # the encoder sends uppercase escapes
+        assert url in [
+                 "https://host.test/users/%E3%81%82",
+                 "https://host.test/notes/%E3%81%82"
+               ]
+
+        id =
+          if url =~ "users",
+            do: "https://host.test/users/あ",
+            else: "https://host.test/notes/%e3%81%82"
+
+        %Tesla.Env{
+          status: 200,
+          url: url,
+          headers: [{"content-type", "application/activity+json"}],
+          body: Jason.encode!(%{"id" => id, "type" => "Note"})
+        }
+      end)
+
+      assert {:ok, _} =
+               Fetcher.fetch_and_contain_remote_object_from_id("https://host.test/users/あ")
+
+      assert {:ok, _} =
+               Fetcher.fetch_and_contain_remote_object_from_id(
+                 "https://host.test/notes/%e3%81%82"
+               )
+    end
+
+    test "it rejects documents without an id" do
+      assert {:error, _} =
+               Fetcher.fetch_and_contain_remote_object_from_id("https://host.test/objects/no-id")
     end
   end
 

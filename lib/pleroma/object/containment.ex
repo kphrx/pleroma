@@ -108,6 +108,34 @@ defmodule Pleroma.Object.Containment do
 
   def contain_origin_from_id(_id, _data), do: :error
 
+  @doc """
+  Checks that a fetched document's id is the URL it was fetched from
+  (after redirects).
+
+  Fragments, a trailing slash, the case of the host and differences
+  that our URL encoding removes before a request are ignored.
+  Documents without an id never match.
+
+  Based on Akkoma's `contain_id_to_fetch/2`.
+  """
+  def contain_id_to_fetch(url, %{"id" => id}) when is_binary(url) and is_binary(id) do
+    if normalize_uri(url) == normalize_uri(id), do: :ok, else: :error
+  end
+
+  def contain_id_to_fetch(_url, _data), do: :error
+
+  defp normalize_uri(uri) do
+    uri = uri |> Pleroma.Utils.URIEncoding.encode_url() |> URI.parse()
+
+    %URI{
+      uri
+      | fragment: nil,
+        host: uri.host && String.downcase(uri.host, :ascii),
+        path: uri.path && String.replace_suffix(uri.path, "/", "")
+    }
+    |> URI.to_string()
+  end
+
   def contain_child(%{"object" => %{"id" => id, "attributedTo" => _} = object}),
     do: contain_origin(id, object)
 
