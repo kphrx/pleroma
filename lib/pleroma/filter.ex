@@ -212,7 +212,7 @@ defmodule Pleroma.Filter do
 
     phrases =
       filters
-      |> Enum.map(&phrase_regex(&1.phrase, boundary))
+      |> Enum.map(&phrase_regex(&1, boundary))
       |> Enum.join("|")
 
     case format do
@@ -223,9 +223,12 @@ defmodule Pleroma.Filter do
 
   def compose_regex(_, _), do: nil
 
-  # Phrases are literal text. Like Mastodon, only add a word boundary
-  # where the phrase starts or ends with a word character.
-  defp phrase_regex(phrase, boundary) do
+  # Phrases are literal text. Like Mastodon, whole-word filters only get a
+  # word boundary where the phrase starts or ends with a word character.
+  defp phrase_regex(%__MODULE__{phrase: phrase, whole_word: false}, _boundary),
+    do: Regex.escape(phrase)
+
+  defp phrase_regex(%__MODULE__{phrase: phrase}, boundary) do
     prefix = if String.match?(phrase, ~r/^\w/u), do: boundary, else: ""
     suffix = if String.match?(phrase, ~r/\w$/u), do: boundary, else: ""
 

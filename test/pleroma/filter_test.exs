@@ -233,6 +233,17 @@ defmodule Pleroma.FilterTest do
       end
     end
 
+    test "matches inside words when whole_word is false" do
+      filters = [%Filter{phrase: "cat", whole_word: false}, %Filter{phrase: "dog"}]
+      pg = Filter.compose_regex(filters)
+      re = Filter.compose_regex(filters, :re)
+
+      for {text, expected} <- [{"a catalog", true}, {"a hotdog", false}, {"a dog", true}] do
+        assert pg_match?(pg, text) == expected
+        assert Regex.match?(re, text) == expected
+      end
+    end
+
     test "keeps word boundaries for every phrase in Elixir" do
       regex = Filter.compose_regex(filters(["cat", "dog"]), :re)
 
