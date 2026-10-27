@@ -11,6 +11,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Conversation.Participation
   alias Pleroma.Filter
   alias Pleroma.Hashtag
+  alias Pleroma.Instances.Instance
   alias Pleroma.Maps
   alias Pleroma.Notification
   alias Pleroma.Object
@@ -2068,10 +2069,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       else
         maybe_handle_clashing_nickname(data)
 
-        data
-        |> User.remote_user_changeset()
-        |> Repo.insert()
-        |> User.set_cache()
+        with {:ok, user} <- data |> User.remote_user_changeset() |> Repo.insert() do
+          # Keeps the instances table complete, so it can list our peers.
+          Instance.ensure_exists(user.ap_id)
+          User.set_cache({:ok, user})
+        end
       end
     end
   end

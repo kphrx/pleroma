@@ -91,6 +91,13 @@ defmodule Pleroma.Instances.Instance do
 
   def reachable?(url_or_host) when is_binary(url_or_host), do: true
 
+  @doc "Creates a record for the instance unless one exists. Existing records are kept."
+  def ensure_exists(url_or_host) when is_binary(url_or_host) do
+    %Instance{host: host(url_or_host)}
+    |> changeset(%{})
+    |> Repo.insert(on_conflict: :nothing, conflict_target: :host)
+  end
+
   def set_reachable(url_or_host) when is_binary(url_or_host) do
     host = host(url_or_host)
 
