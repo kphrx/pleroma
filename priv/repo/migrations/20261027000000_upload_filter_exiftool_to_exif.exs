@@ -22,20 +22,20 @@ defmodule Pleroma.Repo.Migrations.UploadFilterExiftoolToExif do
 
   def down, do: rename_filters(@down)
 
+  # Only touch configs that list filters: adding an empty list would hide the
+  # filters from the config file.
   defp rename_filters(renames) do
-    case ConfigDB.get_by_params(%{group: :pleroma, key: Pleroma.Upload}) do
-      %{value: value} ->
-        new_value =
-          Keyword.update(value, :filters, [], fn filters ->
-            filters
-            |> Enum.map(&Map.get(renames, &1, &1))
-            |> Enum.uniq()
-          end)
-
-        ConfigDB.update_or_create(%{group: :pleroma, key: Pleroma.Upload, value: new_value})
-
-      _ ->
-        nil
+    with %{value: value} <- ConfigDB.get_by_params(%{group: :pleroma, key: Pleroma.Upload}),
+         filters when is_list(filters) <- value[:filters],
+         new_filters when new_filters != filters <-
+           filters |> Enum.map(&Map.get(renames, &1, &1)) |> Enum.uniq() do
+      ConfigDB.update_or_create(%{
+        group: :pleroma,
+        key: Pleroma.Upload,
+        value: Keyword.put(value, :filters, new_filters)
+      })
+    else
+      _ -> nil
     end
   end
 end

@@ -61,4 +61,13 @@ defmodule Pleroma.Repo.Migrations.UploadFilterExiftoolToExifTest do
     assert migration.up() == nil
     assert ConfigDB.get_by_params(%{group: :pleroma, key: Pleroma.Upload}) == nil
   end
+
+  test "up/0 does not add filters to a database config without them", %{migration: migration} do
+    insert(:config, group: :pleroma, key: Pleroma.Upload, value: [uploader: Pleroma.Uploaders.S3])
+
+    migration.up()
+
+    value = ConfigDB.get_by_params(%{group: :pleroma, key: Pleroma.Upload}).value
+    assert value == [uploader: Pleroma.Uploaders.S3]
+  end
 end
