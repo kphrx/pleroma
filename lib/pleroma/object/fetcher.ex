@@ -11,6 +11,7 @@ defmodule Pleroma.Object.Fetcher do
   alias Pleroma.Web.ActivityPub.InternalFetchActor
   alias Pleroma.Web.ActivityPub.MRF
   alias Pleroma.Web.ActivityPub.ObjectValidator
+  alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
   alias Pleroma.Web.ActivityPub.Pipeline
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.Federator
@@ -46,9 +47,14 @@ defmodule Pleroma.Object.Fetcher do
     end
   end
 
-  def refetch_object(%Object{data: %{"id" => id}} = object) do
+  # The stored id is canonical, so the refetch must not redirect, and the
+  # remote must not swap in another object or author.
+  # Based on Akkoma 9061d148b and fee57eb37.
+  def refetch_object(%Object{data: %{"id" => id} = data} = object) do
     with {:local, false} <- {:local, Object.local?(object)},
-         {:ok, new_data} <- fetch_and_contain_remote_object_from_id(id),
+         {:ok, new_data} <- fetch_and_contain(id, true),
+         {:id, true} <- {:id, new_data["id"] == id},
+         {:actor, true} <- {:actor, actor_of(new_data) == actor_of(data)},
          {:ok, object} <- reinject_object(object, new_data) do
       {:ok, object}
     else
@@ -56,6 +62,8 @@ defmodule Pleroma.Object.Fetcher do
       e -> {:error, e}
     end
   end
+
+  defp actor_of(data), do: CommonFixes.fix_actor(data)["actor"]
 
   @typep fetcher_errors ::
            :error | :reject | :allowed_depth | :fetch | :containment | :transmogrifier

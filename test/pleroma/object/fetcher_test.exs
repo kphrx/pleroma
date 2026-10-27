@@ -465,6 +465,60 @@ defmodule Pleroma.Object.FetcherTest do
       %{object1: local_object1, object2: local_object2}
     end
 
+    test "it rejects a refetched object whose actor changed", %{object1: object1} do
+      insert(:user, ap_id: "https://mastodon.social/users/someone_else")
+      {:ok, o} = Object.create(object1)
+
+      mock(fn %{method: :get, url: "https://mastodon.social/1"} ->
+        %Tesla.Env{
+          status: 200,
+          headers: [{"content-type", "application/activity+json"}],
+          body:
+            object1
+            |> Map.merge(%{
+              "actor" => "https://mastodon.social/users/someone_else",
+              "attributedTo" => "https://mastodon.social/users/someone_else",
+              "content" => "hijacked"
+            })
+            |> Jason.encode!()
+        }
+      end)
+
+      assert {:error, _} = Fetcher.refetch_object(o)
+      assert Object.get_by_ap_id("https://mastodon.social/1").data["content"] == "test 1"
+    end
+
+    test "it rejects a refetched object whose id changed", %{object1: object1} do
+      {:ok, o} = Object.create(object1)
+
+      mock(fn %{method: :get, url: "https://mastodon.social/1"} ->
+        %Tesla.Env{
+          status: 200,
+          url: "https://mastodon.social/2",
+          headers: [{"content-type", "application/activity+json"}],
+          body: object1 |> Map.put("id", "https://mastodon.social/2") |> Jason.encode!()
+        }
+      end)
+
+      assert {:error, _} = Fetcher.refetch_object(o)
+    end
+
+    test "it rejects a refetched object whose id differs only by a trailing slash", %{
+      object1: object1
+    } do
+      {:ok, o} = Object.create(object1)
+
+      mock(fn %{method: :get, url: "https://mastodon.social/1"} ->
+        %Tesla.Env{
+          status: 200,
+          headers: [{"content-type", "application/activity+json"}],
+          body: object1 |> Map.put("id", "https://mastodon.social/1/") |> Jason.encode!()
+        }
+      end)
+
+      assert {:error, _} = Fetcher.refetch_object(o)
+    end
+
     test "it keeps formerRepresentations if remote does not have this attr", %{object1: object1} do
       full_object1 =
         object1
