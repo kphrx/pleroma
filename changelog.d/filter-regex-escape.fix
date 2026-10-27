@@ -1,0 +1,1 @@
+Treat filter phrases as literal text; a phrase like "(" no longer breaks timeline and notification queries, and phrases that start or end with punctuation (like "#tag") now match
