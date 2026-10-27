@@ -281,36 +281,18 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   defp maybe_use_sharedinbox(%User{shared_inbox: shared_inbox}), do: shared_inbox
 
   @doc """
-  Determine a user inbox to use based on heuristics.  These heuristics
-  are based on an approximation of the ``sharedInbox`` rules in the
-  [ActivityPub specification][ap-sharedinbox].
+  Determines the inbox to deliver an activity to.
 
-  Please do not edit this function (or its children) without reading
-  the spec, as editing the code is likely to introduce some breakage
-  without some familiarity.
-
-     [ap-sharedinbox]: https://www.w3.org/TR/activitypub/#shared-inbox-delivery
+  Like Mastodon, GoToSocial and Akkoma, this always prefers the shared inbox,
+  which saves duplicate deliveries to the same server. Only activities with
+  `bcc` or `bto` go to personal inboxes, because the receiver rebuilds that
+  addressing from the inbox the activity arrived at.
   """
-  def determine_inbox(
-        %Activity{data: activity_data},
-        %User{inbox: inbox} = user
-      ) do
-    to = activity_data["to"] || []
-    cc = activity_data["cc"] || []
-    type = activity_data["type"]
-
-    cond do
-      type == "Delete" ->
-        maybe_use_sharedinbox(user)
-
-      Pleroma.Constants.as_public() in to || Pleroma.Constants.as_public() in cc ->
-        maybe_use_sharedinbox(user)
-
-      length(to) + length(cc) > 1 ->
-        maybe_use_sharedinbox(user)
-
-      true ->
-        inbox
+  def determine_inbox(%Activity{data: activity_data}, %User{inbox: inbox} = user) do
+    if Enum.empty?(activity_data["bcc"] || []) and Enum.empty?(activity_data["bto"] || []) do
+      maybe_use_sharedinbox(user)
+    else
+      inbox
     end
   end
 
