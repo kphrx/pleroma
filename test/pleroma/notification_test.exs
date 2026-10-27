@@ -9,6 +9,7 @@ defmodule Pleroma.NotificationTest do
 
   alias Pleroma.FollowingRelationship
   alias Pleroma.Notification
+  alias Pleroma.Object
   alias Pleroma.Repo
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
@@ -274,6 +275,22 @@ defmodule Pleroma.NotificationTest do
       {:ok, status} = CommonAPI.post(user, %{status: "got cofe?"})
 
       assert {:ok, []} == Notification.create_notifications(status)
+    end
+
+    test "it creates notifications for objects without content when the user has filters" do
+      author = insert(:user)
+      user = insert(:user)
+      insert(:filter, user: user, phrase: "cofe", hide: true)
+
+      {:ok, status} = CommonAPI.post(author, %{status: "hey @#{user.nickname}"})
+      object = Object.normalize(status, fetch: false)
+
+      {:ok, _} =
+        object
+        |> Object.change(%{data: Map.delete(object.data, "content")})
+        |> Object.update_and_set_cache()
+
+      assert {:ok, [_]} = Notification.create_notifications(Pleroma.Activity.get_by_id(status.id))
     end
 
     test "it creates notifications if content matches with a not irreversible filter" do
