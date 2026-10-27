@@ -205,6 +205,7 @@ defmodule Pleroma.Mixfile do
       {:majic, "~> 1.2"},
       {:open_api_spex, "~> 3.22"},
       {:ecto_psql_extras, "~> 0.8"},
+      {:exif_stripper, "~> 0.1.1"},
       {:vix, "~> 0.36"},
       {:elixir_make, "~> 0.7.8", override: true},
       {:blurhash, "~> 0.1.0", hex: :rinpatch_blurhash},
