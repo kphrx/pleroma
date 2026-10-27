@@ -13,7 +13,8 @@ defmodule Pleroma.Repo.Migrations.BackfillInstancesFromUsers do
       INSERT INTO instances (host, inserted_at, updated_at)
       SELECT DISTINCT host, now(), now()
       FROM (
-        SELECT substring(ap_id from '^[A-Za-z][A-Za-z0-9+.-]*://([^/:?#]+)') AS host
+        -- Skips userinfo; IPv6 literals give NULL and are left out.
+        SELECT substring(ap_id from '^[A-Za-z][A-Za-z0-9+.-]*://(?:[^/?#@]*@)?([^/:?#\\[]+)') AS host
         FROM users
         WHERE local = false AND ap_id IS NOT NULL
       ) AS hosts

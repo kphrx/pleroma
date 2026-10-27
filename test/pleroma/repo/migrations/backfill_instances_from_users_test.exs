@@ -19,12 +19,14 @@ defmodule Pleroma.Repo.Migrations.BackfillInstancesFromUsersTest do
     insert(:user, local: false, ap_id: "https://new.example/users/a")
     insert(:user, local: false, ap_id: "https://new.example/users/b")
     insert(:user, local: false, ap_id: "https://ported.example:8443/users/c")
+    insert(:user, local: false, ap_id: "https://user@userinfo.example/users/d")
+    insert(:user, local: false, ap_id: "https://[2001:db8::1]/users/e")
     insert(:user, local: true)
 
     migration.up()
 
     hosts = Instance |> Repo.all() |> Enum.map(& &1.host) |> Enum.sort()
-    assert hosts == ["known.example", "new.example", "ported.example"]
+    assert hosts == ["known.example", "new.example", "ported.example", "userinfo.example"]
 
     assert %{unreachable_since: ^unreachable_since} = Repo.get_by(Instance, host: "known.example")
   end

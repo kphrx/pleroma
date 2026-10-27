@@ -86,6 +86,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceControllerTest do
     # Peers come from the instances table, which remote users add to.
     insert(:instance, host: "peer1.com")
     insert(:instance, host: "peer2.com")
+    # Favicon lookups for local accounts can add our own host.
+    insert(:instance, host: Pleroma.Web.Endpoint.host())
 
     Pleroma.Stats.force_update()
 

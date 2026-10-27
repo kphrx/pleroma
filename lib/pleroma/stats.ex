@@ -67,7 +67,10 @@ defmodule Pleroma.Stats do
   def calculate_stat_data do
     # Hosts are unique in instances, and remote users add theirs. Scanning
     # all remote users for their domains was one of the costliest queries.
-    peers = Repo.all(from(i in Instance, select: i.host))
+    # Favicon lookups for local accounts can add our own host, so skip it.
+    peers =
+      from(i in Instance, where: i.host != ^local_host(), select: i.host)
+      |> Repo.all()
 
     domain_count = Enum.count(peers)
 
@@ -92,6 +95,9 @@ defmodule Pleroma.Stats do
       }
     }
   end
+
+  # Read from the config: this also runs before the endpoint has started.
+  defp local_host, do: Pleroma.Config.get([Pleroma.Web.Endpoint, :url, :host])
 
   @spec get_status_visibility_count(String.t() | nil) :: map()
   def get_status_visibility_count(instance \\ nil) do
