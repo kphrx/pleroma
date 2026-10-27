@@ -1,0 +1,1 @@
+Require the read:security and write:security scopes to list and revoke OAuth tokens (HTTP Basic auth no longer works for these endpoints)
