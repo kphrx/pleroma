@@ -32,6 +32,16 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UserValidatorTest do
     end
   end
 
+  test "treats empty and null fields as missing" do
+    data =
+      actor()
+      |> Map.merge(%{"inbox" => "", "followers" => nil, "following" => "", "featured" => ""})
+      |> put_in(["endpoints", "sharedInbox"], "")
+      |> put_in(["publicKey", "id"], "")
+
+    assert {:ok, _, _} = UserValidator.validate(data, [])
+  end
+
   for field <- ["inbox", "followers", "following", "featured"] do
     test "rejects an actor whose #{field} is on another host" do
       data = Map.put(actor(), unquote(field), "https://victim.example/users/lain/x")

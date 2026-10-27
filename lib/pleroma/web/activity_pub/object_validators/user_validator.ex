@@ -10,7 +10,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UserValidator do
   addressing and visibility checks, and map signature key ids back to
   the actor. If an actor could point any of these at another host, it
   could redirect our signed deliveries or claim another actor's
-  collections. Optional fields are only checked when present.
+  collections. Optional fields are only checked when present; null and
+  empty strings count as missing.
 
   Based on Akkoma's UserValidator.
   """
@@ -38,7 +39,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.UserValidator do
 
   def validate(_data, _meta), do: {:error, "Actor has no id"}
 
-  defp same_origin?(_id, nil), do: true
+  defp same_origin?(_id, value) when value in [nil, ""], do: true
   defp same_origin?(id, %{"id" => value}), do: same_origin?(id, value)
   defp same_origin?(id, value), do: Containment.same_origin(id, value) == :ok
 
