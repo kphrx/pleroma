@@ -1,0 +1,1 @@
+Strip GPS data from WebP and HEIC/AVIF uploads; the Exiftool.StripLocation filter used to skip them
