@@ -13,9 +13,11 @@ defmodule Pleroma.Upload.Filter.Exif.StripLocationTest do
         {"DSCN0010.jpg", "image/jpeg"},
         {"DSCN0010.png", "image/png"},
         {"strip_location_gps.webp", "image/webp"},
-        {"strip_location_gps.heic", "image/heic"}
+        {"strip_location_gps.heic", "image/heic"},
+        {"strip_location_gps_grid.heic", "image/heic"},
+        {"strip_location_gps.tiff", "image/tiff"}
       ] do
-    test "strips GPS data from #{content_type}" do
+    test "strips GPS data from #{fixture} (#{content_type})" do
       upload = upload_copy(unquote(fixture), unquote(content_type))
       assert gps_tags(upload.tempfile) =~ "GPS Latitude"
 
@@ -38,6 +40,12 @@ defmodule Pleroma.Upload.Filter.Exif.StripLocationTest do
 
     assert StripLocation.filter(upload) == {:ok, :noop}
     assert File.read!(upload.tempfile) == original
+  end
+
+  test "accepts PNG files with data after IEND" do
+    upload = upload_copy("image_with_stray_data_after.png", "image/png")
+
+    assert {:ok, _} = StripLocation.filter(upload)
   end
 
   test "ignores non-image uploads" do
