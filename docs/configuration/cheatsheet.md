@@ -704,7 +704,7 @@ No specific configuration.
 
 #### Pleroma.Upload.Filter.Exif.StripLocation
 
-This filter strips GPS and location metadata from JPEG, WebP, HEIC and AVIF images, leaving color profiles and attributes intact. For PNG images it removes all text and EXIF metadata chunks. Images are not re-encoded, and other formats are left unchanged.
+This filter strips GPS and location metadata from JPEG, WebP, HEIC, AVIF and TIFF images, leaving color profiles and attributes intact. For PNG images it removes all text and EXIF metadata chunks. Images are not re-encoded, and other formats are left unchanged.
 
 It replaces the deprecated `Pleroma.Upload.Filter.Exiftool.StripLocation`, which no longer needs exiftool.
 

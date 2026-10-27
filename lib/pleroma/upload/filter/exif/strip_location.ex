@@ -6,7 +6,7 @@ defmodule Pleroma.Upload.Filter.Exif.StripLocation do
   @moduledoc """
   Strips GPS metadata from uploaded images and overwrites the file in place.
 
-  Supports JPEG, PNG, WebP and ISO-BMFF images (HEIC, AVIF). This is lossless:
+  Supports JPEG, PNG, WebP, TIFF and ISO-BMFF images (HEIC, AVIF). This is lossless:
   the image data is not re-encoded. Other image types are left untouched.
   """
 

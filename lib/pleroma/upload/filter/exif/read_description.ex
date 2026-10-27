@@ -6,7 +6,7 @@ defmodule Pleroma.Upload.Filter.Exif.ReadDescription do
   @moduledoc """
   Reads a description from image metadata when the upload has none yet.
 
-  Checks EXIF ImageDescription, then IPTC Caption-Abstract, then XMP. Blank
+  Checks EXIF ImageDescription, then IPTC Caption-Abstract (and XMP for GIF). Blank
   values and values longer than `[:instance, :description_limit]` are ignored.
   """
 
