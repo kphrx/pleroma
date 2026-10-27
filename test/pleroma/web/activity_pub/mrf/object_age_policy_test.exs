@@ -8,6 +8,8 @@ defmodule Pleroma.Web.ActivityPub.MRF.ObjectAgePolicyTest do
   alias Pleroma.Web.ActivityPub.MRF.ObjectAgePolicy
   alias Pleroma.Web.ActivityPub.Visibility
 
+  require Pleroma.Constants
+
   setup do:
           clear_config(:mrf_object_age,
             threshold: 172_800,
@@ -92,6 +94,90 @@ defmodule Pleroma.Web.ActivityPub.MRF.ObjectAgePolicyTest do
       {:ok, data} = ObjectAgePolicy.filter(data)
 
       assert Visibility.get_visibility(%{data: data}) == "unlisted"
+    end
+
+    test "it keeps an old followers-only post private" do
+      clear_config([:mrf_object_age, :actions], [:delist])
+
+      data = get_old_message()
+      {:ok, user} = User.get_or_fetch_by_ap_id(data["actor"])
+
+      data =
+        data
+        |> Map.put("to", [user.follower_address])
+        |> Map.put("cc", [])
+        |> put_in(["object", "to"], [user.follower_address])
+        |> put_in(["object", "cc"], [])
+
+      {:ok, data} = ObjectAgePolicy.filter(data)
+
+      assert data["to"] == [user.follower_address]
+      assert data["cc"] == []
+      assert Visibility.get_visibility(%{data: data}) == "private"
+      assert data["object"]["to"] == data["to"]
+      assert data["object"]["cc"] == data["cc"]
+    end
+
+    test "it keeps an old direct message direct" do
+      clear_config([:mrf_object_age, :actions], [:delist])
+
+      data = get_old_message()
+      {:ok, _user} = User.get_or_fetch_by_ap_id(data["actor"])
+      recipient = "https://example.com/users/someone"
+
+      data =
+        data
+        |> Map.put("to", [recipient])
+        |> Map.put("cc", [])
+        |> put_in(["object", "to"], [recipient])
+        |> put_in(["object", "cc"], [])
+
+      {:ok, data} = ObjectAgePolicy.filter(data)
+
+      assert data["to"] == [recipient]
+      assert data["cc"] == []
+      assert Visibility.get_visibility(%{data: data}) == "direct"
+    end
+
+    test "it removes every copy of the follower address" do
+      clear_config([:mrf_object_age, :actions], [:strip_followers])
+
+      data = get_old_message()
+      {:ok, user} = User.get_or_fetch_by_ap_id(data["actor"])
+      public = Pleroma.Constants.as_public()
+      followers = [user.follower_address, user.follower_address]
+
+      data =
+        data
+        |> Map.put("to", [public])
+        |> Map.put("cc", followers)
+        |> put_in(["object", "to"], [public])
+        |> put_in(["object", "cc"], followers)
+
+      {:ok, data} = ObjectAgePolicy.filter(data)
+
+      assert data["to"] == [public]
+      assert data["cc"] == []
+    end
+
+    test "it does not duplicate addresses of an old unlisted post" do
+      clear_config([:mrf_object_age, :actions], [:delist, :strip_followers])
+
+      data = get_old_message()
+      {:ok, user} = User.get_or_fetch_by_ap_id(data["actor"])
+      public = Pleroma.Constants.as_public()
+
+      data =
+        data
+        |> Map.put("to", [user.follower_address])
+        |> Map.put("cc", [public])
+        |> put_in(["object", "to"], [user.follower_address])
+        |> put_in(["object", "cc"], [public])
+
+      {:ok, data} = ObjectAgePolicy.filter(data)
+
+      assert data["to"] == []
+      assert data["cc"] == [public]
     end
 
     test "it allows a new post" do
