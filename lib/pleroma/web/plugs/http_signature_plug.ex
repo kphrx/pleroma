@@ -101,7 +101,7 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlug do
          conn.assigns[:actor_id] do
       %{host: host} = URI.parse(conn.assigns.actor_id)
 
-      if MRF.subdomain_match?(rejected_domains(), host) do
+      if MRF.subdomain_match?(rejected_domains(), host) or not MRF.instance_allowed?(host) do
         conn
         |> put_status(:unauthorized)
         |> halt()

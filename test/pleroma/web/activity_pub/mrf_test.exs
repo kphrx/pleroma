@@ -139,4 +139,37 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
              type: :group
            }
   end
+
+  describe "instance_allowed?/1" do
+    setup do: clear_config([:mrf, :policies], [Pleroma.Web.ActivityPub.MRF.SimplePolicy])
+    setup do: clear_config([:mrf_simple, :reject], [{"rejected.example", "spam"}])
+    setup do: clear_config([:mrf_simple, :accept], [])
+
+    test "is false for hosts rejected by SimplePolicy, including subdomains" do
+      clear_config([:mrf_simple, :reject], [{"*.rejected.example", "spam"}])
+
+      refute MRF.instance_allowed?("rejected.example")
+      refute MRF.instance_allowed?("sub.rejected.example")
+      assert MRF.instance_allowed?("fine.example")
+    end
+
+    test "only allows accepted hosts when SimplePolicy has an accept list" do
+      clear_config([:mrf_simple, :accept], [{"friend.example", ""}])
+
+      assert MRF.instance_allowed?("friend.example")
+      refute MRF.instance_allowed?("stranger.example")
+    end
+
+    test "ignores the SimplePolicy lists when the policy is not enabled" do
+      clear_config([:mrf, :policies], [])
+      clear_config([:mrf_simple, :accept], [{"friend.example", ""}])
+
+      assert MRF.instance_allowed?("rejected.example")
+      assert MRF.instance_allowed?("stranger.example")
+    end
+
+    test "is false without a host" do
+      refute MRF.instance_allowed?(nil)
+    end
+  end
 end

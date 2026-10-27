@@ -6,6 +6,8 @@ defmodule Pleroma.Workers.PublisherWorker do
   alias Pleroma.Activity
   alias Pleroma.Config
   alias Pleroma.Instances
+  alias Pleroma.Web.ActivityPub.Publisher
+  alias Pleroma.Web.ActivityPub.Visibility
   alias Pleroma.Web.Federator
 
   use Oban.Worker, queue: :federator_outgoing, max_attempts: 13
@@ -32,26 +34,39 @@ defmodule Pleroma.Workers.PublisherWorker do
         end
       end)
 
-    # Cancel / skip the job if this server believed to be unreachable now
-    if not Instances.reachable?(params.inbox) do
-      {:cancel, :unreachable}
-    else
-      case federator().perform(:publish_one, params) do
-        {:ok, _} ->
-          :ok
+    cond do
+      # Cancel / skip the job if this server believed to be unreachable now
+      not Instances.reachable?(params.inbox) ->
+        {:cancel, :unreachable}
 
-        {:error, _} = error ->
-          # Only mark as unreachable on final failure
-          if job.attempt == job.max_attempts do
-            Instances.set_unreachable(params.inbox)
-          end
+      # The instance may have been blocked after the job was queued
+      not federate?(params) ->
+        {:cancel, :rejected}
 
-          error
+      true ->
+        case federator().perform(:publish_one, params) do
+          {:ok, _} ->
+            :ok
 
-        error ->
-          # Unexpected error, may have been client side
-          error
-      end
+          {:error, _} = error ->
+            # Only mark as unreachable on final failure
+            if job.attempt == job.max_attempts do
+              Instances.set_unreachable(params.inbox)
+            end
+
+            error
+
+          error ->
+            # Unexpected error, may have been client side
+            error
+        end
+    end
+  end
+
+  defp federate?(%{inbox: inbox, activity_id: activity_id}) do
+    case Activity.get_by_id(activity_id) do
+      %Activity{} = activity -> Publisher.should_federate?(inbox, Visibility.public?(activity))
+      nil -> true
     end
   end
 
