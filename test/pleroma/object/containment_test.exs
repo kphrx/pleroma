@@ -128,6 +128,24 @@ defmodule Pleroma.Object.ContainmentTest do
     end
   end
 
+  describe "get_actor/1" do
+    test "returns nil for actor shapes without an id" do
+      for actor <- [%{"type" => "Person"}, %{"id" => 1}, 1, true] do
+        assert nil == Containment.get_actor(%{"actor" => actor})
+        assert nil == Containment.get_actor(%{"actor" => nil, "attributedTo" => actor})
+      end
+
+      assert nil == Containment.get_actor(%{})
+    end
+
+    test "contain_origin/2 rejects actor shapes without an id" do
+      assert :error ==
+               Containment.contain_origin("https://a.test/o/1", %{
+                 "attributedTo" => %{"type" => "Person"}
+               })
+    end
+  end
+
   describe "contain_id_to_fetch/2" do
     test "matches the exact id" do
       assert :ok =

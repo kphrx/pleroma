@@ -1,0 +1,1 @@
+Reject fetched objects whose author has no id instead of crashing

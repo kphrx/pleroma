@@ -488,6 +488,24 @@ defmodule Pleroma.Object.FetcherTest do
       assert Object.get_by_ap_id("https://mastodon.social/1").data["content"] == "test 1"
     end
 
+    test "it rejects a refetched object whose author has no id", %{object1: object1} do
+      {:ok, o} = Object.create(object1)
+
+      mock(fn %{method: :get, url: "https://mastodon.social/1"} ->
+        %Tesla.Env{
+          status: 200,
+          headers: [{"content-type", "application/activity+json"}],
+          body:
+            object1
+            |> Map.delete("actor")
+            |> Map.put("attributedTo", %{"type" => "Person"})
+            |> Jason.encode!()
+        }
+      end)
+
+      assert {:error, _} = Fetcher.refetch_object(o)
+    end
+
     test "it rejects a refetched object whose id changed", %{object1: object1} do
       {:ok, o} = Object.create(object1)
 
@@ -907,6 +925,25 @@ defmodule Pleroma.Object.FetcherTest do
                Fetcher.fetch_and_contain_remote_object_from_id(
                  "https://host.test/notes/%e3%81%82"
                )
+    end
+
+    test "it rejects objects whose author has no id" do
+      mock(fn %{method: :get, url: "https://host.test/objects/anon" = url} ->
+        %Tesla.Env{
+          status: 200,
+          headers: [{"content-type", "application/activity+json"}],
+          body:
+            Jason.encode!(%{
+              "id" => url,
+              "type" => "Note",
+              "content" => "anon",
+              "attributedTo" => %{"type" => "Person", "name" => "nobody"}
+            })
+        }
+      end)
+
+      assert {:containment, :error} =
+               Fetcher.fetch_object_from_id("https://host.test/objects/anon")
     end
 
     test "it rejects documents without an id" do

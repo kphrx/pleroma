@@ -44,6 +44,9 @@ defmodule Pleroma.Object.Containment do
     id
   end
 
+  # remote data can carry any shape here; callers treat nil as "no actor"
+  def get_actor(_), do: nil
+
   def get_object(%{"object" => id}) when is_binary(id) do
     id
   end
