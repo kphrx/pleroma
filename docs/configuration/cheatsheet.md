@@ -177,8 +177,8 @@ To add configuration to your config file, you can copy it from the base config. 
 * `media_removal`: List of instances to strip media attachments from and the reason for doing so.
 * `media_nsfw`: List of instances to tag all media as NSFW (sensitive) from and the reason for doing so.
 * `federated_timeline_removal`: List of instances to remove from the Federated Timeline (aka The Whole Known Network) and the reason for doing so.
-* `reject`: List of instances to reject activities (except deletes) from and the reason for doing so.
-* `accept`: List of instances to only accept activities (except deletes) from and the reason for doing so.
+* `reject`: List of instances to reject activities (except deletes) from and the reason for doing so. Activities are also not delivered to these instances, and signed fetches from them are refused in `authorized_fetch_mode`.
+* `accept`: List of instances to only accept activities (except deletes) from and the reason for doing so. If set, activities are also only delivered to these instances, and signed fetches from others are refused in `authorized_fetch_mode`.
 * `followers_only`: Force posts from the given instances to be visible by followers only and the reason for doing so.
 * `report_removal`: List of instances to reject reports from and the reason for doing so.
 * `avatar_removal`: List of instances to strip avatars from and the reason for doing so.
