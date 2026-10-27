@@ -969,7 +969,7 @@ defmodule Pleroma.User do
     candidates = Config.get([:instance, :autofollowed_nicknames])
 
     autofollowed_users =
-      User.Query.build(%{nickname: candidates, local: true, is_active: true})
+      User.Query.build(%{nickname: candidates, local: true, deactivated: false})
       |> Repo.all()
 
     follow_all(user, autofollowed_users)
@@ -1401,7 +1401,7 @@ defmodule Pleroma.User do
 
   @spec get_followers_query(User.t(), pos_integer() | nil) :: Ecto.Query.t()
   def get_followers_query(%User{} = user, nil) do
-    User.Query.build(%{followers: user, is_active: true})
+    User.Query.build(%{followers: user, deactivated: false})
   end
 
   def get_followers_query(%User{} = user, page) do
@@ -1476,7 +1476,7 @@ defmodule Pleroma.User do
       |> where([u], not u.hide_follows)
       |> select([u], u.id)
 
-    User.Query.build(%{is_active: true})
+    User.Query.build(%{deactivated: false})
     |> where([u], u.id not in ^[user.id, current_user.id])
     |> join(:inner, [u], r in FollowingRelationship,
       as: :followers_relationships,
@@ -1611,7 +1611,7 @@ defmodule Pleroma.User do
   @spec get_users_from_set([String.t()], keyword()) :: [User.t()]
   def get_users_from_set(ap_ids, opts \\ []) do
     local_only = Keyword.get(opts, :local_only, true)
-    criteria = %{ap_id: ap_ids, is_active: true}
+    criteria = %{ap_id: ap_ids, deactivated: false}
     criteria = if local_only, do: Map.put(criteria, :local, true), else: criteria
 
     User.Query.build(criteria)
@@ -1622,7 +1622,7 @@ defmodule Pleroma.User do
   def get_recipients_from_activity(%Activity{recipients: to, actor: actor}) do
     to = [actor | to]
 
-    query = User.Query.build(%{recipients_from_activity: to, local: true, is_active: true})
+    query = User.Query.build(%{recipients_from_activity: to, local: true, deactivated: false})
 
     query
     |> Repo.all()
@@ -2473,7 +2473,7 @@ defmodule Pleroma.User do
 
   @spec all_superusers() :: [User.t()]
   def all_superusers do
-    User.Query.build(%{super_users: true, local: true, is_active: true})
+    User.Query.build(%{super_users: true, local: true, deactivated: false})
     |> Repo.all()
   end
 

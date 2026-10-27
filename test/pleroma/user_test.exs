@@ -1197,8 +1197,29 @@ defmodule Pleroma.UserTest do
 
       res = User.get_followers(user)
 
+      assert length(res) == 2
       assert Enum.member?(res, follower_one)
       assert Enum.member?(res, follower_two)
+      refute Enum.member?(res, not_follower)
+    end
+
+    test "does not return deactivated followers" do
+      user = insert(:user)
+      follower_one = insert(:user)
+      follower_two = insert(:user)
+      not_follower = insert(:user)
+
+      {:ok, follower_one, user} = User.follow(follower_one, user)
+      {:ok, follower_two, user} = User.follow(follower_two, user)
+
+      User.delete(follower_two)
+      follower_two = User.get_cached_by_id(follower_two.id)
+
+      res = User.get_followers(user)
+
+      assert length(res) == 1
+      assert Enum.member?(res, follower_one)
+      refute Enum.member?(res, follower_two)
       refute Enum.member?(res, not_follower)
     end
 
@@ -1215,8 +1236,32 @@ defmodule Pleroma.UserTest do
 
       followed_one = User.get_cached_by_ap_id(followed_one.ap_id)
       followed_two = User.get_cached_by_ap_id(followed_two.ap_id)
+
+      assert length(res) == 2
       assert Enum.member?(res, followed_one)
       assert Enum.member?(res, followed_two)
+      refute Enum.member?(res, not_followed)
+    end
+
+    test "does not return deactivated followed users (friends)" do
+      user = insert(:user)
+      followed_one = insert(:user)
+      followed_two = insert(:user)
+      not_followed = insert(:user)
+
+      {:ok, user, followed_one} = User.follow(user, followed_one)
+      {:ok, user, followed_two} = User.follow(user, followed_two)
+
+      User.delete(followed_two)
+
+      res = User.get_friends(user)
+
+      followed_one = User.get_cached_by_id(followed_one.id)
+      followed_two = User.get_cached_by_id(followed_two.id)
+
+      assert length(res) == 1
+      assert Enum.member?(res, followed_one)
+      refute Enum.member?(res, followed_two)
       refute Enum.member?(res, not_followed)
     end
   end
@@ -2963,6 +3008,18 @@ defmodule Pleroma.UserTest do
       User.follow(user2, user3)
 
       assert [%{id: ^id2}] = User.get_familiar_followers(user3, user1)
+    end
+
+    test "does not return deactivated users" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      user3 = insert(:user)
+
+      User.follow(user1, user2)
+      User.follow(user2, user3)
+      {:ok, _} = User.set_activation(user2, false)
+
+      assert [] = User.get_familiar_followers(user3, user1)
     end
   end
 
