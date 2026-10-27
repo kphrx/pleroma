@@ -22,8 +22,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   alias Pleroma.Web.ControllerHelper
   alias Pleroma.Web.Endpoint
   alias Pleroma.Web.Federator
+  alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.Plugs.EnsureAuthenticatedPlug
   alias Pleroma.Web.Plugs.FederatingPlug
+  alias Pleroma.Web.Plugs.OAuthScopesPlug
 
   require Logger
 
@@ -46,6 +48,24 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     when action in [:read_inbox, :update_outbox, :whoami, :upload_media]
   )
 
+  # Checks scopes only for OAuth tokens (signatures and Basic auth already skip the check).
+  plug(:check_token_scopes, %{scopes: ["read:accounts"]} when action == :whoami)
+  plug(:check_token_scopes, %{scopes: ["read:statuses"]} when action == :read_inbox)
+  plug(:check_token_scopes, %{scopes: ["write"]} when action == :update_outbox)
+  plug(:check_token_scopes, %{scopes: ["write:media"]} when action == :upload_media)
+
+  plug(
+    :check_token_scopes,
+    %{fallback: :proceed_unauthenticated, scopes: ["read:statuses"]}
+    when action in [:outbox, :object_replies]
+  )
+
+  plug(
+    :check_token_scopes,
+    %{fallback: :proceed_unauthenticated, scopes: ["read:accounts"]}
+    when action in [:followers, :following]
+  )
+
   plug(Majic.Plug, [pool: Pleroma.MajicPool] when action in [:upload_media])
 
   plug(
@@ -56,6 +76,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
 
   plug(:log_inbox_metadata when action in [:inbox])
   plug(:relay_active? when action in [:relay])
+
+  defp check_token_scopes(%{assigns: %{token: %Token{}}} = conn, opts),
+    do: OAuthScopesPlug.call(conn, opts)
+
+  defp check_token_scopes(conn, _), do: conn
 
   defp relay_active?(conn, _) do
     if Pleroma.Config.get([:instance, :allow_relay]) do
