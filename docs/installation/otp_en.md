@@ -61,17 +61,16 @@ Other than things bundled in the OTP release Pleroma depends on:
 Per [`docs/installation/optional/media_graphics_packages.md`](optional/media_graphics_packages.md):
   * ImageMagick
   * ffmpeg
-  * exiftool
 
 === "Alpine"
     ```
     apk update
-    apk add imagemagick ffmpeg exiftool
+    apk add imagemagick ffmpeg
     ```
 
 === "Debian/Ubuntu"
     ```
-    apt install imagemagick ffmpeg libimage-exiftool-perl
+    apt install imagemagick ffmpeg
     ```
 
 ## Setup
