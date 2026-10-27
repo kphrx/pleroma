@@ -208,19 +208,30 @@ defmodule Pleroma.Filter do
   end
 
   def compose_regex([_ | _] = filters, format) do
+    boundary = if format == :postgres, do: "\\y", else: "\\b"
+
     phrases =
       filters
-      |> Enum.map(& &1.phrase)
+      |> Enum.map(&phrase_regex(&1, boundary))
       |> Enum.join("|")
 
     case format do
-      :postgres ->
-        "\\y(#{phrases})\\y"
-
-      :re ->
-        ~r/\b#{phrases}\b/i
+      :postgres -> "(#{phrases})"
+      :re -> Regex.compile!("(?:#{phrases})", "iu")
     end
   end
 
   def compose_regex(_, _), do: nil
+
+  # Phrases are literal text. Like Mastodon, whole-word filters only get a
+  # word boundary where the phrase starts or ends with a word character.
+  defp phrase_regex(%__MODULE__{phrase: phrase, whole_word: false}, _boundary),
+    do: Regex.escape(phrase)
+
+  defp phrase_regex(%__MODULE__{phrase: phrase}, boundary) do
+    prefix = if String.match?(phrase, ~r/^\w/u), do: boundary, else: ""
+    suffix = if String.match?(phrase, ~r/\w$/u), do: boundary, else: ""
+
+    prefix <> Regex.escape(phrase) <> suffix
+  end
 end

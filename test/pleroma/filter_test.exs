@@ -190,4 +190,66 @@ defmodule Pleroma.FilterTest do
 
     {:error, _} = Filter.update(filter, changes)
   end
+
+  describe "compose_regex/2" do
+    defp filters(phrases), do: Enum.map(phrases, &%Filter{phrase: &1})
+
+    defp pg_match?(regex, text) do
+      %{rows: [[match]]} = Repo.query!("SELECT $1::text ~* $2", [text, regex])
+      match
+    end
+
+    test "treats phrases as literal text in Postgres" do
+      regex = Filter.compose_regex(filters(["a.b", "(c"]))
+
+      assert pg_match?(regex, "see a.b here")
+      refute pg_match?(regex, "see axb here")
+      assert pg_match?(regex, "see (c here")
+    end
+
+    test "treats phrases as literal text in Elixir" do
+      regex = Filter.compose_regex(filters(["a.b", "(c"]), :re)
+
+      assert Regex.match?(regex, "see a.b here")
+      refute Regex.match?(regex, "see axb here")
+      assert Regex.match?(regex, "see (c here")
+    end
+
+    test "keeps word boundaries for every phrase in Postgres" do
+      regex = Filter.compose_regex(filters(["cat", "dog"]))
+
+      assert pg_match?(regex, "a dog barks")
+      refute pg_match?(regex, "a catalog")
+      refute pg_match?(regex, "a hotdog")
+    end
+
+    test "only adds word boundaries next to word characters" do
+      pg = Filter.compose_regex(filters(["#tag"]))
+      re = Filter.compose_regex(filters(["#tag"]), :re)
+
+      for {text, expected} <- [{"a #tag here", true}, {"a#tag", true}, {"some #tags", false}] do
+        assert pg_match?(pg, text) == expected
+        assert Regex.match?(re, text) == expected
+      end
+    end
+
+    test "matches inside words when whole_word is false" do
+      filters = [%Filter{phrase: "cat", whole_word: false}, %Filter{phrase: "dog"}]
+      pg = Filter.compose_regex(filters)
+      re = Filter.compose_regex(filters, :re)
+
+      for {text, expected} <- [{"a catalog", true}, {"a hotdog", false}, {"a dog", true}] do
+        assert pg_match?(pg, text) == expected
+        assert Regex.match?(re, text) == expected
+      end
+    end
+
+    test "keeps word boundaries for every phrase in Elixir" do
+      regex = Filter.compose_regex(filters(["cat", "dog"]), :re)
+
+      assert Regex.match?(regex, "a dog barks")
+      refute Regex.match?(regex, "a catalog")
+      refute Regex.match?(regex, "a hotdog")
+    end
+  end
 end

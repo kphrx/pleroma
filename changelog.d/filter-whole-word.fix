@@ -1,0 +1,1 @@
+Filters with whole_word set to false now also match inside words
