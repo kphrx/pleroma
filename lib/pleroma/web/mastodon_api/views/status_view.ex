@@ -675,7 +675,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   def render("attachment_meta.json", %{
         attachment: %{"url" => [%{"width" => width, "height" => height} | _]}
       })
-      when is_integer(width) and is_integer(height) do
+      when is_integer(width) and is_integer(height) and width > 0 and height > 0 do
     %{
       original: %{
         width: width,
