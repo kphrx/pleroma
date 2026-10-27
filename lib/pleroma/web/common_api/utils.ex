@@ -435,12 +435,55 @@ defmodule Pleroma.Web.CommonAPI.Utils do
           %{}
       end
 
-    tagged_mentions = maybe_extract_mentions(object_data)
+    tagged_mentions =
+      maybe_extract_mentions(object_data)
+      |> filter_tags_to_qualified(activity)
 
     recipients ++ tagged_mentions
   end
 
   def maybe_notify_mentioned_recipients(recipients, _), do: recipients
+
+  # Filter tagged mentions to ensure they can actually access the status
+  defp filter_tags_to_qualified(tagged_mentions, %Activity{
+         recipients: recipients,
+         data: data,
+         actor: actor
+       }) do
+    recipients =
+      if recipients && recipients != [],
+        do: recipients,
+        else:
+          (data["to"] || []) ++ (data["cc"] || []) ++ (data["bto"] || []) ++ (data["bcc"] || [])
+
+    cond do
+      recipients == [] ->
+        []
+
+      Pleroma.Constants.as_public() in recipients ->
+        tagged_mentions
+
+      true ->
+        author = User.get_cached_by_ap_id(actor)
+        to_followers = match?(%User{}, author) and author.follower_address in recipients
+
+        Enum.filter(tagged_mentions, fn tagged ->
+          cond do
+            tagged in recipients ->
+              true
+
+            to_followers ->
+              case User.get_cached_by_ap_id(tagged) do
+                %User{} = tagged_user -> User.following?(tagged_user, author)
+                _ -> false
+              end
+
+            true ->
+              false
+          end
+        end)
+    end
+  end
 
   def maybe_notify_followers(recipients, %Activity{data: %{"type" => "Move"}} = activity) do
     with %User{} = user <- User.get_cached_by_ap_id(activity.actor) do
