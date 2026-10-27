@@ -8,10 +8,11 @@ defmodule Pleroma.Stats do
   import Ecto.Query
 
   alias Pleroma.CounterCache
+  alias Pleroma.Instances.Instance
   alias Pleroma.Repo
   alias Pleroma.User
 
-  @interval :timer.seconds(60)
+  @interval :timer.seconds(300)
 
   def start_link(_) do
     GenServer.start_link(
@@ -64,14 +65,9 @@ defmodule Pleroma.Stats do
           }
         }
   def calculate_stat_data do
-    peers =
-      from(
-        u in User,
-        select: fragment("distinct split_part(?, '@', 2)", u.nickname),
-        where: u.local != ^true
-      )
-      |> Repo.all()
-      |> Enum.filter(& &1)
+    # Hosts are unique in instances, and remote users add theirs. Scanning
+    # all remote users for their domains was one of the costliest queries.
+    peers = Repo.all(from(i in Instance, select: i.host))
 
     domain_count = Enum.count(peers)
 

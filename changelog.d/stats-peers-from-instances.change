@@ -1,0 +1,1 @@
+Read the peer list from the instances table and update instance stats every 5 minutes instead of every minute; the old peers query was one of the most expensive regular queries
