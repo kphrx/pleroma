@@ -286,6 +286,9 @@ Notes:
 * `sign_object_fetches`: Sign object fetches with HTTP signatures
 * `authorized_fetch_mode`: Require HTTP signatures for AP fetches
 * `authorized_fetch_mode_exceptions`: List of IPs (CIDR format accepted) to exempt from HTTP Signatures requirement (for example to allow debugging, you shouldn't otherwise need this)
+* `signature_policy`: What to do with incoming HTTP signatures that do not sign the `date` header (or `(created)`), whose signed date is outside the window below, or that do not sign the `digest` header of a request with a body (or whose body Pleroma did not hash). `:enforce` (default) treats them as invalid, `:log` only logs a warning.
+* `signature_max_age`: How old, in seconds, the signed date of an incoming HTTP signature can be. Default: `7200` (2 hours).
+* `signature_max_clock_skew`: How far, in seconds, the signed `date` of an incoming HTTP signature can be in the future. Default: `3600` (1 hour). A `(created)` time in the future is always rejected.
 
 ## Pleroma.User
 

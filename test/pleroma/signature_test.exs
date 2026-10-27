@@ -116,6 +116,135 @@ defmodule Pleroma.SignatureTest do
     end
   end
 
+  describe "check_signature_policy/2" do
+    @now ~U[2026-10-27 12:00:00Z]
+
+    defp policy_conn(method, signed_headers, extra_headers, extra_params \\ "") do
+      signature =
+        "keyId=\"https://remote.example/users/a#main-key\",headers=\"#{signed_headers}\"" <>
+          extra_params <> ",signature=\"fake\""
+
+      %Plug.Conn{
+        method: method,
+        req_headers: [{"signature", signature}, {"host", "pleroma.example"} | extra_headers],
+        assigns: %{digest: "SHA-256=abc"}
+      }
+    end
+
+    defp date_header(seconds_ago) do
+      date = DateTime.add(@now, -seconds_ago) |> DateTime.to_naive()
+      {"date", Signature.signed_date(date)}
+    end
+
+    test "accepts a fresh signed GET (Pleroma, Mastodon, Misskey style)" do
+      for headers <- ["(request-target) host date", "(request-target) host date accept"] do
+        conn = policy_conn("GET", headers, [date_header(10)])
+        assert Signature.check_signature_policy(conn, @now) == :ok
+      end
+    end
+
+    test "accepts a fresh signed POST covering the digest" do
+      conn =
+        policy_conn("POST", "(request-target) host content-length digest date", [
+          date_header(10),
+          {"digest", "SHA-256=abc"}
+        ])
+
+      assert Signature.check_signature_policy(conn, @now) == :ok
+    end
+
+    test "accepts (created) instead of date (GoToSocial style)" do
+      created = DateTime.to_unix(@now) - 10
+
+      conn =
+        policy_conn(
+          "POST",
+          "(request-target) (created) host digest",
+          [{"digest", "SHA-256=abc"}],
+          ",algorithm=\"hs2019\",created=#{created}"
+        )
+
+      assert Signature.check_signature_policy(conn, @now) == :ok
+    end
+
+    test "rejects signatures that cover neither date nor (created)" do
+      conn = policy_conn("GET", "(request-target) host", [date_header(10)])
+      assert Signature.check_signature_policy(conn, @now) == {:error, :date_not_signed}
+    end
+
+    test "rejects a body request whose digest is not signed" do
+      conn =
+        policy_conn("POST", "(request-target) host date", [
+          date_header(10),
+          {"digest", "SHA-256=abc"}
+        ])
+
+      assert Signature.check_signature_policy(conn, @now) == {:error, :digest_not_signed}
+    end
+
+    test "rejects a signed date that is missing or unparsable" do
+      conn = policy_conn("GET", "(request-target) host date", [])
+      assert Signature.check_signature_policy(conn, @now) == {:error, :invalid_date}
+
+      conn = policy_conn("GET", "(request-target) host date", [{"date", "yesterday"}])
+      assert Signature.check_signature_policy(conn, @now) == {:error, :invalid_date}
+    end
+
+    test "rejects more than one date header" do
+      conn =
+        policy_conn("GET", "(request-target) host date", [date_header(10), date_header(9000)])
+
+      assert Signature.check_signature_policy(conn, @now) == {:error, :invalid_date}
+    end
+
+    test "rejects a signed digest when the body was not hashed" do
+      conn =
+        policy_conn("POST", "(request-target) host date digest", [
+          date_header(10),
+          {"digest", "SHA-256=abc"}
+        ])
+        |> Map.put(:assigns, %{})
+
+      assert Signature.check_signature_policy(conn, @now) == {:error, :body_not_hashed}
+    end
+
+    test "rejects a signed date that is too old or too far in the future" do
+      clear_config([:activitypub, :signature_max_age], 7200)
+      clear_config([:activitypub, :signature_max_clock_skew], 3600)
+
+      conn = policy_conn("GET", "(request-target) host date", [date_header(7200)])
+      assert Signature.check_signature_policy(conn, @now) == :ok
+
+      conn = policy_conn("GET", "(request-target) host date", [date_header(7201)])
+      assert Signature.check_signature_policy(conn, @now) == {:error, :date_too_old}
+
+      conn = policy_conn("GET", "(request-target) host date", [date_header(-3600)])
+      assert Signature.check_signature_policy(conn, @now) == :ok
+
+      conn = policy_conn("GET", "(request-target) host date", [date_header(-3601)])
+      assert Signature.check_signature_policy(conn, @now) == {:error, :date_in_future}
+    end
+
+    test "rejects a (created) timestamp that is too old" do
+      clear_config([:activitypub, :signature_max_age], 60)
+      created = DateTime.to_unix(@now) - 61
+
+      conn =
+        policy_conn("GET", "(request-target) (created) host", [], ",created=#{created}")
+
+      assert Signature.check_signature_policy(conn, @now) == {:error, :date_too_old}
+    end
+
+    test "uses the cavage default of a signed date when headers are not given" do
+      conn = %Plug.Conn{
+        method: "GET",
+        req_headers: [{"signature", "keyId=\"https://remote.example/users/a#main-key\""}]
+      }
+
+      assert Signature.check_signature_policy(conn, @now) == {:error, :invalid_date}
+    end
+  end
+
   describe "key_id_to_actor_id/1" do
     test "it properly deduces the actor id for misskey" do
       assert Signature.key_id_to_actor_id("https://example.com/users/1234/publickey") ==
