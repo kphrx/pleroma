@@ -26,7 +26,11 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlugMRFTest do
     |> expect(:validate_conn, fn _ -> true end)
 
     build_conn(:get, "/doesntmattter", %{"actor" => actor})
-    |> put_req_header("signature", "keyId=\"#{actor}#main-key")
+    |> put_req_header("date", Pleroma.Signature.signed_date())
+    |> put_req_header(
+      "signature",
+      "keyId=\"#{actor}#main-key\",headers=\"(request-target) host date\",signature=\"fake\""
+    )
     |> put_format("activity+json")
     |> HTTPSignaturePlug.call(%{})
   end

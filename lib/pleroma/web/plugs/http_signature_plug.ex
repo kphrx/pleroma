@@ -45,18 +45,50 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlug do
 
   defp maybe_assign_valid_signature(conn) do
     if has_signature_header?(conn) do
-      # we replace the digest header with the one we computed in DigestPlug
-      conn =
-        case conn do
-          %{assigns: %{digest: digest}} = conn -> put_req_header(conn, "digest", digest)
-          conn -> conn
-        end
+      conn = put_computed_digest(conn)
 
-      assign(conn, :valid_signature, Signature.validate_signature(conn))
+      case check_signature_policy(conn) do
+        :ok ->
+          assign(conn, :valid_signature, Signature.validate_signature(conn))
+
+        {:error, reason} ->
+          reject_signature(conn, reason)
+      end
     else
       Logger.debug("No signature header!")
       conn
     end
+  end
+
+  # we replace the digest header with the one we computed in DigestPlug
+  defp put_computed_digest(%{assigns: %{digest: digest}} = conn),
+    do: put_req_header(conn, "digest", digest)
+
+  defp put_computed_digest(conn), do: conn
+
+  defp check_signature_policy(conn) do
+    with {:error, reason} <- Signature.check_signature_policy(conn) do
+      if Pleroma.Config.get([:activitypub, :signature_policy], :enforce) == :log do
+        Logger.warning(
+          "HTTP signature policy violation (#{reason}) for #{conn.method} #{conn.request_path}, allowed by config"
+        )
+
+        :ok
+      else
+        {:error, reason}
+      end
+    end
+  end
+
+  # The request is treated as badly signed. The reason is kept so the inbox
+  # can refuse it instead of queueing a failed-signature retry, which only
+  # checks the cryptographic signature.
+  defp reject_signature(conn, reason) do
+    Logger.debug("Rejecting HTTP signature: #{reason}")
+
+    conn
+    |> assign(:valid_signature, false)
+    |> assign(:signature_error, reason)
   end
 
   defp maybe_assign_actor_id(%{assigns: %{valid_signature: true}} = conn) do
