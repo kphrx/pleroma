@@ -1,0 +1,1 @@
+Proxy media given as network-path URLs (//host/path), so remote HTML cannot load images directly
