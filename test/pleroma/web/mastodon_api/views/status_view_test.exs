@@ -597,6 +597,24 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
   end
 
   describe "attachments" do
+    test "skips meta for zero dimensions" do
+      for {width, height} <- [{0, 0}, {200, 0}, {0, 100}] do
+        object = %{
+          "type" => "Image",
+          "url" => [
+            %{
+              "mediaType" => "image/png",
+              "href" => "someurl",
+              "width" => width,
+              "height" => height
+            }
+          ]
+        }
+
+        refute Map.has_key?(StatusView.render("attachment.json", %{attachment: object}), :meta)
+      end
+    end
+
     test "Complete Mastodon style" do
       object = %{
         "type" => "Image",
