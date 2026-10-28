@@ -455,6 +455,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       language: get_language(object),
       emojis: build_emojis(object.data["emoji"]),
       quotes_count: object.data["quotesCount"] || 0,
+      quote: build_quote(object, quote_activity, quote_post, opts),
       pleroma: %{
         local: activity.local,
         conversation_id: get_context_id(activity),
@@ -691,7 +692,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     %{ancestors: ancestors, descendants: descendants} =
       activities
       |> Enum.reverse()
-      |> Enum.group_by(fn %{id: id} -> if id < activity.id, do: :ancestors, else: :descendants end)
+      |> Enum.group_by(fn %{id: id} ->
+        if id < activity.id, do: :ancestors, else: :descendants
+      end)
       |> Map.put_new(:ancestors, [])
       |> Map.put_new(:descendants, [])
 
@@ -741,6 +744,26 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       nil
     end
   end
+
+  # Mastodon (4.4+) quote entity. Quoted statuses get a shallow quote that only
+  # has the id, as quotes are only rendered one level deep.
+  defp build_quote(%Object{data: %{"quoteUrl" => url}}, quote_activity, quote_post, opts)
+       when is_binary(url) and url != "" do
+    state =
+      cond do
+        is_nil(quote_activity) -> "deleted"
+        visible_for_user?(quote_activity, opts[:for]) -> "accepted"
+        true -> "unauthorized"
+      end
+
+    if opts[:show_quote] == false do
+      %{state: state, quoted_status_id: if(state == "accepted", do: to_string(quote_activity.id))}
+    else
+      %{state: state, quoted_status: if(state == "accepted", do: quote_post)}
+    end
+  end
+
+  defp build_quote(_object, _quote_activity, _quote_post, _opts), do: nil
 
   def get_quote(activity, %{quoted_activities: quoted_activities}) do
     object = Object.normalize(activity, fetch: false)
