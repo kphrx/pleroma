@@ -11,7 +11,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
 
   @behaviour Pleroma.Web.ActivityPub.ObjectValidator.Validating
 
-  import Pleroma.Constants, only: [activity_types: 0, object_types: 0]
+  import Pleroma.Constants, only: [activity_types: 0, actor_types: 0, object_types: 0]
 
   alias Pleroma.Activity
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
@@ -37,6 +37,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
   alias Pleroma.Web.ActivityPub.ObjectValidators.QuestionValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.UndoValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.UpdateValidator
+  alias Pleroma.Web.ActivityPub.ObjectValidators.UserValidator
 
   @impl true
   def validate(object, meta)
@@ -226,7 +227,8 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
   end
 
   def validate(%{"type" => type} = object, meta) when type == "Update" do
-    with {:ok, object} <-
+    with :ok <- validate_updated_actor(object, meta),
+         {:ok, object} <-
            object
            |> UpdateValidator.cast_and_validate(meta)
            |> Ecto.Changeset.apply_action(:insert) do
@@ -246,6 +248,19 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidator do
   end
 
   def validate(o, m), do: {:error, {:validator_not_set, {o, m}}}
+
+  defp validate_updated_actor(%{"object" => %{"type" => type} = actor}, meta)
+       when type in actor_types() do
+    with {_, false} <- {:local, Access.get(meta, :local, false)},
+         {:ok, _, _} <- UserValidator.validate(actor, meta) do
+      :ok
+    else
+      {:local, true} -> :ok
+      error -> error
+    end
+  end
+
+  defp validate_updated_actor(_, _), do: :ok
 
   def cast_and_apply_and_stringify_with_history(object) do
     do_separate_with_history(object, fn object ->

@@ -11,6 +11,7 @@ defmodule Pleroma.Object.Fetcher do
   alias Pleroma.Web.ActivityPub.InternalFetchActor
   alias Pleroma.Web.ActivityPub.MRF
   alias Pleroma.Web.ActivityPub.ObjectValidator
+  alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
   alias Pleroma.Web.ActivityPub.Pipeline
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.Federator
@@ -46,9 +47,14 @@ defmodule Pleroma.Object.Fetcher do
     end
   end
 
-  def refetch_object(%Object{data: %{"id" => id}} = object) do
+  # The stored id is canonical, so the refetch must not redirect, and the
+  # remote must not swap in another object or author.
+  # Based on Akkoma 9061d148b and fee57eb37.
+  def refetch_object(%Object{data: %{"id" => id} = data} = object) do
     with {:local, false} <- {:local, Object.local?(object)},
-         {:ok, new_data} <- fetch_and_contain_remote_object_from_id(id),
+         {:ok, new_data} <- fetch_and_contain(id, true),
+         {:id, true} <- {:id, new_data["id"] == id},
+         {:actor, true} <- {:actor, actor_of(new_data) == actor_of(data)},
          {:ok, object} <- reinject_object(object, new_data) do
       {:ok, object}
     else
@@ -56,6 +62,8 @@ defmodule Pleroma.Object.Fetcher do
       e -> {:error, e}
     end
   end
+
+  defp actor_of(data), do: CommonFixes.fix_actor(data)["actor"]
 
   @typep fetcher_errors ::
            :error | :reject | :allowed_depth | :fetch | :containment | :transmogrifier
@@ -140,17 +148,39 @@ defmodule Pleroma.Object.Fetcher do
   def fetch_and_contain_remote_object_from_id(%{"id" => id}),
     do: fetch_and_contain_remote_object_from_id(id)
 
-  def fetch_and_contain_remote_object_from_id(id) when is_binary(id) do
+  def fetch_and_contain_remote_object_from_id(id) when is_binary(id),
+    do: fetch_and_contain(id, false)
+
+  def fetch_and_contain_remote_object_from_id(_id),
+    do: {:error, "id must be a string"}
+
+  # The fetched document's id must be the URL it came from. Display URLs
+  # (e.g. Mastodon's /@user/123) serve the object under another id, so
+  # if the id differs we refetch once from that id, which has to be on the
+  # same host, must not redirect, and must then match exactly.
+  # Based on Akkoma 8684964c5 and 940792f8b.
+  defp fetch_and_contain(id, canonical?) do
     Logger.debug("Fetching object #{id} via AP")
 
     with {:scheme, true} <- {:scheme, String.starts_with?(id, "http")},
          {_, true} <- {:mrf, MRF.id_filter(id)},
          {_, :ok} <- {:local_fetch, Containment.contain_local_fetch(id)},
-         {:ok, body} <- get_object(id),
+         {:ok, final_url, body} <- get_object(id),
+         {_, true} <- {:redirect, not canonical? or same_url?(final_url, id)},
          {:ok, data} <- safe_json_decode(body),
-         :ok <- Containment.contain_origin_from_id(id, data) do
+         :ok <- Containment.contain_origin_from_id(id, data),
+         {_, _, :ok} <- {:id, data, Containment.contain_id_to_fetch(final_url, data)} do
       {:ok, data}
     else
+      {:id, %{"id" => canonical_id}, :error} when is_binary(canonical_id) and not canonical? ->
+        fetch_and_contain(canonical_id, true)
+
+      {:id, _, :error} ->
+        {:error, :id_mismatch}
+
+      {:redirect, false} ->
+        {:error, :canonical_id_redirect}
+
       {:scheme, _} ->
         {:error, "Unsupported URI scheme"}
 
@@ -168,8 +198,7 @@ defmodule Pleroma.Object.Fetcher do
     end
   end
 
-  def fetch_and_contain_remote_object_from_id(_id),
-    do: {:error, "id must be a string"}
+  defp same_url?(url, other), do: Containment.contain_id_to_fetch(url, %{"id" => other}) == :ok
 
   defp check_crossdomain_redirect(final_host, _original_url) when is_nil(final_host) do
     {:cross_domain_redirect, false}
@@ -195,7 +224,7 @@ defmodule Pleroma.Object.Fetcher do
         with {:cross_domain_redirect, false} <- check_crossdomain_redirect(remote_host, id),
              {_, content_type} <- List.keyfind(headers, "content-type", 0),
              {:ok, _media_type} <- verify_content_type(content_type) do
-          {:ok, body}
+          {:ok, if(final_url in [nil, ""], do: id, else: final_url), body}
         else
           {:cross_domain_redirect, true} ->
             {:error, {:cross_domain_redirect, true}}
@@ -209,7 +238,7 @@ defmodule Pleroma.Object.Fetcher do
         case List.keyfind(headers, "content-type", 0) do
           {_, content_type} ->
             case verify_content_type(content_type) do
-              {:ok, _} -> {:ok, body}
+              {:ok, _} -> {:ok, id, body}
               error -> error
             end
 

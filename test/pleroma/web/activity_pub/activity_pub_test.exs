@@ -244,6 +244,58 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
              }
     end
 
+    test "rejects actors whose inbox is on another host" do
+      ap_id = "https://example.com/users/evil"
+
+      user_data =
+        "test/fixtures/users_mock/user.json"
+        |> File.read!()
+        |> String.replace("{{nickname}}", "evil")
+        |> Jason.decode!()
+        |> Map.put("inbox", "https://victim.example/inbox")
+        |> Map.put("featured", nil)
+        |> Jason.encode!()
+
+      Tesla.Mock.mock(fn
+        %{method: :get, url: ^ap_id} ->
+          %Tesla.Env{
+            status: 200,
+            body: user_data,
+            headers: [{"content-type", "application/activity+json"}]
+          }
+      end)
+
+      assert {:error, _} = ActivityPub.make_user_from_ap_id(ap_id)
+      refute User.get_by_ap_id(ap_id)
+    end
+
+    test "updates the known user when fetched from a display URL" do
+      ap_id = "https://example.com/users/lain"
+      display_url = "https://example.com/@lain"
+      user = insert(:user, local: false, ap_id: ap_id, nickname: "lain@example.com")
+
+      user_data =
+        "test/fixtures/users_mock/user.json"
+        |> File.read!()
+        |> String.replace("{{nickname}}", "lain")
+        |> Jason.decode!()
+        |> Map.merge(%{"featured" => nil, "name" => "new name"})
+        |> Jason.encode!()
+
+      Tesla.Mock.mock(fn %{method: :get, url: url} when url in [ap_id, display_url] ->
+        %Tesla.Env{
+          status: 200,
+          body: user_data,
+          headers: [{"content-type", "application/activity+json"}]
+        }
+      end)
+
+      assert {:ok, %User{id: id, name: "new name"}} =
+               ActivityPub.make_user_from_ap_id(display_url)
+
+      assert id == user.id
+    end
+
     test "fetches user featured collection" do
       ap_id = "https://example.com/users/lain"
 
@@ -516,7 +568,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     end
 
     test "fetches user birthday information from misskey" do
-      user_id = "https://misskey.io/@mkljczk"
+      user_id = "https://misskey.io/users/8dhi2ne167"
 
       Tesla.Mock.mock(fn
         %{
@@ -2033,7 +2085,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
             json(
               %{
                 "@context" => "https://www.w3.org/ns/activitystreams",
-                "id" => "https://remote.org/users/masto_hidden_counters/followers"
+                "id" => "https://remote.org/users/masto_hidden_counters/following"
               },
               headers: HttpRequestMock.activitypub_object_headers()
             )
@@ -2045,7 +2097,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
             json(
               %{
                 "@context" => "https://www.w3.org/ns/activitystreams",
-                "id" => "https://remote.org/users/masto_hidden_counters/following"
+                "id" => "https://remote.org/users/masto_hidden_counters/followers"
               },
               headers: HttpRequestMock.activitypub_object_headers()
             )

@@ -21,6 +21,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Upload
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.MRF
+  alias Pleroma.Web.ActivityPub.ObjectValidators.UserValidator
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.Streamer
   alias Pleroma.Web.WebFinger
@@ -1924,6 +1925,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   def user_data_from_user_object(data, additional \\ []) do
     with {:ok, data} <- MRF.filter(data),
+         {:ok, data, _} <- UserValidator.validate(data, []),
          {:ok, data} <- object_to_user_data(data, additional) do
       {:ok, data}
     else
@@ -2053,10 +2055,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   def enqueue_pin_fetches(_), do: nil
 
   def make_user_from_ap_id(ap_id, additional \\ []) do
-    user = User.get_cached_by_ap_id(ap_id)
-
     with {:ok, data} <- fetch_and_prepare_user_from_ap_id(ap_id, additional) do
       enqueue_pin_fetches(data)
+
+      # the fetched actor's id differs from ap_id when it was fetched from a display URL
+      user = User.get_cached_by_ap_id(data.ap_id)
 
       if user do
         user

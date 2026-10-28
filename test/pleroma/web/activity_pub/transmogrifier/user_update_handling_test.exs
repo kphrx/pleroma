@@ -11,8 +11,11 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.UserUpdateHandlingTest do
 
   import Pleroma.Factory
 
+  # matches the host of the actor in mastodon-update.json
+  @gargron "http://mastodon.example.org/users/gargron"
+
   test "it works for incoming update activities" do
-    user = insert(:user, local: false)
+    user = insert(:user, local: false, ap_id: @gargron)
 
     update_data = File.read!("test/fixtures/mastodon-update.json") |> Jason.decode!()
 
@@ -50,8 +53,28 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.UserUpdateHandlingTest do
     assert user.bio == "<p>Some bio</p>"
   end
 
+  test "it rejects updates that move the shared inbox to another host" do
+    user = insert(:user, local: false, ap_id: @gargron)
+
+    update_data = File.read!("test/fixtures/mastodon-update.json") |> Jason.decode!()
+
+    object =
+      update_data["object"]
+      |> Map.put("actor", user.ap_id)
+      |> Map.put("id", user.ap_id)
+      |> put_in(["endpoints", "sharedInbox"], "https://victim.example/inbox")
+
+    update_data =
+      update_data
+      |> Map.put("actor", user.ap_id)
+      |> Map.put("object", object)
+
+    assert {:error, _} = Transmogrifier.handle_incoming(update_data)
+    assert User.get_cached_by_ap_id(user.ap_id).shared_inbox == user.shared_inbox
+  end
+
   test "it selects an actor type after an extension type" do
-    user = insert(:user, local: false)
+    user = insert(:user, local: false, ap_id: @gargron)
     update_data = File.read!("test/fixtures/mastodon-update.json") |> Jason.decode!()
 
     object =
@@ -70,7 +93,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.UserUpdateHandlingTest do
   end
 
   test "it works with alsoKnownAs" do
-    %{ap_id: actor} = insert(:user, local: false)
+    %{ap_id: actor} = insert(:user, local: false, ap_id: @gargron)
 
     assert User.get_cached_by_ap_id(actor).also_known_as == []
 
@@ -97,7 +120,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.UserUpdateHandlingTest do
   end
 
   test "it works with custom profile fields" do
-    user = insert(:user, local: false)
+    user = insert(:user, local: false, ap_id: @gargron)
 
     assert user.fields == []
 
@@ -155,7 +178,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.UserUpdateHandlingTest do
   end
 
   test "it works for incoming update activities which lock the account" do
-    user = insert(:user, local: false)
+    user = insert(:user, local: false, ap_id: @gargron)
 
     update_data = File.read!("test/fixtures/mastodon-update.json") |> Jason.decode!()
 
