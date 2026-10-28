@@ -26,6 +26,21 @@ defmodule Pleroma.Upload.Filter.Exif.StripLocationTest do
     end
   end
 
+  test "strips GPS data from XMP, including DJI drone positions" do
+    for fixture <- ["xmp_gps.jpg", "dji_gps.jpg"] do
+      upload = upload_copy(fixture, "image/jpeg")
+      assert exiftool_xmp(upload.tempfile) =~ "GPSLatitude"
+
+      assert StripLocation.filter(upload) == {:ok, :filtered}
+      refute exiftool_xmp(upload.tempfile) =~ ~r/GPS|AbsoluteAltitude/
+    end
+  end
+
+  defp exiftool_xmp(path) do
+    {output, 0} = System.cmd("exiftool", ["-m", "-s", "-xmp:all", path])
+    output
+  end
+
   test "keeps other EXIF data in HEIC" do
     upload = upload_copy("strip_location_gps.heic", "image/heic")
 

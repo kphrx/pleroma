@@ -1,1 +1,1 @@
-Strip GPS data from WebP and HEIC/AVIF uploads; the Exiftool.StripLocation filter used to skip them
+Strip GPS data from WebP and HEIC/AVIF uploads; the Exiftool.StripLocation filter used to skip them; GPS data in XMP (including DJI drone positions) is stripped too
