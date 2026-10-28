@@ -1,0 +1,1 @@
+Add the Mastodon quote entity (`quote` with `state` and `quoted_status`) to statuses, so Mastodon 4.4+ clients show quote posts
