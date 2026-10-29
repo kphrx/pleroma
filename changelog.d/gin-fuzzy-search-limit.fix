@@ -1,0 +1,1 @@
+gin_fuzzy_search_limit is now only set for search queries (configurable under Pleroma.Search.DatabaseSearch), so other GIN index scans such as recipient lookups and Oban job queries are exact again

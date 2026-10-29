@@ -44,4 +44,31 @@ defmodule Pleroma.Search.DatabaseSearchTest do
 
     assert result.id == other_post.id
   end
+
+  describe "gin_fuzzy_search_limit" do
+    defp fuzzy_limit do
+      %{rows: [[value]]} = Pleroma.Repo.query!("SHOW gin_fuzzy_search_limit")
+      value
+    end
+
+    test "is not set on normal database connections" do
+      assert fuzzy_limit() == "0"
+    end
+
+    test "is only set for the search query when configured" do
+      clear_config([Search, :gin_fuzzy_search_limit], nil)
+      assert Search.with_fuzzy_limit(&fuzzy_limit/0) == "0"
+
+      clear_config([Search, :gin_fuzzy_search_limit], 10_000)
+      assert Search.with_fuzzy_limit(&fuzzy_limit/0) == "10000"
+    end
+
+    test "search still works with a limit" do
+      clear_config([Search, :gin_fuzzy_search_limit], 10_000)
+      {:ok, post} = CommonAPI.post(insert(:user), %{status: "it's wednesday my dudes"})
+
+      assert [%{id: id}] = Search.search(nil, "wednesday")
+      assert id == post.id
+    end
+  end
 end
