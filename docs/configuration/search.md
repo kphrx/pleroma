@@ -10,11 +10,13 @@ To use built-in search that has no external dependencies, set the search module 
 
 While it has no external dependencies, it has problems with performance and relevancy.
 
-With a GIN index (the default), search queries limit how many matches PostgreSQL considers (`gin_fuzzy_search_limit`, see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)). This keeps searches for common words fast on large databases, but the results are incomplete and can change between requests. On smaller instances you can turn it off for exact results:
+With a GIN index (the default), search looks at the newest posts first and stops when it has enough results: first the newest 10,000 objects, then the newest 100,000, then the newest 1,000,000, then all older ones (`windows`). Only the newest candidates are joined to their activities for the visibility checks. If a search takes longer than `time_budget` (default 2.5 seconds), it returns the results found so far. On large databases this can make results incomplete for words that only occur in old posts, for several common words together, and for local-only searches on instances with few local posts.
+
+> config :pleroma, Pleroma.Search.DatabaseSearch, time_budget: 2_500, windows: [10_000, 100_000, 1_000_000]
+
+Search queries also limit how many matches PostgreSQL considers (`gin_fuzzy_search_limit`, see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)). This makes the results incomplete and they can change between requests. You can turn it off for exact results:
 
 > config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: nil
-
-Without a limit, searches for common words can take longer than the database timeout on large databases, and then return nothing.
 
 Earlier versions of Pleroma set this limit for every database connection, which also made other GIN index scans (for example recipient lookups) incomplete. It is now only set for search queries.
 

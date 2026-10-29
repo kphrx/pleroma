@@ -948,7 +948,10 @@ config :pleroma, Pleroma.Web.WebFinger, domain: nil, update_nickname_on_user_fet
 
 config :pleroma, Pleroma.Search, module: Pleroma.Search.DatabaseSearch
 
-config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: 500
+config :pleroma, Pleroma.Search.DatabaseSearch,
+  gin_fuzzy_search_limit: 500,
+  time_budget: 2_500,
+  windows: [10_000, 100_000, 1_000_000]
 
 config :pleroma, Pleroma.Search.Meilisearch,
   url: "http://127.0.0.1:7700/",

@@ -3575,8 +3575,22 @@ config :pleroma, :config_description, [
         key: :gin_fuzzy_search_limit,
         type: :integer,
         description:
-          "Limits how many matches PostgreSQL considers in GIN full-text search queries (see `gin_fuzzy_search_limit` in the PostgreSQL docs). Only set for search queries. Keeps search fast on large databases, but results become incomplete and change between requests. Set to `nil` for exact results, which is fine on small instances. Default: 500.",
+          "Limits how many matches PostgreSQL considers in GIN full-text search queries (see `gin_fuzzy_search_limit` in the PostgreSQL docs). Only set for search queries. Makes results incomplete and random. Set to `nil` for exact results. Default: 500.",
         suggestions: [500, nil]
+      },
+      %{
+        key: :time_budget,
+        type: :integer,
+        description:
+          "Time in milliseconds after which search stops looking at older posts and returns the results found so far. Each search query may only use the rest of this time (and never more than the server's `statement_timeout`). 0 searches only the first window and keeps the server's statement timeout. Default: 2500.",
+        suggestions: [2_500]
+      },
+      %{
+        key: :windows,
+        type: {:list, :integer},
+        description:
+          "Search looks at the newest posts first: first the newest N objects for each N in this list, then all older ones. It stops when it has enough results. Default: [10000, 100000, 1000000].",
+        suggestions: [[10_000, 100_000, 1_000_000]]
       }
     ]
   },
