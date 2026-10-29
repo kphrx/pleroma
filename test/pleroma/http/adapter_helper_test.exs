@@ -12,6 +12,12 @@ defmodule Pleroma.HTTP.AdapterHelperTest do
       assert AdapterHelper.format_proxy(nil) == nil
     end
 
+    test "with an empty string" do
+      assert ExUnit.CaptureLog.capture_log(fn ->
+               assert AdapterHelper.format_proxy("") == nil
+             end) == ""
+    end
+
     test "with string" do
       assert AdapterHelper.format_proxy("127.0.0.1:8123") == {{127, 0, 0, 1}, 8123}
     end
