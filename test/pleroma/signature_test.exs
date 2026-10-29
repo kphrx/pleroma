@@ -121,8 +121,8 @@ defmodule Pleroma.SignatureTest do
 
     defp policy_conn(method, signed_headers, extra_headers, extra_params \\ "") do
       signature =
-        "keyId=\"https://remote.example/users/a#main-key\",headers=\"#{signed_headers}\"" <>
-          extra_params <> ",signature=\"fake\""
+        ~s(keyId="https://remote.example/users/a#main-key",headers="#{signed_headers}") <>
+          extra_params <> ~s(,signature="fake")
 
       %Plug.Conn{
         method: method,
