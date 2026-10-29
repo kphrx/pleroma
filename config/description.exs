@@ -3567,6 +3567,21 @@ config :pleroma, :config_description, [
   },
   %{
     group: :pleroma,
+    key: Pleroma.Search.DatabaseSearch,
+    type: :group,
+    description: "Built-in database search settings.",
+    children: [
+      %{
+        key: :gin_fuzzy_search_limit,
+        type: :integer,
+        description:
+          "Limits how many matches PostgreSQL considers in GIN full-text search queries (see `gin_fuzzy_search_limit` in the PostgreSQL docs). Only set for search queries. Keeps search fast on large databases, but results become incomplete and change between requests. Set to `nil` for exact results, which is fine on small instances. Default: 500.",
+        suggestions: [500, nil]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
     key: Pleroma.Search.Meilisearch,
     type: :group,
     description: "Meilisearch settings.",
