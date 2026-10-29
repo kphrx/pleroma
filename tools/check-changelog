@@ -6,7 +6,9 @@ git config --global --add safe.directory "$(pwd)"
 echo "looking for change log"
 
 git remote add upstream https://git.pleroma.social/pleroma/pleroma.git
-git fetch upstream ${CI_COMMIT_TARGET_BRANCH}:refs/remotes/upstream/${CI_COMMIT_TARGET_BRANCH}
+# Only the tip's trees are needed to list added files: no history, tags or file contents.
+git fetch --depth=1 --no-tags --filter=blob:none upstream \
+    ${CI_COMMIT_TARGET_BRANCH}:refs/remotes/upstream/${CI_COMMIT_TARGET_BRANCH}
 
 git diff --raw --no-renames upstream/${CI_COMMIT_TARGET_BRANCH} HEAD -- changelog.d | \
     grep ' A\t' | grep '\.\(skip\|add\|remove\|fix\|security\|change\)$'
