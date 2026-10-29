@@ -90,10 +90,8 @@ defmodule Pleroma.Search.DatabaseSearch do
       original: original
     }
 
-    found = collect(search, window_bounds(max_id), max_id + 1, [], wanted)
-    set_local(original)
-
-    found
+    search
+    |> collect(window_bounds(max_id), max_id + 1, [], wanted)
     |> Enum.drop(offset)
     |> Enum.take(limit)
   end
@@ -132,27 +130,57 @@ defmodule Pleroma.Search.DatabaseSearch do
     end
   end
 
-  # Savepoints keep the transaction usable when statement_timeout cancels a query.
   defp search_window(search, lower, upper) do
     # When the planner underestimates the matches (common for several words),
     # it scans a whole window through objects_pkey and runs to_tsvector on
     # every row. Bitmap scans, which combine both indexes, stay allowed.
-    set_local(%{"enable_indexscan" => "off", "statement_timeout" => statement_timeout(search)})
-    ids = search |> candidate_query(lower, upper) |> Repo.all(mode: :savepoint)
-    set_local(Map.take(search.original, ["enable_indexscan"]))
-    {ids, fetch_activities(search, ids)}
+    settings = %{"enable_indexscan" => "off", "statement_timeout" => statement_timeout(search)}
+
+    case with_local_settings(settings, search.original, fn ->
+           search |> candidate_query(lower, upper) |> Repo.all(mode: :savepoint)
+         end) do
+      {:ok, ids} -> {ids, fetch_activities(search, ids)}
+      :canceled -> :canceled
+    end
+  end
+
+  @doc false
+  # Runs `fun` with `settings` set, then restores `original`, also when
+  # statement_timeout cancels a query in `fun` (which returns :canceled).
+  # Queries in `fun` must use `mode: :savepoint` to keep the transaction usable.
+  def with_local_settings(settings, original, fun) do
+    set_local(settings)
+
+    result =
+      try do
+        {:ok, fun.()}
+      rescue
+        error in Postgrex.Error ->
+          if canceled?(error), do: :canceled, else: reraise(error, __STACKTRACE__)
+      end
+
+    restore_settings(Map.take(original, Map.keys(settings)), 2)
+    result
+  end
+
+  # The restore runs under the short timeout too; retry if it is cancelled.
+  defp restore_settings(settings, attempts) do
+    set_local(settings, mode: :savepoint)
   rescue
     error in Postgrex.Error ->
-      if match?(%{postgres: %{code: :query_canceled}}, error),
-        do: :canceled,
+      if canceled?(error) and attempts > 1,
+        do: restore_settings(settings, attempts - 1),
         else: reraise(error, __STACKTRACE__)
   end
+
+  defp canceled?(error), do: match?(%{postgres: %{code: :query_canceled}}, error)
 
   # Each query gets the rest of the time budget, but not more than the server allows.
   defp statement_timeout(%{budget: 0, original: original}), do: original["statement_timeout"]
 
   defp statement_timeout(%{deadline: deadline, original: original}) do
-    remaining = max(deadline - System.monotonic_time(:millisecond), 1)
+    # At least 50 ms, so that restoring the settings afterwards has time to run.
+    remaining = max(deadline - System.monotonic_time(:millisecond), 50)
 
     case String.to_integer(original["statement_timeout"]) do
       0 -> Integer.to_string(remaining)
@@ -169,14 +197,14 @@ defmodule Pleroma.Search.DatabaseSearch do
     Map.new(rows, &List.to_tuple/1)
   end
 
-  defp set_local(settings) do
+  defp set_local(settings, opts \\ []) do
     calls =
       settings
       |> Enum.with_index()
       |> Enum.map_join(", ", fn {_, i} -> "set_config($#{2 * i + 1}, $#{2 * i + 2}, true)" end)
 
     params = Enum.flat_map(settings, fn {name, value} -> [name, value] end)
-    Repo.query!("SELECT " <> calls, params)
+    Repo.query!("SELECT " <> calls, params, opts)
   end
 
   defp candidate_query(search, lower, upper) do
@@ -250,7 +278,7 @@ defmodule Pleroma.Search.DatabaseSearch do
     |> visible_activities(search.author, search.blocked)
     |> where([a, o], o.id in ^ids)
     |> order_by([a, o], desc: o.id)
-    |> Repo.all(mode: :savepoint)
+    |> Repo.all()
   end
 
   defp visible_activities(user, author, blocked) do

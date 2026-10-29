@@ -243,6 +243,40 @@ defmodule Pleroma.Search.DatabaseSearchTest do
     end
   end
 
+  test "resets the settings when a window query is cancelled" do
+    show = fn name ->
+      %{rows: [[value]]} = Pleroma.Repo.query!("SHOW #{name}")
+      value
+    end
+
+    {:ok, _} =
+      Pleroma.Repo.transaction(fn ->
+        original = %{
+          "statement_timeout" => show.("statement_timeout"),
+          "enable_indexscan" => "on"
+        }
+
+        assert :canceled =
+                 Search.with_local_settings(
+                   %{"statement_timeout" => "10", "enable_indexscan" => "off"},
+                   original,
+                   fn -> Pleroma.Repo.query!("SELECT pg_sleep(1)", [], mode: :savepoint) end
+                 )
+
+        # The transaction is still usable, with the original settings.
+        assert show.("statement_timeout") == original["statement_timeout"]
+        assert show.("enable_indexscan") == "on"
+
+        assert {:ok, :done} =
+                 Search.with_local_settings(%{"enable_indexscan" => "off"}, original, fn ->
+                   assert show.("enable_indexscan") == "off"
+                   :done
+                 end)
+
+        assert show.("enable_indexscan") == "on"
+      end)
+  end
+
   test "restores the session's planner and timeout settings" do
     {:ok, _} = CommonAPI.post(insert(:user), %{status: "wednesday"})
     Pleroma.Repo.query!("SET statement_timeout = 12345")
