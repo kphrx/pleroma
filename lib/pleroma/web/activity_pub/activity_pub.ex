@@ -2058,6 +2058,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   def make_user_from_ap_id(ap_id, additional \\ []) do
     with {:ok, data} <- fetch_and_prepare_user_from_ap_id(ap_id, additional) do
       enqueue_pin_fetches(data)
+      # Keeps the instances table complete, so it can list our peers.
+      Instance.ensure_exists(data.ap_id)
 
       # the fetched actor's id differs from ap_id when it was fetched from a display URL
       user = User.get_cached_by_ap_id(data.ap_id)
@@ -2069,11 +2071,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
       else
         maybe_handle_clashing_nickname(data)
 
-        with {:ok, user} <- data |> User.remote_user_changeset() |> Repo.insert() do
-          # Keeps the instances table complete, so it can list our peers.
-          Instance.ensure_exists(user.ap_id)
-          User.set_cache({:ok, user})
-        end
+        data
+        |> User.remote_user_changeset()
+        |> Repo.insert()
+        |> User.set_cache()
       end
     end
   end
