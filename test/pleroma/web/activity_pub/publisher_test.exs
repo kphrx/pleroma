@@ -137,7 +137,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       assert Publisher.determine_inbox(activity, user) == "http://example.com/inbox"
     end
 
-    test "it returns inbox for messages involving single recipients in total" do
+    test "it returns sharedInbox for messages to a single recipient" do
       user =
         insert(:user, %{
           shared_inbox: "http://example.com/inbox",
@@ -147,6 +147,46 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       activity = %Activity{
         data: %{"to" => [user.ap_id], "cc" => []}
       }
+
+      assert Publisher.determine_inbox(activity, user) == "http://example.com/inbox"
+    end
+
+    test "it returns sharedInbox for followers-only messages" do
+      user =
+        insert(:user, %{
+          shared_inbox: "http://example.com/inbox",
+          inbox: "http://example.com/personal-inbox"
+        })
+
+      author = insert(:user)
+
+      activity = %Activity{
+        data: %{"to" => [author.follower_address], "cc" => []}
+      }
+
+      assert Publisher.determine_inbox(activity, user) == "http://example.com/inbox"
+    end
+
+    test "it returns inbox for messages with bcc or bto, which needs personal inboxes" do
+      user =
+        insert(:user, %{
+          shared_inbox: "http://example.com/inbox",
+          inbox: "http://example.com/personal-inbox"
+        })
+
+      for field <- ["bcc", "bto"] do
+        activity = %Activity{
+          data: %{"to" => [@as_public], "cc" => [], field => [user.ap_id]}
+        }
+
+        assert Publisher.determine_inbox(activity, user) == "http://example.com/personal-inbox"
+      end
+    end
+
+    test "it returns inbox when the user has no sharedInbox" do
+      user = insert(:user, %{shared_inbox: nil, inbox: "http://example.com/personal-inbox"})
+
+      activity = %Activity{data: %{"to" => [@as_public], "cc" => []}}
 
       assert Publisher.determine_inbox(activity, user) == "http://example.com/personal-inbox"
     end
