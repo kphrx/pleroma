@@ -14,9 +14,9 @@ With a GIN index (the default), search looks at the newest posts first and stops
 
 > config :pleroma, Pleroma.Search.DatabaseSearch, time_budget: 2_500, windows: [10_000, 100_000, 1_000_000]
 
-Search queries also limit how many matches PostgreSQL considers (`gin_fuzzy_search_limit`, see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)). This makes the results incomplete and they can change between requests. You can turn it off for exact results:
+Search queries set `gin_fuzzy_search_limit` (see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)) to 0 by default, which gives exact results even if your PostgreSQL server sets a limit. A limit, such as the earlier default of 500, makes results incomplete and random, especially for searches with several words. `nil` keeps the server's setting.
 
-> config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: nil
+> config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: 0
 
 Earlier versions of Pleroma set this limit for every database connection, which also made other GIN index scans (for example recipient lookups) incomplete. It is now only set for search queries.
 

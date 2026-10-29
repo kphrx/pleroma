@@ -3575,8 +3575,8 @@ config :pleroma, :config_description, [
         key: :gin_fuzzy_search_limit,
         type: :integer,
         description:
-          "Limits how many matches PostgreSQL considers in GIN full-text search queries (see `gin_fuzzy_search_limit` in the PostgreSQL docs). Only set for search queries. Makes results incomplete and random. Set to `nil` for exact results. Default: 500.",
-        suggestions: [500, nil]
+          "Limits how many matches PostgreSQL considers in GIN full-text search queries (see `gin_fuzzy_search_limit` in the PostgreSQL docs). Only set for search queries. A limit makes results incomplete and random. 0 gives exact results, even if the PostgreSQL server sets a limit; `nil` keeps the server's setting. Default: 0.",
+        suggestions: [0, 500, nil]
       },
       %{
         key: :time_budget,

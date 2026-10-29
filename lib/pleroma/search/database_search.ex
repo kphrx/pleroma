@@ -268,12 +268,13 @@ defmodule Pleroma.Search.DatabaseSearch do
 
   @doc """
   Runs `fun` with `gin_fuzzy_search_limit` set, if configured under
-  `Pleroma.Search.DatabaseSearch`. The limit makes GIN scans faster but their
-  results incomplete and random, so it is only set for search queries.
+  `Pleroma.Search.DatabaseSearch`. A limit makes GIN scans faster but their
+  results incomplete and random, so it is only set for search queries. 0 sets
+  exact results even if the server has a limit; nil keeps the server's value.
   """
   def with_fuzzy_limit(fun) do
     case Config.get([__MODULE__, :gin_fuzzy_search_limit]) do
-      limit when is_integer(limit) and limit > 0 ->
+      limit when is_integer(limit) and limit >= 0 ->
         {:ok, result} =
           Repo.transaction(fn ->
             # SET LOCAL takes no parameters; limit is an integer.
