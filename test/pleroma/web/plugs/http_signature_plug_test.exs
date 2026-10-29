@@ -13,6 +13,15 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlugTest do
   import Phoenix.Controller, only: [put_format: 2]
   import Plug.Conn
 
+  defp put_signature(conn, actor, signed_headers \\ "(request-target) host date") do
+    conn
+    |> put_req_header("date", Pleroma.Signature.signed_date())
+    |> put_req_header(
+      "signature",
+      "keyId=\"#{actor}#main-key\",headers=\"#{signed_headers}\",signature=\"fake\""
+    )
+  end
+
   test "it calls HTTPSignatures to check validity if the actor signed it" do
     params = %{"actor" => "http://mastodon.example.org/users/admin"}
     conn = build_conn(:get, "/doesntmattter", params)
@@ -22,10 +31,7 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlugTest do
 
     conn =
       conn
-      |> put_req_header(
-        "signature",
-        "keyId=\"http://mastodon.example.org/users/admin#main-key"
-      )
+      |> put_signature("http://mastodon.example.org/users/admin")
       |> put_format("activity+json")
       |> HTTPSignaturePlug.call(%{})
 
@@ -51,10 +57,7 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlugTest do
 
       conn =
         orig_conn
-        |> put_req_header(
-          "signature",
-          "keyId=\"http://mastodon.example.org/users/admin#main-key"
-        )
+        |> put_signature("http://mastodon.example.org/users/admin")
         |> HTTPSignaturePlug.call(%{})
 
       assert conn.assigns.valid_signature == false
@@ -71,10 +74,7 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlugTest do
 
       conn =
         orig_conn
-        |> put_req_header(
-          "signature",
-          "keyId=\"http://mastodon.example.org/users/admin#main-key"
-        )
+        |> put_signature("http://mastodon.example.org/users/admin")
         |> HTTPSignaturePlug.call(%{})
 
       assert conn.assigns.valid_signature == true
@@ -108,10 +108,7 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlugTest do
       conn =
         conn
         |> Map.put(:remote_ip, {192, 168, 0, 1})
-        |> put_req_header(
-          "signature",
-          "keyId=\"http://mastodon.example.org/users/admin#main-key"
-        )
+        |> put_signature("http://mastodon.example.org/users/admin")
         |> HTTPSignaturePlug.call(%{})
 
       assert conn.remote_ip == {192, 168, 0, 1}
@@ -131,10 +128,7 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlugTest do
 
     conn =
       build_conn(:get, "/doesntmattter", %{"actor" => "http://mastodon.example.org/users/admin"})
-      |> put_req_header(
-        "signature",
-        "keyId=\"http://mastodon.example.org/users/admin#main-key"
-      )
+      |> put_signature("http://mastodon.example.org/users/admin")
       |> put_format("activity+json")
       |> HTTPSignaturePlug.call(%{})
 
@@ -152,14 +146,84 @@ defmodule Pleroma.Web.Plugs.HTTPSignaturePlugTest do
 
     conn =
       build_conn(:get, "/doesntmattter", %{"actor" => "http://allowed.example.org/users/admin"})
-      |> put_req_header(
-        "signature",
-        "keyId=\"http://allowed.example.org/users/admin#main-key"
-      )
+      |> put_signature("http://allowed.example.org/users/admin")
       |> put_format("activity+json")
       |> HTTPSignaturePlug.call(%{})
 
     assert conn.assigns.valid_signature == true
     assert conn.halted == false
+  end
+
+  describe "signature policy" do
+    test "treats a signed GET with a stale date as unsigned" do
+      HTTPSignaturesMock
+      |> expect(:validate_conn, 0, fn _ -> true end)
+
+      stale = NaiveDateTime.add(NaiveDateTime.utc_now(), -3 * 3600)
+
+      conn =
+        build_conn(:get, "/doesntmattter")
+        |> put_signature("http://mastodon.example.org/users/admin")
+        |> put_req_header("date", Pleroma.Signature.signed_date(stale))
+        |> put_format("activity+json")
+        |> HTTPSignaturePlug.call(%{})
+
+      assert conn.assigns.valid_signature == false
+      assert conn.assigns.signature_error == :date_too_old
+      refute conn.halted
+    end
+
+    test "marks a signed POST that does not cover the digest as invalid" do
+      HTTPSignaturesMock
+      |> expect(:validate_conn, 0, fn _ -> true end)
+
+      conn =
+        build_conn(:post, "/inbox")
+        |> put_signature("http://mastodon.example.org/users/admin")
+        |> put_format("activity+json")
+        |> HTTPSignaturePlug.call(%{})
+
+      assert conn.assigns.valid_signature == false
+      assert conn.assigns.signature_error == :digest_not_signed
+      refute conn.halted
+    end
+
+    test "uses the digest computed from the body for signed POSTs" do
+      HTTPSignaturesMock
+      |> expect(:validate_conn, fn conn ->
+        get_req_header(conn, "digest") == ["SHA-256=computed"]
+      end)
+
+      conn =
+        build_conn(:post, "/inbox")
+        |> put_signature(
+          "http://mastodon.example.org/users/admin",
+          "(request-target) host date digest"
+        )
+        |> put_req_header("digest", "SHA-256=claimed")
+        |> assign(:digest, "SHA-256=computed")
+        |> put_format("activity+json")
+        |> HTTPSignaturePlug.call(%{})
+
+      assert conn.assigns.valid_signature == true
+    end
+
+    test "marks a signed POST whose body was not hashed as invalid" do
+      HTTPSignaturesMock
+      |> expect(:validate_conn, 0, fn _ -> true end)
+
+      conn =
+        build_conn(:post, "/inbox")
+        |> put_signature(
+          "http://mastodon.example.org/users/admin",
+          "(request-target) host date digest"
+        )
+        |> put_req_header("digest", "SHA-256=claimed")
+        |> put_format("activity+json")
+        |> HTTPSignaturePlug.call(%{})
+
+      assert conn.assigns.valid_signature == false
+      assert conn.assigns.signature_error == :body_not_hashed
+    end
   end
 end
