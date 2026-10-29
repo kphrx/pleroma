@@ -3582,8 +3582,8 @@ config :pleroma, :config_description, [
         key: :time_budget,
         type: :integer,
         description:
-          "Time in milliseconds after which search stops looking at older posts and returns the results found so far. Each search query may only use the rest of this time (and never more than the server's `statement_timeout`). 0 searches only the first window and keeps the server's statement timeout. Default: 2500.",
-        suggestions: [2_500]
+          "Time in milliseconds after which search stops looking at older posts and returns the results found so far. Each search query may only use the rest of this time (and never more than the server's `statement_timeout`). 0 searches only the first window and keeps the server's statement timeout. Keep it below the Repo `:timeout` (default 15 s): the search API stops waiting after that and then returns nothing. Default: 10000.",
+        suggestions: [10_000]
       },
       %{
         key: :windows,

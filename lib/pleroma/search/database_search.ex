@@ -20,7 +20,7 @@ defmodule Pleroma.Search.DatabaseSearch do
 
   # Newest object ids searched first, each window older than the one before.
   @default_windows [10_000, 100_000, 1_000_000]
-  @default_time_budget 2_500
+  @default_time_budget 10_000
 
   @impl true
   def search(user, search_query, options \\ []) do

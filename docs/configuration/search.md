@@ -10,9 +10,9 @@ To use built-in search that has no external dependencies, set the search module 
 
 While it has no external dependencies, it has problems with performance and relevancy.
 
-With a GIN index (the default), search looks at the newest posts first and stops when it has enough results: first the newest 10,000 objects, then the newest 100,000, then the newest 1,000,000, then all older ones (`windows`). Only the newest candidates are joined to their activities for the visibility checks. If a search takes longer than `time_budget` (default 2.5 seconds), it returns the results found so far. On large databases this can make results incomplete for words that only occur in old posts, for several common words together, and for local-only searches on instances with few local posts.
+With a GIN index (the default), search looks at the newest posts first and stops when it has enough results: first the newest 10,000 objects, then the newest 100,000, then the newest 1,000,000, then all older ones (`windows`). Only the newest candidates are joined to their activities for the visibility checks. If a search takes longer than `time_budget` (default 10 seconds), it returns the results found so far. Keep it below the `Pleroma.Repo` `:timeout` (default 15 seconds), as the search API stops waiting after that and then returns nothing. On large databases this can make results incomplete for words that only occur in old posts, for several common words together, and for local-only searches on instances with few local posts.
 
-> config :pleroma, Pleroma.Search.DatabaseSearch, time_budget: 2_500, windows: [10_000, 100_000, 1_000_000]
+> config :pleroma, Pleroma.Search.DatabaseSearch, time_budget: 10_000, windows: [10_000, 100_000, 1_000_000]
 
 Search queries set `gin_fuzzy_search_limit` (see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)) to 0 by default, which gives exact results even if your PostgreSQL server sets a limit. A limit, such as the earlier default of 500, makes results incomplete and random, especially for searches with several words. `nil` keeps the server's setting.
 

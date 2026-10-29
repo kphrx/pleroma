@@ -950,7 +950,7 @@ config :pleroma, Pleroma.Search, module: Pleroma.Search.DatabaseSearch
 
 config :pleroma, Pleroma.Search.DatabaseSearch,
   gin_fuzzy_search_limit: 0,
-  time_budget: 2_500,
+  time_budget: 10_000,
   windows: [10_000, 100_000, 1_000_000]
 
 config :pleroma, Pleroma.Search.Meilisearch,
