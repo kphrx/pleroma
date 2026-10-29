@@ -1,0 +1,1 @@
+Read the peer list from the instances table (hosts of remote actors, without our own host) and update instance stats every 5 minutes; the old peers query scanned all remote users every minute
