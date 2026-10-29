@@ -18,7 +18,7 @@ Search queries set `gin_fuzzy_search_limit` (see [PostgreSQL's docs](https://www
 
 > config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: 0
 
-Earlier versions of Pleroma set this limit for every database connection, which also made other GIN index scans (for example recipient lookups) incomplete. It is now only set for search queries.
+Earlier versions of Pleroma set this limit for every database connection, which also made other GIN index scans (for example recipient lookups) incomplete. It is now only set for search queries. Account search uses the same setting, also with the other search modules.
 
 ## QdrantSearch
 

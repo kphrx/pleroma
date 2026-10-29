@@ -273,7 +273,7 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
 
       results =
         conn
-        |> get("/api/v1/accounts/search?q=shp@shitposter.club xxx")
+        |> get("/api/v1/accounts/search?q=shp@shitposter. club")
         |> json_response_and_validate_schema(200)
 
       assert length(results) == 1
