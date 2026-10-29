@@ -153,7 +153,7 @@ but should only be run if necessary. **It is safe to cancel this.**
 
 ## Change Text Search Configuration
 
-Change `default_text_search_config` for database and (if necessary) text_search_config used in index, then rebuild index (it may take time). 
+Change `default_text_search_config` for database and (if necessary) text_search_config used in index, then rebuild index (it may take time). If window tokens are active, the rebuilt index keeps them. Restart Pleroma afterwards: open database connections keep the old `default_text_search_config`, and search only uses the new index with the new config. With `--blocking`, the index is built without `CONCURRENTLY`: faster, but writes to the objects table wait until it is done.
 
 === "OTP"
 
@@ -168,3 +168,25 @@ Change `default_text_search_config` for database and (if necessary) text_search_
     ```
 
 See [PostgreSQL documentation](https://www.postgresql.org/docs/current/textsearch-configuration.html) and `docs/configuration/howto_search_cjk.md` for more detail.
+
+## Search window tokens
+
+Rebuilds the full-text index `objects_fts` with or without window tokens, which make the built-in search fast for searches with several words on large databases (see [Configuring search](../../configuration/search.md#window-tokens-optional-for-large-databases)). Not for RUM indexes.
+
+The new index is built with `CREATE INDEX CONCURRENTLY` under the name `objects_fts_windowed` (`objects_fts_plain` for `disable`), then it replaces `objects_fts`. If a valid `objects_fts_windowed` with the same expression and text search config already exists, for example built by hand, `enable` only switches to it. The task refuses to run while another session builds an index or runs maintenance on the objects table. This can take hours on large instances and needs disk space for a second index while it runs. If it is interrupted, run the task again: it removes the leftover index first. With `--blocking`, the index is built without `CONCURRENTLY`: faster, but writes to the objects table wait until it is done.
+
+=== "OTP"
+
+    ```sh
+    ./bin/pleroma_ctl database search_window_tokens status
+    ./bin/pleroma_ctl database search_window_tokens enable [--blocking]
+    ./bin/pleroma_ctl database search_window_tokens disable [--blocking]
+    ```
+
+=== "From Source"
+
+    ```sh
+    mix pleroma.database search_window_tokens status
+    mix pleroma.database search_window_tokens enable [--blocking]
+    mix pleroma.database search_window_tokens disable [--blocking]
+    ```

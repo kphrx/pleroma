@@ -1,0 +1,1 @@
+Optional window tokens for the full-text index (`mix pleroma.database search_window_tokens enable`) make built-in search fast for searches with several words on large databases

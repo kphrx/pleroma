@@ -692,4 +692,104 @@ defmodule Mix.Tasks.Pleroma.DatabaseTest do
       )
     end
   end
+
+  describe "search_window_tokens" do
+    alias Pleroma.Search.DatabaseSearch.Index
+
+    test "enable, status and disable" do
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "status"])
+      assert_receive {:mix_shell, :info, ["objects_fts: plain"]}
+
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "enable", "--blocking"])
+      assert_receive {:mix_shell, :info, ["Done: objects_fts now has window tokens."]}
+      assert %{form: :tokens} = Index.status()
+
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "enable", "--blocking"])
+      assert_receive {:mix_shell, :info, ["objects_fts already has window tokens."]}
+
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "disable", "--blocking"])
+      assert_receive {:mix_shell, :info, ["Done: objects_fts is a plain full-text index again."]}
+      assert %{form: :plain} = Index.status()
+    end
+
+    test "status reports leftovers and how to remove them" do
+      Repo.query!("CREATE INDEX objects_fts_windowed ON objects (id)")
+
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "status"])
+
+      assert_receive {:mix_shell, :info,
+                      ["Leftover index objects_fts_windowed (valid: true)" <> hint]}
+
+      assert hint =~ "enable"
+    end
+
+    test "refuses with RUM" do
+      clear_config([:database, :rum_enabled], true)
+
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "enable", "--blocking"])
+      assert_receive {:mix_shell, :error, [message]}
+      assert message =~ "RUM"
+      assert %{form: :plain} = Index.status()
+    end
+  end
+
+  describe "search_window_tokens errors" do
+    test "prints the usage for unknown arguments" do
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "enabel"])
+
+      assert_receive {:mix_shell, :error,
+                      ["Usage: mix pleroma.database search_window_tokens" <> _]}
+
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "enable", "--blokcing"])
+
+      assert_receive {:mix_shell, :error,
+                      ["Usage: mix pleroma.database search_window_tokens" <> _]}
+    end
+
+    test "status warns about an index it does not know" do
+      Repo.query!("DROP INDEX objects_fts")
+      Repo.query!("CREATE INDEX objects_fts ON objects (id)")
+
+      Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "status"])
+      assert_receive {:mix_shell, :info, ["objects_fts: unknown"]}
+      assert_receive {:mix_shell, :error, [warning]}
+      assert warning =~ "disable"
+    end
+  end
+
+  describe "set_text_search_config" do
+    alias Pleroma.Search.DatabaseSearch.Index
+
+    test "keeps window tokens" do
+      {:ok, :rebuilt} = Index.rebuild(:tokens, concurrently: false)
+
+      Mix.Tasks.Pleroma.Database.run(["set_text_search_config", "simple", "--blocking"])
+
+      assert %{form: :tokens, definition: definition} = Index.status()
+      assert definition =~ "'simple'::regconfig"
+    end
+
+    test "keeps the database's config if the rebuild does not run" do
+      Repo.query!("CREATE INDEX objects_fts_plain ON objects (id)")
+
+      Mix.Tasks.Pleroma.Database.run(["set_text_search_config", "simple", "--blocking"])
+
+      assert_receive {:mix_shell, :error, [message]}
+      assert message =~ "objects_fts_plain"
+
+      assert %{rows: [["english"]]} =
+               Repo.query!(
+                 "SELECT current_setting('default_text_search_config')::regconfig::text"
+               )
+
+      refute_received {:mix_shell, :info, ["Done."]}
+    end
+
+    test "rebuilds the plain index with the new config" do
+      Mix.Tasks.Pleroma.Database.run(["set_text_search_config", "simple", "--blocking"])
+
+      assert %{form: :plain, definition: definition} = Index.status()
+      assert definition =~ "'simple'::regconfig"
+    end
+  end
 end

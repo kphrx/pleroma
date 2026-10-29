@@ -1,0 +1,1 @@
+`mix pleroma.database set_text_search_config` swaps in the rebuilt index instead of dropping it first, and keeps window tokens
