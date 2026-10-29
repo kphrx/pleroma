@@ -9,6 +9,8 @@ defmodule Pleroma.Search.DatabaseSearch do
   alias Pleroma.Object.Fetcher
   alias Pleroma.Pagination
   alias Pleroma.Repo
+  alias Pleroma.Search.DatabaseSearch.Index
+  alias Pleroma.Search.DatabaseSearch.WindowTokens
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.Visibility
 
@@ -73,6 +75,18 @@ defmodule Pleroma.Search.DatabaseSearch do
   end
 
   defp gin_search(max_id, user, search_query, author, offset, limit) do
+    case text_search_setup(search_query) do
+      # Only stop words: nothing to search for (and with window tokens, an
+      # empty query would match every post in a window).
+      {_tsc, _tokens, 0} ->
+        []
+
+      {tsc, tokens, _nodes} ->
+        gin_search(max_id, user, search_query, author, offset, limit, tsc, tokens)
+    end
+  end
+
+  defp gin_search(max_id, user, search_query, author, offset, limit, tsc, tokens) do
     budget = Config.get([__MODULE__, :time_budget]) || @default_time_budget
     wanted = offset + limit
     original = current_settings()
@@ -83,7 +97,9 @@ defmodule Pleroma.Search.DatabaseSearch do
       blocked: blocked_ap_ids(user),
       local: restrict_local?(user),
       query: search_query,
-      tsc: text_search_config(),
+      tsc: tsc,
+      tokens: tokens,
+      max_id: max_id,
       batch: max(2 * wanted, 40),
       budget: budget,
       deadline: System.monotonic_time(:millisecond) + budget,
@@ -131,13 +147,24 @@ defmodule Pleroma.Search.DatabaseSearch do
   end
 
   defp search_window(search, lower, upper) do
+    case window_tokens(search, lower, upper) do
+      :empty -> {[], []}
+      tokens -> search_window(search, lower, upper, tokens)
+    end
+  end
+
+  defp window_tokens(%{tokens: false}, _lower, _upper), do: :plain
+  defp window_tokens(search, :rest, upper), do: WindowTokens.rest(upper, search.max_id)
+  defp window_tokens(_search, lower, upper), do: WindowTokens.window(lower, upper)
+
+  defp search_window(search, lower, upper, tokens) do
     # When the planner underestimates the matches (common for several words),
     # it scans a whole window through objects_pkey and runs to_tsvector on
     # every row. Bitmap scans, which combine both indexes, stay allowed.
     settings = %{"enable_indexscan" => "off", "statement_timeout" => statement_timeout(search)}
 
     case with_local_settings(settings, search.original, fn ->
-           search |> candidate_query(lower, upper) |> Repo.all(mode: :savepoint)
+           search |> candidate_query(lower, upper, tokens) |> Repo.all(mode: :savepoint)
          end) do
       {:ok, ids} -> {ids, fetch_activities(search, ids)}
       :canceled -> :canceled
@@ -207,18 +234,10 @@ defmodule Pleroma.Search.DatabaseSearch do
     Repo.query!("SELECT " <> calls, params, opts)
   end
 
-  defp candidate_query(search, lower, upper) do
+  defp candidate_query(search, lower, upper, tokens) do
     recipients = intended_recipients(search.user)
 
     from(o in Object,
-      where:
-        fragment(
-          "to_tsvector(?::oid::regconfig, ?->>'content') @@ websearch_to_tsquery(?::oid::regconfig, ?)",
-          ^search.tsc,
-          o.data,
-          ^search.tsc,
-          ^search.query
-        ),
       # Cheap pre-filter on the object's own addressing; the activity's is checked later.
       where:
         fragment(
@@ -233,19 +252,79 @@ defmodule Pleroma.Search.DatabaseSearch do
       limit: ^search.batch,
       select: o.id
     )
-    |> restrict_window(lower, upper)
+    |> restrict_text(search, tokens)
+    |> restrict_window(lower, upper, tokens)
     |> prefilter_local(search.local)
     |> prefilter_author(search.author)
     |> prefilter_blocked(search.blocked)
   end
 
-  # The newest windows combine the GIN index with objects_pkey; the rest uses
-  # only the GIN index, as a range over most of the table would be expensive.
-  defp restrict_window(query, :rest, upper),
+  # With window tokens, the expressions must be the same as the index's.
+  defmacrop token_match(tsc, data, id, query, tokens) do
+    sql =
+      WindowTokens.vector_sql() <>
+        " @@ (websearch_to_tsquery(?::oid::regconfig, ?) && ?::text::tsquery)"
+
+    quote do
+      fragment(
+        unquote(sql),
+        unquote(tsc),
+        unquote(data),
+        unquote(id),
+        unquote(tsc),
+        unquote(query),
+        unquote(tokens)
+      )
+    end
+  end
+
+  defmacrop token_match(tsc, data, id, query) do
+    sql = WindowTokens.vector_sql() <> " @@ websearch_to_tsquery(?::oid::regconfig, ?)"
+
+    quote do
+      fragment(
+        unquote(sql),
+        unquote(tsc),
+        unquote(data),
+        unquote(id),
+        unquote(tsc),
+        unquote(query)
+      )
+    end
+  end
+
+  defp restrict_text(query, %{tsc: tsc, query: text}, :plain) do
+    where(
+      query,
+      [o],
+      fragment(
+        "to_tsvector(?::oid::regconfig, ?->>'content') @@ websearch_to_tsquery(?::oid::regconfig, ?)",
+        ^tsc,
+        o.data,
+        ^tsc,
+        ^text
+      )
+    )
+  end
+
+  defp restrict_text(query, %{tsc: tsc, query: text}, :none),
+    do: where(query, [o], token_match(^tsc, o.data, o.id, ^text))
+
+  defp restrict_text(query, %{tsc: tsc, query: text}, {:tokens, tokens}),
+    do: where(query, [o], token_match(^tsc, o.data, o.id, ^text, ^tokens))
+
+  # Without tokens, the newest windows combine the GIN index with objects_pkey;
+  # the rest uses only the GIN index, as a range over most of the table would
+  # be expensive. With tokens, the GIN index finds the window's buckets, and
+  # the exact bounds are checked on the rows.
+  defp restrict_window(query, :rest, upper, _tokens),
     do: where(query, [o], fragment("? + 0", o.id) < ^upper)
 
-  defp restrict_window(query, lower, upper),
+  defp restrict_window(query, lower, upper, tokens) when tokens in [:plain, :none],
     do: where(query, [o], o.id > ^lower and o.id < ^upper)
+
+  defp restrict_window(query, lower, upper, {:tokens, _}),
+    do: where(query, [o], fragment("? + 0", o.id) > ^lower and fragment("? + 0", o.id) < ^upper)
 
   # Pre-filters on the object's actor; the activity's actor is checked later.
   defmacrop object_actor(data) do
@@ -363,11 +442,17 @@ defmodule Pleroma.Search.DatabaseSearch do
     )
   end
 
-  defp text_search_config do
-    %{rows: [[tsc]]} =
-      Repo.query!("select current_setting('default_text_search_config')::regconfig::oid;")
+  # The index form is read on every search, so switching it needs no restart.
+  defp text_search_setup(search_query) do
+    %{rows: [[tsc, definition, nodes]]} =
+      Repo.query!(
+        "SELECT current_setting('default_text_search_config')::regconfig::oid, " <>
+          Index.definition_sql() <>
+          ", numnode(websearch_to_tsquery(current_setting('default_text_search_config')::regconfig, $1))",
+        [search_query]
+      )
 
-    tsc
+    {tsc, WindowTokens.form(definition) == :tokens, nodes}
   end
 
   defp query_with(q, :rum, search_query) do

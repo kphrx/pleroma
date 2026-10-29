@@ -94,7 +94,8 @@ defmodule Pleroma.Search.DatabaseSearchTest do
         handler,
         [:pleroma, :repo, :query],
         fn _event, _measurements, %{query: query}, _ ->
-          if self() == test_pid and query =~ "websearch_to_tsquery" do
+          if self() == test_pid and query =~ "websearch_to_tsquery" and
+               query =~ ~s(FROM "objects") do
             send(test_pid, :candidate_query)
           end
         end,
