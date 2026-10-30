@@ -49,7 +49,7 @@ defmodule Pleroma.Search.DatabaseSearchWindowTokensTest do
   end
 
   # Makes the next object id the first of a bucket of `size` ids, minus `before`.
-  defp start_bucket_in(before, size \\ Pleroma.Search.DatabaseSearch.WindowTokens.bucket_size()) do
+  defp start_bucket_in(before, size) do
     Repo.query!(
       "SELECT setval('objects_id_seq', (nextval('objects_id_seq') / $1 + 2) * $1 - $2 - 1)",
       [size, before]
