@@ -70,8 +70,52 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
     end
 
     assert %{form: :missing} = Index.status()
-    assert %DataMigration{state: state} = DataMigration.search_window_tokens()
-    assert state in [:pending, :running]
+    assert %DataMigration{state: :running} = DataMigration.search_window_tokens()
+  end
+
+  test "builds again after an interrupted build" do
+    set_state(:running)
+
+    capture_log(fn -> assert :complete = Migrator.run(@opts) end)
+    assert %{form: :tokens} = Index.status()
+  end
+
+  test "keeps an objects_fts it does not know and waits for the admin" do
+    Repo.query!("CREATE INDEX objects_fts ON objects (id)")
+
+    log = capture_log(fn -> assert :manual = Migrator.run(@opts) end)
+
+    assert %{form: :unknown} = Index.status()
+    assert %DataMigration{state: :manual} = DataMigration.search_window_tokens()
+    assert log =~ "search_window_tokens enable"
+  end
+
+  test "retries later after a connection error" do
+    log = fn _ -> raise DBConnection.ConnectionError, "connection lost" end
+
+    capture_log(fn -> assert :retry = Migrator.run(@opts ++ [log: log]) end)
+    assert %DataMigration{state: :running} = DataMigration.search_window_tokens()
+  end
+
+  test "fails on other errors" do
+    log = fn _ -> raise "boom" end
+
+    capture_log(fn -> assert :failed = Migrator.run(@opts ++ [log: log]) end)
+    assert %DataMigration{state: :failed} = DataMigration.search_window_tokens()
+  end
+
+  test "completes with a warning if only the cleanup after the switch failed" do
+    log = fn
+      "Dropping the old index" <> _ -> raise %Postgrex.Error{message: "cleanup failed"}
+      _ -> :ok
+    end
+
+    output = capture_log(fn -> assert :complete = Migrator.run(@opts ++ [log: log]) end)
+
+    assert %{form: :tokens} = Index.status()
+    assert %DataMigration{state: :complete} = DataMigration.search_window_tokens()
+    assert output =~ "cleanup failed"
+    assert output =~ "search_window_tokens enable"
   end
 
   test "marks a failed build as failed, says how to retry, and does not run again" do
@@ -111,6 +155,37 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
 
     assert %{form: :tokens} = Index.status()
     assert %DataMigration{state: :complete} = DataMigration.search_window_tokens()
+  end
+
+  test "the process stays and retries while another session builds" do
+    {:ok, other} = Postgrex.start_link(other_session_config())
+    Postgrex.query!(other, "SELECT pg_advisory_lock(7365000001)", [])
+
+    try do
+      capture_log(fn ->
+        pid = start_supervised!({Migrator, delay: 0, rebuild: @opts})
+        # The first run is done when the state is :running and the process is idle.
+        assert_state(:running)
+        :sys.get_state(pid)
+        assert Process.alive?(pid)
+      end)
+    after
+      GenServer.stop(other)
+    end
+  end
+
+  defp assert_state(state, tries \\ 50) do
+    case DataMigration.search_window_tokens() do
+      %DataMigration{state: ^state} ->
+        :ok
+
+      _ when tries > 0 ->
+        Process.sleep(20)
+        assert_state(state, tries - 1)
+
+      other ->
+        flunk("data migration state: #{inspect(other.state)}")
+    end
   end
 
   defp set_state(state) do

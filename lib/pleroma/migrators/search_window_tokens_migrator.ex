@@ -15,10 +15,12 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigrator do
   - `:complete`: built, already had tokens, or RUM is used.
   - `:failed`: the build failed. It is not retried automatically; run
     `mix pleroma.database search_window_tokens enable`.
-  - `:manual` (or listed in `[:instance, :manual_data_migrations]`): skipped.
+  - `:manual`: `objects_fts` is an index that it does not know (for example
+    partial), which is kept. Also skipped if listed in
+    `[:instance, :manual_data_migrations]`.
 
   While another session builds or maintains `objects` (for example another
-  node), it tries again later.
+  node), and after connection errors, it tries again later.
 
   This is not a `Pleroma.Migrators.Support.BaseMigrator`: that one processes
   records in batches and has no "try again later".
@@ -36,9 +38,11 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigrator do
   @start_delay :timer.minutes(1)
   @retry_interval :timer.minutes(10)
 
+  @enable_command "`mix pleroma.database search_window_tokens enable` " <>
+                    "(or `./bin/pleroma_ctl database search_window_tokens enable`)"
+
   @retry_hint "Search works, but slowly, until objects_fts has window tokens. " <>
-                "To build them, run `mix pleroma.database search_window_tokens enable` " <>
-                "(or `./bin/pleroma_ctl database search_window_tokens enable`)."
+                "To build them, run " <> @enable_command <> "."
 
   @doc """
   Options: `:delay` before the first run in ms, `:rebuild` options for
@@ -66,8 +70,8 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigrator do
   end
 
   @doc """
-  Runs the data migration once. Returns `:complete`, `:failed`, `:retry`, or
-  `:skip` if there is nothing to do.
+  Runs the data migration once. Returns `:complete`, `:failed`, `:manual`,
+  `:retry`, or `:skip` if there is nothing to do.
   """
   def run(rebuild_opts \\ []) do
     data_migration = DataMigration.search_window_tokens()
@@ -81,22 +85,40 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigrator do
   defp runnable?(_data_migration), do: false
 
   defp perform(data_migration, rebuild_opts) do
-    if Config.get([:database, :rum_enabled]) do
-      complete(data_migration, "RUM is enabled; window tokens are for the GIN index.")
-    else
-      update(data_migration, :running, "Started the window token rebuild of objects_fts.")
+    cond do
+      Config.get([:database, :rum_enabled]) ->
+        complete(data_migration, "RUM is enabled; window tokens are for the GIN index.")
 
-      log(
-        "Starting the window token rebuild of objects_fts in the background. " <>
-          "Search is slow until it is done."
-      )
+      # For example a partial index made by hand: the admin decides.
+      Index.status().form == :unknown ->
+        message =
+          "objects_fts is an index that this migration does not know, so it is kept. " <>
+            "To replace it with window tokens, run " <> @enable_command <> "."
 
-      :tokens
-      |> Index.rebuild(Keyword.put_new(rebuild_opts, :log, &log/1))
-      |> finish(data_migration)
+        Logger.warning("#{inspect(__MODULE__)}: " <> message)
+        update(data_migration, :manual, message)
+        :manual
+
+      true ->
+        build(data_migration, rebuild_opts)
     end
   rescue
+    # For example a busy pool or a database restart; not a failed build.
+    error in DBConnection.ConnectionError -> retry(Exception.message(error))
     error -> fail(data_migration, Exception.message(error))
+  end
+
+  defp build(data_migration, rebuild_opts) do
+    update(data_migration, :running, "Started the window token rebuild of objects_fts.")
+
+    log(
+      "Starting the window token rebuild of objects_fts in the background. " <>
+        "Search is slow until it is done."
+    )
+
+    :tokens
+    |> Index.rebuild(Keyword.put_new(rebuild_opts, :log, &log/1))
+    |> finish(data_migration)
   end
 
   defp finish({:ok, :rebuilt}, data_migration),
@@ -109,16 +131,26 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigrator do
     do: complete(data_migration, "objects_fts is a RUM index; window tokens are for GIN.")
 
   # Another session (for example on another node) builds or maintains objects.
-  defp finish({:error, :running}, _data_migration) do
-    log(
-      "Another session is building an index or running maintenance on objects; " <>
-        "trying again in #{div(@retry_interval, 60_000)} minutes."
-    )
+  defp finish({:error, :running}, _data_migration),
+    do: retry("another session is building an index or running maintenance on objects")
 
-    :retry
+  # objects_fts has tokens; only dropping the old index or ANALYZE failed.
+  defp finish({:error, {:after_switch, reason}}, data_migration) do
+    message =
+      "objects_fts now has window tokens, but removing the old index or analyzing " <>
+        "failed: #{reason}. Run " <> @enable_command <> " to finish."
+
+    Logger.warning("#{inspect(__MODULE__)}: " <> message)
+    update(data_migration, :complete, message)
+    :complete
   end
 
   defp finish({:error, reason}, data_migration), do: fail(data_migration, inspect(reason))
+
+  defp retry(reason) do
+    log("Not building now (#{reason}); trying again in #{div(@retry_interval, 60_000)} minutes.")
+    :retry
+  end
 
   defp complete(data_migration, message) do
     log(message)
