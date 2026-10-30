@@ -186,4 +186,17 @@ defmodule Pleroma.Search.DatabaseSearchWindowTokensTest do
     assert [post.id] == Enum.map(result, & &1.id)
     refute sql =~ "|| ('W' ||"
   end
+
+  # After the upgrade migration dropped the plain index, until the background build is done.
+  test "searches without objects_fts, with the plain expression" do
+    Repo.query!("DROP INDEX objects_fts")
+    assert %{form: :missing} = Index.status()
+    {:ok, post} = CommonAPI.post(insert(:user), %{status: "wednesday"})
+
+    {result, [{sql, _} | _]} =
+      capture_candidate_queries(fn -> Search.search(nil, "wednesday") end)
+
+    assert [post.id] == Enum.map(result, & &1.id)
+    refute sql =~ "|| ('W' ||"
+  end
 end

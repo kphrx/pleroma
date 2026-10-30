@@ -90,6 +90,19 @@ defmodule Pleroma.Search.DatabaseSearch.IndexTest do
     assert %{form: :tokens} = Index.status()
   end
 
+  test "builds the token index when objects_fts is missing" do
+    Repo.query!("DROP INDEX objects_fts")
+    assert %{form: :missing, leftovers: []} = Index.status()
+
+    test_pid = self()
+    log = &send(test_pid, {:log, &1})
+
+    assert {:ok, :rebuilt} = Index.rebuild(:tokens, concurrently: false, log: log)
+    assert %{form: :tokens, leftovers: []} = Index.status()
+    assert_received {:log, "Building" <> _}
+    refute_received {:log, "Dropping objects_fts" <> _}
+  end
+
   test "reports a failed build and keeps the index" do
     %{definition: definition} = Index.status()
 
