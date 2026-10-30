@@ -239,13 +239,16 @@ defmodule Pleroma.Search.DatabaseSearch do
 
     from(o in Object,
       # Cheap pre-filter on the object's own addressing; the activity's is checked later.
+      # Objects without addressing pass, as their activity decides.
       where:
         fragment(
-          "(?->'to') \\?| ? OR (?->'cc') \\?| ?",
+          "(?->'to') \\?| ? OR (?->'cc') \\?| ? OR ((?->'to') IS NULL AND (?->'cc') IS NULL)",
           o.data,
           ^recipients,
           o.data,
-          ^recipients
+          ^recipients,
+          o.data,
+          o.data
         ),
       # `+ 0`: never walk objects_pkey backwards running to_tsvector on every row.
       order_by: [desc: fragment("? + 0", o.id)],
@@ -329,7 +332,9 @@ defmodule Pleroma.Search.DatabaseSearch do
   defp restrict_window(query, lower, upper, {:tokens, _}),
     do: where(query, [o], fragment("? + 0", o.id) > ^lower and fragment("? + 0", o.id) < ^upper)
 
-  # Pre-filters on the object's actor; the activity's actor is checked later.
+  # Pre-filters on the object's actor; the activity's actor is checked later. They
+  # rely on both being the same, which CreateGenericValidator.validate_actors_match
+  # enforces for every Create.
   defmacrop object_actor(data) do
     quote do
       fragment("coalesce(?->>'actor', ?->>'attributedTo', '')", unquote(data), unquote(data))

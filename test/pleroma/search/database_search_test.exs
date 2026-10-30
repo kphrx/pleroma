@@ -199,6 +199,18 @@ defmodule Pleroma.Search.DatabaseSearchTest do
       assert [] == Search.search(insert(:user), "wednesday")
     end
 
+    test "finds public posts whose object has no addressing" do
+      user = insert(:user)
+      {:ok, post} = CommonAPI.post(user, %{status: "wednesday bare"})
+      object = Pleroma.Object.normalize(post, fetch: false)
+
+      object
+      |> Pleroma.Object.change(%{data: Map.drop(object.data, ["to", "cc"])})
+      |> Repo.update!()
+
+      assert [post.id] == Search.search(nil, "wednesday") |> Enum.map(& &1.id)
+    end
+
     test "excludes posts of blocked and deactivated users" do
       reader = insert(:user)
       blocked = insert(:user)
