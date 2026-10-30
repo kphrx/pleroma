@@ -201,8 +201,11 @@ defmodule Pleroma.Search.DatabaseSearch.Index do
   defp building do
     %{rows: rows} =
       query(
+        # pg_locks covers every database; other databases can have the same oid.
         "SELECT DISTINCT l.pid FROM pg_locks l LEFT JOIN pg_stat_activity a ON a.pid = l.pid " <>
-          "WHERE l.relation = 'objects'::regclass AND l.mode = 'ShareUpdateExclusiveLock' " <>
+          "WHERE l.relation = 'objects'::regclass " <>
+          "AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database()) " <>
+          "AND l.mode = 'ShareUpdateExclusiveLock' " <>
           "AND l.granted AND l.pid <> pg_backend_pid() " <>
           "AND a.backend_type IS DISTINCT FROM 'autovacuum worker' " <>
           "AND a.backend_type IS DISTINCT FROM 'parallel worker'"
