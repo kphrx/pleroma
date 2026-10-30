@@ -60,14 +60,9 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
   end
 
   test "retries later, and does not fail, while another session builds" do
-    {:ok, other} = Postgrex.start_link(other_session_config())
-    Postgrex.query!(other, "SELECT pg_advisory_lock(7365000001)", [])
-
-    try do
+    with_lock_in_other_session(fn ->
       capture_log(fn -> assert :retry = Migrator.run(@opts) end)
-    after
-      GenServer.stop(other)
-    end
+    end)
 
     assert %{form: :missing} = Index.status()
     assert %DataMigration{state: :running} = DataMigration.search_window_tokens()
@@ -158,10 +153,7 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
   end
 
   test "the process stays and retries while another session builds" do
-    {:ok, other} = Postgrex.start_link(other_session_config())
-    Postgrex.query!(other, "SELECT pg_advisory_lock(7365000001)", [])
-
-    try do
+    with_lock_in_other_session(fn ->
       capture_log(fn ->
         pid = start_supervised!({Migrator, delay: 0, rebuild: @opts})
         # The first run is done when the state is :running and the process is idle.
@@ -169,9 +161,7 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
         :sys.get_state(pid)
         assert Process.alive?(pid)
       end)
-    after
-      GenServer.stop(other)
-    end
+    end)
   end
 
   defp assert_state(state, tries \\ 50) do
@@ -192,7 +182,20 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
     :ok = DataMigration.update_one_by_id(DataMigration.search_window_tokens().id, state: state)
   end
 
-  # A connection outside the test's sandbox, like another node's.
+  # Index.rebuild's lock, held by a connection outside the test's sandbox, like another node's.
+  defp with_lock_in_other_session(fun) do
+    {:ok, other} = Postgrex.start_link(other_session_config())
+    Postgrex.query!(other, "SELECT pg_advisory_lock(7365000001)", [])
+
+    try do
+      fun.()
+    after
+      # Unlock first: the server can release it later than the connection closes.
+      Postgrex.query!(other, "SELECT pg_advisory_unlock(7365000001)", [])
+      GenServer.stop(other)
+    end
+  end
+
   defp other_session_config do
     Repo.config()
     |> Keyword.take([:hostname, :port, :username, :password, :database])
