@@ -8,8 +8,11 @@ defmodule Pleroma.Search.DatabaseSearch.IndexTest do
 
   alias Pleroma.Search.DatabaseSearch.Index
 
-  test "the test database starts with the plain index" do
+  # The upgrade migration drops the plain index; most tests start from it.
+  setup do
+    {:ok, _} = Index.rebuild(:plain, concurrently: false)
     assert %{form: :plain, leftovers: []} = Index.status()
+    :ok
   end
 
   test "switches to window tokens and back" do

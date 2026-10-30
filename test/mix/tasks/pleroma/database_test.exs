@@ -696,6 +696,12 @@ defmodule Mix.Tasks.Pleroma.DatabaseTest do
   describe "search_window_tokens" do
     alias Pleroma.Search.DatabaseSearch.Index
 
+    # The upgrade migration drops the plain index; these tests start from it.
+    setup do
+      {:ok, _} = Pleroma.Search.DatabaseSearch.Index.rebuild(:plain, concurrently: false)
+      :ok
+    end
+
     test "enable, status and disable" do
       Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "status"])
       assert_receive {:mix_shell, :info, ["objects_fts: plain"]}
@@ -734,6 +740,12 @@ defmodule Mix.Tasks.Pleroma.DatabaseTest do
   end
 
   describe "search_window_tokens errors" do
+    # The upgrade migration drops the plain index; these tests start from it.
+    setup do
+      {:ok, _} = Pleroma.Search.DatabaseSearch.Index.rebuild(:plain, concurrently: false)
+      :ok
+    end
+
     test "prints the usage for unknown arguments" do
       Mix.Tasks.Pleroma.Database.run(["search_window_tokens", "enabel"])
 
