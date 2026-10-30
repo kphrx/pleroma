@@ -253,7 +253,8 @@ defmodule Pleroma.Application do
     if Application.get_env(:pleroma, __MODULE__)[:background_migrators] do
       [
         Pleroma.Migrators.HashtagsTableMigrator,
-        Pleroma.Migrators.ContextObjectsDeletionMigrator
+        Pleroma.Migrators.ContextObjectsDeletionMigrator,
+        Pleroma.Migrators.SearchWindowTokensMigrator
       ]
     else
       []
