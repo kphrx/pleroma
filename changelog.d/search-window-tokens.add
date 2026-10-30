@@ -1,1 +1,1 @@
-Optional window tokens for the full-text index (`mix pleroma.database search_window_tokens enable`) make built-in search fast for searches with several words on large databases
+Window tokens for the full-text index make built-in search fast for searches with several words on large databases. The upgrade drops the plain `objects_fts` index and builds the new one in the background after startup; search is slow until it is done. Large instances can build it before the upgrade with `mix pleroma.database search_window_tokens enable`
