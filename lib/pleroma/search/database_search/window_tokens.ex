@@ -9,7 +9,7 @@ defmodule Pleroma.Search.DatabaseSearch.WindowTokens do
   @max_tokens 200
 
   @moduledoc """
-  Optional window tokens in the `objects_fts` full-text index.
+  Window tokens in the `objects_fts` full-text index.
 
   With tokens, the index expression adds three lexemes to the content's
   tsvector: the object's bucket of 10_000 ids (`W0`, `W1`, ...), of 100_000

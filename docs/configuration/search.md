@@ -18,13 +18,13 @@ With a GIN index (the default), search looks at the newest posts first and stops
 
 PostgreSQL's planner often expects only a few matches for searches with several words. Then each window reads every matching post in the whole database instead of only the window's, which can take seconds when the posts are not cached. Window tokens fix this: the full-text index gets three extra entries per post, for its blocks of 10,000, 100,000 and 1,000,000 object ids. A window uses the blocks of its own size, so the index itself returns only the matches in the window, and it starts from a rare word when the word has fewer posts than the window.
 
-The upgrade to this version drops the plain `objects_fts` index to free its disk space. After startup, Pleroma builds the new index with window tokens in the background (`CREATE INDEX CONCURRENTLY`, so the instance keeps running), once. Until it is done, search works without a full-text index and is slow. Search uses the new index as soon as it is in place; no restart is needed. As a guide, with a parallel build: about 2 minutes for 1.7 million objects, and about 50 minutes for 75 million objects, which also used up to 9 GB of temporary files on top of the new index of about 7.6 GB (about as large as the plain one). The build uses one database connection until it is done. Instances with RUM indexes are not changed.
+The upgrade to this version drops the plain `objects_fts` index to free its disk space. After startup, Pleroma builds the new index with window tokens in the background (`CREATE INDEX CONCURRENTLY`, so the instance keeps running). If Pleroma is restarted during the build, it continues after the restart. Until it is done, search works without a full-text index and is slow. Search uses the new index as soon as it is in place; no restart is needed. As a guide, with a parallel build: about 2 minutes for 1.7 million objects, and about 50 minutes for 75 million objects, which also used up to 9 GB of temporary files on top of the new index of about 7.6 GB (about as large as the plain one). The build uses one database connection until it is done. Instances with RUM indexes are not changed, and an `objects_fts` that Pleroma does not know (for example a partial index made by hand) is kept.
 
 On a large instance, you can build the index before you upgrade, while the plain index still works:
 
 > mix pleroma.database search_window_tokens enable
 
-Then the upgrade finds the index with window tokens and keeps it, and search is never slow. This needs disk space for a second index until it is done.
+If this is done before the upgrade, the upgrade finds the index with window tokens and keeps it, and search is never slow. This needs disk space for a second index until it is done.
 
 If the background build fails, the log tells you, and it is not tried again automatically: run the same task to build the index. You can run the task at any time; it refuses while the background build runs. `status` shows which index is active, `disable` goes back to the plain index the same way. See [the database tasks](../administration/CLI_tasks/database.md#search-window-tokens).
 
