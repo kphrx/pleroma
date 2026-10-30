@@ -156,20 +156,23 @@ defmodule Pleroma.User.Search do
     |> Enum.join(" & ")
   end
 
-  # A profile link searches for its handle: https://host/@name, https://host/users/name
-  # or https://host/@name@other.host.
+  # A profile or status link searches for its handle: https://host/@name,
+  # https://host/@name/123, https://host/users/name or https://host/@name@other.host.
+  # Other links stay as they are.
   defp handle_from_url(query_string) do
-    case URI.parse(query_string) do
-      %URI{scheme: scheme, host: host, path: path}
-      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
-        name = (path || "") |> String.split("/", trim: true) |> List.last("")
-        name = String.trim_leading(name, "@")
-        format_handle(if String.contains?(name, "@"), do: name, else: name <> "@" <> host)
-
-      _ ->
-        query_string
+    with %URI{scheme: scheme, host: host, path: path}
+         when scheme in ["http", "https"] and is_binary(host) and host != "" <-
+           URI.parse(query_string),
+         name when is_binary(name) <- name_from_path(String.split(path || "", "/", trim: true)) do
+      format_handle(if String.contains?(name, "@"), do: name, else: name <> "@" <> host)
+    else
+      _ -> query_string
     end
   end
+
+  defp name_from_path(["@" <> name | _]) when name != "", do: name
+  defp name_from_path(["users", name | _]), do: name
+  defp name_from_path(_segments), do: nil
 
   # Considers nickname match, localized nickname match, name match; preferences nickname match
   defp trigram_rank(query, query_string) do

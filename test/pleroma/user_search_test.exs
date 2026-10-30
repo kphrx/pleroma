@@ -148,6 +148,23 @@ defmodule Pleroma.UserSearchTest do
       end
     end
 
+    test "finds the author of a status link, and ignores other links" do
+      user = insert(:user, %{nickname: "foo@mastodon.example", local: false})
+      insert(:user, %{nickname: "123456@mastodon.example", local: false})
+      notice = insert(:user, %{nickname: "notice@mastodon.example", local: false})
+      for_user = insert(:user)
+
+      for query <- [
+            "https://mastodon.example/@foo/123456",
+            "https://mastodon.example/users/foo/statuses/123456"
+          ] do
+        assert [user.id] == User.search(query, for_user: for_user) |> Enum.map(& &1.id)
+      end
+
+      refute notice.id in (User.search("https://mastodon.example/notice/123", for_user: for_user)
+                           |> Enum.map(& &1.id))
+    end
+
     test "finds a user by a profile link with an underscore or a remote handle" do
       user = insert(:user, %{nickname: "foo_bar@remote.example", local: false})
       for_user = insert(:user)
