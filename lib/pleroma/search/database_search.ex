@@ -265,12 +265,14 @@ defmodule Pleroma.Search.DatabaseSearch do
       WindowTokens.vector_sql() <>
         " @@ (websearch_to_tsquery(?::oid::regconfig, ?) && ?::text::tsquery)"
 
+    ids = List.duplicate(id, WindowTokens.level_count())
+
     quote do
       fragment(
         unquote(sql),
         unquote(tsc),
         unquote(data),
-        unquote(id),
+        unquote_splicing(ids),
         unquote(tsc),
         unquote(query),
         unquote(tokens)
@@ -280,13 +282,14 @@ defmodule Pleroma.Search.DatabaseSearch do
 
   defmacrop token_match(tsc, data, id, query) do
     sql = WindowTokens.vector_sql() <> " @@ websearch_to_tsquery(?::oid::regconfig, ?)"
+    ids = List.duplicate(id, WindowTokens.level_count())
 
     quote do
       fragment(
         unquote(sql),
         unquote(tsc),
         unquote(data),
-        unquote(id),
+        unquote_splicing(ids),
         unquote(tsc),
         unquote(query)
       )

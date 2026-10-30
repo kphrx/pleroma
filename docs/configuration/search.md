@@ -16,11 +16,11 @@ With a GIN index (the default), search looks at the newest posts first and stops
 
 ### Window tokens (optional, for large databases)
 
-PostgreSQL's planner often expects only a few matches for searches with several words. Then each window reads every matching post in the whole database instead of only the window's, which can take seconds when the posts are not cached. Window tokens fix this: the full-text index gets one extra entry per post for its block of 10,000 object ids, so the index itself returns only the matches in a window.
+PostgreSQL's planner often expects only a few matches for searches with several words. Then each window reads every matching post in the whole database instead of only the window's, which can take seconds when the posts are not cached. Window tokens fix this: the full-text index gets three extra entries per post, for its blocks of 10,000, 100,000 and 1,000,000 object ids. A window uses the blocks of its own size, so the index itself returns only the matches in the window, and it starts from a rare word when the word has fewer posts than the window.
 
 > mix pleroma.database search_window_tokens enable
 
-This rebuilds the `objects_fts` index once (`CREATE INDEX CONCURRENTLY`, so the instance keeps running). On a large instance it can take hours, and it needs disk space for a second copy of the index until it is done. The new index is about 3% larger than the old one. Search uses the new index as soon as it is in place; no restart is needed. If the build is interrupted, run the task again. `status` shows which index is active, `disable` goes back to the plain index the same way. See [the database tasks](../administration/CLI_tasks/database.md#search-window-tokens).
+This rebuilds the `objects_fts` index once (`CREATE INDEX CONCURRENTLY`, so the instance keeps running). On a large instance it can take hours, and it needs disk space for a second copy of the index until it is done. The index is about as large as the plain one. Search uses the new index as soon as it is in place; no restart is needed. If the build is interrupted, run the task again. `status` shows which index is active, `disable` goes back to the plain index the same way. See [the database tasks](../administration/CLI_tasks/database.md#search-window-tokens).
 
 Search queries set `gin_fuzzy_search_limit` (see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)) to 0 by default, which gives exact results even if your PostgreSQL server sets a limit. A limit, such as the earlier default of 500, makes results incomplete and random, especially for searches with several words. `nil` keeps the server's setting.
 

@@ -48,13 +48,11 @@ defmodule Pleroma.Search.DatabaseSearchWindowTokensTest do
     end
   end
 
-  # Makes the next object id the first of a bucket, minus `before`.
-  defp start_bucket_in(before) do
-    bucket = Pleroma.Search.DatabaseSearch.WindowTokens.bucket_size()
-
+  # Makes the next object id the first of a bucket of `size` ids, minus `before`.
+  defp start_bucket_in(before, size \\ Pleroma.Search.DatabaseSearch.WindowTokens.bucket_size()) do
     Repo.query!(
       "SELECT setval('objects_id_seq', (nextval('objects_id_seq') / $1 + 2) * $1 - $2 - 1)",
-      [bucket, before]
+      [size, before]
     )
   end
 
@@ -81,8 +79,8 @@ defmodule Pleroma.Search.DatabaseSearchWindowTokensTest do
   test "searches a token window and the rest below it" do
     clear_config([Search, :windows], [1])
     user = insert(:user)
-    # The oldest two posts end up in the bucket below the newest one.
-    start_bucket_in(2)
+    # The newest post starts a 1M bucket; the rest below it excludes that bucket.
+    start_bucket_in(2, 1_000_000)
 
     ids =
       for n <- 1..3 do
@@ -95,7 +93,7 @@ defmodule Pleroma.Search.DatabaseSearchWindowTokensTest do
     assert Enum.reverse(ids) == Enum.map(result, & &1.id)
     assert [{_, newest}, {_, rest}] = queries
     assert Enum.any?(newest, &(is_binary(&1) and &1 =~ ~r/^W\d+$/))
-    assert Enum.any?(rest, &(is_binary(&1) and &1 =~ ~r/^!\(W\d+\)$/))
+    assert Enum.any?(rest, &(is_binary(&1) and &1 =~ ~r/^!\(Y\d+\)$/))
   end
 
   test "pages and stops like the plain index" do
@@ -146,17 +144,18 @@ defmodule Pleroma.Search.DatabaseSearchWindowTokensTest do
   end
 
   test "finds posts in a window over several buckets" do
+    # 20_000 ids use the 100k buckets.
     clear_config([Search, :windows], [20_000])
     user = insert(:user)
     {:ok, older} = CommonAPI.post(user, %{status: "wednesday older"})
-    start_bucket_in(0)
+    start_bucket_in(0, 100_000)
     {:ok, newer} = CommonAPI.post(user, %{status: "wednesday newer"})
 
     {result, [{sql, params} | _]} =
       capture_candidate_queries(fn -> Search.search(nil, "wednesday") end)
 
     assert [newer.id, older.id] == Enum.map(result, & &1.id)
-    assert Enum.any?(params, &(is_binary(&1) and &1 =~ ~r/^W\d+( \| W\d+)+$/))
+    assert Enum.any?(params, &(is_binary(&1) and &1 =~ ~r/^X\d+( \| X\d+)+$/))
 
     Repo.query!("SET LOCAL enable_seqscan = off")
     %{rows: plan} = Repo.query!("EXPLAIN " <> sql, params)
@@ -164,9 +163,10 @@ defmodule Pleroma.Search.DatabaseSearchWindowTokensTest do
   end
 
   test "keeps the id range for windows too wide for tokens" do
-    clear_config([Search, :windows], [10_000_000])
+    # More than 200 buckets of the widest level.
+    clear_config([Search, :windows], [300_000_000])
     # The window needs ids above its size.
-    Repo.query!("SELECT setval('objects_id_seq', greatest(nextval('objects_id_seq'), 20000000))")
+    Repo.query!("SELECT setval('objects_id_seq', greatest(nextval('objects_id_seq'), 400000000))")
     {:ok, post} = CommonAPI.post(insert(:user), %{status: "wednesday"})
 
     {result, [{sql, _} | _]} =

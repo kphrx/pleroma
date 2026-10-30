@@ -27,33 +27,54 @@ defmodule Pleroma.Search.DatabaseSearch.WindowTokensTest do
       assert WindowTokens.window(9_999, 10_000) == :empty
     end
 
+    test "uses the level whose buckets are as wide as the window" do
+      # 10_001 ids: one more than the narrowest buckets hold
+      assert WindowTokens.window(10_000, 20_002) == {:tokens, "X0"}
+      # 90_000 ids: 100k buckets
+      assert WindowTokens.window(100_000, 190_001) == {:tokens, "X1"}
+      assert WindowTokens.window(150_000, 240_001) == {:tokens, "X2 | X1"}
+      # 900_000 ids: 1M buckets
+      assert WindowTokens.window(1_000_000, 1_900_001) == {:tokens, "Y1"}
+      assert WindowTokens.window(1_500_000, 2_400_001) == {:tokens, "Y2 | Y1"}
+      # Wider than the widest level: several of its buckets
+      assert WindowTokens.window(0, 3_000_000) == {:tokens, "Y2 | Y1 | Y0"}
+    end
+
     test "does not use tokens for very wide windows" do
-      assert WindowTokens.window(0, 10_000 * 500) == :none
+      assert WindowTokens.window(0, 1_000_000 * 500) == :none
     end
   end
 
   describe "rest/2" do
-    test "excludes the buckets that only hold newer ids" do
-      # ids below 25_001; buckets 3 and 4 only hold ids from 30_000
-      assert WindowTokens.rest(25_001, 40_000) == {:tokens, "!(W4 | W3)"}
+    test "excludes the 1M buckets that only hold newer ids" do
+      # ids below 2_500_001; buckets 3 and 4 only hold ids from 3_000_000
+      assert WindowTokens.rest(2_500_001, 4_000_000) == {:tokens, "!(Y4 | Y3)"}
     end
 
     test "keeps a bucket that also holds older ids" do
-      assert WindowTokens.rest(30_001, 39_999) == :none
-      assert WindowTokens.rest(30_000, 39_999) == {:tokens, "!(W3)"}
+      assert WindowTokens.rest(3_000_001, 3_999_999) == :none
+      assert WindowTokens.rest(3_000_000, 3_999_999) == {:tokens, "!(Y3)"}
     end
 
     test "does not use tokens when too many buckets would be excluded" do
-      assert WindowTokens.rest(1, 10_000 * 500) == :none
+      assert WindowTokens.rest(1, 1_000_000 * 500) == :none
     end
   end
 
   describe "form/1" do
     test "detects the token index" do
+      # As PostgreSQL 18 shows it
+      definition =
+        "CREATE INDEX objects_fts ON public.objects USING gin (((to_tsvector('english'::regconfig, (data ->> 'content'::text)) || (((((('W'::text || ((id / 10000))::text) || ' X'::text) || ((id / 100000))::text) || ' Y'::text) || ((id / 1000000))::text))::tsvector)))"
+
+      assert WindowTokens.form(definition) == :tokens
+    end
+
+    test "detects the earlier single-level token index as unknown" do
       definition =
         "CREATE INDEX objects_fts ON public.objects USING gin (((to_tsvector('english'::regconfig, (data ->> 'content'::text)) || (('W'::text || ((id / 10000))::text))::tsvector)))"
 
-      assert WindowTokens.form(definition) == :tokens
+      assert WindowTokens.form(definition) == :unknown
     end
 
     test "detects the plain index" do
@@ -88,6 +109,7 @@ defmodule Pleroma.Search.DatabaseSearch.WindowTokensTest do
              "to_tsvector('english'::regconfig, data->>'content')"
 
     assert WindowTokens.index_expression(:tokens, "pg_catalog.english") ==
-             "(to_tsvector('pg_catalog.english'::regconfig, data->>'content') || ('W' || (id / 10000)::text)::tsvector)"
+             "(to_tsvector('pg_catalog.english'::regconfig, data->>'content') || " <>
+               "('W' || (id / 10000)::text || ' X' || (id / 100000)::text || ' Y' || (id / 1000000)::text)::tsvector)"
   end
 end

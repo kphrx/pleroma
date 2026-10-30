@@ -101,7 +101,8 @@ defmodule Pleroma.Search.DatabaseSearch.IndexTest do
   end
 
   describe "an objects_fts_windowed built by hand" do
-    @expression "(to_tsvector('english'::regconfig, data->>'content') || ('W' || (id / 10000)::text)::tsvector)"
+    @expression "(to_tsvector('english'::regconfig, data->>'content') || " <>
+                  "('W' || (id / 10000)::text || ' X' || (id / 100000)::text || ' Y' || (id / 1000000)::text)::tsvector)"
 
     test "is reused when it is valid" do
       Repo.query!("CREATE INDEX objects_fts_windowed ON objects USING gin ((#{@expression}))")
