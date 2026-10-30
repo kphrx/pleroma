@@ -99,18 +99,25 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
     assert %DataMigration{state: :failed} = DataMigration.search_window_tokens()
   end
 
-  test "completes with a warning if only the cleanup after the switch failed" do
+  test "retries the cleanup if only the cleanup after the switch failed" do
+    # A plain index that the switch replaces and the cleanup has to drop.
+    {:ok, :rebuilt} = Index.rebuild(:plain, concurrently: false)
+
     log = fn
       "Dropping the old index" <> _ -> raise %Postgrex.Error{message: "cleanup failed"}
       _ -> :ok
     end
 
-    output = capture_log(fn -> assert :complete = Migrator.run(@opts ++ [log: log]) end)
+    output = capture_log(fn -> assert :retry = Migrator.run(@opts ++ [log: log]) end)
 
-    assert %{form: :tokens} = Index.status()
-    assert %DataMigration{state: :complete} = DataMigration.search_window_tokens()
+    assert %{form: :tokens, leftovers: [%{name: "objects_fts_old"}]} = Index.status()
+    assert %DataMigration{state: :running} = DataMigration.search_window_tokens()
     assert output =~ "cleanup failed"
-    assert output =~ "search_window_tokens enable"
+
+    # The next run only removes the old index.
+    assert :complete = Migrator.run(@opts)
+    assert %{form: :tokens, leftovers: []} = Index.status()
+    assert %DataMigration{state: :complete} = DataMigration.search_window_tokens()
   end
 
   test "marks a failed build as failed, says how to retry, and does not run again" do

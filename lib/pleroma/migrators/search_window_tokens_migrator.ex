@@ -11,7 +11,8 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigrator do
   The state is the `search_window_tokens` row in `data_migrations`:
 
   - `:pending` or `:running`: build after startup. `:running` at startup means
-    that a build was interrupted or runs on another node.
+    that a build was interrupted, runs on another node, or that only the cleanup
+    after the switch is left.
   - `:complete`: built, already had tokens, or RUM is used.
   - `:failed`: the build failed. It is not retried automatically; run
     `mix pleroma.database search_window_tokens enable`.
@@ -134,16 +135,10 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigrator do
   defp finish({:error, :running}, _data_migration),
     do: retry("another session is building an index or running maintenance on objects")
 
-  # objects_fts has tokens; only dropping the old index or ANALYZE failed.
-  defp finish({:error, {:after_switch, reason}}, data_migration) do
-    message =
-      "objects_fts now has window tokens, but removing the old index or analyzing " <>
-        "failed: #{reason}. Run " <> @enable_command <> " to finish."
-
-    Logger.warning("#{inspect(__MODULE__)}: " <> message)
-    update(data_migration, :complete, message)
-    :complete
-  end
+  # objects_fts has tokens; only dropping the old index or ANALYZE failed. The next
+  # run only does that cleanup, so the old index does not stay behind.
+  defp finish({:error, {:after_switch, reason}}, _data_migration),
+    do: retry("objects_fts has window tokens, but the cleanup after the switch failed: #{reason}")
 
   defp finish({:error, reason}, data_migration), do: fail(data_migration, inspect(reason))
 
