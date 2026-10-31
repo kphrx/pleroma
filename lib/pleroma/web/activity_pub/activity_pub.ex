@@ -466,21 +466,28 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   def fetch_activities_for_context_query(context, opts) do
-    public = [Constants.as_public()]
+    user = opts[:user]
 
     recipients =
-      if opts[:user],
-        do: [opts[:user].ap_id | User.following(opts[:user])] ++ public,
-        else: public
+      cond do
+        user && user.local ->
+          [Constants.as_public(), as_local_public(), user.ap_id | User.following(user)]
+
+        user ->
+          [Constants.as_public(), user.ap_id | User.following(user)]
+
+        true ->
+          [Constants.as_public()]
+      end
 
     from(activity in Activity)
     |> maybe_preload_objects(opts)
     |> maybe_preload_bookmarks(opts)
     |> maybe_set_thread_muted_field(opts)
-    |> restrict_unauthenticated(opts[:user])
+    |> restrict_unauthenticated(user)
     |> restrict_blocked(opts)
     |> restrict_blockers_visibility(opts)
-    |> restrict_recipients(recipients, opts[:user])
+    |> restrict_recipients(recipients, user)
     |> restrict_filtered(opts)
     |> where(
       [activity],
