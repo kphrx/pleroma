@@ -1,0 +1,1 @@
+Media proxy: serve a preview for static=true on non-GIF files instead of redirecting to the main endpoint host
