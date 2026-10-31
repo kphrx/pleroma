@@ -705,15 +705,19 @@ This filter replaces the filename (not the path) of an upload. For complete obfu
 
 No specific configuration.
 
-#### Pleroma.Upload.Filter.Exiftool.StripLocation
+#### Pleroma.Upload.Filter.Exif.StripLocation
 
-This filter only strips the GPS and location metadata with Exiftool leaving color profiles and attributes intact.
+This filter strips GPS and location metadata from JPEG, WebP, HEIC, AVIF and TIFF images, leaving color profiles and attributes intact. For PNG images it removes all text and EXIF metadata chunks. Images are not re-encoded, and other formats are left unchanged.
+
+It replaces the deprecated `Pleroma.Upload.Filter.Exiftool.StripLocation`, which no longer needs exiftool.
 
 No specific configuration.
 
-#### Pleroma.Upload.Filter.Exiftool.ReadDescription
+#### Pleroma.Upload.Filter.Exif.ReadDescription
 
-This filter reads the ImageDescription and iptc:Caption-Abstract fields with Exiftool so clients can prefill the media description field.
+This filter reads the ImageDescription and iptc:Caption-Abstract fields so clients can prefill the media description field.
+
+It replaces the deprecated `Pleroma.Upload.Filter.Exiftool.ReadDescription`, which no longer needs exiftool.
 
 No specific configuration.
 

@@ -4,30 +4,11 @@
 
 defmodule Pleroma.Upload.Filter.Exiftool.StripLocation do
   @moduledoc """
-  Strips GPS related EXIF tags and overwrites the file in place.
-  Also strips or replaces filesystem metadata e.g., timestamps.
+  Deprecated: use `Pleroma.Upload.Filter.Exif.StripLocation`. This module delegates to it.
   """
+
   @behaviour Pleroma.Upload.Filter
 
-  # Formats not compatible with exiftool at this time
-  def filter(%Pleroma.Upload{content_type: "image/heic"}), do: {:ok, :noop}
-  def filter(%Pleroma.Upload{content_type: "image/webp"}), do: {:ok, :noop}
-  def filter(%Pleroma.Upload{content_type: "image/svg" <> _}), do: {:ok, :noop}
-
-  def filter(%Pleroma.Upload{tempfile: file, content_type: "image" <> _}) do
-    try do
-      case System.cmd("exiftool", ["-m", "-overwrite_original", "-gps:all=", "-png:all=", file],
-             stderr_to_stdout: true,
-             parallelism: true
-           ) do
-        {_response, 0} -> {:ok, :filtered}
-        {error, _} -> {:error, error}
-      end
-    rescue
-      e in ErlangError ->
-        {:error, "#{__MODULE__}: #{inspect(e)}"}
-    end
-  end
-
-  def filter(_), do: {:ok, :noop}
+  @impl true
+  defdelegate filter(upload), to: Pleroma.Upload.Filter.Exif.StripLocation
 end

@@ -26,12 +26,11 @@ Independently of the reverse proxy, [acme-client(1)](https://man.openbsd.org/acm
 
   * ImageMagick
   * ffmpeg
-  * exiftool
 
 To install the above:
 
 ```
-# pkg_add ImageMagick ffmpeg p5-Image-ExifTool
+# pkg_add ImageMagick ffmpeg
 ```
 
 For more information read [`docs/installation/optional/media_graphics_packages.md`](../installation/optional/media_graphics_packages.md):
