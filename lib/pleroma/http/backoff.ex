@@ -19,10 +19,11 @@ defmodule Pleroma.HTTP.Backoff do
 
   @default_seconds 5 * 60
   @max_seconds 60 * 60
+  @max_job_age 2 * 60 * 60
 
   @spec get(String.t(), list(), keyword()) :: {:ok, Tesla.Env.t()} | {:error, any()}
   def get(url, headers \\ [], options \\ []) when is_binary(url) do
-    host = URI.parse(url).host
+    host = url |> URI.parse() |> Map.get(:host) |> downcase()
 
     case @cachex.get(@cache, host) do
       {:ok, true} ->
@@ -35,6 +36,9 @@ defmodule Pleroma.HTTP.Backoff do
     end
   end
 
+  defp downcase(nil), do: nil
+  defp downcase(host), do: String.downcase(host)
+
   defp check_backoff({:ok, %{status: status, headers: headers}}, host)
        when status in [429, 503] do
     seconds = backoff_seconds(headers, DateTime.utc_now())
@@ -44,6 +48,23 @@ defmodule Pleroma.HTTP.Backoff do
   end
 
   defp check_backoff(response, _host), do: response
+
+  @doc """
+  Turns an Oban job's `{:error, :ratelimit}` result into a snooze for the
+  default backoff, so the job's attempts aren't all spent while the host is
+  backed off. Jobs inserted more than #{@max_job_age} seconds ago get the
+  error back and fail as usual.
+  """
+  @spec snooze_ratelimited(any(), Oban.Job.t()) :: any()
+  def snooze_ratelimited({:error, :ratelimit} = error, %Oban.Job{inserted_at: inserted_at}) do
+    if is_nil(inserted_at) or DateTime.diff(DateTime.utc_now(), inserted_at) < @max_job_age do
+      {:snooze, @default_seconds}
+    else
+      error
+    end
+  end
+
+  def snooze_ratelimited(result, _job), do: result
 
   @doc """
   Seconds to back off for, from the first valid `Retry-After` or

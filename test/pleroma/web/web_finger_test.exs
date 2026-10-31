@@ -308,6 +308,7 @@ defmodule Pleroma.Web.WebFingerTest do
 
   describe "rate limiting" do
     setup do
+      # the module setup stubs NullCache, the backoff needs a real cache
       Mox.stub_with(Pleroma.CachexMock, Pleroma.CachexProxy)
       test_pid = self()
 

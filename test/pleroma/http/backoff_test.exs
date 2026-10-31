@@ -67,6 +67,15 @@ defmodule Pleroma.HTTP.BackoffTest do
       assert_ttl_about(300)
     end
 
+    test "treats host names case-insensitively" do
+      mock_response(429)
+      assert {:error, :ratelimit} = Backoff.get("https://RateLimited.Example.com/users/alice")
+      assert_received :request
+
+      assert {:error, :ratelimit} = Backoff.get(@url)
+      refute_received :request
+    end
+
     test "only backs off from the host that answered" do
       mock_response(429)
       assert {:error, :ratelimit} = Backoff.get(@url)

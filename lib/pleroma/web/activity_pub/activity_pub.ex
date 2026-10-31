@@ -1949,6 +1949,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
         Logger.info("Rejected user #{ap_id}: #{inspect(reason)}")
         {:error, e}
 
+      {:error, :ratelimit = e} ->
+        Logger.debug("Backing off from fetching user #{ap_id}")
+        {:error, e}
+
       {:error, e} ->
         Logger.error("Could not decode user at fetch #{ap_id}, #{inspect(e)}")
         {:error, e}
