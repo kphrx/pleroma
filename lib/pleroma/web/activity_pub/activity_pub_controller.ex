@@ -386,18 +386,25 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   end
 
   def inbox(%{assigns: %{valid_signature: false}} = conn, params) do
-    if unsupported_http_message_signature?(conn) do
-      reject_unsupported_http_message_signature(conn)
-    else
-      Federator.incoming_failed_signature_ap_doc(%{
-        method: conn.method,
-        req_headers: conn.req_headers,
-        request_path: conn.request_path,
-        params: params,
-        query_string: conn.query_string
-      })
+    cond do
+      unsupported_http_message_signature?(conn) ->
+        reject_unsupported_http_message_signature(conn)
 
-      json(conn, "ok")
+      reason = conn.assigns[:signature_error] ->
+        conn
+        |> put_status(:unauthorized)
+        |> json("error, invalid HTTP signature (#{reason})")
+
+      true ->
+        Federator.incoming_failed_signature_ap_doc(%{
+          method: conn.method,
+          req_headers: conn.req_headers,
+          request_path: conn.request_path,
+          params: params,
+          query_string: conn.query_string
+        })
+
+        json(conn, "ok")
     end
   end
 

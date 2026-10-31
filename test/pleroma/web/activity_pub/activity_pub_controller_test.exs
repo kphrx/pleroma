@@ -9,6 +9,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   alias Pleroma.Activity
   alias Pleroma.Delivery
   alias Pleroma.Object
+  alias Pleroma.Signature
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.ActivityPub
@@ -47,6 +48,16 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     conn
     |> assign(:valid_signature, true)
     |> put_req_header("signature", "keyId=\"#{actor_id}#main-key\"")
+  end
+
+  defp put_fake_signature(conn, actor_id, date \\ Signature.signed_date()) do
+    conn
+    |> put_req_header("date", date)
+    |> put_req_header("digest", "SHA-256=fake-digest")
+    |> put_req_header(
+      "signature",
+      "keyId=\"#{actor_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+    )
   end
 
   defp expect_signature_retry_from(%User{} = signer) do
@@ -792,12 +803,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         }
       }
 
-      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
+      Mox.stub(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
 
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Fri, 29 May 2026 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("content-digest", "sha-256=:fake-digest:")
         |> put_req_header(
           "signature-input",
@@ -832,12 +843,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       legacy_signature =
         "keyId=\"https://activitypubbot.example/user/ok#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
 
-      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
+      Mox.stub(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
 
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Fri, 29 May 2026 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("digest", "SHA-256=fake-digest")
         |> put_req_header("signature", "sig1=:fake-signature:")
         |> Map.update!(:req_headers, &[{"signature", legacy_signature} | &1])
@@ -871,7 +882,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Fri, 29 May 2026 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("digest", "SHA-256=fake-digest")
         |> put_req_header(
           "signature-input",
@@ -881,10 +892,42 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
           "signature",
           "keyId=\"https://activitypubbot.example/user/ok#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
         )
-        |> post("/inbox", data)
+        |> post("/inbox", Jason.encode!(data))
 
       assert "ok" == json_response(conn, 200)
       assert [_] = all_enqueued(worker: SignatureRetryWorker)
+    end
+
+    test "refuses a replayed signed POST instead of queueing a retry", %{conn: conn} do
+      data = File.read!("test/fixtures/mastodon-post-activity.json") |> Jason.decode!()
+      stale = NaiveDateTime.add(NaiveDateTime.utc_now(), -3 * 3600)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_fake_signature(data["actor"], Signature.signed_date(stale))
+        |> post("/inbox", Jason.encode!(data))
+
+      assert "error, invalid HTTP signature (date_too_old)" == json_response(conn, 401)
+      assert [] == all_enqueued(worker: SignatureRetryWorker)
+      assert [] == all_enqueued(worker: ReceiverWorker)
+    end
+
+    test "refuses a signed POST that does not cover the digest", %{conn: conn} do
+      data = File.read!("test/fixtures/mastodon-post-activity.json") |> Jason.decode!()
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", Signature.signed_date())
+        |> put_req_header(
+          "signature",
+          "keyId=\"#{data["actor"]}#main-key\",headers=\"(request-target) host date\",signature=\"fake\""
+        )
+        |> post("/inbox", Jason.encode!(data))
+
+      assert "error, invalid HTTP signature (digest_not_signed)" == json_response(conn, 401)
+      assert [] == all_enqueued(worker: SignatureRetryWorker)
     end
 
     test "does not create a forged post after failed signature retry", %{conn: conn} do
@@ -918,8 +961,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         conn
         |> assign(:valid_signature, false)
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
-        |> post("/inbox", data)
+        |> put_fake_signature(alice.ap_id)
+        |> post("/inbox", Jason.encode!(data))
 
       assert "ok" == json_response(conn, 200)
 
@@ -950,8 +993,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         conn
         |> assign(:valid_signature, false)
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
-        |> post("/inbox", data)
+        |> put_fake_signature(alice.ap_id)
+        |> post("/inbox", Jason.encode!(data))
 
       assert "ok" == json_response(conn, 200)
 
@@ -982,8 +1025,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         conn
         |> assign(:valid_signature, false)
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
-        |> post("/inbox", data)
+        |> put_fake_signature(alice.ap_id)
+        |> post("/inbox", Jason.encode!(data))
 
       assert "ok" == json_response(conn, 200)
 
@@ -1025,13 +1068,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("digest", "SHA-256=fake-digest")
         |> put_req_header(
           "signature",
           "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
         )
-        |> post("/inbox", data)
+        |> post("/inbox", Jason.encode!(data))
 
       assert conn.assigns.valid_signature == false
       assert "ok" == json_response(conn, 200)
@@ -1063,13 +1106,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("digest", "SHA-256=fake-digest")
         |> put_req_header(
           "signature",
           "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
         )
-        |> post("/inbox", data)
+        |> post("/inbox", Jason.encode!(data))
 
       assert conn.assigns.valid_signature == false
       assert "ok" == json_response(conn, 200)

@@ -2243,6 +2243,29 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
            |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
   end
 
+  describe "status_id_action rate limit" do
+    setup do: clear_config([:rate_limit, :status_id_action], {60_000, 2})
+    setup do: clear_config([:rate_limit, :statuses_actions], {60_000, 100})
+    setup do: oauth_access(["write:statuses", "write:favourites"])
+
+    for {action, undo} <- [{"favourite", "unfavourite"}, {"reblog", "unreblog"}] do
+      test "#{action} is limited per status, not per user", %{conn: conn} do
+        conn = put_req_header(conn, "content-type", "application/json")
+        statuses = insert_list(3, :note_activity)
+
+        assert Enum.map(
+                 statuses,
+                 &post(conn, "/api/v1/statuses/#{&1.id}/#{unquote(action)}").status
+               ) ==
+                 [200, 200, 200]
+
+        status = hd(statuses)
+        assert post(conn, "/api/v1/statuses/#{status.id}/#{unquote(undo)}").status == 200
+        assert post(conn, "/api/v1/statuses/#{status.id}/#{unquote(action)}").status == 429
+      end
+    end
+  end
+
   describe "pinned statuses" do
     setup do: oauth_access(["write:accounts"])
 

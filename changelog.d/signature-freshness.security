@@ -1,0 +1,1 @@
+Reject incoming HTTP signatures that do not sign the date, are older than 2 hours (or more than 1 hour in the future), or do not sign the digest of a request body, so captured requests cannot be replayed. Set `config :pleroma, :activitypub, signature_policy: :log` to only log these

@@ -1,0 +1,1 @@
+Update jose to version 1.11.13, which fixes JWE, key parsing and signature validation vulnerabilities

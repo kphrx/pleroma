@@ -184,6 +184,34 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       assert user.follower_address == "http://mastodon.example.org/users/admin/followers"
     end
 
+    test "it records the user's instance" do
+      refute Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+
+      {:ok, _user} = ActivityPub.make_user_from_ap_id("http://mastodon.example.org/users/admin")
+
+      assert %{unreachable_since: nil} =
+               Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+    end
+
+    test "it records the instance of a known user when refreshing it" do
+      insert(:user, local: false, ap_id: "http://mastodon.example.org/users/admin")
+      refute Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+
+      {:ok, _user} = ActivityPub.make_user_from_ap_id("http://mastodon.example.org/users/admin")
+
+      assert Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+    end
+
+    test "it keeps an existing instance record" do
+      unreachable_since = ~N[2020-01-01 00:00:00.000000]
+      insert(:instance, host: "mastodon.example.org", unreachable_since: unreachable_since)
+
+      {:ok, _user} = ActivityPub.make_user_from_ap_id("http://mastodon.example.org/users/admin")
+
+      assert %{unreachable_since: ^unreachable_since} =
+               Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+    end
+
     test "it returns a user that is invisible" do
       user_id = "http://mastodon.example.org/users/relay"
       {:ok, user} = ActivityPub.make_user_from_ap_id(user_id)
