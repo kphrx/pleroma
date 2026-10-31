@@ -213,7 +213,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator do
 
   defp fix_misskey_content(object), do: object
 
-  defp fix(data) do
+  def fix(data) do
     data
     |> CommonFixes.fix_actor()
     |> CommonFixes.fix_object_defaults()
