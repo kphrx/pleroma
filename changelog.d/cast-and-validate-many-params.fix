@@ -1,0 +1,1 @@
+Drop all unexpected query params, not just the first one, when `Pleroma.Web.ApiSpec.CastAndValidate` `strict` is off
