@@ -39,8 +39,9 @@ defmodule Pleroma.HTTP.Backoff do
   defp downcase(nil), do: nil
   defp downcase(host), do: String.downcase(host)
 
-  defp check_backoff({:ok, %{status: status, headers: headers}}, host)
+  defp check_backoff({:ok, %{status: status, headers: headers} = env}, host)
        when status in [429, 503] do
+    host = response_host(env, host)
     seconds = backoff_seconds(headers, DateTime.utc_now())
     Logger.warning("#{host} answered #{status}, backing off for #{seconds} seconds")
     @cachex.put(@cache, host, true, ttl: :timer.seconds(seconds))
@@ -48,6 +49,13 @@ defmodule Pleroma.HTTP.Backoff do
   end
 
   defp check_backoff(response, _host), do: response
+
+  # After a redirect, the 429/503 came from the last host, not the requested one.
+  defp response_host(%{url: url}, host) when is_binary(url) do
+    URI.parse(url).host |> downcase() || host
+  end
+
+  defp response_host(_env, host), do: host
 
   @doc """
   Turns an Oban job's `{:error, :ratelimit}` result into a snooze for the
@@ -75,7 +83,7 @@ defmodule Pleroma.HTTP.Backoff do
   def backoff_seconds(headers, now) do
     [
       parse_retry_after(header(headers, "retry-after"), now),
-      parse_timestamp(header(headers, "x-ratelimit-reset"), now)
+      parse_ratelimit_reset(header(headers, "x-ratelimit-reset"), now)
     ]
     |> Enum.find(@default_seconds, &is_integer/1)
     |> min(@max_seconds)
@@ -101,6 +109,29 @@ defmodule Pleroma.HTTP.Backoff do
       _ -> parse_timestamp(value, now)
     end
   end
+
+  # Servers send X-RateLimit-Reset as a timestamp (ISO 8601 like Mastodon, or
+  # Unix seconds) or as seconds until the reset.
+  @unix_timestamp_min 1_000_000_000
+
+  defp parse_ratelimit_reset(nil, _now), do: nil
+
+  defp parse_ratelimit_reset(value, now) do
+    case Integer.parse(value) do
+      {timestamp, ""} when timestamp >= @unix_timestamp_min ->
+        timestamp - DateTime.to_unix(now)
+
+      {seconds, ""} ->
+        seconds
+
+      _ ->
+        parse_timestamp(value, now)
+    end
+    |> positive()
+  end
+
+  defp positive(seconds) when is_integer(seconds) and seconds > 0, do: seconds
+  defp positive(_), do: nil
 
   defp parse_timestamp(nil, _now), do: nil
 

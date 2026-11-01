@@ -83,6 +83,23 @@ defmodule Pleroma.HTTP.BackoffTest do
       mock_response(200)
       assert {:ok, _} = Backoff.get("https://other.example.com/users/bob")
     end
+
+    test "backs off from the host that answered after a redirect" do
+      test_pid = self()
+
+      Tesla.Mock.mock(fn
+        %{url: "https://redirector.example.com/users/alice"} = env ->
+          %{env | status: 302, headers: [{"location", @url}], body: ""}
+
+        %{url: @url} = env ->
+          send(test_pid, :request)
+          %{env | status: 429, headers: [], body: ""}
+      end)
+
+      assert {:error, :ratelimit} = Backoff.get("https://redirector.example.com/users/alice")
+      assert {:ok, true} = Cachex.get(@cache, @host)
+      assert {:ok, nil} = Cachex.get(@cache, "redirector.example.com")
+    end
   end
 
   describe "backoff headers" do
@@ -116,6 +133,21 @@ defmodule Pleroma.HTTP.BackoffTest do
     test "parses X-RateLimit-Reset as an ISO 8601 timestamp" do
       date = DateTime.utc_now() |> DateTime.add(600) |> DateTime.to_iso8601()
       mock_response(429, [{"x-ratelimit-reset", date}])
+
+      assert {:error, :ratelimit} = Backoff.get(@url)
+      assert_ttl_about(600)
+    end
+
+    test "parses X-RateLimit-Reset as a Unix timestamp" do
+      reset = DateTime.utc_now() |> DateTime.add(600) |> DateTime.to_unix() |> to_string()
+      mock_response(429, [{"x-ratelimit-reset", reset}])
+
+      assert {:error, :ratelimit} = Backoff.get(@url)
+      assert_ttl_about(600)
+    end
+
+    test "parses X-RateLimit-Reset in seconds" do
+      mock_response(429, [{"x-ratelimit-reset", "600"}])
 
       assert {:error, :ratelimit} = Backoff.get(@url)
       assert_ttl_about(600)
