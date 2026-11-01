@@ -752,12 +752,16 @@ An example for SMTP adapter:
 ```elixir
 config :pleroma, Pleroma.Emails.Mailer,
   enabled: true,
-  adapter: Swoosh.Adapters.Mua,
+  adapter: Swoosh.Adapters.SMTP,
   relay: "smtp.gmail.com",
-  auth: [username: "YOUR_USERNAME@gmail.com", password: "YOUR_SMTP_PASSWORD"],
+  username: "YOUR_USERNAME@gmail.com",
+  password: "YOUR_SMTP_PASSWORD",
+  auth: :always,
   port: 465,
-  protocol: :ssl
+  ssl: true
 ```
+
+The SMTP adapter checks the server certificate against the bundled CA store, with implicit TLS (`ssl: true`) and with STARTTLS. For a relay with a self-signed certificate, turn the check off with `sockopts: [verify: :verify_none]` (`ssl: true`) or `tls_options: [verify: :verify_none]` (STARTTLS).
 
 An example for Mua adapter:
 
