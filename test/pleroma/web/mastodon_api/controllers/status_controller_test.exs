@@ -3093,6 +3093,30 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
            } = response
   end
 
+  test "context shows local-only replies to local users only" do
+    poster = insert(:user)
+    replier = insert(:user)
+    %{conn: conn} = oauth_access(["read:statuses"])
+    %{conn: remote_conn} = oauth_access(["read:statuses"], user: insert(:user, local: false))
+
+    {:ok, %{id: id1}} = CommonAPI.post(poster, %{status: "1"})
+
+    {:ok, %{id: id2}} =
+      CommonAPI.post(replier, %{status: "2", visibility: "local", in_reply_to_status_id: id1})
+
+    assert %{"descendants" => [%{"id" => ^id2}]} =
+             conn
+             |> get("/api/v1/statuses/#{id1}/context")
+             |> json_response_and_validate_schema(:ok)
+
+    for conn <- [build_conn(), remote_conn] do
+      assert %{"descendants" => []} =
+               conn
+               |> get("/api/v1/statuses/#{id1}/context")
+               |> json_response_and_validate_schema(:ok)
+    end
+  end
+
   test "context doesn't leak priv posts" do
     %{user: user, conn: conn} = oauth_access(["read:statuses"])
     stranger = insert(:user)

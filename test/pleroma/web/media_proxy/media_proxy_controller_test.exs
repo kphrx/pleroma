@@ -252,22 +252,27 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyControllerTest do
       assert redirected_to(response, 301) == media_proxy_url
     end
 
-    test "with `static` param and non-GIF image preview requested, " <>
-           "redirects to media preview proxy URI without `static` param",
+    test "with `static` param and non-GIF image preview requested, responds with a preview",
          %{
            conn: conn,
            url: url,
            media_proxy_url: media_proxy_url
          } do
+      assert_dependencies_installed()
+
       Tesla.Mock.mock(fn
         %{method: :head, url: ^media_proxy_url} ->
           %Tesla.Env{status: 200, body: "", headers: [{"content-type", "image/jpeg"}]}
+
+        %{method: :get, url: ^media_proxy_url} ->
+          %Tesla.Env{status: 200, body: File.read!("test/fixtures/image.jpg")}
       end)
 
       response = get(conn, url <> "?static=true")
 
-      assert response.status == 302
-      assert redirected_to(response) == url
+      assert response.status == 200
+      assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
+      assert response.resp_body != ""
     end
 
     test "with :min_content_length setting not matched by Content-Length header, " <>
