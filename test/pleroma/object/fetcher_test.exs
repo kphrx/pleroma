@@ -94,6 +94,27 @@ defmodule Pleroma.Object.FetcherTest do
     end
   end
 
+  describe "rate limiting" do
+    test "a backed-off host gets no further requests" do
+      test_pid = self()
+
+      mock(fn %{method: :get, url: url} ->
+        send(test_pid, {:request, url})
+        %Tesla.Env{status: 429, headers: [{"retry-after", "600"}]}
+      end)
+
+      first = "https://ratelimited.example.com/objects/1"
+      second = "https://ratelimited.example.com/objects/2"
+
+      assert {:fetch, {:error, :ratelimit}} = Fetcher.fetch_object_from_id(first)
+      assert_received {:request, ^first}
+
+      assert {:error, :ratelimit} = Fetcher.fetch_and_contain_remote_object_from_id(second)
+      assert {:fetch, {:error, :ratelimit}} = Fetcher.fetch_object_from_id(second)
+      refute_received {:request, _}
+    end
+  end
+
   describe "max thread distance restriction" do
     @ap_id "http://mastodon.example.org/@admin/99541947525187367"
     setup do: clear_config([:instance, :federation_incoming_replies_max_depth])

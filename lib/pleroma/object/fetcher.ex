@@ -216,7 +216,7 @@ defmodule Pleroma.Object.Fetcher do
       |> maybe_date_fetch(date)
       |> sign_fetch(id, date)
 
-    case HTTP.get(id, headers) do
+    case HTTP.Backoff.get(id, headers) do
       {:ok, %{body: body, status: code, headers: headers, url: final_url}}
       when code in 200..299 ->
         remote_host = if final_url, do: URI.parse(final_url).host, else: nil
