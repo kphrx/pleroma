@@ -14,7 +14,9 @@ defmodule Pleroma.Gun.Conn do
       opts
       |> Enum.into(%{})
       |> Map.put_new(:connect_timeout, pool_opts[:connect_timeout] || 5_000)
-      |> Map.put_new(:supervise, false)
+      # Under gun's supervisor, a failed connect does not kill the caller
+      # through the link. Gun still stops when its owner goes down.
+      |> Map.put_new(:supervise, true)
       |> maybe_add_tls_opts(uri)
 
     do_open(uri, opts)
@@ -117,8 +119,7 @@ defmodule Pleroma.Gun.Conn do
     host = Pleroma.HTTP.AdapterHelper.parse_host(host)
     opts = Map.put(opts, :transport, transport(uri.scheme))
 
-    with {:ok, conn} <- Gun.open(host, port, opts),
-         {:ok, protocol} <- await_up(conn, opts[:connect_timeout]) do
+    with {:ok, conn, protocol} <- open_direct(host, port, opts) do
       {:ok, conn, protocol, nil}
     else
       error ->
@@ -129,6 +130,40 @@ defmodule Pleroma.Gun.Conn do
         error
     end
   end
+
+  defp open_direct(host, port, opts) do
+    result =
+      with {:ok, conn} <- Gun.open(host, port, opts),
+           {:ok, protocol} <- await_up(conn, opts[:connect_timeout]) do
+        {:ok, conn, protocol}
+      end
+
+    case inet6_fallback(result, host, opts) do
+      {:ok, inet6_opts} -> open_direct(host, port, inet6_opts)
+      :error -> result
+    end
+  end
+
+  # Gun's default when :tcp_opts is not set.
+  @default_tcp_opts [send_timeout: 15_000, send_timeout_close: true]
+
+  @doc """
+  Gun resolves hostnames with `inet_tcp` (A records only) unless `:inet6` is
+  in `:tcp_opts`, for both the :tcp and :tls transports. When the A lookup
+  finds nothing, returns the options for one more attempt over IPv6.
+  """
+  @spec inet6_fallback(term(), Pleroma.HTTP.AdapterHelper.host(), map()) :: {:ok, map()} | :error
+  def inet6_fallback({:error, {:down, {:shutdown, :nxdomain}}}, host, opts) when is_list(host) do
+    tcp_opts = Map.get(opts, :tcp_opts, @default_tcp_opts)
+
+    if :inet6 in tcp_opts do
+      :error
+    else
+      {:ok, Map.put(opts, :tcp_opts, [:inet6 | tcp_opts])}
+    end
+  end
+
+  def inet6_fallback(_result, _host, _opts), do: :error
 
   defp destination_opts(%URI{host: host, port: port}) do
     host = Pleroma.HTTP.AdapterHelper.parse_host(host)

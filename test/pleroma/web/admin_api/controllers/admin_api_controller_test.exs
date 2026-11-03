@@ -1042,9 +1042,9 @@ defmodule Pleroma.Web.AdminAPI.AdminAPIControllerTest do
       ObanHelpers.perform_all()
 
       Pleroma.Emails.UserEmail.account_confirmation_email(first_user)
-      # temporary hackney fix until hackney max_connections bug is fixed
-      # https://git.pleroma.social/pleroma/pleroma/-/issues/2101
-      |> Swoosh.Email.put_private(:hackney_options, ssl_options: [versions: [:"tlsv1.2"]])
+      |> Swoosh.Email.put_private(:hackney_options,
+        ssl_options: Pleroma.HTTP.TLS.ssl_options()
+      )
       |> assert_email_sent()
     end
 

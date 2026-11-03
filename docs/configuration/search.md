@@ -10,6 +10,14 @@ To use built-in search that has no external dependencies, set the search module 
 
 While it has no external dependencies, it has problems with performance and relevancy.
 
+With a GIN index (the default), search queries limit how many matches PostgreSQL considers (`gin_fuzzy_search_limit`, see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)). This keeps searches for common words fast on large databases, but the results are incomplete and can change between requests. On smaller instances you can turn it off for exact results:
+
+> config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: nil
+
+Without a limit, searches for common words can take longer than the database timeout on large databases, and then return nothing.
+
+Earlier versions of Pleroma set this limit for every database connection, which also made other GIN index scans (for example recipient lookups) incomplete. It is now only set for search queries.
+
 ## QdrantSearch
 
 This uses the vector search engine [Qdrant](https://qdrant.tech) to search the posts in a vector space. This needs a way to generate embeddings and uses the [OpenAI API](https://platform.openai.com/docs/guides/embeddings/what-are-embeddings). This is implemented by several project besides OpenAI itself, including the python-based fastembed-server found in `supplemental/search/fastembed-api`.

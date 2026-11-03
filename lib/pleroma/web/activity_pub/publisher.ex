@@ -11,6 +11,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   alias Pleroma.Object
   alias Pleroma.Repo
   alias Pleroma.User
+  alias Pleroma.Web.ActivityPub.MRF
   alias Pleroma.Web.ActivityPub.Publisher.Prepared
   alias Pleroma.Web.ActivityPub.Relay
   alias Pleroma.Workers.PublisherWorker
@@ -221,18 +222,25 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
     end
   end
 
-  def should_federate?(nil, _), do: false
-  def should_federate?(_, true), do: true
+  def should_federate?(inbox, public), do: federation_filter(public).(inbox)
 
-  def should_federate?(inbox, _) do
-    %{host: host} = URI.parse(inbox)
+  # Compiles the instance lists once, for filtering many inboxes.
+  defp federation_filter(public) do
+    allowed? = MRF.instance_filter()
 
-    quarantined_instances =
+    quarantined =
       Config.get([:instance, :quarantined_instances], [])
-      |> Pleroma.Web.ActivityPub.MRF.instance_list_from_tuples()
-      |> Pleroma.Web.ActivityPub.MRF.subdomains_regex()
+      |> MRF.instance_list_from_tuples()
+      |> MRF.subdomains_regex()
 
-    !Pleroma.Web.ActivityPub.MRF.subdomain_match?(quarantined_instances, host)
+    fn
+      nil ->
+        false
+
+      inbox ->
+        %{host: host} = URI.parse(inbox)
+        allowed?.(host) and (public or not MRF.subdomain_match?(quarantined, host))
+    end
   end
 
   @spec recipients(User.t(), Activity.t()) :: [[User.t()]]
@@ -273,36 +281,18 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
   defp maybe_use_sharedinbox(%User{shared_inbox: shared_inbox}), do: shared_inbox
 
   @doc """
-  Determine a user inbox to use based on heuristics.  These heuristics
-  are based on an approximation of the ``sharedInbox`` rules in the
-  [ActivityPub specification][ap-sharedinbox].
+  Determines the inbox to deliver an activity to.
 
-  Please do not edit this function (or its children) without reading
-  the spec, as editing the code is likely to introduce some breakage
-  without some familiarity.
-
-     [ap-sharedinbox]: https://www.w3.org/TR/activitypub/#shared-inbox-delivery
+  Like Mastodon, GoToSocial and Akkoma, this always prefers the shared inbox,
+  which saves duplicate deliveries to the same server. Only activities with
+  `bcc` or `bto` go to personal inboxes, because the receiver rebuilds that
+  addressing from the inbox the activity arrived at.
   """
-  def determine_inbox(
-        %Activity{data: activity_data},
-        %User{inbox: inbox} = user
-      ) do
-    to = activity_data["to"] || []
-    cc = activity_data["cc"] || []
-    type = activity_data["type"]
-
-    cond do
-      type == "Delete" ->
-        maybe_use_sharedinbox(user)
-
-      Pleroma.Constants.as_public() in to || Pleroma.Constants.as_public() in cc ->
-        maybe_use_sharedinbox(user)
-
-      length(to) + length(cc) > 1 ->
-        maybe_use_sharedinbox(user)
-
-      true ->
-        inbox
+  def determine_inbox(%Activity{data: activity_data}, %User{inbox: inbox} = user) do
+    if Enum.empty?(activity_data["bcc"] || []) and Enum.empty?(activity_data["bto"] || []) do
+      maybe_use_sharedinbox(user)
+    else
+      inbox
     end
   end
 
@@ -312,7 +302,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
 
   def publish(%User{} = actor, %{data: %{"bcc" => bcc}} = activity)
       when is_list(bcc) and bcc != [] do
-    public = public?(activity)
+    should_federate? = activity |> public?() |> federation_filter()
 
     [priority_recipients, recipients] = recipients(actor, activity)
 
@@ -324,7 +314,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
           determine_inbox(activity, user)
         end)
         |> Enum.uniq()
-        |> Enum.filter(fn inbox -> should_federate?(inbox, public) end)
+        |> Enum.filter(should_federate?)
         |> Instances.filter_reachable()
       end)
 
@@ -360,6 +350,8 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
       Relay.publish(activity)
     end
 
+    should_federate? = federation_filter(public)
+
     [priority_inboxes, inboxes] =
       recipients(actor, activity)
       |> Enum.map(fn recipients ->
@@ -368,7 +360,7 @@ defmodule Pleroma.Web.ActivityPub.Publisher do
           determine_inbox(activity, user)
         end)
         |> Enum.uniq()
-        |> Enum.filter(fn inbox -> should_federate?(inbox, public) end)
+        |> Enum.filter(should_federate?)
       end)
 
     inboxes = inboxes -- priority_inboxes

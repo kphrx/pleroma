@@ -50,6 +50,15 @@ defmodule Pleroma.HTTP.AdapterHelper.GunTest do
       assert Keyword.has_key?(defaults, :b)
     end
 
+    test "uses Hackney's ssl_options from the config as Gun's tls_opts" do
+      clear_config([:http, :adapter], ssl_options: [versions: [:"tlsv1.3"]])
+
+      opts = Gun.options([], URI.parse("https://example.com"))
+
+      assert opts[:tls_opts] == [versions: [:"tlsv1.3"]]
+      refute Keyword.has_key?(opts, :ssl_options)
+    end
+
     test "parses string proxy host & port" do
       clear_config([:http, :proxy_url], "localhost:8123")
 

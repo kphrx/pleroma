@@ -95,6 +95,84 @@ defmodule Pleroma.Signature do
     Timex.format!(date, "{WDshort}, {0D} {Mshort} {YYYY} {h24}:{m}:{s} GMT")
   end
 
+  @doc """
+  Checks the parts of an incoming signature that the cryptographic check does
+  not cover, so that a captured request cannot be replayed later or with a
+  different body.
+
+  The signature must cover `date` or `(created)`, and the signed time must be
+  within the configured window. Requests other than GET and HEAD must also
+  sign `digest`, and DigestPlug must have hashed their body. Based on Akkoma's http_signatures fork and Mastodon's
+  SignedRequest.
+  """
+  @spec check_signature_policy(Plug.Conn.t(), DateTime.t()) :: :ok | {:error, atom()}
+  def check_signature_policy(%Plug.Conn{} = conn, now \\ DateTime.utc_now()) do
+    signature = HTTPSignatures.signature_for_conn(conn)
+    signed = Map.get(signature, "headers", [])
+
+    cond do
+      "date" not in signed and "(created)" not in signed ->
+        {:error, :date_not_signed}
+
+      conn.method not in ["GET", "HEAD"] and "digest" not in signed ->
+        {:error, :digest_not_signed}
+
+      # The plug puts the digest computed by DigestPlug into the header. With
+      # no computed digest (e.g. multipart), nothing checked the body.
+      conn.method not in ["GET", "HEAD"] and is_nil(conn.assigns[:digest]) ->
+        {:error, :body_not_hashed}
+
+      true ->
+        with :ok <- check_signed_date(conn, signed, now) do
+          check_signed_created(signature, signed, now)
+        end
+    end
+  end
+
+  defp check_signed_date(conn, signed, now) do
+    if "date" in signed do
+      # Exactly one header: a second one could make this check and the
+      # signature check see different dates.
+      with [date] <- Plug.Conn.get_req_header(conn, "date"),
+           {:ok, %DateTime{} = date} <- Timex.parse(date, "{RFC1123}") do
+        check_time_window(date, now)
+      else
+        _ -> {:error, :invalid_date}
+      end
+    else
+      :ok
+    end
+  end
+
+  defp check_signed_created(signature, signed, now) do
+    if "(created)" in signed do
+      with created when is_binary(created) <- signature["created"],
+           {created, ""} <- Integer.parse(created),
+           {:ok, created} <- DateTime.from_unix(created) do
+        check_time_window(created, now)
+      else
+        _ -> {:error, :invalid_date}
+      end
+    else
+      :ok
+    end
+  end
+
+  defp check_time_window(signed_at, now) do
+    age = DateTime.diff(now, signed_at)
+
+    cond do
+      age > Pleroma.Config.get([:activitypub, :signature_max_age], 7200) ->
+        {:error, :date_too_old}
+
+      -age > Pleroma.Config.get([:activitypub, :signature_max_clock_skew], 3600) ->
+        {:error, :date_in_future}
+
+      true ->
+        :ok
+    end
+  end
+
   @spec validate_signature(Plug.Conn.t(), String.t()) :: boolean()
   def validate_signature(%Plug.Conn{} = conn, request_target) do
     # Newer drafts for HTTP signatures now use @request-target instead of the

@@ -103,6 +103,25 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.QuestionHandlingTest do
     assert Enum.sort(object.data["oneOf"]) == Enum.sort(options)
   end
 
+  test "Question activity with a single, non-array tag" do
+    tag = %{
+      "href" => "https://gts.example/tags/caturday",
+      "name" => "#caturday",
+      "type" => "Hashtag"
+    }
+
+    data =
+      File.read!("test/fixtures/mastodon-question-activity.json")
+      |> Jason.decode!()
+      |> Kernel.put_in(["object", "tag"], tag)
+
+    {:ok, %Activity{local: false} = activity} = Transmogrifier.handle_incoming(data)
+    object = Object.normalize(activity, fetch: false)
+
+    assert tag in object.data["tag"]
+    assert Object.hashtags(object) == ["caturday"]
+  end
+
   test "Mastodon Question activity with custom emojis" do
     options = [
       %{

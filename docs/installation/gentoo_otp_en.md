@@ -25,7 +25,6 @@ Gentoo quite pointedly does not come with a cron daemon installed, and as such i
 * `app-crypt/certbot-nginx` (nginx certbot plugin that allows use of the all-powerful `--nginx` flag on certbot)
 * `media-gfx/imagemagick`
 * `media-video/ffmpeg`
-* `media-libs/exiftool`
 
 ### Prepare the system
 
@@ -68,7 +67,7 @@ The output from emerging postgresql should give you a command for initializing t
 See [Optional software packages needed for specific functionality](optional/media_graphics_packages.md) for details.
 
 ```shell
-# emerge --ask media-video/ffmpeg media-gfx/imagemagick media-libs/exiftool
+# emerge --ask media-video/ffmpeg media-gfx/imagemagick
 ```
 
 ### Setup PleromaBE

@@ -1,0 +1,2 @@
+import{M as e,R as t,X as n,_ as r,g as i,p as a,t as o,u as s}from"./_plugin-vue_export-helper.By3-ojQa.js";import{O as c,kn as l}from"./free-solid-svg-icons.vn_kySUQ.js";l.add(c);var u={},d={class:`panel-loading`},f={class:`loading-text`};function p(o,c,l,u,p,m){let h=t(`FAIcon`);return e(),a(`div`,d,[s(`span`,f,[r(h,{icon:`circle-notch`,spin:``,size:`3x`}),i(` `+n(o.$t(`general.loading`)),1)])])}var m=o(u,[[`render`,p]]);export{m as t};
+//# sourceMappingURL=panel_loading.0JmxtEZa.js.map

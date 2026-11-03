@@ -11,6 +11,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Conversation.Participation
   alias Pleroma.Filter
   alias Pleroma.Hashtag
+  alias Pleroma.Instances.Instance
   alias Pleroma.Maps
   alias Pleroma.Notification
   alias Pleroma.Object
@@ -21,6 +22,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Upload
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.MRF
+  alias Pleroma.Web.ActivityPub.ObjectValidators.UserValidator
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.Streamer
   alias Pleroma.Web.WebFinger
@@ -464,21 +466,28 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   def fetch_activities_for_context_query(context, opts) do
-    public = [Constants.as_public()]
+    user = opts[:user]
 
     recipients =
-      if opts[:user],
-        do: [opts[:user].ap_id | User.following(opts[:user])] ++ public,
-        else: public
+      cond do
+        user && user.local ->
+          [Constants.as_public(), as_local_public(), user.ap_id | User.following(user)]
+
+        user ->
+          [Constants.as_public(), user.ap_id | User.following(user)]
+
+        true ->
+          [Constants.as_public()]
+      end
 
     from(activity in Activity)
     |> maybe_preload_objects(opts)
     |> maybe_preload_bookmarks(opts)
     |> maybe_set_thread_muted_field(opts)
-    |> restrict_unauthenticated(opts[:user])
+    |> restrict_unauthenticated(user)
     |> restrict_blocked(opts)
     |> restrict_blockers_visibility(opts)
-    |> restrict_recipients(recipients, opts[:user])
+    |> restrict_recipients(recipients, user)
     |> restrict_filtered(opts)
     |> where(
       [activity],
@@ -1924,6 +1933,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   def user_data_from_user_object(data, additional \\ []) do
     with {:ok, data} <- MRF.filter(data),
+         {:ok, data, _} <- UserValidator.validate(data, []),
          {:ok, data} <- object_to_user_data(data, additional) do
       {:ok, data}
     else
@@ -1944,6 +1954,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
       {:error, {:reject, reason} = e} ->
         Logger.info("Rejected user #{ap_id}: #{inspect(reason)}")
+        {:error, e}
+
+      {:error, :ratelimit = e} ->
+        Logger.debug("Backing off from fetching user #{ap_id}")
         {:error, e}
 
       {:error, e} ->
@@ -2053,10 +2067,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   def enqueue_pin_fetches(_), do: nil
 
   def make_user_from_ap_id(ap_id, additional \\ []) do
-    user = User.get_cached_by_ap_id(ap_id)
-
     with {:ok, data} <- fetch_and_prepare_user_from_ap_id(ap_id, additional) do
       enqueue_pin_fetches(data)
+      # Keeps the instances table complete, so it can list our peers.
+      Instance.ensure_exists(data.ap_id)
+
+      # the fetched actor's id differs from ap_id when it was fetched from a display URL
+      user = User.get_cached_by_ap_id(data.ap_id)
 
       if user do
         user

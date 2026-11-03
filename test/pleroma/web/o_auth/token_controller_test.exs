@@ -52,36 +52,60 @@ defmodule Pleroma.Web.OAuth.TokenControllerTest do
   end
 
   describe "GET /api/oauth_tokens" do
-    setup do
-      token = insert(:oauth_token) |> Repo.preload(:user)
-
-      %{token: token}
-    end
-
-    test "renders list", %{token: token} do
-      response =
-        build_conn()
-        |> assign(:user, token.user)
-        |> get("/api/oauth_tokens")
+    test "renders list" do
+      %{conn: conn} = oauth_access(["read:security"])
 
       keys =
-        json_response(response, 200)
+        conn
+        |> get("/api/oauth_tokens")
+        |> json_response(200)
         |> hd()
         |> Map.keys()
 
       assert Enum.sort(keys) == Enum.sort(["id", "app_name", "valid_until", "scopes"])
     end
 
-    test "revoke token", %{token: token} do
-      response =
-        build_conn()
-        |> assign(:user, token.user)
-        |> delete("/api/oauth_tokens/#{token.id}")
+    test "is allowed with the read scope" do
+      %{conn: conn} = oauth_access(["read"])
 
-      tokens = Token.get_user_tokens(token.user)
+      assert [_] = conn |> get("/api/oauth_tokens") |> json_response(200)
+    end
 
-      assert tokens == []
-      assert response.status == 201
+    test "is forbidden without read:security" do
+      %{conn: conn} = oauth_access(["profile", "read:accounts", "write:security"])
+
+      assert %{"error" => "Insufficient permissions: read:security."} =
+               conn |> get("/api/oauth_tokens") |> json_response(403)
+    end
+  end
+
+  describe "DELETE /api/oauth_tokens/:id" do
+    test "revokes the token" do
+      %{conn: conn, user: user, token: token} = oauth_access(["write:security"])
+      other = insert(:oauth_token, user: user)
+
+      conn = delete(conn, "/api/oauth_tokens/#{other.id}")
+
+      assert conn.status == 201
+      assert [%Token{id: id}] = Token.get_user_tokens(user)
+      assert id == token.id
+    end
+
+    test "is allowed with the write scope" do
+      %{conn: conn, user: user} = oauth_access(["write"])
+      other = insert(:oauth_token, user: user)
+
+      assert delete(conn, "/api/oauth_tokens/#{other.id}").status == 201
+    end
+
+    test "is forbidden without write:security" do
+      %{conn: conn, user: user} = oauth_access(["profile", "read", "write:accounts"])
+      other = insert(:oauth_token, user: user)
+
+      assert %{"error" => "Insufficient permissions: write:security."} =
+               conn |> delete("/api/oauth_tokens/#{other.id}") |> json_response(403)
+
+      assert length(Token.get_user_tokens(user)) == 2
     end
   end
 end

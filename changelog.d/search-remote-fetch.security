@@ -1,0 +1,1 @@
+Status search only fetches remote URLs with resolve=true, on the first page, and for anonymous users only if limit_to_local_content allows it

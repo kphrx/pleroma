@@ -303,6 +303,10 @@ Additional fields are returned in the response:
 - `id`: The primary key of this token in Pleroma's database.
 - `me` (user tokens only): The ActivityPub ID of the user who owns the token.
 
+### `profile` scope
+
+As in Mastodon 4.3, a token with the `profile` scope can call `GET /api/v1/accounts/verify_credentials` and no other Mastodon API endpoint. Apps can use it to log users in with their fediverse account. Unless the token also has `read` or `read:accounts`, Pleroma returns only public data: unlike Mastodon, there is no `source.privacy`, no `follow_requests_count`, and none of the private `pleroma` fields such as `email`, `settings_store` and `chat_token`.
+
 ## Account Registration
 
 `POST /api/v1/accounts`

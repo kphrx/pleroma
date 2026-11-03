@@ -141,6 +141,44 @@ defmodule Pleroma.HTMLTest do
     end
   end
 
+  describe "link schemes as a browser sees them" do
+    # Browsers remove tabs and newlines in URLs and control characters and
+    # spaces at the start, so these are javascript: links to them.
+    test "removes javascript: links hidden with control characters" do
+      for href <- [
+            "java\tscript:alert(1)",
+            "java&#x09;script:alert(1)",
+            "java\nscript:alert(1)",
+            "&#x0d;javascript:alert(1)",
+            " javascript:alert(1)",
+            "\u0001javascript:alert(1)"
+          ],
+          scrubber <- [
+            Pleroma.HTML.Scrubber.Default,
+            Pleroma.HTML.Scrubber.TwitterText,
+            Pleroma.HTML.Scrubber.LinksOnly
+          ] do
+        html = HTML.filter_tags(~s(<a href="#{href}">x</a>), scrubber)
+
+        refute html =~ "href", "#{inspect(href)} survived #{inspect(scrubber)}: #{html}"
+      end
+    end
+
+    test "keeps normal links" do
+      for href <- ["https://example.org/a?b=c", "/relative/path", "#fragment"] do
+        assert HTML.filter_tags(~s(<a href="#{href}">x</a>), Pleroma.HTML.Scrubber.Default) ==
+                 ~s(<a href="#{href}">x</a>)
+      end
+    end
+
+    test "removes images with hidden schemes" do
+      html =
+        HTML.filter_tags(~s|<img src="java\tscript:alert(1)"/>|, Pleroma.HTML.Scrubber.Default)
+
+      refute html =~ "src"
+    end
+  end
+
   describe "default scrubber" do
     test "normalizes HTML as expected" do
       expected = """

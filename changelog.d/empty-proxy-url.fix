@@ -1,0 +1,1 @@
+HTTP: treat an empty proxy_url as no proxy; with Hackney 4 it made every outgoing request fail

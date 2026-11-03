@@ -66,6 +66,7 @@ defmodule Pleroma.Application do
 
     if match?({Tesla.Adapter.Finch, _}, adapter) do
       Logger.info("Starting Finch")
+      use_castore_for_otp_cacerts()
       Finch.start_link(name: MyFinch)
     end
 
@@ -197,6 +198,7 @@ defmodule Pleroma.Application do
       ),
       build_cachex("rel_me", limit: 2500),
       build_cachex("host_meta", default_ttl: :timer.minutes(120), limit: 5_000),
+      build_cachex("http_backoff", limit: 10_000),
       build_cachex("translations", default_ttl: :timer.hours(24), limit: 5_000)
     ]
   end
@@ -301,6 +303,15 @@ defmodule Pleroma.Application do
         match?(Tesla.Adapter.Gun, adapter) -> http_children_gun()
         true -> []
       end
+    end
+  end
+
+  # Mint trusts the OTP CA store, which comes from the OS. Make it the CAStore
+  # bundle that the other adapters trust. OTP 24 has no such store and Mint
+  # uses CAStore there anyway.
+  defp use_castore_for_otp_cacerts do
+    if Code.ensure_loaded?(:public_key) and function_exported?(:public_key, :cacerts_load, 1) do
+      :ok = :public_key.cacerts_load(CAStore.file_path())
     end
   end
 

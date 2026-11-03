@@ -184,6 +184,34 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
       assert user.follower_address == "http://mastodon.example.org/users/admin/followers"
     end
 
+    test "it records the user's instance" do
+      refute Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+
+      {:ok, _user} = ActivityPub.make_user_from_ap_id("http://mastodon.example.org/users/admin")
+
+      assert %{unreachable_since: nil} =
+               Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+    end
+
+    test "it records the instance of a known user when refreshing it" do
+      insert(:user, local: false, ap_id: "http://mastodon.example.org/users/admin")
+      refute Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+
+      {:ok, _user} = ActivityPub.make_user_from_ap_id("http://mastodon.example.org/users/admin")
+
+      assert Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+    end
+
+    test "it keeps an existing instance record" do
+      unreachable_since = ~N[2020-01-01 00:00:00.000000]
+      insert(:instance, host: "mastodon.example.org", unreachable_since: unreachable_since)
+
+      {:ok, _user} = ActivityPub.make_user_from_ap_id("http://mastodon.example.org/users/admin")
+
+      assert %{unreachable_since: ^unreachable_since} =
+               Repo.get_by(Pleroma.Instances.Instance, host: "mastodon.example.org")
+    end
+
     test "it returns a user that is invisible" do
       user_id = "http://mastodon.example.org/users/relay"
       {:ok, user} = ActivityPub.make_user_from_ap_id(user_id)
@@ -242,6 +270,58 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
                "url" => [%{"href" => "https://jk.nipponalba.scot/images/profile.jpg"}],
                "name" => "profile picture"
              }
+    end
+
+    test "rejects actors whose inbox is on another host" do
+      ap_id = "https://example.com/users/evil"
+
+      user_data =
+        "test/fixtures/users_mock/user.json"
+        |> File.read!()
+        |> String.replace("{{nickname}}", "evil")
+        |> Jason.decode!()
+        |> Map.put("inbox", "https://victim.example/inbox")
+        |> Map.put("featured", nil)
+        |> Jason.encode!()
+
+      Tesla.Mock.mock(fn
+        %{method: :get, url: ^ap_id} ->
+          %Tesla.Env{
+            status: 200,
+            body: user_data,
+            headers: [{"content-type", "application/activity+json"}]
+          }
+      end)
+
+      assert {:error, _} = ActivityPub.make_user_from_ap_id(ap_id)
+      refute User.get_by_ap_id(ap_id)
+    end
+
+    test "updates the known user when fetched from a display URL" do
+      ap_id = "https://example.com/users/lain"
+      display_url = "https://example.com/@lain"
+      user = insert(:user, local: false, ap_id: ap_id, nickname: "lain@example.com")
+
+      user_data =
+        "test/fixtures/users_mock/user.json"
+        |> File.read!()
+        |> String.replace("{{nickname}}", "lain")
+        |> Jason.decode!()
+        |> Map.merge(%{"featured" => nil, "name" => "new name"})
+        |> Jason.encode!()
+
+      Tesla.Mock.mock(fn %{method: :get, url: url} when url in [ap_id, display_url] ->
+        %Tesla.Env{
+          status: 200,
+          body: user_data,
+          headers: [{"content-type", "application/activity+json"}]
+        }
+      end)
+
+      assert {:ok, %User{id: id, name: "new name"}} =
+               ActivityPub.make_user_from_ap_id(display_url)
+
+      assert id == user.id
     end
 
     test "fetches user featured collection" do
@@ -516,7 +596,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
     end
 
     test "fetches user birthday information from misskey" do
-      user_id = "https://misskey.io/@mkljczk"
+      user_id = "https://misskey.io/users/8dhi2ne167"
 
       Tesla.Mock.mock(fn
         %{
@@ -2033,7 +2113,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
             json(
               %{
                 "@context" => "https://www.w3.org/ns/activitystreams",
-                "id" => "https://remote.org/users/masto_hidden_counters/followers"
+                "id" => "https://remote.org/users/masto_hidden_counters/following"
               },
               headers: HttpRequestMock.activitypub_object_headers()
             )
@@ -2045,7 +2125,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubTest do
             json(
               %{
                 "@context" => "https://www.w3.org/ns/activitystreams",
-                "id" => "https://remote.org/users/masto_hidden_counters/following"
+                "id" => "https://remote.org/users/masto_hidden_counters/followers"
               },
               headers: HttpRequestMock.activitypub_object_headers()
             )

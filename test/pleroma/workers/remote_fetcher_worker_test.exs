@@ -13,6 +13,7 @@ defmodule Pleroma.Workers.RemoteFetcherWorkerTest do
   @unauthorized_object "https://unauthorized.example.com/"
   @depth_object "https://depth.example.com/"
   @content_type_object "https://bad_content_type.example.com/"
+  @ratelimited_object "https://ratelimited.example.com/"
 
   describe "RemoteFetcherWorker" do
     setup do
@@ -35,6 +36,11 @@ defmodule Pleroma.Workers.RemoteFetcherWorkerTest do
         %{method: :get, url: @depth_object} ->
           %Tesla.Env{
             status: 200
+          }
+
+        %{method: :get, url: @ratelimited_object} ->
+          %Tesla.Env{
+            status: 429
           }
 
         %{method: :get, url: @content_type_object} ->
@@ -70,6 +76,14 @@ defmodule Pleroma.Workers.RemoteFetcherWorkerTest do
                  "op" => "fetch_remote",
                  "id" => @depth_object,
                  "depth" => 1
+               })
+    end
+
+    test "retries jobs for a rate-limited host" do
+      assert {:error, :ratelimit} =
+               perform_job(RemoteFetcherWorker, %{
+                 "op" => "fetch_remote",
+                 "id" => @ratelimited_object
                })
     end
 

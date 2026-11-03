@@ -20,8 +20,9 @@ defmodule Pleroma.HTTP.AdapterHelper do
 
   @callback options(keyword(), URI.t()) :: keyword()
 
+  # AdminFE stores an empty proxy field as "", which means no proxy.
   @spec format_proxy(String.t() | tuple() | nil) :: proxy() | nil
-  def format_proxy(nil), do: nil
+  def format_proxy(proxy) when proxy in [nil, ""], do: nil
 
   def format_proxy(proxy_url) do
     case parse_proxy(proxy_url) do
@@ -32,7 +33,7 @@ defmodule Pleroma.HTTP.AdapterHelper do
   end
 
   @spec maybe_add_proxy(keyword(), proxy() | nil) :: keyword()
-  def maybe_add_proxy(opts, nil), do: opts
+  def maybe_add_proxy(opts, proxy) when proxy in [nil, ""], do: opts
   def maybe_add_proxy(opts, proxy), do: Keyword.put_new(opts, :proxy, proxy)
 
   @doc """
@@ -44,6 +45,24 @@ defmodule Pleroma.HTTP.AdapterHelper do
     @defaults
     |> Keyword.merge(opts)
     |> adapter_helper().options(uri)
+  end
+
+  @doc """
+  The configured Tesla adapter with TLS options, for clients that do not go
+  through `Pleroma.HTTP`.
+  """
+  @spec tesla_adapter() :: module() | {module(), keyword()}
+  def tesla_adapter do
+    case adapter() do
+      Tesla.Adapter.Hackney ->
+        {Tesla.Adapter.Hackney, Pleroma.HTTP.TLS.put_hackney_ssl_options([])}
+
+      Tesla.Adapter.Gun ->
+        {Tesla.Adapter.Gun, certificates_verification: true}
+
+      adapter ->
+        adapter
+    end
   end
 
   defp adapter, do: Application.get_env(:tesla, :adapter)

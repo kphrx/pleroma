@@ -24,6 +24,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   alias Pleroma.Web.MastodonAPI.MastodonAPI
   alias Pleroma.Web.MastodonAPI.StatusView
   alias Pleroma.Web.OAuth.OAuthController
+  alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.Plugs.OAuthScopesPlug
   alias Pleroma.Web.Plugs.RateLimiter
   alias Pleroma.Web.Registration
@@ -49,8 +50,12 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
 
   plug(
     OAuthScopesPlug,
-    %{scopes: ["read:accounts"]}
-    when action in [:verify_credentials, :endorsements, :own_endorsements]
+    %{scopes: ["read:accounts", "profile"]} when action == :verify_credentials
+  )
+
+  plug(
+    OAuthScopesPlug,
+    %{scopes: ["read:accounts"]} when action in [:endorsements, :own_endorsements]
   )
 
   plug(
@@ -161,7 +166,18 @@ defmodule Pleroma.Web.MastodonAPI.AccountController do
   end
 
   @doc "GET /api/v1/accounts/verify_credentials"
-  def verify_credentials(%{assigns: %{user: user}} = conn, _) do
+  def verify_credentials(%{assigns: %{user: user, token: %Token{scopes: scopes}}} = conn, _) do
+    if OAuthScopesPlug.filter_descendants(["read:accounts"], scopes) == [] do
+      # The profile scope only identifies the user: show what anyone can see.
+      render(conn, "show.json", user: user, skip_visibility_check: true)
+    else
+      render_own_account(conn, user)
+    end
+  end
+
+  def verify_credentials(%{assigns: %{user: user}} = conn, _), do: render_own_account(conn, user)
+
+  defp render_own_account(conn, user) do
     chat_token = Phoenix.Token.sign(conn, "user socket", user.id)
 
     render(conn, "show.json",

@@ -1,0 +1,2 @@
+import{M as e,p as t,t as n}from"./_plugin-vue_export-helper.By3-ojQa.js";import{c as r,i,n as a}from"./oauth.C4JLKGAu.js";var o={props:[`code`],mounted(){if(this.code){let e=a(),{clientId:t,clientSecret:n}=e;i({clientId:t,clientSecret:n,instance:r().server,code:this.code}).then(({data:t})=>{e.setToken(t.access_token),this.$store.dispatch(`loginUser`,t.access_token),this.$router.push({name:`friends`})})}}};function s(n,r,i,a,o,s){return e(),t(`h1`,null,`...`)}var c=n(o,[[`render`,s]]);export{c as default};
+//# sourceMappingURL=oauth_callback.B2cngiTu.js.map

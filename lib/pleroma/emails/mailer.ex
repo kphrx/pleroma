@@ -36,10 +36,11 @@ defmodule Pleroma.Emails.Mailer do
   def deliver(email, config \\ [])
 
   def deliver(email, config) do
-    # temporary hackney fix until hackney max_connections bug is fixed
-    # https://git.pleroma.social/pleroma/pleroma/-/issues/2101
+    # Swoosh HTTP adapters use Hackney, which otherwise trusts its certifi bundle
     email =
-      Swoosh.Email.put_private(email, :hackney_options, ssl_options: [versions: [:"tlsv1.2"]])
+      Swoosh.Email.put_private(email, :hackney_options,
+        ssl_options: Pleroma.HTTP.TLS.ssl_options()
+      )
 
     case enabled?() do
       true -> Swoosh.Mailer.deliver(email, parse_config(config))
@@ -67,6 +68,21 @@ defmodule Pleroma.Emails.Mailer do
   end
 
   defp parse_config(config) do
-    Swoosh.Mailer.parse_config(@otp_app, __MODULE__, @mailer_config, config)
+    @otp_app
+    |> Swoosh.Mailer.parse_config(__MODULE__, @mailer_config, config)
+    |> put_mua_cacertfile()
+  end
+
+  @doc false
+  # Mua otherwise trusts the OS CA store. Keep a CA that the admin set.
+  def put_mua_cacertfile(config) do
+    ssl = Keyword.get(config, :ssl, [])
+
+    if config[:adapter] == Swoosh.Adapters.Mua and
+         not Keyword.has_key?(ssl, :cacertfile) and not Keyword.has_key?(ssl, :cacerts) do
+      Keyword.put(config, :ssl, [{:cacertfile, CAStore.file_path()} | ssl])
+    else
+      config
+    end
   end
 end

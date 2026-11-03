@@ -161,7 +161,11 @@ config :mime, :types, %{
   "image/apng" => ["apng"]
 }
 
-config :tesla, adapter: Tesla.Adapter.Hackney
+config :tesla, adapter: Tesla.Adapter.Gun
+
+# Hackney 4 shares one HTTP/2 connection per host, and closing one response
+# (as the media proxy does) stops it for every other stream on it.
+config :hackney, default_protocols: [:http1]
 
 # Configures http settings, upstream proxy etc.
 config :pleroma, :http,
@@ -369,6 +373,9 @@ config :pleroma, :activitypub,
   note_replies_output_limit: 5,
   sign_object_fetches: true,
   authorized_fetch_mode: false,
+  signature_policy: :enforce,
+  signature_max_age: 7200,
+  signature_max_clock_skew: 3600,
   client_api_enabled: false,
   anonymize_reporter: false,
   anonymize_reporter_local_nickname: ""
@@ -802,7 +809,7 @@ config :pleroma, :frontends,
       "name" => "admin-fe",
       "git" => "https://git.pleroma.social/pleroma/admin-fe",
       "build_url" =>
-        "https://git.pleroma.social/pleroma/admin-fe/-/jobs/artifacts/${ref}/download?job=build",
+        "https://git.pleroma.social/api/packages/pleroma/generic/admin-fe-builds/${ref}/latest.zip",
       "ref" => "develop"
     },
     "soapbox" => %{
@@ -839,7 +846,7 @@ config :pleroma, :modules, runtime_dir: "instance/modules"
 config :pleroma, configurable_from_database: false
 
 config :pleroma, Pleroma.Repo,
-  parameters: [gin_fuzzy_search_limit: "500", jit: "off"],
+  parameters: [jit: "off"],
   prepare: :unnamed
 
 config :pleroma, :connections_pool,
@@ -943,6 +950,8 @@ config :pleroma, ConcurrentLimiter, [
 config :pleroma, Pleroma.Web.WebFinger, domain: nil, update_nickname_on_user_fetch: true
 
 config :pleroma, Pleroma.Search, module: Pleroma.Search.DatabaseSearch
+
+config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: 500
 
 config :pleroma, Pleroma.Search.Meilisearch,
   url: "http://127.0.0.1:7700/",

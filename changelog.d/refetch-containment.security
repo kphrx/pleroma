@@ -1,0 +1,1 @@
+Do not let a refetched object (such as a poll) change its id or author

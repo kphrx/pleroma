@@ -216,6 +216,39 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidatorTest 
     assert content =~ "@uncached"
   end
 
+  test "a Misskey MFM remote mention is not rendered as an email link" do
+    remote_user = insert(:user, ap_id: "https://mk.absturztau.be/users/alice")
+    mentioned_user = insert(:user, ap_id: "https://movsw.0x0.st/users/bob")
+
+    note = %{
+      "id" => "https://mk.absturztau.be/notes/1",
+      "type" => "Note",
+      "actor" => remote_user.ap_id,
+      "attributedTo" => remote_user.ap_id,
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [mentioned_user.ap_id],
+      "content" => ~s(<p>@<a href="mailto:bob@movsw.0x0.st">bob@movsw.0x0.st</a> hello</p>),
+      "context" => Utils.generate_context_id(),
+      "tag" => [
+        %{
+          "type" => "Mention",
+          "name" => "@bob@movsw.0x0.st",
+          "href" => mentioned_user.ap_id
+        }
+      ],
+      "source" => %{
+        "content" => "@bob@movsw.0x0.st hello",
+        "mediaType" => "text/x.misskeymarkdown"
+      }
+    }
+
+    %{valid?: true, changes: %{content: content}} =
+      ArticleNotePageValidator.cast_and_validate(note)
+
+    assert content =~ ~s(href="#{mentioned_user.ap_id}")
+    refute content =~ "mailto:"
+  end
+
   test "a Misskey MFM note drops oversized source content instead of parsing it" do
     user = insert(:user, ap_id: "https://misskey.example/users/oversized")
 

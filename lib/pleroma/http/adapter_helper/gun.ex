@@ -28,11 +28,21 @@ defmodule Pleroma.HTTP.AdapterHelper.Gun do
 
     @defaults
     |> Keyword.merge(config_opts)
+    |> ssl_options_to_tls_opts()
     |> add_scheme_opts(uri)
     |> AdapterHelper.maybe_add_proxy(proxy)
     |> Keyword.merge(incoming_opts)
     |> put_timeout()
     |> maybe_stream()
+  end
+
+  # [:http, :adapter, :ssl_options] is Hackney's name for the TLS options,
+  # and AdminFE sets it. Keep those settings when Gun is the adapter.
+  defp ssl_options_to_tls_opts(opts) do
+    case Keyword.pop(opts, :ssl_options) do
+      {nil, opts} -> opts
+      {ssl_options, opts} -> Keyword.put_new(opts, :tls_opts, ssl_options)
+    end
   end
 
   defp add_scheme_opts(opts, %{scheme: "http"}), do: opts

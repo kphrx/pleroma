@@ -1,0 +1,1 @@
+Do not deliver activities, including public ones and deletes, to instances rejected by SimplePolicy (or not on its accept list), and refuse their signed fetches in authorized fetch mode

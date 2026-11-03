@@ -1,0 +1,2 @@
+import{n as e}from"./chunk.aKtaBQYM.js";import{r as t}from"./modal.BLgTTi-o.js";var n=e({usePostStatusStore:()=>r}),r=t(`postStatus`,{state:()=>({params:null,modalActivated:!1}),actions:{openPostStatusModal(e){this.params=e,this.modalActivated=!0},closePostStatusModal(){this.modalActivated=!1},resetPostStatusModal(){this.params=null}}});export{r as n,n as t};
+//# sourceMappingURL=post_status.BF7jtp5r.js.map

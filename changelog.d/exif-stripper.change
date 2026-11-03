@@ -1,0 +1,1 @@
+Exiftool upload filters are replaced by the built-in Exif.StripLocation and Exif.ReadDescription filters; exiftool is no longer required, old filter names still work but are deprecated

@@ -8,6 +8,7 @@ defmodule Pleroma.Web.MastodonAPI.MarkerControllerTest do
   alias Pleroma.Notification
   alias Pleroma.Repo
   alias Pleroma.Web.CommonAPI
+  alias Pleroma.Web.CommonAPI.Utils
 
   import Pleroma.Factory
 
@@ -33,7 +34,7 @@ defmodule Pleroma.Web.MastodonAPI.MarkerControllerTest do
       assert response == %{
                "notifications" => %{
                  "last_read_id" => "69420",
-                 "updated_at" => NaiveDateTime.to_iso8601(marker.updated_at),
+                 "updated_at" => Utils.to_masto_date(marker.updated_at),
                  "version" => 0,
                  "pleroma" => %{"unread_count" => 7}
                }
@@ -107,7 +108,7 @@ defmodule Pleroma.Web.MastodonAPI.MarkerControllerTest do
       assert response == %{
                "notifications" => %{
                  "last_read_id" => "69888",
-                 "updated_at" => NaiveDateTime.to_iso8601(marker.updated_at),
+                 "updated_at" => Utils.to_masto_date(marker.updated_at),
                  "version" => 0,
                  "pleroma" => %{"unread_count" => 0}
                }

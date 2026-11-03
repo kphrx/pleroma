@@ -12,7 +12,7 @@ defmodule Pleroma.Search.ParadeDB do
 
   import Pleroma.Search.DatabaseSearch,
     only: [
-      maybe_fetch: 3,
+      maybe_fetch: 4,
       maybe_restrict_author: 2,
       maybe_restrict_blocked: 2,
       maybe_restrict_local: 2
@@ -149,19 +149,19 @@ defmodule Pleroma.Search.ParadeDB do
 
     case search_ids(query, limit, offset, author) do
       {:ok, []} ->
-        maybe_fetch([], user, query)
+        maybe_fetch([], user, query, options)
 
       {:ok, ids} ->
         ids
-        |> fetch_activities(user, query, author)
+        |> fetch_activities(user, query, author, options)
 
       {:error, error} ->
         Logger.error("ParadeDB search failed: #{inspect(error)}")
-        maybe_fetch([], user, query)
+        maybe_fetch([], user, query, options)
     end
   end
 
-  defp fetch_activities(ids, user, query, author) do
+  defp fetch_activities(ids, user, query, author, options) do
     dumped_ids =
       ids
       |> Enum.map(&dump_activity_id/1)
@@ -183,7 +183,7 @@ defmodule Pleroma.Search.ParadeDB do
       )
     )
     |> Pleroma.Repo.all()
-    |> maybe_fetch(user, query)
+    |> maybe_fetch(user, query, options)
   end
 
   defp maybe_restrict_public(query, %Pleroma.User{}) do

@@ -821,6 +821,9 @@ defmodule Pleroma.Notification do
       object.data["actor"] == user.ap_id ->
         false
 
+      not is_binary(object.data["content"]) ->
+        false
+
       not is_nil(regex = Pleroma.Filter.compose_regex(user, :re)) ->
         Regex.match?(regex, object.data["content"])
 

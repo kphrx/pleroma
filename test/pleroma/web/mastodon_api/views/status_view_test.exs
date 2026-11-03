@@ -345,7 +345,8 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
         bookmark_folder: nil,
         list_id: nil
       },
-      quotes_count: 0
+      quotes_count: 0,
+      quote: nil
     }
 
     assert status == expected
@@ -507,6 +508,63 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     refute status.pleroma.quote_visible
   end
 
+  describe "Mastodon quote entity" do
+    test "a quote has the quoted status, and quoted statuses only a shallow quote" do
+      post = insert(:note_activity)
+      user = insert(:user)
+
+      {:ok, quote_post} = CommonAPI.post(user, %{status: "he", quoted_status_id: post.id})
+
+      {:ok, quoted_quote_post} =
+        CommonAPI.post(user, %{status: "yo", quoted_status_id: quote_post.id})
+
+      status = StatusView.render("show.json", %{activity: quoted_quote_post})
+
+      assert %{state: "accepted", quoted_status: %{id: quoted_id} = quoted} = status.quote
+      assert quoted_id == to_string(quote_post.id)
+      assert quoted.quote == %{state: "accepted", quoted_status_id: to_string(post.id)}
+
+      assert_schema(status, "Status", Pleroma.Web.ApiSpec.spec())
+    end
+
+    test "a quote of a post the user cannot see is unauthorized" do
+      user = insert(:user)
+      private = insert(:followers_only_note_activity, user: user)
+
+      quote_private =
+        insert(:note_activity,
+          note: insert(:note, data: %{"quoteUrl" => Object.normalize(private).data["id"]})
+        )
+
+      status = StatusView.render("show.json", %{activity: quote_private})
+      assert status.quote == %{state: "unauthorized", quoted_status: nil}
+      assert_schema(status, "Status", Pleroma.Web.ApiSpec.spec())
+
+      follower = insert(:user)
+      CommonAPI.follow(user, follower)
+
+      status = StatusView.render("show.json", %{activity: quote_private, for: follower})
+      assert %{state: "accepted", quoted_status: %{id: id}} = status.quote
+      assert id == to_string(private.id)
+    end
+
+    test "a quote of a missing post is deleted" do
+      quote_missing =
+        insert(:note_activity,
+          note: insert(:note, data: %{"quoteUrl" => "https://example.com/objects/gone"})
+        )
+
+      status = StatusView.render("show.json", %{activity: quote_missing})
+      assert status.quote == %{state: "deleted", quoted_status: nil}
+    end
+
+    test "a post without a quote has no quote" do
+      status = StatusView.render("show.json", %{activity: insert(:note_activity)})
+      assert status.quote == nil
+      assert_schema(status, "Status", Pleroma.Web.ApiSpec.spec())
+    end
+  end
+
   test "repost of quote post" do
     post = insert(:note_activity)
     user = insert(:user)
@@ -559,6 +617,46 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     assert mention.url == recipient_ap_id
   end
 
+  test "inlined images are media proxied" do
+    ConfigMock |> stub_with(Pleroma.Test.StaticConfig)
+    clear_config([:media_proxy, :enabled], true)
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        content_type: "text/html",
+        status: "hii <img src=\"https://example.org/a.png\" />"
+      })
+
+    activity = Repo.get(Activity, activity.id)
+    status = StatusView.render("show.json", activity: activity)
+
+    assert_schema(status, "Status", Pleroma.Web.ApiSpec.spec())
+
+    assert status[:content] =~
+             ~r/^hii <img src="https?:\/\/[^\/]+\/proxy\/[^\/]+\/aHR0cHM6Ly9leGFtcGxlLm9yZy9hLnBuZw\/a.png"/
+  end
+
+  test "inlined images using network-path ref are media proxied" do
+    ConfigMock |> stub_with(Pleroma.Test.StaticConfig)
+    clear_config([:media_proxy, :enabled], true)
+    user = insert(:user)
+
+    {:ok, activity} =
+      CommonAPI.post(user, %{
+        content_type: "text/html",
+        status: "hii <img src=\"//example.org/a.png\" />"
+      })
+
+    activity = Repo.get(Activity, activity.id)
+    status = StatusView.render("show.json", activity: activity)
+
+    assert_schema(status, "Status", Pleroma.Web.ApiSpec.spec())
+
+    assert status[:content] =~
+             ~r/^hii <img src="https?:\/\/[^\/]+\/proxy\/[^\/]+\/aHR0cHM6Ly9leGFtcGxlLm9yZy9hLnBuZw\/a.png"/
+  end
+
   test "create mentions from the 'tag' field" do
     recipient = insert(:user)
     cc = insert_pair(:user) |> Enum.map(& &1.ap_id)
@@ -597,6 +695,24 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
   end
 
   describe "attachments" do
+    test "skips meta for zero dimensions" do
+      for {width, height} <- [{0, 0}, {200, 0}, {0, 100}] do
+        object = %{
+          "type" => "Image",
+          "url" => [
+            %{
+              "mediaType" => "image/png",
+              "href" => "someurl",
+              "width" => width,
+              "height" => height
+            }
+          ]
+        }
+
+        refute Map.has_key?(StatusView.render("attachment.json", %{attachment: object}), :meta)
+      end
+    end
+
     test "Complete Mastodon style" do
       object = %{
         "type" => "Image",
@@ -672,7 +788,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
   test "put the url advertised in the Activity in to the url attribute" do
     id = "https://wedistribute.org/wp-json/pterotype/v1/object/85810"
-    [activity] = Activity.search(nil, id)
+    [activity] = Activity.search(insert(:user), id, resolve: true)
 
     status = StatusView.render("show.json", %{activity: activity})
 

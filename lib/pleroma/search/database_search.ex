@@ -7,6 +7,7 @@ defmodule Pleroma.Search.DatabaseSearch do
   alias Pleroma.Config
   alias Pleroma.Object.Fetcher
   alias Pleroma.Pagination
+  alias Pleroma.Repo
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.Visibility
 
@@ -23,22 +24,49 @@ defmodule Pleroma.Search.DatabaseSearch do
     offset = Keyword.get(options, :offset, 0)
     author = Keyword.get(options, :author)
 
-    try do
-      Activity
-      |> Activity.with_preloaded_object()
-      |> Activity.restrict_deactivated_users()
-      |> restrict_public(user)
-      |> query_with(index_type, search_query)
-      |> maybe_restrict_local(user)
-      |> maybe_restrict_author(author)
-      |> maybe_restrict_blocked(user)
-      |> Pagination.fetch_paginated(
-        %{"offset" => offset, "limit" => limit, "skip_order" => index_type == :rum},
-        :offset
-      )
-      |> maybe_fetch(user, search_query)
-    rescue
-      _ -> maybe_fetch([], user, search_query)
+    activities =
+      try do
+        with_fuzzy_limit(fn ->
+          Activity
+          |> Activity.with_preloaded_object()
+          |> Activity.restrict_deactivated_users()
+          |> restrict_public(user)
+          |> query_with(index_type, search_query)
+          |> maybe_restrict_local(user)
+          |> maybe_restrict_author(author)
+          |> maybe_restrict_blocked(user)
+          |> Pagination.fetch_paginated(
+            %{"offset" => offset, "limit" => limit, "skip_order" => index_type == :rum},
+            :offset
+          )
+        end)
+      rescue
+        _ -> []
+      end
+
+    # Outside the query transaction, as it may fetch over the network.
+    maybe_fetch(activities, user, search_query, options)
+  end
+
+  @doc """
+  Runs `fun` with `gin_fuzzy_search_limit` set, if configured under
+  `Pleroma.Search.DatabaseSearch`. The limit makes GIN scans faster but their
+  results incomplete and random, so it is only set for search queries.
+  """
+  def with_fuzzy_limit(fun) do
+    case Config.get([__MODULE__, :gin_fuzzy_search_limit]) do
+      limit when is_integer(limit) and limit > 0 ->
+        {:ok, result} =
+          Repo.transaction(fn ->
+            # SET LOCAL takes no parameters; limit is an integer.
+            Repo.query!("SET LOCAL gin_fuzzy_search_limit TO #{limit}")
+            fun.()
+          end)
+
+        result
+
+      _ ->
+        fun.()
     end
   end
 
@@ -132,7 +160,27 @@ defmodule Pleroma.Search.DatabaseSearch do
 
   defp restrict_local(q), do: where(q, local: true)
 
-  def maybe_fetch(activities, user, search_query) do
+  @doc """
+  Adds the status a URL query points to, fetching it if needed. As in Mastodon,
+  this only happens with `resolve: true` and on the first page, and for
+  anonymous users only if `[:instance, :limit_to_local_content]` is `false`.
+  """
+  def maybe_fetch(activities, user, search_query, options) do
+    if fetch_allowed?(user, options),
+      do: fetch(activities, user, search_query),
+      else: activities
+  end
+
+  defp fetch_allowed?(user, options) do
+    options[:resolve] == true and (options[:offset] || 0) == 0 and
+      case Config.get([:instance, :limit_to_local_content], :unauthenticated) do
+        :all -> false
+        :unauthenticated -> match?(%User{}, user)
+        false -> true
+      end
+  end
+
+  defp fetch(activities, user, search_query) do
     with true <- Regex.match?(~r/https?:/, search_query),
          {:ok, object} <- Fetcher.fetch_object_from_id(search_query),
          %Activity{} = activity <- Activity.get_create_by_object_ap_id(object.data["id"]),

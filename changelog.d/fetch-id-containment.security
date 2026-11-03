@@ -1,0 +1,1 @@
+Only accept fetched objects whose id is the URL they were fetched from; for other ids, refetch once from the canonical id on the same host

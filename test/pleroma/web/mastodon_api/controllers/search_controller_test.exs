@@ -328,7 +328,9 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
       assert status["id"] == to_string(activity.id)
     end
 
-    test "search fetches remote statuses and prefers them over other results", %{conn: conn} do
+    test "search fetches remote statuses and prefers them over other results" do
+      %{conn: conn} = oauth_access(["read:search"])
+
       {:ok, %{id: activity_id}} =
         CommonAPI.post(insert(:user), %{
           status: "check out http://mastodon.example.org/@admin/99541947525187367"
@@ -336,13 +338,37 @@ defmodule Pleroma.Web.MastodonAPI.SearchControllerTest do
 
       %{"url" => result_url, "id" => result_id} =
         conn
-        |> get("/api/v1/search?q=http://mastodon.example.org/@admin/99541947525187367")
+        |> get(
+          "/api/v1/search?resolve=true&q=http://mastodon.example.org/@admin/99541947525187367"
+        )
         |> json_response_and_validate_schema(200)
         |> Map.get("statuses")
         |> List.first()
 
       refute match?(^result_id, activity_id)
       assert match?(^result_url, "http://mastodon.example.org/@admin/99541947525187367")
+    end
+
+    test "search fetches remote statuses only with resolve, when logged in, on the first page",
+         %{conn: anonymous} do
+      %{conn: conn} = oauth_access(["read:search"])
+      url = "http://mastodon.example.org/@admin/99541947525187367"
+
+      for {conn, params} <- [
+            {conn, ""},
+            {conn, "&resolve=false"},
+            {conn, "&resolve=true&offset=5"},
+            {anonymous, "&resolve=true"}
+          ] do
+        assert %{"statuses" => []} =
+                 conn
+                 |> get("/api/v1/search?q=#{url}#{params}")
+                 |> json_response_and_validate_schema(200)
+      end
+
+      refute Pleroma.Object.get_by_ap_id(
+               "http://mastodon.example.org/users/admin/statuses/99541947525187367"
+             )
     end
 
     test "search doesn't show statuses that it shouldn't", %{conn: conn} do

@@ -1,7 +1,7 @@
 # https://hub.docker.com/r/hexpm/elixir/tags
 ARG ELIXIR_IMG=hexpm/elixir
 ARG ELIXIR_VER=1.17.3
-ARG ERLANG_VER=27.3.4.14
+ARG ERLANG_VER=27.3.4.17
 ARG ALPINE_VER=3.23.5
 ARG ELIXIR_TAG=${ELIXIR_VER}-erlang-${ERLANG_VER}-alpine-${ALPINE_VER}
 ARG ALPINE_IMG=alpine
@@ -42,7 +42,7 @@ ARG HOME=/opt/pleroma
 ARG DATA=/var/lib/pleroma
 
 RUN apk update &&\
-	apk add exiftool ffmpeg vips libmagic ncurses postgresql-client &&\
+	apk add ffmpeg vips libmagic ncurses postgresql-client &&\
 	adduser --system --shell /bin/false --home ${HOME} pleroma &&\
 	mkdir -p ${DATA}/uploads &&\
 	mkdir -p ${DATA}/static &&\

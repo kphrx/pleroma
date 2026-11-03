@@ -46,7 +46,7 @@ present, `uploads`, and `instance`. Diff and restore any other non-stock
 configuration files, preserve their ownership, and review them before starting
 Pleroma.
 
-Pleroma requires Elixir 1.15 or newer. Install supported Erlang and Elixir
+Pleroma requires Elixir 1.17 or newer and Erlang/OTP 27 or newer. Install supported Erlang and Elixir
 versions as described in the installation guide for your distribution before
 running any Mix command. Do not reuse Rebased's `.tool-versions`. If you keep
 using [`asdf`](https://asdf-vm.com/), select supported versions in the

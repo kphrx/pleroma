@@ -1,0 +1,2 @@
+import{M as e,R as t,d as n,f as r,t as i}from"./_plugin-vue_export-helper.By3-ojQa.js";import{P as a,kn as o}from"./free-solid-svg-icons.vn_kySUQ.js";o.add(a);var s={props:{user:Object}};function c(i,a,o,s,c,l){let u=t(`FAIcon`);return i.user&&i.user.screen_name_ui_contains_non_ascii?(e(),n(u,{key:0,icon:`code`,title:i.$t(`unicode_domain_indicator.tooltip`)},null,8,[`title`])):r(``,!0)}var l=i(s,[[`render`,c]]);export{l as t};
+//# sourceMappingURL=unicode_domain_indicator.BnLqD48H.js.map
