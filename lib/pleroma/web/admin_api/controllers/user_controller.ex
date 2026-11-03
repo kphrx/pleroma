@@ -73,12 +73,10 @@ defmodule Pleroma.Web.AdminAPI.UserController do
   defp do_deletes(%{assigns: %{user: admin}} = conn, nicknames) when is_list(nicknames) do
     users = Enum.map(nicknames, &User.get_cached_by_nickname/1)
 
-    # A nickname that no longer resolves (the account was already deleted, or the
-    # admin frontend sent a stale entry) maps to nil here. `Builder.delete/2` has
-    # no nil clause, so without this the whole request dies with
-    # UndefinedFunctionError (`nil.ap_id/0`) and returns 500. Fail closed with a
-    # 404 instead of deleting an arbitrary subset of the requested users.
-    if Enum.all?(users, &is_struct(&1, User)) do
+    # Fail closed: an unknown nickname means no deletes, not a partial delete.
+    if nil in users do
+      {:error, :not_found}
+    else
       Enum.each(users, fn user ->
         {:ok, delete_data, _} = Builder.delete(admin, user.ap_id)
         Pipeline.common_pipeline(delete_data, local: true)
@@ -91,8 +89,6 @@ defmodule Pleroma.Web.AdminAPI.UserController do
       })
 
       json(conn, nicknames)
-    else
-      {:error, :not_found}
     end
   end
 
