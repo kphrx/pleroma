@@ -343,8 +343,8 @@ defmodule Pleroma.HTMLTest do
         data: %{
           "quoteUrl" => "https://raru.re/users/ocean/statuses/116235427788617987",
           "content" =>
-            "<p class=\"quote-inline\">RE: <a href=\"https://raru.re/@ocean/116235427788617987\">raru.re/@ocean/116235427788617987</a></p>" <>
-              "<p>Berapa lapis?</p><p><a href=\"https://www.youtube.com/watch?v=S0dJMhWDRDE\">youtube.com/watch?v=S0dJMhWDRDE</a></p>"
+            ~s(<p class="quote-inline">RE: <a href="https://raru.re/@ocean/116235427788617987">raru.re/@ocean/116235427788617987</a></p>) <>
+              ~s(<p>Berapa lapis?</p><p><a href="https://www.youtube.com/watch?v=S0dJMhWDRDE">youtube.com/watch?v=S0dJMhWDRDE</a></p>)
         }
       }
 
@@ -356,7 +356,7 @@ defmodule Pleroma.HTMLTest do
       object = %Object{
         data: %{
           "content" =>
-            "hello<span class=\"quote-inline\"><br/><br/>RE: <a href=\"https://misskey.example/notes/abc\">https://misskey.example/notes/abc</a></span>"
+            ~s(hello<span class="quote-inline"><br/><br/>RE: <a href="https://misskey.example/notes/abc">https://misskey.example/notes/abc</a></span>)
         }
       }
 
@@ -368,7 +368,7 @@ defmodule Pleroma.HTMLTest do
         data: %{
           "quoteUrl" => "https://remote.example/objects/1",
           "content" =>
-            "RE: <a href=\"https://remote.example/objects/1\">https://remote.example/objects/1</a> <a href=\"https://cofe.example/\">cofe</a>"
+            ~s(RE: <a href="https://remote.example/objects/1">https://remote.example/objects/1</a> <a href="https://cofe.example/">cofe</a>)
         }
       }
 
