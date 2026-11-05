@@ -16,7 +16,11 @@ defmodule Pleroma.Web.ActivityPub.MRF.ForceMentionsInContentTest do
 
   test "adds mentions to post content" do
     [lain, coolboymew, dielan, hakui, fence] = [
-      insert(:user, ap_id: "https://lain.com/users/lain", nickname: "lain@lain.com", local: false),
+      insert(:user,
+        ap_id: "https://lain.com/users/lain",
+        nickname: "lain@lain.com",
+        local: false
+      ),
       insert(:user,
         ap_id: "https://shitposter.club/users/coolboymew",
         nickname: "coolboymew@shitposter.club",
