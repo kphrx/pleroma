@@ -26,11 +26,11 @@ defmodule Pleroma.Web.OAuth.TokenController do
     end
   end
 
-  def oauth_tokens(%{assigns: %{user: user}} = conn, _params) do
+  def oauth_tokens(%{assigns: %{user: user, token: current_token}} = conn, _params) do
     with oauth_tokens <- Token.get_user_tokens(user) do
       conn
       |> put_view(TokenView)
-      |> render("index.json", %{tokens: oauth_tokens})
+      |> render("index.json", %{tokens: oauth_tokens, token: current_token})
     end
   end
 
