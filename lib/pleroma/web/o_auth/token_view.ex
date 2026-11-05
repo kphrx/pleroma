@@ -5,7 +5,7 @@
 defmodule Pleroma.Web.OAuth.TokenView do
   use Pleroma.Web, :view
 
-  def render("index.json", %{tokens: tokens}) do
+  def render("index.json", %{tokens: tokens, current_token: current_token}) do
     tokens
     |> render_many(Pleroma.Web.OAuth.TokenView, "show.json")
     |> Enum.filter(&Enum.any?/1)
