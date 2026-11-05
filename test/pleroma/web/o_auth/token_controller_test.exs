@@ -62,7 +62,22 @@ defmodule Pleroma.Web.OAuth.TokenControllerTest do
         |> hd()
         |> Map.keys()
 
-      assert Enum.sort(keys) == Enum.sort(["id", "app_name", "valid_until", "scopes"])
+      assert Enum.sort(keys) ==
+               Enum.sort(["id", "app_name", "valid_until", "scopes", "is_current_token"])
+    end
+
+    test "marks which token is being used for the request" do
+      %{conn: conn, user: user, token: current} = oauth_access(["read:security"])
+      other = insert(:oauth_token, user: user)
+
+      tokens =
+        conn
+        |> get("/api/oauth_tokens")
+        |> json_response(200)
+        |> Map.new(&{&1["id"], &1["is_current_token"]})
+
+      assert tokens[current.id] == true
+      assert tokens[other.id] == false
     end
 
     test "is allowed with the read scope" do
