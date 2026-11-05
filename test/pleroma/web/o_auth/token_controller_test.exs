@@ -62,8 +62,7 @@ defmodule Pleroma.Web.OAuth.TokenControllerTest do
         |> hd()
         |> Map.keys()
 
-      assert Enum.sort(keys) ==
-               Enum.sort(["id", "app_name", "valid_until", "scopes", "is_current_token"])
+      assert Enum.sort(keys) == Enum.sort(["id", "app_name", "valid_until", "scopes", "is_current_token"])
     end
 
     test "marks which token is being used for the request" do
