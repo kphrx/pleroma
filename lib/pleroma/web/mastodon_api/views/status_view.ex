@@ -182,64 +182,66 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       end
 
     reblog_rendering_opts = Map.put(opts, :activity, reblogged_parent_activity)
-    reblogged = render("show.json", reblog_rendering_opts)
+    # Without its Create activity (pruned or deleted) the post cannot be
+    # rendered, and a repeat of nothing is of no use to clients.
+    with %{} = reblogged <- render("show.json", reblog_rendering_opts) do
+      favorited = opts[:for] && opts[:for].ap_id in (object.data["likes"] || [])
 
-    favorited = opts[:for] && opts[:for].ap_id in (object.data["likes"] || [])
+      bookmark = Activity.get_bookmark(reblogged_parent_activity, opts[:for])
 
-    bookmark = Activity.get_bookmark(reblogged_parent_activity, opts[:for])
+      bookmark_folder =
+        if bookmark != nil do
+          bookmark.folder_id
+        else
+          nil
+        end
 
-    bookmark_folder =
-      if bookmark != nil do
-        bookmark.folder_id
-      else
-        nil
-      end
+      mentions =
+        activity.recipients
+        |> Enum.map(fn ap_id -> User.get_cached_by_ap_id(ap_id) end)
+        |> Enum.filter(& &1)
+        |> Enum.map(fn user -> AccountView.render("mention.json", %{user: user}) end)
 
-    mentions =
-      activity.recipients
-      |> Enum.map(fn ap_id -> User.get_cached_by_ap_id(ap_id) end)
-      |> Enum.filter(& &1)
-      |> Enum.map(fn user -> AccountView.render("mention.json", %{user: user}) end)
+      {pinned?, pinned_at} = pin_data(object, user)
 
-    {pinned?, pinned_at} = pin_data(object, user)
-
-    %{
-      id: to_string(activity.id),
-      uri: object.data["id"],
-      url: object.data["id"],
-      account:
-        AccountView.render("show.json", %{
-          user: user,
-          for: opts[:for]
-        }),
-      in_reply_to_id: nil,
-      in_reply_to_account_id: nil,
-      reblog: reblogged,
-      content: reblogged[:content] || "",
-      created_at: created_at,
-      reblogs_count: 0,
-      replies_count: 0,
-      favourites_count: 0,
-      reblogged: reblogged?(reblogged_parent_activity, opts[:for]),
-      favourited: present?(favorited),
-      bookmarked: present?(bookmark),
-      muted: false,
-      pinned: pinned?,
-      sensitive: false,
-      spoiler_text: "",
-      visibility: get_visibility(activity),
-      media_attachments: reblogged[:media_attachments] || [],
-      mentions: mentions,
-      tags: reblogged[:tags] || [],
-      application: build_application(object.data["generator"]),
-      language: get_language(object),
-      emojis: [],
-      pleroma: %{
-        local: activity.local,
-        pinned_at: pinned_at,
-        bookmark_folder: bookmark_folder
+      %{
+        id: to_string(activity.id),
+        uri: object.data["id"],
+        url: object.data["id"],
+        account:
+          AccountView.render("show.json", %{
+            user: user,
+            for: opts[:for]
+          }),
+        in_reply_to_id: nil,
+        in_reply_to_account_id: nil,
+        reblog: reblogged,
+        content: reblogged[:content] || "",
+        created_at: created_at,
+        reblogs_count: 0,
+        replies_count: 0,
+        favourites_count: 0,
+        reblogged: reblogged?(reblogged_parent_activity, opts[:for]),
+        favourited: present?(favorited),
+        bookmarked: present?(bookmark),
+        muted: false,
+        pinned: pinned?,
+        sensitive: false,
+        spoiler_text: "",
+        visibility: get_visibility(activity),
+        media_attachments: reblogged[:media_attachments] || [],
+        mentions: mentions,
+        tags: reblogged[:tags] || [],
+        application: build_application(object.data["generator"]),
+        language: get_language(object),
+        emojis: [],
+        pleroma: %{
+          local: activity.local,
+          pinned_at: pinned_at,
+          bookmark_folder: bookmark_folder
+        }
       }
-    }
+    end
   end
 
   def render("show.json", %{activity: %{data: %{"object" => _object}} = activity} = opts) do

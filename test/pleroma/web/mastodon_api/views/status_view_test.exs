@@ -810,6 +810,17 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     assert_schema(represented, "Status", Pleroma.Web.ApiSpec.spec())
   end
 
+  test "a reblog of a post whose Create activity is gone is not rendered" do
+    user = insert(:user)
+    activity = insert(:note_activity)
+
+    {:ok, reblog} = CommonAPI.repeat(activity.id, user)
+    Repo.delete!(activity)
+
+    assert StatusView.render("show.json", %{for: user, activity: reblog}) == nil
+    assert StatusView.render("index.json", %{for: user, activities: [reblog]}) == []
+  end
+
   test "a peertube video" do
     user = insert(:user)
 
