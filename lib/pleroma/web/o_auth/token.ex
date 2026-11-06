@@ -97,7 +97,7 @@ defmodule Pleroma.Web.OAuth.Token do
     |> validate_required([:valid_until])
   end
 
-  defp update_activity() do
+  defp update_activity do
     last_active = NaiveDateTime.utc_now()
 
     changeset
