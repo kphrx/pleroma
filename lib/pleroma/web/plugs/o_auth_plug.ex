@@ -29,7 +29,7 @@ defmodule Pleroma.Web.Plugs.OAuthPlug do
         with true <- needs_update?(user_token),
              {:ok, updated_token} <- Token.update_activity(user_token) do
           conn
-          |> assign(conn, :token, updated_token)
+          |> assign(:token, updated_token)
           |> assign(:user, user)
         else
           _ ->
