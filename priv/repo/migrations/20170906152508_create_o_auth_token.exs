@@ -12,7 +12,6 @@ defmodule Pleroma.Repo.Migrations.CreateOAuthToken do
       add(:token, :string)
       add(:refresh_token, :string)
       add(:valid_until, :naive_datetime_usec)
-      add(:last_active, :naive_datetime_usec)
 
       timestamps()
     end

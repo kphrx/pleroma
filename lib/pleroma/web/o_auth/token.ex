@@ -99,16 +99,9 @@ defmodule Pleroma.Web.OAuth.Token do
 
   @spec update_activity(Token.t()) :: {:ok, Token.t()} | {:error, Ecto.Changeset.t()}
   def update_activity(token) do
-    last_active = NaiveDateTime.utc_now()
-
-    changeset = Ecto.Changeset.change(token)
-
-    changeset
-    |> change(%{last_active: last_active})
-    |> validate_required([:last_active])
-    |> Repo.insert()
-
-    {:ok, token}
+    token
+    |> Ecto.Changeset.change(last_active: NaiveDateTime.utc_now())
+    |> Repo.update()
   end
 
   @spec create(App.t(), User.t(), map()) :: {:ok, Token.t()} | {:error, Ecto.Changeset.t()}
