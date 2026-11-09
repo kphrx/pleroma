@@ -108,7 +108,7 @@ defmodule Pleroma.Web.OAuth.Token do
     |> validate_required([:last_active])
     |> Repo.insert()
 
-    {: ok, token}
+    {:ok, token}
   end
 
   @spec create(App.t(), User.t(), map()) :: {:ok, Token.t()} | {:error, Ecto.Changeset.t()}
