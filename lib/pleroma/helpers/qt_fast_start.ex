@@ -4,29 +4,31 @@
 
 defmodule Pleroma.Helpers.QtFastStart do
   @moduledoc """
-  (WIP) Converts a "slow start" (data before metadatas) mov/mp4 file to a "fast start" one (metadatas before data).
+  Converts a "slow start" (data before metadata) MP4/MOV file to a "fast start" one
+  (metadata before data) by relocating the moov atom before the mdat atom and updating
+  chunk offset references in stco/co64 atoms accordingly.
   """
 
-  # TODO: Cleanup and optimizations
-  # Inspirations: https://www.ffmpeg.org/doxygen/3.4/qt-faststart_8c_source.html
-  #               https://github.com/danielgtaylor/qtfaststart/blob/master/qtfaststart/processor.py
-  #               ISO/IEC 14496-12:2015, ISO/IEC 15444-12:2015
-  #               Paracetamol
-
-  def fix(<<0x00, 0x00, 0x00, _, 0x66, 0x74, 0x79, 0x70, _::bits>> = binary) do
+  def fix(<<size::integer-big-size(32), 0x66, 0x74, 0x79, 0x70, _::bits>> = binary)
+      when size >= 8 do
     index = fix(binary, 0, nil, nil, [])
 
     case index do
-      :abort -> binary
-      [{"ftyp", _, _, _, _}, {"mdat", _, _, _, _} | _] -> faststart(index)
-      [{"ftyp", _, _, _, _}, {"free", _, _, _, _}, {"mdat", _, _, _, _} | _] -> faststart(index)
-      _ -> binary
+      :abort ->
+        binary
+
+      [{"ftyp", _, _, _, _}, {"mdat", _, _, _, _} | _] ->
+        faststart(index)
+
+      [{"ftyp", _, _, _, _}, {"free", _, _, _, _}, {"mdat", _, _, _, _} | _] ->
+        faststart(index)
+
+      _ ->
+        binary
     end
   end
 
-  def fix(binary) do
-    binary
-  end
+  def fix(binary), do: binary
 
   # MOOV have been seen before MDAT- abort
   defp fix(<<_::bits>>, _, true, false, _) do
@@ -74,9 +76,9 @@ defmodule Pleroma.Helpers.QtFastStart do
 
     {{_moov, _, _, moov_size, moov}, index} = List.keytake(index, "moov", 0)
     offset = -free_size + moov_size
-    rest = for {_, _, _, _, data} <- index, do: data, into: []
+    rest = Enum.map(index, fn {_, _, _, _, data} -> data end)
     <<moov_head::bits-size(64), moov_data::bits>> = moov
-    [ftyp, moov_head, fix_moov(moov_data, offset, []), rest]
+    IO.iodata_to_binary([ftyp, moov_head, fix_moov(moov_data, offset, []), rest])
   end
 
   defp fix_moov(
