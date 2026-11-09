@@ -39,23 +39,22 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
   def process_request(conn, key) do
     cache_key = {conn.method, conn.request_path, actor_key(conn), key}
 
-    # The claim is placed atomically via `fetch/3`: the fallback runs at most
-    # once per key (serialised by Cachex), so exactly one request can win a
-    # previously unseen key and every other concurrent request observes either
-    # the claim or the final record — never a second pass downstream.
-    case @cachex.fetch(:idempotency_cache, cache_key, fn _key ->
-           {:commit, @in_progress, ttl: @claim_ttl}
+    # Read and claim under the same lock so a retry cannot overwrite a
+    # claim or response written after a cache miss.
+    case @cachex.get_and_update(:idempotency_cache, cache_key, fn
+           nil -> {:commit, @in_progress, ttl: @claim_ttl}
+           existing -> {:ignore, existing}
          end) do
       {:commit, @in_progress, _options} ->
         cache_response(conn, key, cache_key)
 
-      {:ok, @in_progress} ->
+      {:ignore, @in_progress} ->
         render_in_progress(conn, key)
 
-      {:ok, record} ->
+      {:ignore, record} ->
         send_cached(conn, key, record)
 
-      {atom, message} when atom in [:ignore, :error] ->
+      {:error, message} ->
         render_error(conn, message)
     end
   end
