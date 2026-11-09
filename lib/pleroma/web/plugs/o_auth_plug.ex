@@ -26,7 +26,7 @@ defmodule Pleroma.Web.Plugs.OAuthPlug do
     with {:ok, token_str} <- fetch_token_str(conn) do
       with {:ok, user, user_token} <- fetch_user_and_token(token_str),
            false <- Token.expired?(user_token) do
-        with true <- needs_update?(token),
+        with true <- needs_update?(user_token),
              {:ok, updated_token} <- Token.update_activity(user_token) do
           assign(conn, :token, updated_token)
         else
