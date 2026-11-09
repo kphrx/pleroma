@@ -27,8 +27,7 @@ defmodule Pleroma.Web.Plugs.OAuthPlug do
       with {:ok, user, user_token} <- fetch_user_and_token(token_str),
            false <- Token.expired?(user_token) do
         with true <- needs_update?(token),
-          {:ok, updated_token} <- Token.update_activity(user_token) do
-
+             {:ok, updated_token} <- Token.update_activity(user_token) do
           assign(conn, :token, updated_token)
         else
           assign(conn, :token, user_token)
@@ -41,8 +40,7 @@ defmodule Pleroma.Web.Plugs.OAuthPlug do
           with {:ok, app, app_token} <- fetch_app_and_token(token_str),
                false <- Token.expired?(app_token) do
             with true <- needs_update?(token),
-              {:ok, updated_token} <- Token.update_activity(app_token) do
-
+                 {:ok, updated_token} <- Token.update_activity(app_token) do
               assign(conn, :token, updated_token)
             else
               assign(conn, :token, app_token)
