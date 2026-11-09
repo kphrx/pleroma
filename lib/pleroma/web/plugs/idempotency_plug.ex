@@ -12,6 +12,14 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
 
   @cachex Pleroma.Config.get([:cachex, :provider], Cachex)
 
+  # How long a claim placed on a key survives without the owning request
+  # completing. Should comfortably exceed the longest expected request; it only
+  # bounds how long a key stays blocked when the owner dies before sending a
+  # response (in which case no `before_send` callback ever runs).
+  @claim_ttl :timer.seconds(60)
+
+  @in_progress :in_progress
+
   @impl true
   def init(opts), do: opts
 
@@ -31,9 +39,18 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
   def process_request(conn, key) do
     cache_key = {conn.method, conn.request_path, actor_key(conn), key}
 
-    case @cachex.get(:idempotency_cache, cache_key) do
-      {:ok, nil} ->
+    # The claim is placed atomically via `fetch/3`: the fallback runs at most
+    # once per key (serialised by Cachex), so exactly one request can win a
+    # previously unseen key and every other concurrent request observes either
+    # the claim or the final record — never a second pass downstream.
+    case @cachex.fetch(:idempotency_cache, cache_key, fn _key ->
+           {:commit, @in_progress, ttl: @claim_ttl}
+         end) do
+      {:commit, @in_progress, _options} ->
         cache_response(conn, key, cache_key)
+
+      {:ok, @in_progress} ->
+        render_in_progress(conn, key)
 
       {:ok, record} ->
         send_cached(conn, key, record)
@@ -50,9 +67,13 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
   defp maybe_cache_response(
          %{private: %{skip_idempotency_cache: true}} = conn,
          _key,
-         _cache_key
-       ),
-       do: conn
+         cache_key
+       ) do
+    # Sensitive responses are not cached; release the claim so that the key
+    # is not reported as in progress until the claim expires.
+    {:ok, _} = @cachex.del(:idempotency_cache, cache_key)
+    conn
+  end
 
   defp maybe_cache_response(conn, key, cache_key) do
     [request_id] = get_resp_header(conn, "x-request-id")
@@ -96,6 +117,14 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlug do
     |> put_resp_header("x-original-request-id", request_id)
     |> put_resp_content_type(content_type)
     |> send_resp(status, body)
+    |> halt()
+  end
+
+  defp render_in_progress(conn, key) do
+    conn
+    |> put_resp_header("idempotency-key", key)
+    |> put_status(:conflict)
+    |> json(%{error: "A request with this idempotency key is already in progress"})
     |> halt()
   end
 
