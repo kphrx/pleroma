@@ -59,9 +59,9 @@ defmodule Pleroma.Web.Plugs.OAuthPlug do
     end
   end
 
-  defp needs_update?(Token{last_active: nil}), do: true
+  defp needs_update?(%Token{last_active: nil}), do: true
 
-  defp needs_update?(Token{last_active: last_active}) do
+  defp needs_update?(%Token{last_active: last_active}) do
     NaiveDateTime.diff(NaiveDateTime.utc_now(), last_active, :millisecond) >= @update_interval
   end
 
