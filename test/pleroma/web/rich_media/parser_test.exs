@@ -98,6 +98,32 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
               }}
   end
 
+  describe "YouTube" do
+    test "uses the oEmbed endpoint without fetching the watch page" do
+      # The watch page has no mock: YouTube often answers server IPs with a
+      # captcha redirect, so the card must not depend on it.
+      assert {:ok, data} = Parser.parse("https://www.youtube.com/watch?v=YOUTUBETEST1")
+
+      assert %{
+               "title" => "Test Video Title",
+               "author_name" => "Test Channel",
+               "provider_name" => "YouTube",
+               "image" => "https://i.ytimg.com/vi/YOUTUBETEST1/hqdefault.jpg",
+               "url" => "https://www.youtube.com/watch?v=YOUTUBETEST1"
+             } = data
+    end
+
+    test "works for youtu.be links" do
+      assert {:ok, %{"title" => "Test Video Title", "url" => "https://youtu.be/YOUTUBETEST1"}} =
+               Parser.parse("https://youtu.be/YOUTUBETEST1")
+    end
+
+    test "falls back to the page when the oEmbed endpoint fails" do
+      assert {:ok, %{"title" => "The Rock"}} =
+               Parser.parse("https://www.youtube.com/watch?v=NOOEMBED")
+    end
+  end
+
   test "does not fetch oEmbed URLs that fail page URL validation" do
     assert {:error, :invalid_metadata} = Parser.parse("https://example.com/oembed-internal")
   end

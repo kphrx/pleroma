@@ -1515,6 +1515,33 @@ defmodule HttpRequestMock do
      }}
   end
 
+  @youtube_oembed_json [
+    "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DYOUTUBETEST1&format=json",
+    "https://www.youtube.com/oembed?url=https%3A%2F%2Fyoutu.be%2FYOUTUBETEST1&format=json"
+  ]
+
+  def get(url, _, _, _) when url in @youtube_oembed_json do
+    {:ok,
+     %Tesla.Env{
+       status: 200,
+       headers: [{"content-type", "application/json"}],
+       body: File.read!("test/fixtures/rich_media/youtube_oembed.json")
+     }}
+  end
+
+  def get(
+        "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DNOOEMBED&format=json",
+        _,
+        _,
+        _
+      ) do
+    {:ok, %Tesla.Env{status: 404, body: "Not Found"}}
+  end
+
+  def get("https://www.youtube.com/watch?v=NOOEMBED", _, _, _) do
+    {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/ogp.html")}}
+  end
+
   def get("https://example.com/twitter-card", _, _, _) do
     {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/twitter_card.html")}}
   end
@@ -1783,6 +1810,7 @@ defmodule HttpRequestMock do
     "https://example.com/ogp-missing-data",
     "https://example.com/ogp-missing-title",
     "https://example.com/twitter-card",
+    "https://www.youtube.com/watch?v=NOOEMBED",
     "https://google.com/",
     "https://pleroma.local/notice/9kCP7V",
     "https://yahoo.com/",
@@ -1791,6 +1819,19 @@ defmodule HttpRequestMock do
 
   def head(url, _query, _body, _headers) when url in @rich_media_mocks do
     {:ok, %Tesla.Env{status: 200, body: ""}}
+  end
+
+  def head(url, _, _, _) when url in @youtube_oembed_json do
+    {:ok, %Tesla.Env{status: 200, headers: [{"content-type", "application/json"}]}}
+  end
+
+  def head(
+        "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DNOOEMBED&format=json",
+        _,
+        _,
+        _
+      ) do
+    {:ok, %Tesla.Env{status: 404}}
   end
 
   def head("https://example.com/oembed.json", _, _, _) do

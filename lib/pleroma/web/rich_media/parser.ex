@@ -4,6 +4,7 @@
 
 defmodule Pleroma.Web.RichMedia.Parser do
   alias Pleroma.Web.RichMedia.Helpers
+  alias Pleroma.Web.RichMedia.Parsers.OEmbed
   import Pleroma.Web.Metadata.Utils, only: [scrub_html_and_truncate: 2]
   require Logger
 
@@ -31,6 +32,15 @@ defmodule Pleroma.Web.RichMedia.Parser do
   end
 
   defp parse_url(url) do
+    with {:ok, data} <- OEmbed.direct_lookup(url),
+         {:ok, data} <- data |> clean_parsed_data() |> check_parsed_data() do
+      {:ok, data}
+    else
+      _ -> parse_page(url)
+    end
+  end
+
+  defp parse_page(url) do
     with {:ok, body} <- Helpers.rich_media_get(url),
          {:ok, html} <- Floki.parse_document(body) do
       html
