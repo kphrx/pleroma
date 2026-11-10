@@ -7,8 +7,8 @@ defmodule Pleroma.Web.RichMedia.Parsers.OEmbed do
     with elements = [_ | _] <- get_discovery_data(html),
          oembed_url when is_binary(oembed_url) <- get_oembed_url(elements),
          :ok <- Pleroma.Web.RichMedia.Helpers.validate_page_url(oembed_url),
-         {:ok, oembed_data = %{"html" => html}} <- get_oembed_data(oembed_url) do
-      %{oembed_data | "html" => Pleroma.HTML.filter_tags(html)}
+         {:ok, oembed_data} <- get_oembed_data(oembed_url) do
+      oembed_data
     else
       _e -> %{}
     end
@@ -23,8 +23,19 @@ defmodule Pleroma.Web.RichMedia.Parsers.OEmbed do
   end
 
   defp get_oembed_data(url) do
-    with {:ok, json} <- Pleroma.Web.RichMedia.Helpers.rich_media_get(url, accept: :json) do
-      Jason.decode(json)
+    with {:ok, json} <- Pleroma.Web.RichMedia.Helpers.rich_media_get(url, accept: :json),
+         {:ok, %{"html" => html} = data} <- Jason.decode(json) do
+      {:ok,
+       data
+       |> Map.put("html", Pleroma.HTML.filter_tags(html))
+       |> put_image()}
+    else
+      _ -> :error
     end
   end
+
+  defp put_image(%{"thumbnail_url" => url} = data) when is_binary(url),
+    do: Map.put_new(data, "image", url)
+
+  defp put_image(data), do: data
 end
