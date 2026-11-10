@@ -97,6 +97,10 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
               }}
   end
 
+  test "does not fetch oEmbed URLs that fail page URL validation" do
+    assert {:error, :invalid_metadata} = Parser.parse("https://example.com/oembed-internal")
+  end
+
   test "rejects invalid OGP data" do
     assert {:error, _} = Parser.parse("https://example.com/malformed")
   end

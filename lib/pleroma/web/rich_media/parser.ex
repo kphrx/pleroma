@@ -19,7 +19,7 @@ defmodule Pleroma.Web.RichMedia.Parser do
           {:ok, map()} | parse_errors() | Helpers.get_errors()
   def parse(url) when is_binary(url) do
     with {_, true} <- {:config, @config_impl.get([:rich_media, :enabled])},
-         {_, :ok} <- {:validate, validate_page_url(url)},
+         {_, :ok} <- {:validate, Helpers.validate_page_url(url)},
          {_, {:ok, data}} <- {:parse, parse_url(url)} do
       data = Map.put(data, "url", url)
       {:ok, data}
@@ -77,46 +77,4 @@ defmodule Pleroma.Web.RichMedia.Parser do
     do: %{data | "description" => scrub_html_and_truncate(desc, 200)}
 
   defp truncate_desc(data), do: data
-
-  @spec validate_page_url(URI.t() | binary()) :: :ok | :error
-  defp validate_page_url(page_url) when is_binary(page_url) do
-    validate_tld = @config_impl.get([Pleroma.Formatter, :validate_tld])
-
-    page_url
-    |> Linkify.Parser.url?(validate_tld: validate_tld)
-    |> parse_uri(page_url)
-  end
-
-  defp validate_page_url(%URI{host: host, scheme: "https"}) do
-    cond do
-      Linkify.Parser.ip?(host) ->
-        :error
-
-      host in @config_impl.get([:rich_media, :ignore_hosts], []) ->
-        :error
-
-      get_tld(host) in @config_impl.get([:rich_media, :ignore_tld], []) ->
-        :error
-
-      true ->
-        :ok
-    end
-  end
-
-  defp validate_page_url(_), do: :error
-
-  defp parse_uri(true, url) do
-    url
-    |> URI.parse()
-    |> validate_page_url
-  end
-
-  defp parse_uri(_, _), do: :error
-
-  defp get_tld(host) do
-    host
-    |> String.split(".")
-    |> Enum.reverse()
-    |> hd
-  end
 end

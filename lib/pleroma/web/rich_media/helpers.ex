@@ -11,6 +11,49 @@ defmodule Pleroma.Web.RichMedia.Helpers do
 
   @type get_errors :: {:error, :body_too_large | :content_type | :head | :get}
 
+  @doc "Checks that a URL is an https URL on a host rich media may fetch."
+  @spec validate_page_url(URI.t() | binary()) :: :ok | :error
+  def validate_page_url(page_url) when is_binary(page_url) do
+    validate_tld = Config.get([Pleroma.Formatter, :validate_tld])
+
+    page_url
+    |> Linkify.Parser.url?(validate_tld: validate_tld)
+    |> parse_uri(page_url)
+  end
+
+  def validate_page_url(%URI{host: host, scheme: "https"}) do
+    cond do
+      Linkify.Parser.ip?(host) ->
+        :error
+
+      host in Config.get([:rich_media, :ignore_hosts], []) ->
+        :error
+
+      get_tld(host) in Config.get([:rich_media, :ignore_tld], []) ->
+        :error
+
+      true ->
+        :ok
+    end
+  end
+
+  def validate_page_url(_), do: :error
+
+  defp parse_uri(true, url) do
+    url
+    |> URI.parse()
+    |> validate_page_url
+  end
+
+  defp parse_uri(_, _), do: :error
+
+  defp get_tld(host) do
+    host
+    |> String.split(".")
+    |> Enum.reverse()
+    |> hd
+  end
+
   @spec rich_media_get(String.t()) :: {:ok, String.t()} | get_errors()
   def rich_media_get(url) do
     case Pleroma.HTTP.AdapterHelper.can_stream?() do
