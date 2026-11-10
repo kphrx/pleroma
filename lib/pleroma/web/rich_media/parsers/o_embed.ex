@@ -23,7 +23,7 @@ defmodule Pleroma.Web.RichMedia.Parsers.OEmbed do
   end
 
   defp get_oembed_data(url) do
-    with {:ok, json} <- Pleroma.Web.RichMedia.Helpers.rich_media_get(url) do
+    with {:ok, json} <- Pleroma.Web.RichMedia.Helpers.rich_media_get(url, accept: :json) do
       Jason.decode(json)
     end
   end

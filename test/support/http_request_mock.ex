@@ -1507,7 +1507,12 @@ defmodule HttpRequestMock do
   end
 
   def get("https://example.com/oembed.json", _, _, _) do
-    {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/oembed.json")}}
+    {:ok,
+     %Tesla.Env{
+       status: 200,
+       headers: [{"content-type", "application/json; charset=utf-8"}],
+       body: File.read!("test/fixtures/rich_media/oembed.json")
+     }}
   end
 
   def get("https://example.com/twitter-card", _, _, _) do
@@ -1772,7 +1777,6 @@ defmodule HttpRequestMock do
     "https://example.com/malformed",
     "https://example.com/non-ogp",
     "https://example.com/oembed",
-    "https://example.com/oembed.json",
     "https://example.com/oembed-internal",
     "http://127.0.0.1:9200/internal.json",
     "https://example.com/ogp",
@@ -1787,6 +1791,10 @@ defmodule HttpRequestMock do
 
   def head(url, _query, _body, _headers) when url in @rich_media_mocks do
     {:ok, %Tesla.Env{status: 200, body: ""}}
+  end
+
+  def head("https://example.com/oembed.json", _, _, _) do
+    {:ok, %Tesla.Env{status: 200, headers: [{"content-type", "application/json; charset=utf-8"}]}}
   end
 
   def head("https://example.com/pdf-file", _, _, _) do

@@ -54,21 +54,30 @@ defmodule Pleroma.Web.RichMedia.Helpers do
     |> hd
   end
 
-  @spec rich_media_get(String.t()) :: {:ok, String.t()} | get_errors()
-  def rich_media_get(url) do
+  @html_types [{"text", "html"}]
+  @json_types [{"application", "json"}, {"application", "json+oembed"}, {"text", "json"}]
+
+  @doc """
+  Fetches a page for rich media. Pass `accept: :json` to fetch an oEmbed
+  JSON document instead of an HTML page.
+  """
+  @spec rich_media_get(String.t(), keyword()) :: {:ok, String.t()} | get_errors()
+  def rich_media_get(url, opts \\ []) do
+    types = if opts[:accept] == :json, do: @json_types, else: @html_types
+
     case Pleroma.HTTP.AdapterHelper.can_stream?() do
-      true -> stream(url)
-      false -> head_first(url)
+      true -> stream(url, types)
+      false -> head_first(url, types)
     end
     |> handle_result(url)
   end
 
-  defp stream(url) do
+  defp stream(url, types) do
     case Pleroma.HTTP.get(url, req_headers(), http_options()) do
       {:ok, %Tesla.Env{status: 200, body: stream_body, headers: headers}} ->
         result =
           try do
-            with {_, :ok} <- {:content_type, check_content_type(headers)},
+            with {_, :ok} <- {:content_type, check_content_type(headers, types)},
                  {_, :ok} <- {:content_length, check_content_length(headers)},
                  {:read_stream, {:ok, body}} <- {:read_stream, read_stream(stream_body)} do
               {:ok, body}
@@ -91,10 +100,10 @@ defmodule Pleroma.Web.RichMedia.Helpers do
     end
   end
 
-  defp head_first(url) do
+  defp head_first(url, types) do
     with {_, {:ok, %Tesla.Env{status: 200, headers: headers}}} <-
            {:head, Pleroma.HTTP.head(url, req_headers(), http_options())},
-         {_, :ok} <- {:content_type, check_content_type(headers)},
+         {_, :ok} <- {:content_type, check_content_type(headers, types)},
          {_, :ok} <- {:content_length, check_content_length(headers)},
          {_, {:ok, %Tesla.Env{status: 200, body: body}}} <-
            {:get, Pleroma.HTTP.get(url, req_headers(), http_options())} do
@@ -129,11 +138,13 @@ defmodule Pleroma.Web.RichMedia.Helpers do
     end
   end
 
-  defp check_content_type(headers) do
+  defp check_content_type(headers, types) do
     case List.keyfind(headers, "content-type", 0) do
       {_, content_type} ->
-        case Plug.Conn.Utils.media_type(content_type) do
-          {:ok, "text", "html", _} -> :ok
+        with {:ok, type, subtype, _} <- Plug.Conn.Utils.media_type(content_type),
+             true <- {type, subtype} in types do
+          :ok
+        else
           _ -> {:error, content_type}
         end
 
