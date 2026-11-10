@@ -733,7 +733,7 @@ No specific configuration.
 
 #### Pleroma.Upload.Filter.QtFastStart
 
-Moves the metadata (`moov` atom) of MP4/MOV videos in front of the media data, so playback can start before the whole file is downloaded. Files it cannot rewrite are uploaded as they are. Put it before `Pleroma.Upload.Filter.Dedupe`, so the name is the hash of the final file. It is in the default `filters`; an instance with its own `filters` list has to add it.
+Moves the metadata (`moov` atom) of MP4/MOV videos in front of the media data, so playback can start before the whole file is downloaded. Files it cannot rewrite are uploaded as they are. Put it before `Pleroma.Upload.Filter.Dedupe`, so the name is the hash of the final file. It is in the default `filters` and in the configs from `mix pleroma.instance gen`; an existing instance with its own `filters` list has to add it.
 
 No specific configuration.
 
