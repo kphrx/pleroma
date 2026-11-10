@@ -118,6 +118,12 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
                Parser.parse("https://youtu.be/YOUTUBETEST1")
     end
 
+    test "is skipped when the OEmbed parser is disabled" do
+      clear_config([:rich_media, :parsers], [Pleroma.Web.RichMedia.Parsers.TwitterCard])
+
+      assert {:error, _} = Parser.parse("https://www.youtube.com/watch?v=YOUTUBETEST1")
+    end
+
     test "falls back to the page when the oEmbed endpoint fails" do
       assert {:ok, %{"title" => "The Rock"}} =
                Parser.parse("https://www.youtube.com/watch?v=NOOEMBED")
@@ -126,6 +132,10 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
 
   test "does not fetch oEmbed URLs that fail page URL validation" do
     assert {:error, :invalid_metadata} = Parser.parse("https://example.com/oembed-internal")
+  end
+
+  test "ignores oEmbed data where html is not a string" do
+    assert {:error, :invalid_metadata} = Parser.parse("https://example.com/oembed-null-html")
   end
 
   test "rejects invalid OGP data" do

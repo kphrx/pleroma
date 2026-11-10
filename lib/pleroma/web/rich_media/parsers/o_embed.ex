@@ -43,7 +43,7 @@ defmodule Pleroma.Web.RichMedia.Parsers.OEmbed do
 
   defp get_oembed_data(url) do
     with {:ok, json} <- Pleroma.Web.RichMedia.Helpers.rich_media_get(url, accept: :json),
-         {:ok, %{"html" => html} = data} <- Jason.decode(json) do
+         {:ok, %{"html" => html} = data} when is_binary(html) <- Jason.decode(json) do
       {:ok,
        data
        |> Map.put("html", Pleroma.HTML.filter_tags(html))

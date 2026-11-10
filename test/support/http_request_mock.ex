@@ -1497,6 +1497,18 @@ defmodule HttpRequestMock do
     {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/oembed.html")}}
   end
 
+  def get("https://example.com/oembed-null-html", _, _, _) do
+    {:ok,
+     %Tesla.Env{
+       status: 200,
+       body: ~s(<link type="application/json+oembed" href="https://example.com/oembed-null.json">)
+     }}
+  end
+
+  def get("https://example.com/oembed-null.json", _, _, _) do
+    {:ok, %Tesla.Env{status: 200, body: ~s({"title": "Null", "html": null})}}
+  end
+
   def get("https://example.com/oembed-internal", _, _, _) do
     {:ok,
      %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/oembed_internal.html")}}
@@ -1805,6 +1817,8 @@ defmodule HttpRequestMock do
     "https://example.com/non-ogp",
     "https://example.com/oembed",
     "https://example.com/oembed-internal",
+    "https://example.com/oembed-null-html",
+    "https://example.com/oembed-null.json",
     "http://127.0.0.1:9200/internal.json",
     "https://example.com/ogp",
     "https://example.com/ogp-missing-data",
