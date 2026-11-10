@@ -13,8 +13,10 @@ defmodule Pleroma.Upload.Filter.QtFastStart do
 
   @behaviour Pleroma.Upload.Filter
 
+  require Logger
+
   @spec filter(Pleroma.Upload.t()) ::
-          {:ok, :filtered} | {:ok, :noop} | {:error, String.t()}
+          {:ok, :filtered} | {:ok, :noop}
   def filter(%Pleroma.Upload{tempfile: file, content_type: "video" <> _} = _upload) do
     try do
       binary = File.read!(file)
@@ -27,7 +29,10 @@ defmodule Pleroma.Upload.Filter.QtFastStart do
         {:ok, :noop}
       end
     rescue
-      e -> {:error, "#{__MODULE__}: #{inspect(e)}"}
+      # an optimisation only: the upload goes on with the file as it is
+      e ->
+        Logger.warning("#{__MODULE__}: #{inspect(e)}")
+        {:ok, :noop}
     end
   end
 

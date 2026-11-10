@@ -3,36 +3,42 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Upload.Filter.QtFastStartTest do
-  use Pleroma.DataCase, async: true
+  use ExUnit.Case, async: true
+  import ExUnit.CaptureLog
   alias Pleroma.Upload.Filter.QtFastStart
 
-  test "leaves a fast-start video unchanged" do
-    upload = %Pleroma.Upload{
-      name: "video.mp4",
-      content_type: "video/mp4",
-      path: Path.absname("test/fixtures/video.mp4"),
-      tempfile: Path.absname("test/fixtures/video.mp4")
+  defp upload(path, content_type \\ "video/mp4") do
+    %Pleroma.Upload{
+      name: Path.basename(path),
+      content_type: content_type,
+      path: path,
+      tempfile: path
     }
-
-    assert {:ok, :noop} = QtFastStart.filter(upload)
   end
 
-  test "converts a slow-start video to fast-start" do
-    File.cp!(
-      "test/fixtures/video_slow_start.mp4",
-      "test/fixtures/video_slow_start_tmp.mp4"
-    )
+  setup do
+    tmp_dir = Path.join(System.tmp_dir!(), "qt_fast_start_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(tmp_dir)
+    on_exit(fn -> File.rm_rf!(tmp_dir) end)
+    %{tmp_dir: tmp_dir}
+  end
 
-    upload = %Pleroma.Upload{
-      name: "video_slow_start.mp4",
-      content_type: "video/mp4",
-      path: Path.absname("test/fixtures/video_slow_start_tmp.mp4"),
-      tempfile: Path.absname("test/fixtures/video_slow_start_tmp.mp4")
-    }
+  defp copy(fixture, tmp_dir) do
+    path = Path.join(tmp_dir, Path.basename(fixture))
+    File.cp!(fixture, path)
+    path
+  end
 
-    assert {:ok, :filtered} = QtFastStart.filter(upload)
+  test "leaves a fast-start video unchanged" do
+    assert {:ok, :noop} = QtFastStart.filter(upload(Path.absname("test/fixtures/video.mp4")))
+  end
 
-    fixed = File.read!("test/fixtures/video_slow_start_tmp.mp4")
+  test "converts a slow-start video to fast-start", %{tmp_dir: tmp_dir} do
+    path = copy("test/fixtures/video_slow_start.mp4", tmp_dir)
+
+    assert {:ok, :filtered} = QtFastStart.filter(upload(path))
+
+    fixed = File.read!(path)
     <<atom_size::integer-big-size(32), fc1::bits-size(32), rest::bits>> = fixed
     assert fc1 == "ftyp"
     payload_size = (atom_size - 8) * 8
@@ -42,13 +48,16 @@ defmodule Pleroma.Upload.Filter.QtFastStartTest do
   end
 
   test "noop for non-video content" do
-    upload = %Pleroma.Upload{
-      name: "image.jpg",
-      content_type: "image/jpeg",
-      path: Path.absname("test/fixtures/image.jpg"),
-      tempfile: Path.absname("test/fixtures/image.jpg")
-    }
-
+    upload = upload(Path.absname("test/fixtures/image.jpg"), "image/jpeg")
     assert {:ok, :noop} = QtFastStart.filter(upload)
+  end
+
+  test "noop with a warning when the file cannot be read", %{tmp_dir: tmp_dir} do
+    log =
+      capture_log(fn ->
+        assert {:ok, :noop} = QtFastStart.filter(upload(Path.join(tmp_dir, "missing.mp4")))
+      end)
+
+    assert log =~ "QtFastStart"
   end
 end
