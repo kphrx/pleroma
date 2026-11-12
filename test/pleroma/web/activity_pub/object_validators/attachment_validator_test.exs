@@ -201,6 +201,23 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidatorTest do
       end
     end
 
+    test "it uses mimeType when mediaType is empty or unknown" do
+      for media_type <- ["", "application/octet-stream"] do
+        attachment = %{
+          "type" => "Document",
+          "mediaType" => media_type,
+          "mimeType" => "image/png",
+          "url" => "https://example.com/image.jpg"
+        }
+
+        {:ok, attachment} =
+          AttachmentValidator.cast_and_validate(attachment)
+          |> Ecto.Changeset.apply_action(:insert)
+
+        assert attachment.mediaType == "image/png"
+      end
+    end
+
     test "it keeps a media type sent by the remote" do
       attachment = %{
         "type" => "Image",

@@ -65,13 +65,11 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidator do
   @guessable_media_types ~w[image video audio]
 
   def fix_media_type(data) do
-    case data["mediaType"] || data["mimeType"] do
-      media_type when media_type in @unknown_media_types ->
-        Map.put(data, "mediaType", guess_media_type(data) || "application/octet-stream")
+    media_type =
+      Enum.find([data["mediaType"], data["mimeType"]], &(&1 not in @unknown_media_types)) ||
+        guess_media_type(data) || "application/octet-stream"
 
-      media_type ->
-        Map.put_new(data, "mediaType", media_type)
-    end
+    Map.put(data, "mediaType", media_type)
   end
 
   # Some servers (e.g. Threads) send no media type. Guess one from the
