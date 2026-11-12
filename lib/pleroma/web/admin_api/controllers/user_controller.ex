@@ -73,18 +73,23 @@ defmodule Pleroma.Web.AdminAPI.UserController do
   defp do_deletes(%{assigns: %{user: admin}} = conn, nicknames) when is_list(nicknames) do
     users = Enum.map(nicknames, &User.get_cached_by_nickname/1)
 
-    Enum.each(users, fn user ->
-      {:ok, delete_data, _} = Builder.delete(admin, user.ap_id)
-      Pipeline.common_pipeline(delete_data, local: true)
-    end)
+    # Fail closed: an unknown nickname means no deletes, not a partial delete.
+    if nil in users do
+      {:error, :not_found}
+    else
+      Enum.each(users, fn user ->
+        {:ok, delete_data, _} = Builder.delete(admin, user.ap_id)
+        Pipeline.common_pipeline(delete_data, local: true)
+      end)
 
-    ModerationLog.insert_log(%{
-      actor: admin,
-      subject: users,
-      action: "delete"
-    })
+      ModerationLog.insert_log(%{
+        actor: admin,
+        subject: users,
+        action: "delete"
+      })
 
-    json(conn, nicknames)
+      json(conn, nicknames)
+    end
   end
 
   def follow(
