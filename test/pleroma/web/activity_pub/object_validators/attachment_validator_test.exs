@@ -8,6 +8,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidatorTest do
   alias Pleroma.UnstubbedConfigMock, as: ConfigMock
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidator
+  alias Pleroma.Web.ActivityPub.Transmogrifier
 
   import Mox
   import Pleroma.Factory
@@ -57,7 +58,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidatorTest do
                |> AttachmentValidator.cast_and_validate()
                |> Ecto.Changeset.apply_action(:insert)
 
-      assert attachment.mediaType == "application/octet-stream"
+      assert attachment.mediaType == "image/jpeg"
       assert attachment.summary == "Select your spirit chonk"
       assert attachment.name == "298p3RG7j27tfsZ9RQ.jpg"
     end
@@ -127,6 +128,91 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.AttachmentValidatorTest do
 
       assert attachment.mediaType == "image/jpeg"
       assert attachment.blurhash == "UD9jJz~VSbR#xT$~%KtQX9R,WAs9RjWBs:of"
+    end
+
+    test "it guesses a missing media type from the url extension (Threads)" do
+      attachment = %{
+        "type" => "Image",
+        "url" => "https://cdn.example.com/v/t51/900924821_n.webp?stp=dst-jpg_e35&oh=00_AQ",
+        "width" => 2000,
+        "height" => 1500
+      }
+
+      {:ok, attachment} =
+        AttachmentValidator.cast_and_validate(attachment)
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert attachment.mediaType == "image/webp"
+      assert [%{mediaType: "image/webp", width: 2000, height: 1500}] = attachment.url
+    end
+
+    test "it guesses a missing media type of a url link object" do
+      attachment = %{
+        "type" => "Document",
+        "url" => [%{"type" => "Link", "href" => "https://example.com/clip.mp4"}]
+      }
+
+      {:ok, attachment} =
+        AttachmentValidator.cast_and_validate(attachment)
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert [%{mediaType: "video/mp4"}] = attachment.url
+    end
+
+    test "it falls back to the object type for a missing media type" do
+      for {type, expected} <- [{"Image", "image/*"}, {"Video", "video/*"}, {"Audio", "audio/*"}] do
+        attachment = %{"type" => type, "url" => "https://example.com/media/12345"}
+
+        {:ok, attachment} =
+          AttachmentValidator.cast_and_validate(attachment)
+          |> Ecto.Changeset.apply_action(:insert)
+
+        assert attachment.mediaType == expected
+        assert [%{mediaType: ^expected}] = attachment.url
+      end
+    end
+
+    test "it uses the guessed media type for url links of incoming objects" do
+      for {url, expected} <- [
+            {"https://cdn.example.com/a_n.webp?stp=1", "image/webp"},
+            {"https://example.com/media/12345", "image/*"}
+          ] do
+        %{"attachment" => [attachment]} =
+          Transmogrifier.fix_attachments(%{"attachment" => [%{"type" => "Image", "url" => url}]})
+
+        {:ok, attachment} =
+          AttachmentValidator.cast_and_validate(attachment)
+          |> Ecto.Changeset.apply_action(:insert)
+
+        assert attachment.mediaType == expected
+        assert [%{mediaType: ^expected}] = attachment.url
+      end
+    end
+
+    test "it guesses only image, video or audio media types" do
+      for url <- ["https://example.com/page.html", "https://example.com/doc.pdf"] do
+        attachment = %{"type" => "Document", "url" => url}
+
+        {:ok, attachment} =
+          AttachmentValidator.cast_and_validate(attachment)
+          |> Ecto.Changeset.apply_action(:insert)
+
+        assert attachment.mediaType == "application/octet-stream"
+      end
+    end
+
+    test "it keeps a media type sent by the remote" do
+      attachment = %{
+        "type" => "Image",
+        "mediaType" => "image/png",
+        "url" => "https://example.com/image.jpg"
+      }
+
+      {:ok, attachment} =
+        AttachmentValidator.cast_and_validate(attachment)
+        |> Ecto.Changeset.apply_action(:insert)
+
+      assert attachment.mediaType == "image/png"
     end
 
     test "it handles our own uploads" do
