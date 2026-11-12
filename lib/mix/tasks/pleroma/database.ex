@@ -7,6 +7,7 @@ defmodule Mix.Tasks.Pleroma.Database do
   alias Pleroma.Maintenance
   alias Pleroma.Object
   alias Pleroma.Repo
+  alias Pleroma.Search.DatabaseSearch.Index
   alias Pleroma.User
 
   require Logger
@@ -311,56 +312,54 @@ defmodule Mix.Tasks.Pleroma.Database do
     |> Stream.run()
   end
 
-  def run(["set_text_search_config", tsconfig]) do
+  def run(["set_text_search_config", tsconfig | args]) do
+    {options, [], []} = OptionParser.parse(args, strict: [blocking: :boolean])
     start_pleroma()
     %{rows: [[tsc]]} = Ecto.Adapters.SQL.query!(Pleroma.Repo, "SHOW default_text_search_config;")
     shell_info("Current default_text_search_config: #{tsc}")
 
-    %{rows: [[db]]} = Ecto.Adapters.SQL.query!(Pleroma.Repo, "SELECT current_database();")
-    shell_info("Update default_text_search_config: #{tsconfig}")
-
-    %{messages: msg} =
-      Ecto.Adapters.SQL.query!(
-        Pleroma.Repo,
-        "ALTER DATABASE #{db} SET default_text_search_config = '#{tsconfig}';"
-      )
-
-    # non-exist config will not raise exception but only give >0 messages
-    if length(msg) > 0 do
-      shell_info("Error: #{inspect(msg, pretty: true)}")
+    if Pleroma.Config.get([:database, :rum_enabled]) do
+      set_text_search_config_rum(tsconfig)
     else
-      rum_enabled = Pleroma.Config.get([:database, :rum_enabled])
-      shell_info("Recreate index, RUM: #{rum_enabled}")
-
-      # Note SQL below needs to be kept up-to-date with latest GIN or RUM index definition in future
-      if rum_enabled do
-        Ecto.Adapters.SQL.query!(
-          Pleroma.Repo,
-          "CREATE OR REPLACE FUNCTION objects_fts_update() RETURNS trigger AS $$ BEGIN
-          new.fts_content := to_tsvector(new.data->>'content');
-          RETURN new;
-          END
-          $$ LANGUAGE plpgsql",
-          [],
-          timeout: :infinity
-        )
-
-        shell_info("Refresh RUM index")
-        Ecto.Adapters.SQL.query!(Pleroma.Repo, "UPDATE objects SET updated_at = NOW();")
-      else
-        Ecto.Adapters.SQL.query!(Pleroma.Repo, "DROP INDEX IF EXISTS objects_fts;")
-
-        Ecto.Adapters.SQL.query!(
-          Pleroma.Repo,
-          "CREATE INDEX CONCURRENTLY objects_fts ON objects USING gin(to_tsvector('#{tsconfig}', data->>'content')); ",
-          [],
-          timeout: :infinity
-        )
-      end
-
-      shell_info(~c"Done.")
+      set_text_search_config_gin(tsconfig, options)
     end
   end
+
+  def run(["search_window_tokens", "status"]) do
+    start_pleroma()
+    %{form: form, leftovers: leftovers, building: building} = Index.status()
+    shell_info("objects_fts: #{form}")
+
+    if building != [] do
+      shell_info(
+        "An index build or other maintenance is running on objects (pid #{Enum.join(building, ", ")})."
+      )
+    end
+
+    if form == :unknown do
+      shell_error(
+        "objects_fts is not an index that search can use well. " <>
+          "Run `search_window_tokens disable` (or `enable`) to replace it."
+      )
+    end
+
+    Enum.each(leftovers, fn %{name: name, valid: valid} ->
+      shell_info(
+        "Leftover index #{name} (valid: #{valid}). If no build is running, enable or " <>
+          "disable uses it if it is valid and matches, and removes it otherwise; " <>
+          "or remove it with: DROP INDEX CONCURRENTLY #{name};"
+      )
+    end)
+  end
+
+  def run(["search_window_tokens", action | args]) when action in ["enable", "disable"] do
+    case OptionParser.parse(args, strict: [blocking: :boolean]) do
+      {options, [], []} -> search_window_tokens(action, options)
+      _ -> search_window_tokens_usage()
+    end
+  end
+
+  def run(["search_window_tokens" | _]), do: search_window_tokens_usage()
 
   # Rolls back a specific migration (leaving subsequent migrations applied).
   # WARNING: imposes a risk of unrecoverable data loss — proceed at your own responsibility.
@@ -387,6 +386,134 @@ defmodule Mix.Tasks.Pleroma.Database do
         end)
 
       shell_info(inspect(result))
+    end
+  end
+
+  defp search_window_tokens(action, options) do
+    start_pleroma()
+    form = if action == "enable", do: :tokens, else: :plain
+
+    if Pleroma.Config.get([:database, :rum_enabled]) do
+      shell_error("Window tokens are for the GIN index; RUM is enabled.")
+    else
+      form
+      |> Index.rebuild(concurrently: !options[:blocking], log: &shell_info/1)
+      |> report_window_tokens(form)
+    end
+  end
+
+  defp search_window_tokens_usage do
+    shell_error(
+      "Usage: mix pleroma.database search_window_tokens status | enable [--blocking] | disable [--blocking]"
+    )
+  end
+
+  defp report_window_tokens({:ok, :unchanged}, :tokens),
+    do: shell_info("objects_fts already has window tokens.")
+
+  defp report_window_tokens({:ok, :unchanged}, :plain),
+    do: shell_info("objects_fts is already a plain full-text index.")
+
+  defp report_window_tokens({:ok, :rebuilt}, :tokens),
+    do: shell_info("Done: objects_fts now has window tokens.")
+
+  defp report_window_tokens({:ok, :rebuilt}, :plain),
+    do: shell_info("Done: objects_fts is a plain full-text index again.")
+
+  defp report_window_tokens({:error, :rum}, _),
+    do: shell_error("objects_fts is a RUM index; window tokens are for the GIN index.")
+
+  defp report_window_tokens({:error, :running}, _),
+    do:
+      shell_error(
+        "Another session is building an index or running maintenance on objects; " <>
+          "try again when it is done (see `search_window_tokens status`)."
+      )
+
+  defp report_window_tokens({:error, {:failed, message}}, _),
+    do: shell_error("The rebuild failed; objects_fts is unchanged: #{message}")
+
+  defp report_window_tokens({:error, :invalid}, _) do
+    shell_error(
+      "The new index is not valid (the build failed). " <>
+        "objects_fts is unchanged; run the task again."
+    )
+  end
+
+  defp report_window_tokens({:error, {:leftover, name}}, _) do
+    shell_error(
+      "The index #{name} exists, but it does not match what this task would build " <>
+        "(another expression or text search config). objects_fts is unchanged. " <>
+        "If you do not need #{name}, remove it with: DROP INDEX CONCURRENTLY #{name};"
+    )
+  end
+
+  defp report_window_tokens({:error, {:after_switch, message}}, _) do
+    shell_error(
+      "objects_fts was switched, but removing the old index or analyzing failed: " <>
+        "#{message}. Run the task again to finish."
+    )
+  end
+
+  defp set_database_text_search_config(tsconfig) do
+    %{rows: [[db]]} = Ecto.Adapters.SQL.query!(Pleroma.Repo, "SELECT current_database();")
+    shell_info("Update default_text_search_config: #{tsconfig}")
+
+    %{messages: msg} =
+      Ecto.Adapters.SQL.query!(
+        Pleroma.Repo,
+        "ALTER DATABASE #{db} SET default_text_search_config = '#{tsconfig}';"
+      )
+
+    # non-exist config will not raise exception but only give >0 messages
+    if msg == [] do
+      :ok
+    else
+      shell_info("Error: #{inspect(msg, pretty: true)}")
+      :error
+    end
+  end
+
+  defp set_text_search_config_rum(tsconfig) do
+    if set_database_text_search_config(tsconfig) == :ok do
+      shell_info("Recreate index, RUM: true")
+
+      # Note SQL below needs to be kept up-to-date with latest RUM index definition in future
+      Ecto.Adapters.SQL.query!(
+        Pleroma.Repo,
+        "CREATE OR REPLACE FUNCTION objects_fts_update() RETURNS trigger AS $$ BEGIN
+          new.fts_content := to_tsvector(new.data->>'content');
+          RETURN new;
+          END
+          $$ LANGUAGE plpgsql",
+        [],
+        timeout: :infinity
+      )
+
+      shell_info("Refresh RUM index")
+      Ecto.Adapters.SQL.query!(Pleroma.Repo, "UPDATE objects SET updated_at = NOW();")
+      shell_info("Done.")
+    end
+  end
+
+  # The index is rebuilt first: if that fails, the database keeps a config
+  # that matches its index.
+  defp set_text_search_config_gin(tsconfig, options) do
+    # Keep window tokens if they are active.
+    form = if Index.status().form == :tokens, do: :tokens, else: :plain
+    shell_info("Recreate index with #{tsconfig}")
+
+    case Index.rebuild(form,
+           config: tsconfig,
+           force: true,
+           concurrently: !options[:blocking],
+           log: &shell_info/1
+         ) do
+      {:ok, _} ->
+        if set_database_text_search_config(tsconfig) == :ok, do: shell_info("Done.")
+
+      error ->
+        report_window_tokens(error, form)
     end
   end
 end

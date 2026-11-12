@@ -6,6 +6,7 @@ defmodule Pleroma.User.Search do
   alias Pleroma.EctoType.ActivityPub.ObjectValidators.Uri, as: UriType
   alias Pleroma.Instances.Instance
   alias Pleroma.Pagination
+  alias Pleroma.Search.DatabaseSearch
   alias Pleroma.User
 
   import Ecto.Query
@@ -32,12 +33,12 @@ defmodule Pleroma.User.Search do
       |> maybe_add_ap_id_match(query_string)
       |> maybe_add_uri_match(query_string)
 
-    results =
+    # The server's gin_fuzzy_search_limit would return random matches.
+    DatabaseSearch.with_fuzzy_limit(fn ->
       query_string
       |> search_query(for_user, following, top_user_ids, capabilities)
       |> Pagination.fetch_paginated(%{"offset" => offset, "limit" => result_limit}, :offset)
-
-    results
+    end)
   end
 
   defp maybe_add_resolved(list, {:ok, %User{} = user}) do
@@ -68,19 +69,34 @@ defmodule Pleroma.User.Search do
     # Strip the beginning @ off if there is a query
     query_string = String.trim_leading(query_string, "@")
 
-    with [name, domain] <- String.split(query_string, "@") do
-      encoded_domain =
-        domain
-        |> String.replace(~r/[!-\-|@|[-`|{-~|\/|:|\s]+/, "")
-        |> String.to_charlist()
-        |> :idna.encode()
-        |> to_string()
+    # Links stay as they are for resolving; to_tsquery/1 takes their handle.
+    if url?(query_string), do: query_string, else: format_handle(query_string)
+  end
 
-      name <> "@" <> encoded_domain
-    else
+  defp format_handle(query_string) do
+    case String.split(query_string, "@") do
+      [name, domain] -> name <> "@" <> encode_domain(domain)
       _ -> query_string
     end
   end
+
+  defp encode_domain(domain) do
+    domain =
+      domain
+      # "-" stays: punycode labels (xn--) need it.
+      |> String.replace(~r/[!-,|@|[-`|{-~|\/|:-?|\s]+/, "")
+      # A label cannot start or end with "-" (for example while typing "my-").
+      |> String.replace(~r/(^|\.)-+|-+(?=\.|$)/, "\\1")
+
+    try do
+      domain |> String.to_charlist() |> :idna.encode() |> to_string()
+    catch
+      # idna exits on invalid labels.
+      :exit, _ -> domain
+    end
+  end
+
+  defp url?(query_string), do: URI.parse(query_string).scheme in ["http", "https"]
 
   defp search_query(query_string, for_user, following, top_user_ids, capabilities) do
     for_user
@@ -129,13 +145,34 @@ defmodule Pleroma.User.Search do
   end
 
   defp to_tsquery(query_string) do
-    String.trim_trailing(query_string, "@" <> local_domain())
+    query_string
+    |> handle_from_url()
+    |> String.trim_trailing("@" <> local_domain())
     |> String.replace(~r/[!-\/|@|[-`|{-~|:-?]+/, " ")
     |> String.trim()
     |> String.split()
     |> Enum.map(&(&1 <> ":*"))
-    |> Enum.join(" | ")
+    # Every word must match: with OR, a sentence matches most users.
+    |> Enum.join(" & ")
   end
+
+  # A profile or status link searches for its handle: https://host/@name,
+  # https://host/@name/123, https://host/users/name or https://host/@name@other.host.
+  # Other links stay as they are.
+  defp handle_from_url(query_string) do
+    with %URI{scheme: scheme, host: host, path: path}
+         when scheme in ["http", "https"] and is_binary(host) and host != "" <-
+           URI.parse(query_string),
+         name when is_binary(name) <- name_from_path(String.split(path || "", "/", trim: true)) do
+      format_handle(if String.contains?(name, "@"), do: name, else: name <> "@" <> host)
+    else
+      _ -> query_string
+    end
+  end
+
+  defp name_from_path(["@" <> name | _]) when name != "", do: name
+  defp name_from_path(["users", name | _]), do: name
+  defp name_from_path(_segments), do: nil
 
   # Considers nickname match, localized nickname match, name match; preferences nickname match
   defp trigram_rank(query, query_string) do

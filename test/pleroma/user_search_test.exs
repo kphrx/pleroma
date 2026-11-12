@@ -21,7 +21,7 @@ defmodule Pleroma.UserSearchTest do
       user = insert(:user, %{nickname: "no_relation", ap_id: "https://lain.com/users/lain"})
       _user = insert(:user, %{nickname: "com_user"})
 
-      [first_user, _second_user] = User.search("https://lain.com/users/lain", resolve: true)
+      [first_user] = User.search("https://lain.com/users/lain", resolve: true)
 
       assert first_user.id == user.id
     end
@@ -30,7 +30,7 @@ defmodule Pleroma.UserSearchTest do
       user = insert(:user, %{nickname: "no_relation", ap_id: "https://lain.com/users/lain"})
       _user = insert(:user, %{nickname: "com_user"})
 
-      [first_user, _second_user] = User.search("https://lain.com/users/lain")
+      [first_user] = User.search("https://lain.com/users/lain")
 
       assert first_user.id == user.id
     end
@@ -51,7 +51,7 @@ defmodule Pleroma.UserSearchTest do
 
       _user = insert(:user, %{nickname: "com_user"})
 
-      [first_user, _second_user] = User.search("https://lain.com/@lain")
+      [first_user] = User.search("https://lain.com/@lain")
 
       assert first_user.id == user.id
     end
@@ -126,6 +126,84 @@ defmodule Pleroma.UserSearchTest do
                  |> List.first()
                  |> clear_virtual_fields()
       end)
+    end
+
+    test "matches only users that have every word" do
+      user = insert(:user, %{name: "John Doe"})
+      insert(:user, %{name: "Mary Doe"})
+      insert(:user, %{name: "John Smith"})
+
+      assert [user.id] == User.search("john doe") |> Enum.map(& &1.id)
+      assert [user.id] == User.search("jo do") |> Enum.map(& &1.id)
+    end
+
+    test "finds a user by a profile link" do
+      user = insert(:user, %{nickname: "foo@mastodon.example", local: false})
+      insert(:user, %{nickname: "foo@other.example", local: false})
+
+      for_user = insert(:user)
+
+      for query <- ["https://mastodon.example/@foo", "https://mastodon.example/users/foo"] do
+        assert [user.id] == User.search(query, for_user: for_user) |> Enum.map(& &1.id)
+      end
+    end
+
+    test "finds the author of a status link, and ignores other links" do
+      user = insert(:user, %{nickname: "foo@mastodon.example", local: false})
+      insert(:user, %{nickname: "123456@mastodon.example", local: false})
+      notice = insert(:user, %{nickname: "notice@mastodon.example", local: false})
+      for_user = insert(:user)
+
+      for query <- [
+            "https://mastodon.example/@foo/123456",
+            "https://mastodon.example/users/foo/statuses/123456"
+          ] do
+        assert [user.id] == User.search(query, for_user: for_user) |> Enum.map(& &1.id)
+      end
+
+      refute notice.id in (User.search("https://mastodon.example/notice/123", for_user: for_user)
+                           |> Enum.map(& &1.id))
+    end
+
+    test "finds a user by a profile link with an underscore or a remote handle" do
+      user = insert(:user, %{nickname: "foo_bar@remote.example", local: false})
+      for_user = insert(:user)
+
+      for query <- [
+            "https://remote.example/@foo_bar",
+            "https://mastodon.example/@foo_bar@remote.example"
+          ] do
+        assert [user.id] == User.search(query, for_user: for_user) |> Enum.map(& &1.id)
+      end
+    end
+
+    test "does not crash on an unfinished or invalid domain" do
+      user = insert(:user, %{nickname: "lain@my-server.example", local: false})
+      for_user = insert(:user)
+
+      assert [user.id] == User.search("lain@my-", for_user: for_user) |> Enum.map(& &1.id)
+
+      for query <- ["lain@", "lain@-foo", "lain@ab--c", "lain@xn--zz"] do
+        assert is_list(User.search(query, for_user: for_user))
+      end
+    end
+
+    test "does not match a sentence by one of its words" do
+      insert(:user, %{name: "Galaxy"})
+      insert(:user, %{nickname: "a@example.com"})
+
+      assert [] == User.search("a long time ago in a galaxy far far away")
+    end
+
+    test "finds all matches when the server has a gin_fuzzy_search_limit" do
+      users = insert_list(10, :user, %{name: "Fuzzy"})
+      # The limit does not apply to the pending list, so the rows are moved into the index.
+      Repo.query!("SELECT gin_clean_pending_list('users_fts_index')")
+      Repo.query!("SET gin_fuzzy_search_limit = 1")
+      Repo.query!("SET enable_seqscan = off")
+
+      assert Enum.sort(Enum.map(users, & &1.id)) ==
+               User.search("fuzzy") |> Enum.map(& &1.id) |> Enum.sort()
     end
 
     test "matches by leading fragment of user domain" do
@@ -298,11 +376,10 @@ defmodule Pleroma.UserSearchTest do
       user = insert(:user)
       insert(:user, nickname: "another@somedomain")
       insert(:user, nickname: "lain")
-      insert(:user, nickname: "lain@examplelocalhost")
+      remote = insert(:user, nickname: "lain@examplelocalhost")
 
       result = User.search("lain@examplelocalhost", resolve: true, for_user: user)
-      assert Enum.each(result, fn u -> u.search_rank == 0.5 end)
-      assert length(result) == 2
+      assert [remote.id] == Enum.map(result, & &1.id)
     end
 
     test "local user search with users" do
@@ -343,7 +420,7 @@ defmodule Pleroma.UserSearchTest do
       user = insert(:user, nickname: "lain@" <> to_string(:idna.encode("zetsubou.みんな")))
 
       results =
-        User.search("lain@zetsubou!@#$%^&*()+,-/:;<=>?[]'_{}|~`.みんな",
+        User.search("lain@zetsubou!#$%^&*()+,-/:;<=>?[]'_{}|~`.みんな",
           resolve: false,
           for_user: user
         )

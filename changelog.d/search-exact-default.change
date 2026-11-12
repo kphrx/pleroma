@@ -1,0 +1,1 @@
+Built-in search now defaults to exact results (`gin_fuzzy_search_limit: 0`), and 0 overrides a limit set on the PostgreSQL server
