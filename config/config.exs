@@ -60,7 +60,7 @@ config :pleroma, Pleroma.Captcha.Kocaptcha, endpoint: "https://captcha.kotobank.
 # Upload configuration
 config :pleroma, Pleroma.Upload,
   uploader: Pleroma.Uploaders.Local,
-  filters: [Pleroma.Upload.Filter.Dedupe],
+  filters: [Pleroma.Upload.Filter.QtFastStart, Pleroma.Upload.Filter.Dedupe],
   link_name: false,
   proxy_remote: false,
   filename_display_max_length: 30,
