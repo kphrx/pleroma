@@ -318,6 +318,10 @@ defmodule Mix.Tasks.Pleroma.Instance do
         enabled_filters
       end
 
+    # always on, it needs nothing installed; before Dedupe, so the hash is of
+    # the final file
+    enabled_filters = enabled_filters ++ [Pleroma.Upload.Filter.QtFastStart]
+
     enabled_filters =
       if filters.anonymize do
         enabled_filters ++ [Pleroma.Upload.Filter.AnonymizeFilename]

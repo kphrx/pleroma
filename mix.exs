@@ -171,7 +171,7 @@ defmodule Pleroma.Mixfile do
       {:httpoison, "~> 3.0", override: true},
       {:swoosh, "~> 1.28"},
       {:phoenix_swoosh, "~> 1.2"},
-      {:gen_smtp, "~> 0.15"},
+      {:gen_smtp, "~> 1.3"},
       {:mua, "~> 0.2.4"},
       {:mail, "~> 0.3.1"},
       # Fixes intermittent failure to compile due to an old pc version,

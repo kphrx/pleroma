@@ -10,13 +10,29 @@ To use built-in search that has no external dependencies, set the search module 
 
 While it has no external dependencies, it has problems with performance and relevancy.
 
-With a GIN index (the default), search queries limit how many matches PostgreSQL considers (`gin_fuzzy_search_limit`, see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)). This keeps searches for common words fast on large databases, but the results are incomplete and can change between requests. On smaller instances you can turn it off for exact results:
+With a GIN index (the default), search looks at the newest posts first and stops when it has enough results: first the newest 10,000 objects, then the newest 100,000, then the newest 1,000,000, then all older ones (`windows`). Only the newest candidates are joined to their activities for the visibility checks. If a search takes longer than `time_budget` (default 10 seconds), it returns the results found so far. Keep it below the `Pleroma.Repo` `:timeout` (default 15 seconds), as the search API stops waiting after that and then returns nothing. On large databases this can make results incomplete for words that only occur in old posts, for several common words together, and for local-only searches on instances with few local posts.
 
-> config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: nil
+> config :pleroma, Pleroma.Search.DatabaseSearch, time_budget: 10_000, windows: [10_000, 100_000, 1_000_000]
 
-Without a limit, searches for common words can take longer than the database timeout on large databases, and then return nothing.
+### Window tokens
 
-Earlier versions of Pleroma set this limit for every database connection, which also made other GIN index scans (for example recipient lookups) incomplete. It is now only set for search queries.
+PostgreSQL's planner often expects only a few matches for searches with several words. Then each window reads every matching post in the whole database instead of only the window's, which can take seconds when the posts are not cached. Window tokens fix this: the full-text index gets three extra entries per post, for its blocks of 10,000, 100,000 and 1,000,000 object ids. A window uses the blocks of its own size, so the index itself returns only the matches in the window, and it starts from a rare word when the word has fewer posts than the window.
+
+The upgrade to this version drops the plain `objects_fts` index to free its disk space. After startup, Pleroma builds the new index with window tokens in the background (`CREATE INDEX CONCURRENTLY`, so the instance keeps running). If Pleroma is restarted during the build, it continues after the restart. Until it is done, search works without a full-text index and is slow. Search uses the new index as soon as it is in place; no restart is needed. As a guide, with a parallel build: about 2 minutes for 1.7 million objects, and about 50 minutes for 75 million objects, which also used up to 9 GB of temporary files on top of the new index of about 7.6 GB (about as large as the plain one). The build uses one database connection until it is done. Instances with RUM indexes are not changed, and an `objects_fts` that Pleroma does not know (for example a partial index made by hand) is kept.
+
+On a large instance, you can build the index before you upgrade, while the plain index still works:
+
+> mix pleroma.database search_window_tokens enable
+
+If this is done before the upgrade, the upgrade finds the index with window tokens and keeps it, and search is never slow. This needs disk space for a second index until it is done.
+
+If the background build fails, the log tells you, and it is not tried again automatically: run the same task to build the index. You can run the task at any time; it refuses while the background build runs. `status` shows which index is active, `disable` goes back to the plain index the same way. See [the database tasks](../administration/CLI_tasks/database.md#search-window-tokens).
+
+Search queries set `gin_fuzzy_search_limit` (see [PostgreSQL's docs](https://www.postgresql.org/docs/current/gin.html#GIN-TIPS)) to 0 by default, which gives exact results even if your PostgreSQL server sets a limit. A limit, such as the earlier default of 500, makes results incomplete and random, especially for searches with several words. `nil` keeps the server's setting.
+
+> config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: 0
+
+Earlier versions of Pleroma set this limit for every database connection, which also made other GIN index scans (for example recipient lookups) incomplete. It is now only set for search queries. Account search uses the same setting, also with the other search modules.
 
 ## QdrantSearch
 

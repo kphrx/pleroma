@@ -60,7 +60,7 @@ config :pleroma, Pleroma.Captcha.Kocaptcha, endpoint: "https://captcha.kotobank.
 # Upload configuration
 config :pleroma, Pleroma.Upload,
   uploader: Pleroma.Uploaders.Local,
-  filters: [Pleroma.Upload.Filter.Dedupe],
+  filters: [Pleroma.Upload.Filter.QtFastStart, Pleroma.Upload.Filter.Dedupe],
   link_name: false,
   proxy_remote: false,
   filename_display_max_length: 30,
@@ -951,7 +951,10 @@ config :pleroma, Pleroma.Web.WebFinger, domain: nil, update_nickname_on_user_fet
 
 config :pleroma, Pleroma.Search, module: Pleroma.Search.DatabaseSearch
 
-config :pleroma, Pleroma.Search.DatabaseSearch, gin_fuzzy_search_limit: 500
+config :pleroma, Pleroma.Search.DatabaseSearch,
+  gin_fuzzy_search_limit: 0,
+  time_budget: 10_000,
+  windows: [10_000, 100_000, 1_000_000]
 
 config :pleroma, Pleroma.Search.Meilisearch,
   url: "http://127.0.0.1:7700/",

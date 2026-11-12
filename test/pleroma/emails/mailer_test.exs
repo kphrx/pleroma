@@ -90,4 +90,75 @@ defmodule Pleroma.Emails.MailerTest do
       assert Mailer.put_mua_cacertfile(config) == config
     end
   end
+
+  describe "put_smtp_tls_options/1" do
+    alias Pleroma.HTTP.TLS
+
+    test "makes implicit TLS check the certificate against the CAStore bundle" do
+      config =
+        Mailer.put_smtp_tls_options(
+          adapter: Swoosh.Adapters.SMTP,
+          relay: "mail.example.com",
+          ssl: true
+        )
+
+      assert config[:sockopts] == TLS.ssl_options()
+      refute Keyword.has_key?(config, :tls_options)
+    end
+
+    test "makes STARTTLS check the certificate for the relay" do
+      config =
+        Mailer.put_smtp_tls_options(adapter: Swoosh.Adapters.SMTP, relay: "mail.example.com")
+
+      assert config[:tls_options] == TLS.ssl_options(server_name_indication: ~c"mail.example.com")
+      refute Keyword.has_key?(config, :sockopts)
+    end
+
+    test "keeps the options that the admin set" do
+      config =
+        Mailer.put_smtp_tls_options(
+          adapter: Swoosh.Adapters.SMTP,
+          relay: "mail.example.com",
+          ssl: true,
+          sockopts: [depth: 3, cacerts: []]
+        )
+
+      assert config[:sockopts] == TLS.ssl_options(depth: 3, cacerts: [])
+
+      config =
+        Mailer.put_smtp_tls_options(
+          adapter: Swoosh.Adapters.SMTP,
+          relay: "mail.example.com",
+          tls: :always,
+          tls_options: [server_name_indication: ~c"mx.example.com"]
+        )
+
+      assert config[:tls_options] == TLS.ssl_options(server_name_indication: ~c"mx.example.com")
+    end
+
+    test "sends no SNI for an IP relay and reads ConfigDB strings" do
+      config = Mailer.put_smtp_tls_options(adapter: Swoosh.Adapters.SMTP, relay: "192.0.2.1")
+      assert config[:tls_options] == TLS.ssl_options()
+
+      config =
+        Mailer.put_smtp_tls_options(
+          adapter: Swoosh.Adapters.SMTP,
+          relay: "mail.example.com",
+          ssl: "true"
+        )
+
+      assert config[:sockopts] == TLS.ssl_options()
+
+      config = [adapter: Swoosh.Adapters.SMTP, relay: "mail.example.com", tls: "never"]
+      assert Mailer.put_smtp_tls_options(config) == config
+    end
+
+    test "leaves plain SMTP and other adapters alone" do
+      config = [adapter: Swoosh.Adapters.SMTP, relay: "mail.example.com", tls: :never]
+      assert Mailer.put_smtp_tls_options(config) == config
+
+      config = [adapter: Swoosh.Adapters.Mua, relay: "mail.example.com"]
+      assert Mailer.put_smtp_tls_options(config) == config
+    end
+  end
 end

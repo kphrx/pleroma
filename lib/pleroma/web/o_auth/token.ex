@@ -21,6 +21,7 @@ defmodule Pleroma.Web.OAuth.Token do
     field(:refresh_token, :string)
     field(:scopes, {:array, :string}, default: [])
     field(:valid_until, :naive_datetime_usec)
+    field(:last_active, :naive_datetime_usec)
     belongs_to(:user, User, type: FlakeId.Ecto.CompatType)
     belongs_to(:app, App)
 
@@ -94,6 +95,13 @@ defmodule Pleroma.Web.OAuth.Token do
     changeset
     |> change(%{valid_until: valid_until})
     |> validate_required([:valid_until])
+  end
+
+  @spec update_activity(Token.t()) :: {:ok, Token.t()} | {:error, Ecto.Changeset.t()}
+  def update_activity(token) do
+    token
+    |> Ecto.Changeset.change(last_active: NaiveDateTime.utc_now())
+    |> Repo.update()
   end
 
   @spec create(App.t(), User.t(), map()) :: {:ok, Token.t()} | {:error, Ecto.Changeset.t()}

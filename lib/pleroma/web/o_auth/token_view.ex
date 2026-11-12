@@ -17,6 +17,7 @@ defmodule Pleroma.Web.OAuth.TokenView do
     %{
       id: token_entry.id,
       valid_until: token_entry.valid_until,
+      last_active: token_entry.last_active,
       app_name: token_entry.app.client_name,
       scopes: token_entry.scopes,
       is_current_token: token_entry.id == current_token.id
