@@ -29,6 +29,10 @@ defmodule Pleroma.HTTPTest do
       %{method: :post, url: "http://example.com/world"} ->
         %Tesla.Env{status: 200, body: "world"}
 
+      # Hackney 4.9 hands back the bytes it read before the peer closed.
+      %{method: :get, url: "http://example.com/truncated"} ->
+        {:error, {:closed, "partial body"}}
+
       %{method: :get, url: "https://example.com/emoji/Pack%201/koronebless.png?foo=bar+baz"} ->
         %Tesla.Env{status: 200, body: "emoji data"}
 
@@ -78,6 +82,12 @@ defmodule Pleroma.HTTPTest do
                :ok,
                %Tesla.Env{status: 200, body: "hello"}
              }
+    end
+  end
+
+  describe "get/1 with a truncated body" do
+    test "drops the partial body from the error" do
+      assert HTTP.get("http://example.com/truncated") == {:error, :closed}
     end
   end
 

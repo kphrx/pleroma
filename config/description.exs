@@ -1789,6 +1789,27 @@ config :pleroma, :config_description, [
           "List of IPs (CIDR format accepted) to exempt from HTTP Signatures requirement (for example to allow debugging, you shouldn't otherwise need this)"
       },
       %{
+        key: :signature_policy,
+        type: {:dropdown, :atom},
+        description:
+          "What to do with incoming HTTP signatures that do not sign the date (or `(created)`), are outside the allowed time window, or do not sign the digest of a request body. `:enforce` treats them as invalid, `:log` only logs them",
+        suggestions: [:enforce, :log]
+      },
+      %{
+        key: :signature_max_age,
+        type: :integer,
+        description:
+          "How old, in seconds, the signed date of an incoming HTTP signature can be. Default: 7200 (2 hours)",
+        suggestions: [7200]
+      },
+      %{
+        key: :signature_max_clock_skew,
+        type: :integer,
+        description:
+          "How far, in seconds, the signed date of an incoming HTTP signature can be in the future. Default: 3600 (1 hour). A `(created)` time in the future is always rejected",
+        suggestions: [3600]
+      },
+      %{
         key: :note_replies_output_limit,
         type: :integer,
         description:
@@ -3562,6 +3583,21 @@ config :pleroma, :config_description, [
           Pleroma.Search.QdrantSearch,
           Pleroma.Search.ParadeDB
         ]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Search.DatabaseSearch,
+    type: :group,
+    description: "Built-in database search settings.",
+    children: [
+      %{
+        key: :gin_fuzzy_search_limit,
+        type: :integer,
+        description:
+          "Limits how many matches PostgreSQL considers in GIN full-text search queries (see `gin_fuzzy_search_limit` in the PostgreSQL docs). Only set for search queries. Keeps search fast on large databases, but results become incomplete and change between requests. Set to `nil` for exact results, which is fine on small instances. Default: 500.",
+        suggestions: [500, nil]
       }
     ]
   },

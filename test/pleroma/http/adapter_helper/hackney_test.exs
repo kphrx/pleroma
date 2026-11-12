@@ -58,6 +58,13 @@ defmodule Pleroma.HTTP.AdapterHelper.HackneyTest do
                {:socks5, ~c"::1", 9050}
     end
 
+    # AdminFE stores an empty field as "", and Hackney 4 fails every request with it.
+    test "ignores an empty proxy_url", %{uri: uri} do
+      clear_config([:http, :proxy_url], "")
+
+      refute Keyword.has_key?(Hackney.options([], uri), :proxy)
+    end
+
     test "respect connection opts and no proxy", %{uri: uri} do
       opts = Hackney.options([a: 2, b: 1], uri)
 

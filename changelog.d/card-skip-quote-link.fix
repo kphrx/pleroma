@@ -1,0 +1,1 @@
+Link preview cards skip the fallback link of quote posts (`RE: <url>`), which pointed at the quoted post and showed it twice.

@@ -7,7 +7,6 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
 
   alias Pleroma.Config
   alias Pleroma.Helpers.MediaHelper
-  alias Pleroma.Helpers.UriHelper
   alias Pleroma.ReverseProxy
   alias Pleroma.Web.MediaProxy
   alias Plug.Conn
@@ -66,9 +65,6 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
       cond do
         static and content_type == "image/gif" ->
           handle_jpeg_preview(conn, media_proxy_url)
-
-        static ->
-          drop_static_param_and_redirect(conn)
 
         content_type == "image/gif" ->
           conn
@@ -164,15 +160,6 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
       _ ->
         fallback_on_preview_error(conn, media_proxy_url)
     end
-  end
-
-  defp drop_static_param_and_redirect(conn) do
-    uri_without_static_param =
-      conn
-      |> current_url()
-      |> UriHelper.modify_uri_params(%{}, ["static"])
-
-    redirect(conn, external: uri_without_static_param)
   end
 
   defp fallback_on_preview_error(conn, media_proxy_url) do

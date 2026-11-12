@@ -96,6 +96,29 @@ defmodule Pleroma.Config.TransferTaskTest do
     assert Application.get_env(:pleroma, Pleroma.Search.ParadeDB.Repo)[:pool_size] == 2
   end
 
+  test "skips settings with an unknown module key" do
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+    Repo.insert_all("config", [
+      %{
+        group: ":pleroma",
+        key: "Pleroma.Nowhere.Module",
+        value: :erlang.term_to_binary(enabled: true),
+        inserted_at: now,
+        updated_at: now
+      }
+    ])
+
+    insert(:config, key: :test_key, value: [live: 2])
+    on_exit(fn -> Application.delete_env(:pleroma, :test_key) end)
+
+    log = capture_log(fn -> assert :ok = TransferTask.load_and_update_env([], false) end)
+
+    assert log =~ "Pleroma.Nowhere.Module"
+    assert Application.get_env(:pleroma, :test_key) == [live: 2]
+    refute Application.get_env(:pleroma, :invalid_atom)
+  end
+
   describe "pleroma restart" do
     setup do
       on_exit(fn ->

@@ -162,38 +162,20 @@ defmodule Mix.Tasks.Pleroma.Instance do
         )
         |> Path.expand()
 
-      {strip_uploads_location_message, strip_uploads_location_default} =
-        if Pleroma.Utils.command_available?("exiftool") do
-          {"Do you want to strip location (GPS) data from uploaded images? This requires exiftool, it was detected as installed. (y/n)",
-           "y"}
-        else
-          {"Do you want to strip location (GPS) data from uploaded images? This requires exiftool, it was detected as not installed, please install it if you answer yes. (y/n)",
-           "n"}
-        end
-
       strip_uploads_location =
         get_option(
           options,
           :strip_uploads_location,
-          strip_uploads_location_message,
-          strip_uploads_location_default
+          "Do you want to strip location (GPS) data from uploaded images? (y/n)",
+          "y"
         ) === "y"
-
-      {read_uploads_description_message, read_uploads_description_default} =
-        if Pleroma.Utils.command_available?("exiftool") do
-          {"Do you want to read data from uploaded files so clients can use it to prefill fields like image description? This requires exiftool, it was detected as installed. (y/n)",
-           "y"}
-        else
-          {"Do you want to read data from uploaded files so clients can use it to prefill fields like image description? This requires exiftool, it was detected as not installed, please install it if you answer yes. (y/n)",
-           "n"}
-        end
 
       read_uploads_description =
         get_option(
           options,
           :read_uploads_description,
-          read_uploads_description_message,
-          read_uploads_description_default
+          "Do you want to read metadata from uploaded images so clients can prefill the media description field? (y/n)",
+          "y"
         ) === "y"
 
       anonymize_uploads =
@@ -324,14 +306,14 @@ defmodule Mix.Tasks.Pleroma.Instance do
   defp upload_filters(filters) when is_map(filters) do
     enabled_filters =
       if filters.strip_location do
-        [Pleroma.Upload.Filter.Exiftool.StripLocation]
+        [Pleroma.Upload.Filter.Exif.StripLocation]
       else
         []
       end
 
     enabled_filters =
       if filters.read_description do
-        enabled_filters ++ [Pleroma.Upload.Filter.Exiftool.ReadDescription]
+        enabled_filters ++ [Pleroma.Upload.Filter.Exif.ReadDescription]
       else
         enabled_filters
       end

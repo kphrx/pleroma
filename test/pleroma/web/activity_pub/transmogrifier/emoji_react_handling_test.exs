@@ -86,6 +86,31 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier.EmojiReactHandlingTest do
            )
   end
 
+  test "it works for incoming custom emoji reactions with a single tag object" do
+    user = insert(:user)
+    other_user = insert(:user, local: false)
+    {:ok, activity} = CommonAPI.post(user, %{status: "hello"})
+
+    data =
+      File.read!("test/fixtures/custom-emoji-reaction.json")
+      |> Jason.decode!()
+      |> Map.put("object", activity.data["object"])
+      |> Map.put("actor", other_user.ap_id)
+
+    [tag] = data["tag"]
+    data = Map.put(data, "tag", tag)
+
+    {:ok, %Activity{data: data, local: false}} = Transmogrifier.handle_incoming(data)
+
+    assert data["content"] == ":hanapog:"
+    assert [%{"name" => "hanapog"}] = data["tag"]
+
+    object = Object.get_by_ap_id(data["object"])
+    url = tag["icon"]["url"]
+
+    assert match?([["hanapog", _, ^url]], object.data["reactions"])
+  end
+
   test "it works for incoming unqualified emoji reactions" do
     user = insert(:user)
     other_user = insert(:user, local: false)

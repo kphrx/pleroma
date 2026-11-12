@@ -4,8 +4,9 @@
 
 # Hackney 4 ignores `with_body` and always returns a fully read binary, so
 # `Tesla.Adapter.Hackney` never reaches the clause that honours `:max_body`.
-# The limit is enforced by Pleroma.Tesla.Middleware.MaxBody instead; these
-# exercise it against the real adapter.
+# Hackney 4.9 enforces `max_body` itself while reading (CVE-2026-97200);
+# Pleroma.Tesla.Middleware.MaxBody stays as the check for every adapter. These
+# exercise both against the real adapter.
 defmodule Pleroma.HTTP.HackneyMaxBodyRegressionTest do
   use ExUnit.Case, async: false
 
@@ -43,8 +44,8 @@ defmodule Pleroma.HTTP.HackneyMaxBodyRegressionTest do
              request("#{server.base_url}/big", max_body: 1024)
   end
 
-  # Without a Content-Length the header pre-check cannot fire, so this is the
-  # case that proves hackney's fully-read binary is measured.
+  # Without a Content-Length the header pre-check cannot fire, so only a size
+  # check on the body can refuse this.
   test "a chunked body over max_body is refused on size alone", %{server: server} do
     assert {:error, :body_too_large} =
              request("#{server.base_url}/chunked", max_body: 1024)
@@ -57,17 +58,16 @@ defmodule Pleroma.HTTP.HackneyMaxBodyRegressionTest do
     assert byte_size(body) == @body_bytes
   end
 
-  test "without max_body the body is returned whatever its size", %{server: server} do
+  test "without max_body the body is returned", %{server: server} do
     assert {:ok, %Tesla.Env{status: 200, body: body}} = request("#{server.base_url}/big", [])
     assert byte_size(body) == @body_bytes
   end
 
-  # Pins why the middleware is needed. Tesla.Adapter.Hackney only honours
-  # :max_body on the branch where hackney hands back a ref, which 4.x never
-  # does for a synchronous request. Should this ever start failing, hackney or
-  # Tesla have regained streaming and the middleware can go.
-  test "the bare adapter does not enforce max_body", %{server: server} do
-    url = "#{server.base_url}/big"
+  # Hackney 4.0 to 4.8 read the whole body whatever `max_body` said; 4.9
+  # stops reading once the body goes over it (CVE-2026-97200). Should this
+  # start failing, the hackney pin has gone back to a version without the fix.
+  test "the bare adapter enforces max_body", %{server: server} do
+    url = "#{server.base_url}/chunked"
 
     adapter_opts =
       HackneyAdapterHelper.options(
@@ -77,10 +77,8 @@ defmodule Pleroma.HTTP.HackneyMaxBodyRegressionTest do
 
     client = Tesla.client([], Tesla.Adapter.Hackney)
 
-    assert {:ok, %Tesla.Env{status: 200, body: body}} =
+    assert {:error, :body_too_large} =
              Tesla.request(client, method: :get, url: url, opts: [adapter: adapter_opts])
-
-    assert byte_size(body) == @body_bytes
   end
 
   defp start_server do

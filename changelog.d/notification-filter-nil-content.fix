@@ -1,0 +1,1 @@
+Do not crash when creating notifications for posts without content while the user has filters

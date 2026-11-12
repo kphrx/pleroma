@@ -4,7 +4,7 @@ defmodule Pleroma.Mixfile do
   def project do
     [
       app: :pleroma,
-      version: version("2.11.0"),
+      version: version("2.11.1"),
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: Mix.compilers(),
@@ -207,6 +207,7 @@ defmodule Pleroma.Mixfile do
       {:majic, "~> 1.2"},
       {:open_api_spex, "~> 3.22"},
       {:ecto_psql_extras, "~> 0.8"},
+      {:exif_stripper, "~> 0.1.3"},
       {:vix, "~> 0.36"},
       {:elixir_make, "~> 0.7.8", override: true},
       {:blurhash, "~> 0.1.0", hex: :rinpatch_blurhash},
@@ -226,9 +227,7 @@ defmodule Pleroma.Mixfile do
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:mock, "~> 0.3.9", only: :test},
       {:covertool, "~> 2.0", only: :test},
-      {:hackney, "~> 4.7.3", override: true},
-      # Hackney 4.7.3 pins certifi ~> 2.17.0; 2.18.0 drops the distrusted emSign roots.
-      {:certifi, "~> 2.18.0", override: true},
+      {:hackney, "~> 4.9.1", override: true},
       {:mox, "~> 1.2", only: :test},
       {:websockex, "~> 0.4.3", only: :test},
       {:benchee, "~> 1.4", only: :benchmark},

@@ -10,7 +10,7 @@ defmodule Pleroma.Search.QdrantSearch do
   alias __MODULE__.OpenAIClient
   alias __MODULE__.QdrantClient
 
-  import Pleroma.Search.DatabaseSearch, only: [maybe_fetch: 3]
+  import Pleroma.Search.DatabaseSearch, only: [maybe_fetch: 4]
 
   @impl true
   def create_index do
@@ -131,7 +131,7 @@ defmodule Pleroma.Search.QdrantSearch do
       |> Activity.restrict_deactivated_users()
       |> Ecto.Query.order_by([a], fragment("array_position(?, ?)", ^ids, a.id))
       |> Pleroma.Repo.all()
-      |> maybe_fetch(user, original_query)
+      |> maybe_fetch(user, original_query, options)
     else
       _ ->
         []

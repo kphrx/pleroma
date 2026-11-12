@@ -28,7 +28,6 @@ Note: This article is potentially outdated because at this time we may not have 
 - `certbot` (または何らかのLet's Encrypt向けACMEクライアント)
 - `ImageMagick`
 - `ffmpeg`
-- `exiftool`
 
 ### システムを準備する
 
@@ -60,7 +59,7 @@ sudo apt install elixir erlang-dev erlang-nox
 ### オプションパッケージ: [`docs/installation/optional/media_graphics_packages.md`](../installation/optional/media_graphics_packages.md)
 
 ```shell
-sudo apt install imagemagick ffmpeg libimage-exiftool-perl
+sudo apt install imagemagick ffmpeg
 ```
 
 ### Pleroma BE (バックエンド) をインストールします

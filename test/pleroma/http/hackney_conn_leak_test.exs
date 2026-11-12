@@ -14,15 +14,15 @@
 #
 # Pleroma cannot work around this: since 4.0 Hackney ignores `with_body` and
 # always returns a fully read binary, so a synchronous request never yields a
-# handle to close, and a truncated read still reports `{:ok, body}`.
+# handle to close. Up to 4.8.2 a truncated read also reported `{:ok, body}`;
+# since 4.8.3 it is `{:error, {:closed, partial_body}}`.
 #
 # Media proxy warming hits this whenever an attachment fetch is cut short and
 # the outbound proxy is used as a CONNECT tunnel, since tunnels are never
 # pooled. That is how it was found.
 #
-# Fixed upstream by https://github.com/benoitc/hackney/pull/919; mix.exs pins
-# that commit until it lands in a release. Should this start failing, the pin
-# has been moved to a version without the fix.
+# Fixed upstream by https://github.com/benoitc/hackney/pull/919. Should this
+# start failing, mix.exs has moved to a Hackney version without the fix.
 #
 # https://github.com/benoitc/hackney/issues/918
 defmodule Pleroma.HTTP.HackneyConnLeakTest do
@@ -50,11 +50,9 @@ defmodule Pleroma.HTTP.HackneyConnLeakTest do
     # pool: false takes hackney's connect_direct/4 path, the same unpooled shape
     # a CONNECT tunnel gets. A pooled connection is reaped by the pool's own
     # grace timer and would not show the leak.
-    assert {:ok, %Tesla.Env{status: 200, body: body}} =
-             request(server, pool: false)
+    assert {:error, {:closed, body}} = request(server, pool: false)
 
-    # The short read still reports success, which is why nothing downstream
-    # knows to clean up.
+    # The short read hands back what did arrive.
     assert byte_size(body) == @sent_bytes
 
     leaked = wait_for_cleanup(before)
@@ -70,7 +68,7 @@ defmodule Pleroma.HTTP.HackneyConnLeakTest do
   test "a pooled request with a truncated body does not leak either", %{server: server} do
     before = conn_pids()
 
-    assert {:ok, %Tesla.Env{status: 200}} = request(server, pool: :media)
+    assert {:error, {:closed, _}} = request(server, pool: :media)
 
     assert wait_for_cleanup(before) == []
   end

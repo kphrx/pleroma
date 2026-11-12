@@ -79,7 +79,13 @@ defmodule Pleroma.HTTP do
       adapter,
       adapter_opts
     )
+    |> drop_partial_body()
   end
+
+  # Hackney 4.9 returns the bytes read before the peer closed. No caller wants
+  # them, and callers that cache errors would keep them.
+  defp drop_partial_body({:error, {:closed, body}}) when is_binary(body), do: {:error, :closed}
+  defp drop_partial_body(result), do: result
 
   @spec request(Client.t(), keyword()) :: {:ok, Env.t()} | {:error, any()}
   def request(client, request), do: Tesla.request(client, request)

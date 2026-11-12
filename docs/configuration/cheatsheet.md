@@ -177,8 +177,8 @@ To add configuration to your config file, you can copy it from the base config. 
 * `media_removal`: List of instances to strip media attachments from and the reason for doing so.
 * `media_nsfw`: List of instances to tag all media as NSFW (sensitive) from and the reason for doing so.
 * `federated_timeline_removal`: List of instances to remove from the Federated Timeline (aka The Whole Known Network) and the reason for doing so.
-* `reject`: List of instances to reject activities (except deletes) from and the reason for doing so.
-* `accept`: List of instances to only accept activities (except deletes) from and the reason for doing so.
+* `reject`: List of instances to reject activities (except deletes) from and the reason for doing so. Activities are also not delivered to these instances, and signed fetches from them are refused in `authorized_fetch_mode`.
+* `accept`: List of instances to only accept activities (except deletes) from and the reason for doing so. If set, activities are also only delivered to these instances, and signed fetches from others are refused in `authorized_fetch_mode`.
 * `followers_only`: Force posts from the given instances to be visible by followers only and the reason for doing so.
 * `report_removal`: List of instances to reject reports from and the reason for doing so.
 * `avatar_removal`: List of instances to strip avatars from and the reason for doing so.
@@ -286,6 +286,9 @@ Notes:
 * `sign_object_fetches`: Sign object fetches with HTTP signatures
 * `authorized_fetch_mode`: Require HTTP signatures for AP fetches
 * `authorized_fetch_mode_exceptions`: List of IPs (CIDR format accepted) to exempt from HTTP Signatures requirement (for example to allow debugging, you shouldn't otherwise need this)
+* `signature_policy`: What to do with incoming HTTP signatures that do not sign the `date` header (or `(created)`), whose signed date is outside the window below, or that do not sign the `digest` header of a request with a body (or whose body Pleroma did not hash). `:enforce` (default) treats them as invalid, `:log` only logs a warning.
+* `signature_max_age`: How old, in seconds, the signed date of an incoming HTTP signature can be. Default: `7200` (2 hours).
+* `signature_max_clock_skew`: How far, in seconds, the signed `date` of an incoming HTTP signature can be in the future. Default: `3600` (1 hour). A `(created)` time in the future is always rejected.
 
 ## Pleroma.User
 
@@ -702,15 +705,19 @@ This filter replaces the filename (not the path) of an upload. For complete obfu
 
 No specific configuration.
 
-#### Pleroma.Upload.Filter.Exiftool.StripLocation
+#### Pleroma.Upload.Filter.Exif.StripLocation
 
-This filter only strips the GPS and location metadata with Exiftool leaving color profiles and attributes intact.
+This filter strips GPS and location metadata from JPEG, WebP, HEIC, AVIF and TIFF images, leaving color profiles and attributes intact. For PNG images it removes all text and EXIF metadata chunks. Images are not re-encoded, and other formats are left unchanged.
+
+It replaces the deprecated `Pleroma.Upload.Filter.Exiftool.StripLocation`, which no longer needs exiftool.
 
 No specific configuration.
 
-#### Pleroma.Upload.Filter.Exiftool.ReadDescription
+#### Pleroma.Upload.Filter.Exif.ReadDescription
 
-This filter reads the ImageDescription and iptc:Caption-Abstract fields with Exiftool so clients can prefill the media description field.
+This filter reads the ImageDescription and iptc:Caption-Abstract fields so clients can prefill the media description field.
+
+It replaces the deprecated `Pleroma.Upload.Filter.Exiftool.ReadDescription`, which no longer needs exiftool.
 
 No specific configuration.
 

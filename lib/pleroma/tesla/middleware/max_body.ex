@@ -7,16 +7,14 @@ defmodule Pleroma.Tesla.Middleware.MaxBody do
   Enforces the `:max_body` adapter option for every adapter.
 
   `Pleroma.HTTP.Adapter.Gun` applies the limit as it accumulates a `:plain`
-  body, so an oversized response is abandoned mid-transfer. Hackney cannot:
-  since 4.0 it ignores `with_body` and always hands back a fully read binary
-  (`hackney:request/5`), so `Tesla.Adapter.Hackney` never takes the branch that
-  would honour `:max_body`. Without this middleware the option is silently
-  unenforced there.
+  body, so an oversized response is abandoned mid-transfer. Since 4.9 Hackney
+  does the same with the `max_body` request option. Before that it ignored
+  `with_body` and always handed back a fully read binary (`hackney:request/5`),
+  so `Tesla.Adapter.Hackney` never took the branch that would honour
+  `:max_body`.
 
-  The check therefore bounds what callers are handed, and refuses up front when
-  `content-length` already announces too much. It cannot bound peak memory on
-  the hackney path, because the adapter has read the body before any middleware
-  runs.
+  The check bounds what callers are handed, whatever the adapter does, and
+  refuses up front when `content-length` already announces too much.
 
   Streaming bodies are left alone: neither adapter limits those, and the caller
   that owns the stream is the one that has to drain and release it.

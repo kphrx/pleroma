@@ -57,7 +57,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.EmojiReactValidator do
       |> CommonFixes.fix_actor()
       |> CommonFixes.fix_activity_addressing()
 
-    data = Map.put_new(data, "tag", [])
+    data = fix_tag(data)
 
     case Object.normalize(data["object"]) do
       %Object{} = object ->
@@ -69,6 +69,10 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.EmojiReactValidator do
         data
     end
   end
+
+  # JSON-LD compaction turns a single-element array into a bare object
+  defp fix_tag(%{"tag" => %{} = tag} = data), do: Map.put(data, "tag", [tag])
+  defp fix_tag(data), do: Map.put_new(data, "tag", [])
 
   defp fix_emoji_qualification(%{"content" => emoji} = data) do
     new_emoji = Pleroma.Emoji.fully_qualify_emoji(emoji)

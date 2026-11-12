@@ -9,6 +9,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
   alias Pleroma.Activity
   alias Pleroma.Delivery
   alias Pleroma.Object
+  alias Pleroma.Signature
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
   alias Pleroma.Web.ActivityPub.ActivityPub
@@ -47,6 +48,16 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     conn
     |> assign(:valid_signature, true)
     |> put_req_header("signature", "keyId=\"#{actor_id}#main-key\"")
+  end
+
+  defp put_fake_signature(conn, actor_id, date \\ Signature.signed_date()) do
+    conn
+    |> put_req_header("date", date)
+    |> put_req_header("digest", "SHA-256=fake-digest")
+    |> put_req_header(
+      "signature",
+      "keyId=\"#{actor_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
+    )
   end
 
   defp expect_signature_retry_from(%User{} = signer) do
@@ -792,12 +803,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         }
       }
 
-      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
+      Mox.stub(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
 
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Fri, 29 May 2026 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("content-digest", "sha-256=:fake-digest:")
         |> put_req_header(
           "signature-input",
@@ -832,12 +843,12 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       legacy_signature =
         "keyId=\"https://activitypubbot.example/user/ok#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
 
-      Mox.expect(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
+      Mox.stub(Pleroma.StubbedHTTPSignaturesMock, :validate_conn, fn _conn -> false end)
 
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Fri, 29 May 2026 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("digest", "SHA-256=fake-digest")
         |> put_req_header("signature", "sig1=:fake-signature:")
         |> Map.update!(:req_headers, &[{"signature", legacy_signature} | &1])
@@ -871,7 +882,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Fri, 29 May 2026 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("digest", "SHA-256=fake-digest")
         |> put_req_header(
           "signature-input",
@@ -881,10 +892,42 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
           "signature",
           "keyId=\"https://activitypubbot.example/user/ok#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
         )
-        |> post("/inbox", data)
+        |> post("/inbox", Jason.encode!(data))
 
       assert "ok" == json_response(conn, 200)
       assert [_] = all_enqueued(worker: SignatureRetryWorker)
+    end
+
+    test "refuses a replayed signed POST instead of queueing a retry", %{conn: conn} do
+      data = File.read!("test/fixtures/mastodon-post-activity.json") |> Jason.decode!()
+      stale = NaiveDateTime.add(NaiveDateTime.utc_now(), -3 * 3600)
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_fake_signature(data["actor"], Signature.signed_date(stale))
+        |> post("/inbox", Jason.encode!(data))
+
+      assert "error, invalid HTTP signature (date_too_old)" == json_response(conn, 401)
+      assert [] == all_enqueued(worker: SignatureRetryWorker)
+      assert [] == all_enqueued(worker: ReceiverWorker)
+    end
+
+    test "refuses a signed POST that does not cover the digest", %{conn: conn} do
+      data = File.read!("test/fixtures/mastodon-post-activity.json") |> Jason.decode!()
+
+      conn =
+        conn
+        |> put_req_header("content-type", "application/activity+json")
+        |> put_req_header("date", Signature.signed_date())
+        |> put_req_header(
+          "signature",
+          "keyId=\"#{data["actor"]}#main-key\",headers=\"(request-target) host date\",signature=\"fake\""
+        )
+        |> post("/inbox", Jason.encode!(data))
+
+      assert "error, invalid HTTP signature (digest_not_signed)" == json_response(conn, 401)
+      assert [] == all_enqueued(worker: SignatureRetryWorker)
     end
 
     test "does not create a forged post after failed signature retry", %{conn: conn} do
@@ -918,8 +961,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         conn
         |> assign(:valid_signature, false)
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
-        |> post("/inbox", data)
+        |> put_fake_signature(alice.ap_id)
+        |> post("/inbox", Jason.encode!(data))
 
       assert "ok" == json_response(conn, 200)
 
@@ -950,8 +993,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         conn
         |> assign(:valid_signature, false)
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
-        |> post("/inbox", data)
+        |> put_fake_signature(alice.ap_id)
+        |> post("/inbox", Jason.encode!(data))
 
       assert "ok" == json_response(conn, 200)
 
@@ -982,8 +1025,8 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         conn
         |> assign(:valid_signature, false)
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("signature", "keyId=\"https://one.com/users/alice#main-key\"")
-        |> post("/inbox", data)
+        |> put_fake_signature(alice.ap_id)
+        |> post("/inbox", Jason.encode!(data))
 
       assert "ok" == json_response(conn, 200)
 
@@ -1025,13 +1068,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("digest", "SHA-256=fake-digest")
         |> put_req_header(
           "signature",
           "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
         )
-        |> post("/inbox", data)
+        |> post("/inbox", Jason.encode!(data))
 
       assert conn.assigns.valid_signature == false
       assert "ok" == json_response(conn, 200)
@@ -1063,13 +1106,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
       conn =
         conn
         |> put_req_header("content-type", "application/activity+json")
-        |> put_req_header("date", "Thu, 25 Jul 2024 13:33:31 GMT")
+        |> put_req_header("date", Signature.signed_date())
         |> put_req_header("digest", "SHA-256=fake-digest")
         |> put_req_header(
           "signature",
           "keyId=\"#{alice.ap_id}#main-key\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest content-type\",signature=\"fake-signature\""
         )
-        |> post("/inbox", data)
+        |> post("/inbox", Jason.encode!(data))
 
       assert conn.assigns.valid_signature == false
       assert "ok" == json_response(conn, 200)
@@ -1817,6 +1860,30 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
         |> Map.put("to", [user.ap_id])
         |> Map.put("cc", [])
         |> Map.put("object", user.ap_id)
+
+      conn =
+        conn
+        |> assign_valid_signature_for_actor(data["actor"])
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/inbox", data)
+
+      assert "ok" == json_response(conn, 200)
+      ObanHelpers.perform(all_enqueued(worker: ReceiverWorker))
+      assert Activity.get_by_ap_id(data["id"])
+    end
+
+    test "it accepts activities that do not address the inbox owner", %{conn: conn} do
+      user = insert(:user)
+      actor = insert(:user, local: false)
+
+      data = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Follow",
+        "id" => "#{actor.ap_id}/follows/1",
+        "actor" => actor.ap_id,
+        "object" => user.ap_id,
+        "to" => ["https://www.w3.org/ns/activitystreams#Public"]
+      }
 
       conn =
         conn
@@ -2642,6 +2709,43 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
 
       assert result == "Character limit (5 characters) exceeded, contains 11 characters"
     end
+
+    test "it is rate limited", %{conn: conn, activity: activity} do
+      clear_config([:rate_limit, :statuses_actions], {60_000, 2})
+      user = insert(:user)
+
+      conn =
+        conn
+        |> assign(:user, user)
+        |> put_req_header("content-type", "application/activity+json")
+
+      for _ <- 1..2 do
+        conn
+        |> post("/users/#{user.nickname}/outbox", activity)
+        |> json_response(201)
+      end
+
+      assert conn
+             |> post("/users/#{user.nickname}/outbox", activity)
+             |> json_response(429) == %{"error" => "Throttled"}
+    end
+
+    test "it shares the rate limit with the Mastodon API", %{activity: activity} do
+      clear_config([:rate_limit, :statuses_actions], {60_000, 2})
+      %{user: user, conn: conn} = oauth_access(["write"])
+
+      for _ <- 1..2 do
+        conn
+        |> put_req_header("content-type", "application/json")
+        |> post("/api/v1/statuses", %{status: "cofe"})
+        |> json_response(200)
+      end
+
+      assert conn
+             |> put_req_header("content-type", "application/activity+json")
+             |> post("/users/#{user.nickname}/outbox", activity)
+             |> json_response(429) == %{"error" => "Throttled"}
+    end
   end
 
   describe "/relay/followers" do
@@ -3103,5 +3207,126 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubControllerTest do
     assert Enum.all?(pinned_objects, fn {obj_id, _} ->
              obj_id in object_ids
            end)
+  end
+
+  describe "OAuth scopes" do
+    setup do
+      Mox.stub_with(Pleroma.StaticStubbedConfigMock, Pleroma.Config)
+      [user: insert(:user)]
+    end
+
+    defp with_token(conn, user, scopes) do
+      token = insert(:oauth_token, user: user, scopes: scopes)
+
+      conn
+      |> put_req_header("authorization", "Bearer #{token.token}")
+      |> put_req_header("accept", "application/activity+json")
+    end
+
+    test "GET /api/ap/whoami needs read:accounts", %{conn: conn, user: user} do
+      assert conn |> with_token(user, ["profile"]) |> get("/api/ap/whoami") |> json_response(403)
+
+      assert %{"id" => id} =
+               conn
+               |> with_token(user, ["read:accounts"])
+               |> get("/api/ap/whoami")
+               |> json_response(200)
+
+      assert id == user.ap_id
+    end
+
+    test "GET /users/:nickname/inbox needs read:statuses", %{conn: conn, user: user} do
+      inbox = "/users/#{user.nickname}/inbox"
+
+      assert conn |> with_token(user, ["read:accounts"]) |> get(inbox) |> json_response(403)
+      assert conn |> with_token(user, ["read:statuses"]) |> get(inbox) |> json_response(200)
+    end
+
+    test "POST /users/:nickname/outbox needs write", %{conn: conn, user: user} do
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "object" => %{
+          "type" => "Note",
+          "content" => "scoped",
+          "to" => "https://www.w3.org/ns/activitystreams#Public",
+          "cc" => []
+        }
+      }
+
+      post = fn scopes ->
+        conn
+        |> with_token(user, scopes)
+        |> put_req_header("content-type", "application/activity+json")
+        |> post("/users/#{user.nickname}/outbox", activity)
+      end
+
+      assert post.(["profile", "write:media"]) |> json_response(403)
+      assert post.(["write"]) |> json_response(201)
+    end
+
+    test "POST /api/ap/upload_media is forbidden without write:media", %{conn: conn, user: user} do
+      assert conn
+             |> with_token(user, ["write:statuses"])
+             |> post("/api/ap/upload_media", %{})
+             |> json_response(403)
+    end
+
+    # majic's libmagic port is unavailable on local Darwin runs; Linux CI still runs this test.
+    @tag :skip_darwin
+    test "POST /api/ap/upload_media works with write:media", %{conn: conn, user: user} do
+      image = %Plug.Upload{
+        content_type: "image/jpeg",
+        path: Path.absname("test/fixtures/image.jpg"),
+        filename: "an_image.jpg"
+      }
+
+      assert conn
+             |> with_token(user, ["write:media"])
+             |> post("/api/ap/upload_media", %{"file" => image})
+             |> json_response(201)
+    end
+
+    test "GET /users/:nickname/outbox shows private posts only with read:statuses",
+         %{conn: conn, user: user} do
+      {:ok, activity} = CommonAPI.post(user, %{status: "secret", visibility: "private"})
+      outbox = "/users/#{user.nickname}/outbox?page=true"
+
+      ids = fn scopes ->
+        conn
+        |> with_token(user, scopes)
+        |> get(outbox)
+        |> json_response(200)
+        |> Map.fetch!("orderedItems")
+        |> Enum.map(& &1["id"])
+      end
+
+      refute activity.data["id"] in ids.(["profile"])
+      assert activity.data["id"] in ids.(["read:statuses"])
+    end
+
+    test "GET /users/:nickname/followers shows hidden followers only with read:accounts",
+         %{conn: conn} do
+      user = insert(:user, hide_followers: true)
+      User.follow(insert(:user), user)
+      followers = "/users/#{user.nickname}/followers?page=1"
+
+      assert conn |> with_token(user, ["profile"]) |> get(followers) |> response(403)
+
+      assert %{"orderedItems" => [_]} =
+               conn |> with_token(user, ["read:accounts"]) |> get(followers) |> json_response(200)
+    end
+
+    test "GET /users/:nickname/following shows hidden follows only with read:accounts",
+         %{conn: conn} do
+      user = insert(:user, hide_follows: true)
+      User.follow(user, insert(:user))
+      following = "/users/#{user.nickname}/following?page=1"
+
+      assert conn |> with_token(user, ["profile"]) |> get(following) |> response(403)
+
+      assert %{"orderedItems" => [_]} =
+               conn |> with_token(user, ["read:accounts"]) |> get(following) |> json_response(200)
+    end
   end
 end

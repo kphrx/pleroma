@@ -780,6 +780,7 @@ Emoji reactions work a lot like favourites do. They make it possible to react to
 ### Retrieve a list of active sessions for the user
 * Method: `GET`
 * Authentication: required
+* OAuth scope: `read:security`
 * Params: none
 * Response: JSON
 * Example response:
@@ -808,8 +809,9 @@ Emoji reactions work a lot like favourites do. They make it possible to react to
 ### Revoke a user session by its ID
 * Method: `DELETE`
 * Authentication: required
+* OAuth scope: `write:security`
 * Params: none
-* Response: HTTP 200 on success, 500 on error
+* Response: HTTP 201 on success, 500 on error
 
 ## `/api/v1/pleroma/settings/:app`
 ### Gets settings for some application

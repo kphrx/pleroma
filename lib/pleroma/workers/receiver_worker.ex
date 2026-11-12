@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Workers.ReceiverWorker do
+  alias Pleroma.HTTP.Backoff
   alias Pleroma.Instances
   alias Pleroma.Web.Federator
   alias Pleroma.Workers.SignatureRetryWorker
@@ -14,7 +15,9 @@ defmodule Pleroma.Workers.ReceiverWorker do
     if signature_retry_job?(args) do
       perform_signature_retry(job)
     else
-      perform_incoming(params)
+      params
+      |> perform_incoming()
+      |> Backoff.snooze_ratelimited(job)
     end
   end
 

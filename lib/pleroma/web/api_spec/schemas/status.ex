@@ -234,6 +234,29 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Status do
         type: :integer,
         description: "How many statuses quoted this status."
       },
+      quote: %Schema{
+        type: :object,
+        nullable: true,
+        description:
+          "The status being quoted, if any (Mastodon 4.4+). Quoted statuses only have `quoted_status_id`.",
+        properties: %{
+          state: %Schema{
+            type: :string,
+            enum: ["accepted", "unauthorized", "deleted"],
+            description: "Whether the quoted status can be shown"
+          },
+          quoted_status: %Schema{
+            allOf: [%OpenApiSpex.Reference{"$ref": "#/components/schemas/Status"}],
+            nullable: true,
+            description: "The quoted status, if it can be shown"
+          },
+          quoted_status_id: %Schema{
+            type: :string,
+            nullable: true,
+            description: "ID of the quoted status, if it can be shown"
+          }
+        }
+      },
       reblog: %Schema{
         allOf: [%OpenApiSpex.Reference{"$ref": "#/components/schemas/Status"}],
         nullable: true,

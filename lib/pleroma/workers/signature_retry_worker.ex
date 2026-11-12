@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 
 defmodule Pleroma.Workers.SignatureRetryWorker do
+  alias Pleroma.HTTP.Backoff
   alias Pleroma.Instances
   alias Pleroma.Signature
   alias Pleroma.User
@@ -16,16 +17,18 @@ defmodule Pleroma.Workers.SignatureRetryWorker do
   use Oban.Worker, queue: :federator_incoming, max_attempts: 5, unique: [period: :infinity]
 
   @impl true
-  def perform(%Job{
-        args: %{
-          "op" => "incoming_failed_signature_ap_doc",
-          "method" => method,
-          "params" => params,
-          "req_headers" => req_headers,
-          "request_path" => request_path,
-          "query_string" => query_string
-        }
-      })
+  def perform(
+        %Job{
+          args: %{
+            "op" => "incoming_failed_signature_ap_doc",
+            "method" => method,
+            "params" => params,
+            "req_headers" => req_headers,
+            "request_path" => request_path,
+            "query_string" => query_string
+          }
+        } = job
+      )
       when is_binary(method) and is_map(params) and is_list(req_headers) and
              is_binary(request_path) and is_binary(query_string) do
     case normalize_req_headers(req_headers) do
@@ -58,7 +61,10 @@ defmodule Pleroma.Workers.SignatureRetryWorker do
 
           {:ok, res}
         else
-          e -> process_errors(e, retry_log_context(params, request_path, signature_actor_result))
+          e ->
+            e
+            |> process_errors(retry_log_context(params, request_path, signature_actor_result))
+            |> Backoff.snooze_ratelimited(job)
         end
 
       e ->

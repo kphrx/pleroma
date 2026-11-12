@@ -1,0 +1,1 @@
+Fix per-status and per-account rate limits when `Pleroma.Web.ApiSpec.CastAndValidate` `strict` is off (the production default)

@@ -17,7 +17,7 @@ defmodule Mix.Pleroma do
     :oban,
     :logger_backends
   ]
-  @cachex_children ["object", "user", "scrubber", "web_resp"]
+  @cachex_children ["object", "user", "scrubber", "web_resp", "http_backoff"]
   @doc "Common functions to be reused in mix tasks"
   def start_pleroma do
     Pleroma.Config.Holder.save_default()

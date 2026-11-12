@@ -48,6 +48,7 @@ defmodule Pleroma.Config.TransferTask do
       settings =
         (Repo.all(ConfigDB) ++ deleted_settings)
         |> Enum.reject(&ConfigDB.static?/1)
+        |> Enum.reject(&(&1.group == :invalid_atom or &1.key == :invalid_atom))
         |> Enum.map(&merge_with_default/1)
 
       started_applications = Application.started_applications()
