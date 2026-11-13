@@ -304,7 +304,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       end
 
     attachment_data = object.data["attachment"] || []
-    attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
+    attachments = render_attachments(attachment_data)
 
     created_at = Utils.to_masto_date(object.data["published"])
 
@@ -535,7 +535,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     sensitive = object.data["sensitive"] || Enum.member?(hashtags, "nsfw")
 
     attachment_data = object.data["attachment"] || []
-    attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
+    attachments = render_attachments(attachment_data)
 
     created_at = Utils.to_masto_date(object.data["updated"] || object.data["published"])
 
@@ -874,6 +874,14 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   @spec build_image_url(URI.t(), URI.t()) :: String.t()
   defp build_image_url(%URI{} = image_url_data, %URI{} = page_url_data) do
     URI.merge(page_url_data, image_url_data) |> to_string
+  end
+
+  # mastodon now introduces "Link" as a mediaType for link on their ap object.
+  # on the real API itself, "Link" is not being included as something to be put in media_attachments
+  defp render_attachments(attachments) do
+    attachments
+    |> Enum.reject(&(&1["type"] == "Link"))
+    |> render_many(StatusView, "attachment.json", as: :attachment)
   end
 
   defp get_source_text(%{"content" => content} = _source) do
