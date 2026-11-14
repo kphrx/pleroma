@@ -885,11 +885,16 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     |> render_many(StatusView, "attachment.json", as: :attachment)
   end
 
-  defp plain_link?(%{"type" => "Link", "url" => [%{"mediaType" => media_type} | _]})
-       when is_binary(media_type),
-       do: not String.starts_with?(media_type, ["image/", "video/", "audio/"])
+  defp plain_link?(%{"type" => "Link"} = attachment) do
+    media_type =
+      case attachment["url"] do
+        [%{} = url | _] -> url["mediaType"] || url["mimeType"]
+        _ -> nil
+      end
 
-  defp plain_link?(%{"type" => "Link"}), do: true
+    not (is_binary(media_type) and String.starts_with?(media_type, ["image/", "video/", "audio/"]))
+  end
+
   defp plain_link?(_), do: false
 
   defp get_source_text(%{"content" => content} = _source) do

@@ -861,6 +861,22 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
              represented[:media_attachments]
   end
 
+  test "keeps stored Link attachments that only have a mimeType" do
+    user = insert(:user)
+
+    attachment = %{
+      "type" => "Link",
+      "url" => [%{"href" => "https://example.com/clip.mp4", "mimeType" => "video/mp4"}]
+    }
+
+    note = insert(:note, user: user, data: %{"attachment" => [attachment]})
+    activity = insert(:note_activity, user: user, note: note)
+
+    represented = StatusView.render("show.json", %{activity: activity})
+
+    assert [%{type: "video"}] = represented[:media_attachments]
+  end
+
   test "funkwhale audio" do
     user = insert(:user)
 
