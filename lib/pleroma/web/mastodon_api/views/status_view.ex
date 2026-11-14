@@ -876,13 +876,21 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     URI.merge(page_url_data, image_url_data) |> to_string
   end
 
-  # mastodon now introduces "Link" as a mediaType for link on their ap object.
-  # on the real API itself, "Link" is not being included as something to be put in media_attachments
+  # Mastodon puts the links of a post into `attachment` as `Link` objects without a
+  # media type. These are not media, so leave them out. PeerTube and Funkwhale media
+  # are also stored as `Link`, but with a media type, so keep those.
   defp render_attachments(attachments) do
     attachments
-    |> Enum.reject(&(&1["type"] == "Link"))
+    |> Enum.reject(&plain_link?/1)
     |> render_many(StatusView, "attachment.json", as: :attachment)
   end
+
+  defp plain_link?(%{"type" => "Link", "url" => [%{"mediaType" => media_type} | _]})
+       when is_binary(media_type),
+       do: not String.starts_with?(media_type, ["image/", "video/", "audio/"])
+
+  defp plain_link?(%{"type" => "Link"}), do: true
+  defp plain_link?(_), do: false
 
   defp get_source_text(%{"content" => content} = _source) do
     content
