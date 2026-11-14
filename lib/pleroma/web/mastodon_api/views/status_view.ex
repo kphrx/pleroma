@@ -304,7 +304,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       end
 
     attachment_data = object.data["attachment"] || []
-    attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
+    attachments = render_attachments(attachment_data)
 
     created_at = Utils.to_masto_date(object.data["published"])
 
@@ -535,7 +535,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     sensitive = object.data["sensitive"] || Enum.member?(hashtags, "nsfw")
 
     attachment_data = object.data["attachment"] || []
-    attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
+    attachments = render_attachments(attachment_data)
 
     created_at = Utils.to_masto_date(object.data["updated"] || object.data["published"])
 
@@ -875,6 +875,27 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   defp build_image_url(%URI{} = image_url_data, %URI{} = page_url_data) do
     URI.merge(page_url_data, image_url_data) |> to_string
   end
+
+  # Mastodon puts the links of a post into `attachment` as `Link` objects without a
+  # media type. These are not media, so leave them out. PeerTube and Funkwhale media
+  # are also stored as `Link`, but with a media type, so keep those.
+  defp render_attachments(attachments) do
+    attachments
+    |> Enum.reject(&plain_link?/1)
+    |> render_many(StatusView, "attachment.json", as: :attachment)
+  end
+
+  defp plain_link?(%{"type" => "Link"} = attachment) do
+    media_type =
+      case attachment["url"] do
+        [%{} = url | _] -> url["mediaType"] || url["mimeType"]
+        _ -> nil
+      end
+
+    not (is_binary(media_type) and String.starts_with?(media_type, ["image/", "video/", "audio/"]))
+  end
+
+  defp plain_link?(_), do: false
 
   defp get_source_text(%{"content" => content} = _source) do
     content

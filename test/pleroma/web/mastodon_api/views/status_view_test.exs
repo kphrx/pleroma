@@ -838,6 +838,45 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     assert_schema(represented, "Status", Pleroma.Web.ApiSpec.spec())
   end
 
+  test "hides Mastodon link attachments but keeps media" do
+    insert(:user, local: false, ap_id: "http://mastodon.example.org/users/admin")
+
+    data =
+      File.read!("test/fixtures/mastodon-post-activity.json")
+      |> Jason.decode!()
+      |> put_in(["object", "attachment"], [
+        %{"type" => "Link", "href" => "https://example.com/article"},
+        %{
+          "type" => "Document",
+          "mediaType" => "image/png",
+          "url" => "https://mastodon.example.org/media/image.png"
+        }
+      ])
+
+    {:ok, activity} = Pleroma.Web.ActivityPub.Transmogrifier.handle_incoming(data)
+
+    represented = StatusView.render("show.json", %{activity: activity})
+
+    assert [%{type: "image", remote_url: "https://mastodon.example.org/media/image.png"}] =
+             represented[:media_attachments]
+  end
+
+  test "keeps stored Link attachments that only have a mimeType" do
+    user = insert(:user)
+
+    attachment = %{
+      "type" => "Link",
+      "url" => [%{"href" => "https://example.com/clip.mp4", "mimeType" => "video/mp4"}]
+    }
+
+    note = insert(:note, user: user, data: %{"attachment" => [attachment]})
+    activity = insert(:note_activity, user: user, note: note)
+
+    represented = StatusView.render("show.json", %{activity: activity})
+
+    assert [%{type: "video"}] = represented[:media_attachments]
+  end
+
   test "funkwhale audio" do
     user = insert(:user)
 
