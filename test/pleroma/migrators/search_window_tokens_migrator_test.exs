@@ -24,6 +24,7 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
     assert %{form: :tokens} = Index.status()
     assert %DataMigration{state: :complete} = DataMigration.search_window_tokens()
     assert log =~ "Building the tokens index"
+    assert log =~ "Search is slow"
   end
 
   test "only completes if objects_fts already has tokens" do
@@ -35,6 +36,7 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigratorTest do
     assert %{form: :tokens, definition: ^definition} = Index.status()
     assert %DataMigration{state: :complete} = DataMigration.search_window_tokens()
     refute log =~ "Building the tokens index"
+    refute log =~ "Search is slow"
   end
 
   test "swaps in a valid prebuilt objects_fts_windowed" do
