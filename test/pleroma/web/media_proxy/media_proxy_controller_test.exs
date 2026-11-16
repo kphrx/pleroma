@@ -421,7 +421,7 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyControllerTest do
 
       response =
         conn
-        |> put_req_header("accept", "image/avif,image/webp,*/*")
+        |> put_req_header("accept", "IMAGE/AVIF; q=0.5,image/webp,*/*")
         |> get(url <> "?size=300")
 
       assert response.status == 200
@@ -466,6 +466,33 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyControllerTest do
 
       assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"]
       assert Conn.get_resp_header(response, "vary") == ["accept"]
+    end
+
+    @tag skip: @avif_skip
+    test "AVIF requires an explicit media range with positive quality", %{
+      conn: conn,
+      url: url,
+      media_proxy_url: media_proxy_url
+    } do
+      clear_config([:media_preview_proxy, :image_sizes], [300])
+      clear_config([:media_preview_proxy, :avif], true)
+      mock_image(media_proxy_url, "image/jpeg", "test/fixtures/image.jpg")
+
+      for accept <- [
+            "image/avif;q=0,image/jpeg,*/*",
+            "image/avif; q=0.000, image/*;q=1",
+            "image/avif;q=invalid",
+            "image/avif;q=0.5invalid",
+            "image/avif;q=1.1",
+            "image/avif-sequence,*/*",
+            "image/jpeg; note=\"image/avif\""
+          ] do
+        response = conn |> put_req_header("accept", accept) |> get(url <> "?size=300")
+
+        assert response.status == 200
+        assert Conn.get_resp_header(response, "content-type") == ["image/jpeg"], accept
+        assert Conn.get_resp_header(response, "vary") == ["accept"]
+      end
     end
 
     test "with AVIF off, a size stays JPEG and does not vary", %{

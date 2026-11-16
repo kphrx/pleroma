@@ -86,13 +86,23 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
       accepts_avif? =
         conn
         |> get_req_header("accept")
-        |> Enum.any?(&String.contains?(&1, "image/avif"))
+        |> Enum.flat_map(&Plug.Conn.Utils.list/1)
+        |> Enum.any?(&accepts_avif?/1)
 
       conn
       |> put_resp_header("vary", "accept")
       |> assign(:preview_avif, accepts_avif?)
     else
       conn
+    end
+  end
+
+  defp accepts_avif?(media_range) do
+    with {:ok, "image", "avif", params} <- Plug.Conn.Utils.media_type(media_range),
+         {quality, ""} <- Float.parse(Map.get(params, "q", "1")) do
+      quality > 0 and quality <= 1
+    else
+      _ -> false
     end
   end
 
