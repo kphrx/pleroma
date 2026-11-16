@@ -77,6 +77,7 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
                 "cache_age" => 3600,
                 "flickr_type" => "photo",
                 "height" => "768",
+                "image" => "https://farm4.staticflickr.com/3040/2362225867_4a87ab8baf_q.jpg",
                 "html" =>
                   "<a href=\"https://www.flickr.com/photos/bees/2362225867/\" title=\"Bacon Lollys by \u202E\u202D\u202Cbees\u202C, on Flickr\"><img src=\"https://farm4.staticflickr.com/3040/2362225867_4a87ab8baf_b.jpg\" width=\"1024\" height=\"768\" alt=\"Bacon Lollys\"/></a>",
                 "license" => "All Rights Reserved",
@@ -95,6 +96,46 @@ defmodule Pleroma.Web.RichMedia.ParserTest do
                 "web_page_short_url" => "https://flic.kr/p/4AK2sc",
                 "width" => "1024"
               }}
+  end
+
+  describe "YouTube" do
+    test "uses the oEmbed endpoint without fetching the watch page" do
+      # The watch page has no mock: YouTube often answers server IPs with a
+      # captcha redirect, so the card must not depend on it.
+      assert {:ok, data} = Parser.parse("https://www.youtube.com/watch?v=YOUTUBETEST1")
+
+      assert %{
+               "title" => "Test Video Title",
+               "author_name" => "Test Channel",
+               "provider_name" => "YouTube",
+               "image" => "https://i.ytimg.com/vi/YOUTUBETEST1/hqdefault.jpg",
+               "url" => "https://www.youtube.com/watch?v=YOUTUBETEST1"
+             } = data
+    end
+
+    test "works for youtu.be links" do
+      assert {:ok, %{"title" => "Test Video Title", "url" => "https://youtu.be/YOUTUBETEST1"}} =
+               Parser.parse("https://youtu.be/YOUTUBETEST1")
+    end
+
+    test "is skipped when the OEmbed parser is disabled" do
+      clear_config([:rich_media, :parsers], [Pleroma.Web.RichMedia.Parsers.TwitterCard])
+
+      assert {:error, _} = Parser.parse("https://www.youtube.com/watch?v=YOUTUBETEST1")
+    end
+
+    test "falls back to the page when the oEmbed endpoint fails" do
+      assert {:ok, %{"title" => "The Rock"}} =
+               Parser.parse("https://www.youtube.com/watch?v=NOOEMBED")
+    end
+  end
+
+  test "does not fetch oEmbed URLs that fail page URL validation" do
+    assert {:error, :invalid_metadata} = Parser.parse("https://example.com/oembed-internal")
+  end
+
+  test "ignores oEmbed data where html is not a string" do
+    assert {:error, :invalid_metadata} = Parser.parse("https://example.com/oembed-null-html")
   end
 
   test "rejects invalid OGP data" do
