@@ -68,6 +68,27 @@ defmodule Pleroma.Web.MediaProxy do
     end
   end
 
+  @doc "The sizes (long side, in pixels) image previews can have besides the thumbnail."
+  @spec image_sizes() :: [pos_integer()]
+  def image_sizes do
+    # from the admin config they can come as strings
+    [:media_preview_proxy, :image_sizes]
+    |> Config.get([])
+    |> List.wrap()
+    |> Enum.flat_map(fn
+      size when is_integer(size) and size > 0 -> [size]
+      size when is_binary(size) -> image_size_from_string(size)
+      _ -> []
+    end)
+  end
+
+  defp image_size_from_string(size) do
+    case Integer.parse(size) do
+      {size, ""} when size > 0 -> [size]
+      _ -> []
+    end
+  end
+
   def enabled?, do: Config.get([:media_proxy, :enabled], false)
 
   # Note: media proxy must be enabled for media preview proxy in order to load all

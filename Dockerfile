@@ -13,7 +13,9 @@ COPY . .
 ENV MIX_ENV=prod
 ENV VIX_COMPILATION_MODE=PLATFORM_PROVIDED_LIBVIPS
 
-RUN apk add git gcc g++ musl-dev make cmake file-dev vips-dev &&\
+# vips-heif: libvips' HEIF/AVIF module, also at build time (Vix makes its
+# functions from what libvips offers then; AVIF previews need heifsave)
+RUN apk add git gcc g++ musl-dev make cmake file-dev vips-dev vips-heif &&\
 	echo "import Config" > config/prod.secret.exs &&\
 	mix local.hex --force &&\
 	mix local.rebar --force &&\
@@ -42,7 +44,7 @@ ARG HOME=/opt/pleroma
 ARG DATA=/var/lib/pleroma
 
 RUN apk update &&\
-	apk add ffmpeg vips libmagic ncurses postgresql-client &&\
+	apk add ffmpeg vips vips-heif libmagic ncurses postgresql-client &&\
 	adduser --system --shell /bin/false --home ${HOME} pleroma &&\
 	mkdir -p ${DATA}/uploads &&\
 	mkdir -p ${DATA}/static &&\

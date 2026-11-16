@@ -17,6 +17,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.MastodonAPI.AccountView
   alias Pleroma.Web.MastodonAPI.StatusView
+  alias Pleroma.Web.MediaProxy
   alias Pleroma.Web.RichMedia.Card
 
   require Bitwise
@@ -783,6 +784,73 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
 
       assert expected == StatusView.render("attachment.json", %{attachment: object})
       assert_schema(expected, "Attachment", api_spec)
+    end
+  end
+
+  describe "attachment image sizes" do
+    setup do
+      clear_config([:media_proxy, :enabled], true)
+      clear_config([:media_preview_proxy, :enabled], true)
+      clear_config([:media_preview_proxy, :image_sizes], [960, 1600, 2560])
+
+      ConfigMock
+      |> stub_with(Pleroma.Test.StaticConfig)
+
+      :ok
+    end
+
+    defp image(media_type, dimensions \\ %{}) do
+      %{
+        "type" => "Image",
+        "url" => [
+          Map.merge(
+            %{"mediaType" => media_type, "href" => "https://remote.example/a.jpg"},
+            dimensions
+          )
+        ]
+      }
+    end
+
+    defp sizes(object) do
+      StatusView.render("attachment.json", %{attachment: object})[:pleroma][:image_sizes]
+    end
+
+    test "lists the sizes smaller than the image, with their dimensions" do
+      object = image("image/jpeg", %{"width" => 2000, "height" => 1000})
+      href = "https://remote.example/a.jpg"
+
+      assert sizes(object) == [
+               %{
+                 size: 960,
+                 width: 960,
+                 height: 480,
+                 url: MediaProxy.preview_url(href, size: 960)
+               },
+               %{
+                 size: 1600,
+                 width: 1600,
+                 height: 800,
+                 url: MediaProxy.preview_url(href, size: 1600)
+               }
+             ]
+
+      result = StatusView.render("attachment.json", %{attachment: object})
+      assert_schema(result, "Attachment", Pleroma.Web.ApiSpec.spec())
+    end
+
+    test "lists every size when the image's dimensions are unknown" do
+      assert [%{size: 960}, %{size: 1600}, %{size: 2560}] = sizes(image("image/png"))
+      refute Map.has_key?(hd(sizes(image("image/png"))), :width)
+    end
+
+    test "lists none for GIFs and APNGs, videos, small images, or without the preview proxy" do
+      assert sizes(image("image/gif")) == nil
+      assert sizes(image("image/apng")) == nil
+      assert sizes(image("video/mp4")) == nil
+      assert sizes(image("image/jpeg", %{"width" => 900, "height" => 600})) == nil
+
+      clear_config([:media_preview_proxy, :enabled], false)
+      assert sizes(image("image/jpeg")) == nil
     end
   end
 
