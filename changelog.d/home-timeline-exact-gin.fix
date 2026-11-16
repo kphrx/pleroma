@@ -1,0 +1,1 @@
+Keep home timeline queries exact even when a fuzzy GIN search limit is configured, without changing the limit used by search.
