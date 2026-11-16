@@ -68,7 +68,7 @@ sudo rc-update add postgresql
 ### Install media / graphics packages (optional, see [`docs/installation/optional/media_graphics_packages.md`](../installation/optional/media_graphics_packages.md))
 
 ```shell
-sudo apk add ffmpeg imagemagick exiftool
+sudo apk add ffmpeg imagemagick
 ```
 
 ### Install PleromaBE

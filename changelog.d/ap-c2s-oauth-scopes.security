@@ -1,0 +1,1 @@
+Check OAuth token scopes on the ActivityPub C2S endpoints; posting to the outbox with a token now needs the `write` scope

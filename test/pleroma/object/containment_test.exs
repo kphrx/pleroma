@@ -127,4 +127,56 @@ defmodule Pleroma.Object.ContainmentTest do
       :ok = Containment.contain_child(data)
     end
   end
+
+  describe "get_actor/1" do
+    test "returns nil for actor shapes without an id" do
+      for actor <- [%{"type" => "Person"}, %{"id" => 1}, 1, true] do
+        assert nil == Containment.get_actor(%{"actor" => actor})
+        assert nil == Containment.get_actor(%{"actor" => nil, "attributedTo" => actor})
+      end
+
+      assert nil == Containment.get_actor(%{})
+    end
+
+    test "contain_origin/2 rejects actor shapes without an id" do
+      assert :error ==
+               Containment.contain_origin("https://a.test/o/1", %{
+                 "attributedTo" => %{"type" => "Person"}
+               })
+    end
+  end
+
+  describe "contain_id_to_fetch/2" do
+    test "matches the exact id" do
+      assert :ok =
+               Containment.contain_id_to_fetch("https://a.test/o/1", %{
+                 "id" => "https://a.test/o/1"
+               })
+    end
+
+    test "ignores fragments, a trailing slash and the host case" do
+      assert :ok =
+               Containment.contain_id_to_fetch("https://A.test/o/1/", %{
+                 "id" => "https://a.test/o/1#x"
+               })
+    end
+
+    test "rejects another id on the same host" do
+      assert :error =
+               Containment.contain_id_to_fetch("https://a.test/o/1", %{
+                 "id" => "https://a.test/o/2"
+               })
+    end
+
+    test "rejects a different query" do
+      assert :error =
+               Containment.contain_id_to_fetch("https://a.test/o?page=1", %{
+                 "id" => "https://a.test/o?page=2"
+               })
+    end
+
+    test "rejects documents without an id" do
+      assert :error = Containment.contain_id_to_fetch("https://a.test/o/1", %{})
+    end
+  end
 end

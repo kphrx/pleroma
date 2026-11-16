@@ -1,0 +1,1 @@
+Speed up home timelines with large recipient sets using a bounded, time-limited query and an exact fallback; preserve pagination, visibility filters and empty polling responses.

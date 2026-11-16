@@ -158,7 +158,11 @@ defmodule Pleroma.Web.WebFinger do
   @cachex Pleroma.Config.get([:cachex, :provider], Cachex)
   def find_lrdd_template(domain) do
     @cachex.fetch!(:host_meta_cache, domain, fn _ ->
-      {:commit, fetch_lrdd_template(domain)}
+      case fetch_lrdd_template(domain) do
+        # retry once the backoff expires instead of caching the miss
+        {:error, :ratelimit} = error -> {:ignore, error}
+        result -> {:commit, result}
+      end
     end)
   rescue
     e -> {:error, "Cachex error: #{inspect(e)}"}
@@ -168,9 +172,13 @@ defmodule Pleroma.Web.WebFinger do
     # WebFinger is restricted to HTTPS - https://tools.ietf.org/html/rfc7033#section-9.1
     meta_url = "https://#{domain}/.well-known/host-meta"
 
-    with {:ok, %{status: status, body: body}} when status in 200..299 <- HTTP.get(meta_url) do
+    with {:ok, %{status: status, body: body}} when status in 200..299 <-
+           HTTP.Backoff.get(meta_url) do
       get_template_from_xml(body)
     else
+      {:error, :ratelimit} = error ->
+        error
+
       error ->
         Logger.warning("Can't find LRDD template in #{inspect(meta_url)}: #{inspect(error)}")
         {:error, :lrdd_not_found}
@@ -210,7 +218,7 @@ defmodule Pleroma.Web.WebFinger do
 
     with address when is_binary(address) <- get_address_from_domain(domain, account),
          {:ok, %{status: status, body: body, headers: headers}} when status in 200..299 <-
-           HTTP.get(
+           HTTP.Backoff.get(
              address,
              [{"accept", "application/xrd+xml,application/jrd+json"}]
            ) do

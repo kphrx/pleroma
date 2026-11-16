@@ -153,4 +153,38 @@ defmodule Pleroma.Workers.PublisherWorkerTest do
       assert {:cancel, :unreachable} = PublisherWorker.perform(job)
     end
   end
+
+  describe "Blocked instances:" do
+    defp publish_one_job(inbox, activity) do
+      %Oban.Job{
+        args: %{
+          "op" => "publish_one",
+          "params" => %{"inbox" => inbox, "activity_id" => activity.id}
+        },
+        attempt: 1,
+        max_attempts: 5
+      }
+    end
+
+    test "cancels queued jobs to instances rejected by SimplePolicy" do
+      clear_config([:mrf, :policies], [Pleroma.Web.ActivityPub.MRF.SimplePolicy])
+      clear_config([:mrf_simple, :reject], [{"rejected.example", ""}])
+      {:ok, activity} = CommonAPI.post(insert(:user), %{status: "public"})
+
+      assert {:cancel, :rejected} =
+               PublisherWorker.perform(
+                 publish_one_job("https://rejected.example/inbox", activity)
+               )
+    end
+
+    test "cancels queued private jobs to quarantined instances" do
+      clear_config([:instance, :quarantined_instances], [{"quarantined.example", ""}])
+      {:ok, activity} = CommonAPI.post(insert(:user), %{status: "hi", visibility: "private"})
+
+      assert {:cancel, :rejected} =
+               PublisherWorker.perform(
+                 publish_one_job("https://quarantined.example/inbox", activity)
+               )
+    end
+  end
 end

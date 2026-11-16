@@ -10,12 +10,13 @@ defmodule Pleroma.HTML.Scrubber.LinksOnly do
   @valid_schemes Pleroma.Config.get([:uri_schemes, :valid_schemes], [])
 
   require FastSanitize.Sanitizer.Meta
+  require Pleroma.HTML.URIAttributes
   alias FastSanitize.Sanitizer.Meta
 
   Meta.strip_comments()
 
   # links
-  Meta.allow_tag_with_uri_attributes(:a, ["href"], @valid_schemes)
+  Pleroma.HTML.URIAttributes.allow_tag_with_uri_attributes(:a, ["href"], @valid_schemes)
 
   Meta.allow_tag_with_this_attribute_values(:a, "rel", [
     "tag",

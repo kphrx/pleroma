@@ -12,6 +12,7 @@ defmodule Pleroma.Web.PleromaAPI.EmojiReactionController do
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.MastodonAPI.StatusView
   alias Pleroma.Web.Plugs.OAuthScopesPlug
+  alias Pleroma.Web.Plugs.RateLimiter
 
   plug(Pleroma.Web.ApiSpec.CastAndValidate)
   plug(OAuthScopesPlug, %{scopes: ["write:statuses"]} when action in [:create, :delete])
@@ -21,6 +22,14 @@ defmodule Pleroma.Web.PleromaAPI.EmojiReactionController do
     %{scopes: ["read:statuses"], fallback: :proceed_unauthenticated}
     when action == :index
   )
+
+  plug(
+    RateLimiter,
+    [name: :status_id_action, bucket_name: "status_id_action:emoji_react", params: [:id]]
+    when action in [:create, :delete]
+  )
+
+  plug(RateLimiter, [name: :statuses_actions] when action in [:create, :delete])
 
   defdelegate open_api_operation(action), to: Pleroma.Web.ApiSpec.EmojiReactionOperation
 

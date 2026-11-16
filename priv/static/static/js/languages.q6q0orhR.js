@@ -1,0 +1,2 @@
+var e=`ar.ca.cs.de.eo.en.es.et.eu.fi.fr.ga.he.hu.it.ja.ja_easy.ko.nan-TW.nb.nl.oc.pl.pdc.pt.ro.ru.sk.te.uk.zh.zh_Hant`.split(`.`),t={ja:`ja_pedantic`},n=e=>t[e]||e,r=e=>{let t=Array.isArray(e)?e:[e];return t.includes(`en`)?t:t.concat([`en`])};export{n,e as r,r as t};
+//# sourceMappingURL=languages.q6q0orhR.js.map

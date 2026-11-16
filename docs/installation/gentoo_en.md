@@ -41,7 +41,6 @@ Gentoo quite pointedly does not come with a cron daemon installed, and as such i
 * `app-crypt/certbot-nginx` (nginx certbot plugin that allows use of the all-powerful `--nginx` flag on certbot)
 * `media-gfx/imagemagick`
 * `media-video/ffmpeg`
-* `media-libs/exiftool`
 
 ### Prepare the system
 
@@ -97,7 +96,7 @@ Not only does this make it much easier to deploy changes you make, as you can co
 ### Install media / graphics packages (optional, see [`docs/installation/optional/media_graphics_packages.md`](docs/installation/optional/media_graphics_packages.md))
 
 ```shell
-# emerge --ask media-video/ffmpeg media-gfx/imagemagick media-libs/exiftool
+# emerge --ask media-video/ffmpeg media-gfx/imagemagick
 ```
 
 ### Install PleromaBE

@@ -1,0 +1,1 @@
+Back off from hosts that answer 429 or 503 to object fetches and WebFinger, until Retry-After or X-RateLimit-Reset (default 5 minutes, max 1 hour)

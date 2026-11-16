@@ -1,0 +1,2 @@
+import{n as e}from"./chunk.aKtaBQYM.js";import{r as t}from"./modal.BLgTTi-o.js";var n=e({useMediaViewerStore:()=>i}),r=new Set([`image`,`video`,`audio`,`flash`]),i=t(`mediaViewer`,{state:()=>({media:[],currentIndex:0,activated:!1}),actions:{setMedia(e){let t=e.filter(e=>r.has(e.type));this.media=t},setCurrentMedia(e){let t=this.media.indexOf(e);this.activated=!0,this.currentIndex=t},closeMediaViewer(){this.activated=!1}}});export{i as n,n as t};
+//# sourceMappingURL=media_viewer.B2Dx6m_D.js.map

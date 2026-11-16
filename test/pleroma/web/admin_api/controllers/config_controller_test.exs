@@ -60,6 +60,28 @@ defmodule Pleroma.Web.AdminAPI.ConfigControllerTest do
       assert key2 == inspect(config2.key)
     end
 
+    test "does not crash on a setting with an unknown module key", %{conn: conn} do
+      now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+      Pleroma.Repo.insert_all("config", [
+        %{
+          group: ":pleroma",
+          key: "Pleroma.Nowhere.Module",
+          value: :erlang.term_to_binary(enabled: true),
+          inserted_at: now,
+          updated_at: now
+        }
+      ])
+
+      capture_log(fn ->
+        for path <- ["/api/pleroma/admin/config", "/api/pleroma/admin/config?only_db=true"] do
+          conn
+          |> get(path)
+          |> json_response_and_validate_schema(200)
+        end
+      end)
+    end
+
     test "db is added to settings that are in db", %{conn: conn} do
       _config = insert(:config, key: ":instance", value: [name: "Some name"])
 

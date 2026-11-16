@@ -148,20 +148,52 @@ defmodule Pleroma.Web.ActivityPub.MRF do
   @spec subdomains_regex([String.t()]) :: [Regex.t()]
   def subdomains_regex(domains) when is_list(domains) do
     for domain <- domains do
-      try do
-        target = String.replace(domain, "*.", "(.*\\.)*")
-        ~r<^#{target}$>i
-      rescue
-        e ->
-          Logger.error("MRF: Invalid subdomain Regex: #{domain}")
-          reraise e, __STACKTRACE__
-      end
+      {prefix, rest} =
+        case domain do
+          "*." <> rest -> {"(.*\\.)?", rest}
+          _ -> {"", domain}
+        end
+
+      ~r<^#{prefix}#{Regex.escape(rest)}$>i
     end
   end
 
   @spec subdomain_match?([Regex.t()], String.t()) :: boolean()
   def subdomain_match?(domains, host) do
     Enum.any?(domains, fn domain -> Regex.match?(domain, host) end)
+  end
+
+  @doc """
+  Returns a function that is false for a host if SimplePolicy is enabled and
+  rejects it, or has an accept list without it. Used for deliveries and signed
+  fetches, not only for incoming activities. Build it once and reuse it: it
+  compiles the instance lists.
+  """
+  @spec instance_filter() :: (String.t() | nil -> boolean())
+  def instance_filter do
+    if Pleroma.Web.ActivityPub.MRF.SimplePolicy in get_policies() do
+      reject = simple_policy_domains(:reject)
+      accept = simple_policy_domains(:accept)
+
+      fn
+        host when is_binary(host) ->
+          not subdomain_match?(reject, host) and (accept == [] or subdomain_match?(accept, host))
+
+        _ ->
+          false
+      end
+    else
+      &is_binary/1
+    end
+  end
+
+  @spec instance_allowed?(String.t() | nil) :: boolean()
+  def instance_allowed?(host), do: instance_filter().(host)
+
+  defp simple_policy_domains(key) do
+    Pleroma.Config.get([:mrf_simple, key], [])
+    |> instance_list_from_tuples()
+    |> subdomains_regex()
   end
 
   @spec instance_list_from_tuples([{String.t(), String.t()}]) :: [String.t()]

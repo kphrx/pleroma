@@ -141,6 +141,44 @@ defmodule Pleroma.HTMLTest do
     end
   end
 
+  describe "link schemes as a browser sees them" do
+    # Browsers remove tabs and newlines in URLs and control characters and
+    # spaces at the start, so these are javascript: links to them.
+    test "removes javascript: links hidden with control characters" do
+      for href <- [
+            "java\tscript:alert(1)",
+            "java&#x09;script:alert(1)",
+            "java\nscript:alert(1)",
+            "&#x0d;javascript:alert(1)",
+            " javascript:alert(1)",
+            "\u0001javascript:alert(1)"
+          ],
+          scrubber <- [
+            Pleroma.HTML.Scrubber.Default,
+            Pleroma.HTML.Scrubber.TwitterText,
+            Pleroma.HTML.Scrubber.LinksOnly
+          ] do
+        html = HTML.filter_tags(~s(<a href="#{href}">x</a>), scrubber)
+
+        refute html =~ "href", "#{inspect(href)} survived #{inspect(scrubber)}: #{html}"
+      end
+    end
+
+    test "keeps normal links" do
+      for href <- ["https://example.org/a?b=c", "/relative/path", "#fragment"] do
+        assert HTML.filter_tags(~s(<a href="#{href}">x</a>), Pleroma.HTML.Scrubber.Default) ==
+                 ~s(<a href="#{href}">x</a>)
+      end
+    end
+
+    test "removes images with hidden schemes" do
+      html =
+        HTML.filter_tags(~s|<img src="java\tscript:alert(1)"/>|, Pleroma.HTML.Scrubber.Default)
+
+      refute html =~ "src"
+    end
+  end
+
   describe "default scrubber" do
     test "normalizes HTML as expected" do
       expected = """
@@ -298,6 +336,43 @@ defmodule Pleroma.HTMLTest do
       object = Object.normalize(activity, fetch: false)
 
       assert nil == HTML.extract_first_external_url_from_object(object)
+    end
+
+    test "skips the link in a Mastodon quote fallback paragraph" do
+      object = %Object{
+        data: %{
+          "quoteUrl" => "https://raru.re/users/ocean/statuses/116235427788617987",
+          "content" =>
+            ~s(<p class="quote-inline">RE: <a href="https://raru.re/@ocean/116235427788617987">raru.re/@ocean/116235427788617987</a></p>) <>
+              ~s(<p>Berapa lapis?</p><p><a href="https://www.youtube.com/watch?v=S0dJMhWDRDE">youtube.com/watch?v=S0dJMhWDRDE</a></p>)
+        }
+      }
+
+      assert HTML.extract_first_external_url_from_object(object) ==
+               "https://www.youtube.com/watch?v=S0dJMhWDRDE"
+    end
+
+    test "skips the link in a quote fallback span (Misskey, InlineQuotePolicy)" do
+      object = %Object{
+        data: %{
+          "content" =>
+            ~s(hello<span class="quote-inline"><br/><br/>RE: <a href="https://misskey.example/notes/abc">https://misskey.example/notes/abc</a></span>)
+        }
+      }
+
+      assert nil == HTML.extract_first_external_url_from_object(object)
+    end
+
+    test "skips a link to the quoted post without fallback markup" do
+      object = %Object{
+        data: %{
+          "quoteUrl" => "https://remote.example/objects/1",
+          "content" =>
+            ~s(RE: <a href="https://remote.example/objects/1">https://remote.example/objects/1</a> <a href="https://cofe.example/">cofe</a>)
+        }
+      }
+
+      assert HTML.extract_first_external_url_from_object(object) == "https://cofe.example/"
     end
   end
 end

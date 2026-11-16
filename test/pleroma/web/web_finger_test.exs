@@ -305,4 +305,30 @@ defmodule Pleroma.Web.WebFingerTest do
       {:ok, _data} = WebFinger.finger("a@sub.mastodon.example")
     end
   end
+
+  describe "rate limiting" do
+    setup do
+      # the module setup stubs NullCache, the backoff needs a real cache
+      Mox.stub_with(Pleroma.CachexMock, Pleroma.CachexProxy)
+      test_pid = self()
+
+      Tesla.Mock.mock_global(fn %{url: url} ->
+        send(test_pid, {:request, url})
+        %Tesla.Env{status: 429, headers: [{"retry-after", "600"}]}
+      end)
+    end
+
+    test "backs off from a host that rate limits host-meta" do
+      assert {:error, :ratelimit} = WebFinger.finger("alice@ratelimited.example")
+      assert_received {:request, "https://ratelimited.example/.well-known/host-meta"}
+      refute_received {:request, _}
+
+      # a rate-limited host-meta lookup must not be cached as "no LRDD template"
+      assert {:ok, nil} = Cachex.get(:host_meta_cache, "ratelimited.example")
+
+      assert {:error, :ratelimit} = WebFinger.finger("bob@ratelimited.example")
+      assert {:error, :ratelimit} = WebFinger.find_lrdd_template("ratelimited.example")
+      refute_received {:request, _}
+    end
+  end
 end

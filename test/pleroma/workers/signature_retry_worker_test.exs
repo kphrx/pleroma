@@ -306,6 +306,24 @@ defmodule Pleroma.Workers.SignatureRetryWorkerTest do
     refute Activity.get_by_ap_id(create["id"])
   end
 
+  test "snoozes while the payload actor's host is backed off" do
+    Cachex.put(:http_backoff_cache, "ratelimited.example", true)
+    alice = build(:user, local: false, ap_id: "https://ratelimited.example/users/alice")
+
+    params = %{
+      "type" => "Create",
+      "actor" => alice.ap_id,
+      "id" => "https://ratelimited.example/activities/1",
+      "object" => "https://ratelimited.example/objects/1"
+    }
+
+    job = failed_signature_job(params, signature_headers_for(alice))
+    assert {:snooze, 300} = SignatureRetryWorker.perform(job)
+
+    old_job = %{job | inserted_at: DateTime.add(DateTime.utc_now(), -121, :minute)}
+    assert {:error, :ratelimit} = SignatureRetryWorker.perform(old_job)
+  end
+
   test "processes the activity after refetching a valid matching signature" do
     alice = insert(:user, local: false, ap_id: "https://one.com/users/alice")
 

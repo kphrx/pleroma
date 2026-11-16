@@ -50,7 +50,9 @@ defmodule Pleroma.Web.Plugs.RateLimiterTest do
 
   test "it restricts based on config values" do
     limiter_name = :test_plug_opts
-    scale = 80
+    # Long enough that the bucket cannot expire during the test on slow CI.
+    # The test expires it explicitly with expire_ttl/2.
+    scale = 60_000
     limit = 5
 
     clear_config([Pleroma.Web.Endpoint, :http, :ip], {127, 0, 0, 1})
@@ -184,7 +186,8 @@ defmodule Pleroma.Web.Plugs.RateLimiterTest do
     test "can have limits separate from unauthenticated connections" do
       limiter_name = :test_authenticated1
 
-      scale = 50
+      # Long enough that the bucket cannot expire during the test on slow CI.
+      scale = 60_000
       limit = 5
       clear_config([Pleroma.Web.Endpoint, :http, :ip], {8, 8, 8, 8})
       clear_config([:rate_limit, limiter_name], [{1000, 1}, {scale, limit}])

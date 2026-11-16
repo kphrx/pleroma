@@ -1,0 +1,1 @@
+Do not federate the Undo of a block when `outgoing_blocks` is disabled

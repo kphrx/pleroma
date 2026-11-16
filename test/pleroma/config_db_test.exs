@@ -50,6 +50,22 @@ defmodule Pleroma.ConfigDBTest do
     assert config[:pleroma][:instance] == [name: "Pleroma"]
   end
 
+  test "loads a row with an unknown module key as :invalid_atom" do
+    now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+
+    Repo.insert_all("config", [
+      %{
+        group: ":pleroma",
+        key: "Pleroma.Nowhere.Module",
+        value: :erlang.term_to_binary(enabled: true),
+        inserted_at: now,
+        updated_at: now
+      }
+    ])
+
+    assert [%ConfigDB{group: :pleroma, key: :invalid_atom}] = Repo.all(ConfigDB)
+  end
+
   describe "update_or_create/1" do
     test "common" do
       config = insert(:config)

@@ -63,8 +63,8 @@ defmodule Pleroma.Web.MastodonAPI.InstanceControllerTest do
     user2 = insert(:user, %{local: true})
     {:ok, _user2} = User.set_activation(user2, false)
 
-    insert(:user, %{local: false, nickname: "u@peer1.com"})
-    insert(:user, %{local: false, nickname: "u@peer2.com"})
+    insert(:instance, host: "peer1.com")
+    insert(:instance, host: "peer2.com")
 
     {:ok, _} = Pleroma.Web.CommonAPI.post(user, %{status: "cofe"})
 
@@ -83,8 +83,11 @@ defmodule Pleroma.Web.MastodonAPI.InstanceControllerTest do
   end
 
   test "get peers", %{conn: conn} do
-    insert(:user, %{local: false, nickname: "u@peer1.com"})
-    insert(:user, %{local: false, nickname: "u@peer2.com"})
+    # Peers come from the instances table, which remote users add to.
+    insert(:instance, host: "peer1.com")
+    insert(:instance, host: "peer2.com")
+    # Favicon lookups for local accounts can add our own host.
+    insert(:instance, host: Pleroma.Web.Endpoint.host())
 
     Pleroma.Stats.force_update()
 

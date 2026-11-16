@@ -150,6 +150,35 @@ defmodule Pleroma.Web.MastodonAPI.TimelineControllerTest do
              |> json_response_and_validate_schema(200) == []
     end
 
+    test "bounded home selection preserves exclusive lists and response order", %{
+      user: user,
+      conn: conn
+    } do
+      import Mock
+      author = insert(:user)
+      excluded = insert(:user)
+      {:ok, user, _} = User.follow(user, author)
+      {:ok, user, _} = User.follow(user, excluded)
+      {:ok, list} = Pleroma.List.create(%{title: "exclusive", exclusive: true}, user)
+      {:ok, _list} = Pleroma.List.follow(list, excluded)
+      {:ok, first} = CommonAPI.post(author, %{status: "first"})
+      {:ok, _excluded} = CommonAPI.post(excluded, %{status: "excluded"})
+      {:ok, second} = CommonAPI.post(author, %{status: "second"})
+
+      with_mock User, [:passthrough],
+        following: fn user ->
+          :meck.passthrough([user]) ++ Enum.map(1..128, &"https://example.org/followers/#{&1}")
+        end do
+        response =
+          conn
+          |> assign(:user, user)
+          |> get("/api/v1/timelines/home")
+          |> json_response_and_validate_schema(200)
+
+        assert Enum.map(response, & &1["id"]) == [second.id, first.id]
+      end
+    end
+
     test "the home timeline excludes posts from users in exclusive lists", %{
       user: user,
       conn: conn

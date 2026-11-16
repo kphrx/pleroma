@@ -1,0 +1,1 @@
+Built-in search with the GIN index searches the newest posts first, joins only the top candidates to their activities and returns what it found after a time budget (`Pleroma.Search.DatabaseSearch, :time_budget`), so it is fast on large databases. Results are sorted by object id (newest first).

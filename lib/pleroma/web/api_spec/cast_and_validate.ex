@@ -20,6 +20,9 @@ defmodule Pleroma.Web.ApiSpec.CastAndValidate do
 
   require Logger
 
+  # How often to drop offending query params and retry in permissive mode
+  @max_retries 20
+
   @impl Plug
   def init(opts) do
     opts
@@ -114,32 +117,47 @@ defmodule Pleroma.Web.ApiSpec.CastAndValidate do
          false = _strict,
          cast_opts
        ) do
-    case OpenApiSpex.cast_and_validate(spec, operation, conn, content_type) do
-      {:ok, conn} ->
-        {:ok, conn}
+    permissive_cast_and_validate(spec, operation, conn, content_type, cast_opts, @max_retries)
+  end
 
-      # Remove unexpected query params and cast/validate again
-      {:error, errors} ->
-        query_params =
-          Enum.reduce(errors, conn.query_params, fn
-            %{reason: :unexpected_field, name: name, path: [name]}, params ->
-              Map.delete(params, name)
+  # OpenApiSpex reports one offending param at a time, so drop it and cast/validate again
+  defp permissive_cast_and_validate(
+         spec,
+         operation,
+         %Conn{} = conn,
+         content_type,
+         cast_opts,
+         retries
+       ) do
+    with {:error, errors} = error <-
+           OpenApiSpex.cast_and_validate(spec, operation, conn, content_type, cast_opts) do
+      query_params = drop_invalid_query_params(errors, conn.query_params)
 
-            # Filter out empty params
-            %{reason: :invalid_type, path: [name_atom], value: ""}, params ->
-              Map.delete(params, to_string(name_atom))
-
-            %{reason: :invalid_enum, name: nil, path: path, value: value}, params ->
-              path = path |> Enum.reverse() |> tl() |> Enum.reverse() |> list_items_to_string()
-              update_in(params, path, &List.delete(&1, value))
-
-            _, params ->
-              params
-          end)
-
-        conn = %Conn{conn | query_params: query_params}
-        OpenApiSpex.cast_and_validate(spec, operation, conn, content_type, cast_opts)
+      if retries > 0 and query_params != conn.query_params do
+        conn = %{conn | query_params: query_params}
+        permissive_cast_and_validate(spec, operation, conn, content_type, cast_opts, retries - 1)
+      else
+        error
+      end
     end
+  end
+
+  defp drop_invalid_query_params(errors, query_params) do
+    Enum.reduce(errors, query_params, fn
+      %{reason: :unexpected_field, name: name, path: [name]}, params ->
+        Map.delete(params, name)
+
+      # Filter out empty params
+      %{reason: :invalid_type, path: [name_atom], value: ""}, params ->
+        Map.delete(params, to_string(name_atom))
+
+      %{reason: :invalid_enum, name: nil, path: path, value: value}, params ->
+        path = path |> Enum.reverse() |> tl() |> Enum.reverse() |> list_items_to_string()
+        update_in(params, path, &List.delete(&1, value))
+
+      _, params ->
+        params
+    end)
   end
 
   defp list_items_to_string(list) do

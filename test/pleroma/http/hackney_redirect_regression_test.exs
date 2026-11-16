@@ -22,7 +22,7 @@ defmodule Pleroma.HTTP.HackneyRedirectRegressionTest do
 
     adapter_opts =
       HackneyAdapterHelper.options(
-        [pool: :media, follow_redirect: false, no_proxy_env: true],
+        [pool: :media, follow_redirect: false, proxy: false],
         uri
       )
 

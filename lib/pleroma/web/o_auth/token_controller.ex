@@ -13,7 +13,8 @@ defmodule Pleroma.Web.OAuth.TokenController do
   require Logger
 
   plug(:skip_auth when action == :confirm_email)
-  plug(:skip_plug, OAuthScopesPlug when action in [:oauth_tokens, :revoke_token])
+  plug(OAuthScopesPlug, %{scopes: ["read:security"]} when action == :oauth_tokens)
+  plug(OAuthScopesPlug, %{scopes: ["write:security"]} when action == :revoke_token)
 
   action_fallback(:errors)
 
@@ -25,11 +26,11 @@ defmodule Pleroma.Web.OAuth.TokenController do
     end
   end
 
-  def oauth_tokens(%{assigns: %{user: user}} = conn, _params) do
+  def oauth_tokens(%{assigns: %{user: user, token: current_token}} = conn, _params) do
     with oauth_tokens <- Token.get_user_tokens(user) do
       conn
       |> put_view(TokenView)
-      |> render("index.json", %{tokens: oauth_tokens})
+      |> render("index.json", %{tokens: oauth_tokens, current_token: current_token})
     end
   end
 

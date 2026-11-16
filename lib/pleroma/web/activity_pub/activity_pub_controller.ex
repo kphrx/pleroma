@@ -22,8 +22,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   alias Pleroma.Web.ControllerHelper
   alias Pleroma.Web.Endpoint
   alias Pleroma.Web.Federator
+  alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.Plugs.EnsureAuthenticatedPlug
   alias Pleroma.Web.Plugs.FederatingPlug
+  alias Pleroma.Web.Plugs.OAuthScopesPlug
+  alias Pleroma.Web.Plugs.RateLimiter
 
   require Logger
 
@@ -46,6 +49,27 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
     when action in [:read_inbox, :update_outbox, :whoami, :upload_media]
   )
 
+  # Checks scopes only for OAuth tokens (signatures and Basic auth already skip the check).
+  plug(:check_token_scopes, %{scopes: ["read:accounts"]} when action == :whoami)
+  plug(:check_token_scopes, %{scopes: ["read:statuses"]} when action == :read_inbox)
+  plug(:check_token_scopes, %{scopes: ["write"]} when action == :update_outbox)
+  plug(:check_token_scopes, %{scopes: ["write:media"]} when action == :upload_media)
+
+  plug(
+    :check_token_scopes,
+    %{fallback: :proceed_unauthenticated, scopes: ["read:statuses"]}
+    when action in [:outbox, :object_replies]
+  )
+
+  plug(
+    :check_token_scopes,
+    %{fallback: :proceed_unauthenticated, scopes: ["read:accounts"]}
+    when action in [:followers, :following]
+  )
+
+  # Shares the per-user bucket with Mastodon API status actions and emoji reactions.
+  plug(RateLimiter, [name: :statuses_actions] when action == :update_outbox)
+
   plug(Majic.Plug, [pool: Pleroma.MajicPool] when action in [:upload_media])
 
   plug(
@@ -56,6 +80,11 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
 
   plug(:log_inbox_metadata when action in [:inbox])
   plug(:relay_active? when action in [:relay])
+
+  defp check_token_scopes(%{assigns: %{token: %Token{}}} = conn, opts),
+    do: OAuthScopesPlug.call(conn, opts)
+
+  defp check_token_scopes(conn, _), do: conn
 
   defp relay_active?(conn, _) do
     if Pleroma.Config.get([:instance, :allow_relay]) do
@@ -316,7 +345,6 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
            {:sender_exists, User.get_or_fetch_by_ap_id(params["actor"])},
          {:recipient_active, true} <- {:recipient_active, recipient.is_active},
          {:sender_active, true} <- {:sender_active, actor.is_active},
-         true <- Utils.recipient_in_message(recipient, actor, params),
          params <- Utils.maybe_splice_recipient(recipient.ap_id, params) do
       Federator.incoming_ap_doc(params)
       json(conn, "ok")
@@ -361,18 +389,25 @@ defmodule Pleroma.Web.ActivityPub.ActivityPubController do
   end
 
   def inbox(%{assigns: %{valid_signature: false}} = conn, params) do
-    if unsupported_http_message_signature?(conn) do
-      reject_unsupported_http_message_signature(conn)
-    else
-      Federator.incoming_failed_signature_ap_doc(%{
-        method: conn.method,
-        req_headers: conn.req_headers,
-        request_path: conn.request_path,
-        params: params,
-        query_string: conn.query_string
-      })
+    cond do
+      unsupported_http_message_signature?(conn) ->
+        reject_unsupported_http_message_signature(conn)
 
-      json(conn, "ok")
+      reason = conn.assigns[:signature_error] ->
+        conn
+        |> put_status(:unauthorized)
+        |> json("error, invalid HTTP signature (#{reason})")
+
+      true ->
+        Federator.incoming_failed_signature_ap_doc(%{
+          method: conn.method,
+          req_headers: conn.req_headers,
+          request_path: conn.request_path,
+          params: params,
+          query_string: conn.query_string
+        })
+
+        json(conn, "ok")
     end
   end
 

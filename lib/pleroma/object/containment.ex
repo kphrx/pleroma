@@ -44,6 +44,9 @@ defmodule Pleroma.Object.Containment do
     id
   end
 
+  # remote data can carry any shape here; callers treat nil as "no actor"
+  def get_actor(_), do: nil
+
   def get_object(%{"object" => id}) when is_binary(id) do
     id
   end
@@ -108,8 +111,46 @@ defmodule Pleroma.Object.Containment do
 
   def contain_origin_from_id(_id, _data), do: :error
 
+  @doc """
+  Checks that a fetched document's id is the URL it was fetched from
+  (after redirects).
+
+  Fragments, a trailing slash, the case of the host and differences
+  that our URL encoding removes before a request are ignored.
+  Documents without an id never match.
+
+  Based on Akkoma's `contain_id_to_fetch/2`.
+  """
+  def contain_id_to_fetch(url, %{"id" => id}) when is_binary(url) and is_binary(id) do
+    if normalize_uri(url) == normalize_uri(id), do: :ok, else: :error
+  end
+
+  def contain_id_to_fetch(_url, _data), do: :error
+
+  defp normalize_uri(uri) do
+    uri = uri |> Pleroma.Utils.URIEncoding.encode_url() |> URI.parse()
+
+    %URI{
+      uri
+      | fragment: nil,
+        host: uri.host && String.downcase(uri.host, :ascii),
+        path: uri.path && String.replace_suffix(uri.path, "/", "")
+    }
+    |> URI.to_string()
+  end
+
   def contain_child(%{"object" => %{"id" => id, "attributedTo" => _} = object}),
     do: contain_origin(id, object)
 
   def contain_child(_), do: :ok
+
+  @doc "Checks that two URIs are on the same host. URIs without a host never match."
+  def same_origin(id, other_id) when is_binary(id) and is_binary(other_id) do
+    case {URI.parse(id), URI.parse(other_id)} do
+      {%URI{host: host}, %URI{host: host}} when is_binary(host) and host != "" -> :ok
+      _ -> :error
+    end
+  end
+
+  def same_origin(_id, _other_id), do: :error
 end

@@ -13,6 +13,7 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
   alias Pleroma.Web.ActivityPub.ActivityPub
   alias Pleroma.Web.ActivityPub.InternalFetchActor
   alias Pleroma.Web.CommonAPI
+  alias Pleroma.Web.MastodonAPI.AccountView
   alias Pleroma.Web.OAuth.Token
   alias Pleroma.Web.Plugs.SetLocalePlug
 
@@ -2032,6 +2033,60 @@ defmodule Pleroma.Web.MastodonAPI.AccountControllerTest do
                json_response_and_validate_schema(conn, 200)
 
       assert id == to_string(user.id)
+    end
+
+    test "the profile scope only gets the public account" do
+      user = insert(:user, default_scope: "private", pleroma_settings_store: %{"fe" => %{}})
+      %{conn: conn} = oauth_access(["profile"], user: user)
+
+      response =
+        conn
+        |> get("/api/v1/accounts/verify_credentials")
+        |> json_response_and_validate_schema(200)
+
+      assert response ==
+               AccountView.render("show.json", user: user, skip_visibility_check: true)
+               |> Jason.encode!()
+               |> Jason.decode!()
+
+      refute Map.has_key?(response["source"], "privacy")
+      refute Map.has_key?(response, "follow_requests_count")
+
+      for key <- ~w(email settings_store chat_token notification_settings
+                    unread_notifications_count unread_conversation_count allow_following_move) do
+        refute Map.has_key?(response["pleroma"], key), "#{key} must not be shown"
+      end
+    end
+
+    test "the profile scope with read:accounts gets the full account" do
+      %{conn: conn} = oauth_access(["profile", "read:accounts"])
+
+      response =
+        conn
+        |> get("/api/v1/accounts/verify_credentials")
+        |> json_response_and_validate_schema(200)
+
+      assert response["source"]["privacy"]
+      assert response["pleroma"]["chat_token"]
+    end
+
+    test "the profile scope works when unauthenticated users cannot see profiles" do
+      clear_config([:restrict_unauthenticated, :profiles, :local], true)
+      %{user: user, conn: conn} = oauth_access(["profile"])
+
+      assert %{"id" => id} =
+               conn
+               |> get("/api/v1/accounts/verify_credentials")
+               |> json_response_and_validate_schema(200)
+
+      assert id == to_string(user.id)
+    end
+
+    test "the profile scope does not give access to other endpoints" do
+      %{conn: conn} = oauth_access(["profile"])
+
+      assert conn |> get("/api/v1/timelines/home") |> json_response(403)
+      assert conn |> get("/api/v1/follow_requests") |> json_response(403)
     end
   end
 

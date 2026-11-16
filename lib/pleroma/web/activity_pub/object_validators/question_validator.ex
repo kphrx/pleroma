@@ -6,10 +6,9 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.QuestionValidator do
   use Ecto.Schema
 
   alias Pleroma.EctoType.ActivityPub.ObjectValidators
-  alias Pleroma.Web.ActivityPub.ObjectValidators.CommonFixes
+  alias Pleroma.Web.ActivityPub.ObjectValidators.ArticleNotePageValidator
   alias Pleroma.Web.ActivityPub.ObjectValidators.CommonValidations
   alias Pleroma.Web.ActivityPub.ObjectValidators.QuestionOptionsValidator
-  alias Pleroma.Web.ActivityPub.Transmogrifier
 
   import Ecto.Changeset
 
@@ -62,11 +61,7 @@ defmodule Pleroma.Web.ActivityPub.ObjectValidators.QuestionValidator do
 
   defp fix(data) do
     data
-    |> CommonFixes.fix_actor()
-    |> CommonFixes.fix_object_defaults()
-    |> CommonFixes.fix_quote_url()
-    |> CommonFixes.fix_likes()
-    |> Transmogrifier.fix_emoji()
+    |> ArticleNotePageValidator.fix()
     |> fix_closed()
   end
 

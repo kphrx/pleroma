@@ -16,6 +16,8 @@ defmodule Pleroma.Web.Plugs.OAuthPlug do
 
   @realm_reg Regex.compile!("Bearer\:?\s+(.*)$", "i")
 
+  @update_interval :timer.hours(1)
+
   def init(options), do: options
 
   def call(%{assigns: %{user: %User{}}} = conn, _), do: conn
@@ -24,16 +26,32 @@ defmodule Pleroma.Web.Plugs.OAuthPlug do
     with {:ok, token_str} <- fetch_token_str(conn) do
       with {:ok, user, user_token} <- fetch_user_and_token(token_str),
            false <- Token.expired?(user_token) do
-        conn
-        |> assign(:token, user_token)
-        |> assign(:user, user)
+        with true <- needs_update?(user_token),
+             {:ok, updated_token} <- Token.update_activity(user_token) do
+          conn
+          |> assign(:token, updated_token)
+          |> assign(:user, user)
+        else
+          _ ->
+            conn
+            |> assign(:token, user_token)
+            |> assign(:user, user)
+        end
       else
         _ ->
           with {:ok, app, app_token} <- fetch_app_and_token(token_str),
                false <- Token.expired?(app_token) do
-            conn
-            |> assign(:token, app_token)
-            |> assign(:app, app)
+            with true <- needs_update?(app_token),
+                 {:ok, updated_token} <- Token.update_activity(app_token) do
+              conn
+              |> assign(:token, updated_token)
+              |> assign(:app, app)
+            else
+              _ ->
+                conn
+                |> assign(:token, app_token)
+                |> assign(:app, app)
+            end
           else
             _ -> conn
           end
@@ -41,6 +59,12 @@ defmodule Pleroma.Web.Plugs.OAuthPlug do
     else
       _ -> conn
     end
+  end
+
+  defp needs_update?(%Token{last_active: nil}), do: true
+
+  defp needs_update?(%Token{last_active: last_active}) do
+    NaiveDateTime.diff(NaiveDateTime.utc_now(), last_active, :millisecond) >= @update_interval
   end
 
   # Gets user by token

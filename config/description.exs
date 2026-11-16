@@ -1815,6 +1815,27 @@ config :pleroma, :config_description, [
           "List of IPs (CIDR format accepted) to exempt from HTTP Signatures requirement (for example to allow debugging, you shouldn't otherwise need this)"
       },
       %{
+        key: :signature_policy,
+        type: {:dropdown, :atom},
+        description:
+          "What to do with incoming HTTP signatures that do not sign the date (or `(created)`), are outside the allowed time window, or do not sign the digest of a request body. `:enforce` treats them as invalid, `:log` only logs them",
+        suggestions: [:enforce, :log]
+      },
+      %{
+        key: :signature_max_age,
+        type: :integer,
+        description:
+          "How old, in seconds, the signed date of an incoming HTTP signature can be. Default: 7200 (2 hours)",
+        suggestions: [7200]
+      },
+      %{
+        key: :signature_max_clock_skew,
+        type: :integer,
+        description:
+          "How far, in seconds, the signed date of an incoming HTTP signature can be in the future. Default: 3600 (1 hour). A `(created)` time in the future is always rejected",
+        suggestions: [3600]
+      },
+      %{
         key: :note_replies_output_limit,
         type: :integer,
         description:
@@ -3588,6 +3609,35 @@ config :pleroma, :config_description, [
           Pleroma.Search.QdrantSearch,
           Pleroma.Search.ParadeDB
         ]
+      }
+    ]
+  },
+  %{
+    group: :pleroma,
+    key: Pleroma.Search.DatabaseSearch,
+    type: :group,
+    description: "Built-in database search settings.",
+    children: [
+      %{
+        key: :gin_fuzzy_search_limit,
+        type: :integer,
+        description:
+          "Limits how many matches PostgreSQL considers in GIN full-text search queries (see `gin_fuzzy_search_limit` in the PostgreSQL docs). Only set for search queries, including account search. A limit makes results incomplete and random. 0 gives exact results, even if the PostgreSQL server sets a limit; `nil` keeps the server's setting. Default: 0.",
+        suggestions: [0, 500, nil]
+      },
+      %{
+        key: :time_budget,
+        type: :integer,
+        description:
+          "Time in milliseconds after which search stops looking at older posts and returns the results found so far. Each search query may only use the rest of this time (and never more than the server's `statement_timeout`). 0 searches only the first window and keeps the server's statement timeout. Keep it below the Repo `:timeout` (default 15 s): the search API stops waiting after that and then returns nothing. Default: 10000.",
+        suggestions: [10_000]
+      },
+      %{
+        key: :windows,
+        type: {:list, :integer},
+        description:
+          "Search looks at the newest posts first: first the newest N objects for each N in this list, then all older ones. It stops when it has enough results. Default: [10000, 100000, 1000000].",
+        suggestions: [[10_000, 100_000, 1_000_000]]
       }
     ]
   },

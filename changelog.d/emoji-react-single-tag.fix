@@ -1,0 +1,1 @@
+Accept incoming emoji reactions whose tag is a single object instead of an array

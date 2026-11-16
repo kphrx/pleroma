@@ -36,7 +36,7 @@ sudo apt install elixir erlang-dev erlang-nox
 ### Optional packages: [`docs/installation/optional/media_graphics_packages.md`](../installation/optional/media_graphics_packages.md)
 
 ```shell
-sudo apt install imagemagick ffmpeg libimage-exiftool-perl
+sudo apt install imagemagick ffmpeg
 ```
 
 ### Install PleromaBE

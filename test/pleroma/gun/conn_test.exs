@@ -42,6 +42,7 @@ defmodule Pleroma.Gun.ConnTest do
 
     expect(Pleroma.GunMock, :open, fn ~c"proxy.example", 8080, opts ->
       assert opts.transport == :tcp
+      assert opts.supervise
       refute Map.has_key?(opts, :tls_opts)
       {:ok, conn}
     end)
@@ -170,6 +171,67 @@ defmodule Pleroma.Gun.ConnTest do
              Conn.open(URI.parse("https://origin.example/inbox"),
                proxy: {:socks4, ~c"proxy.example", 1080}
              )
+  end
+
+  describe "IPv6-only hosts" do
+    @nxdomain {:error, {:down, {:shutdown, :nxdomain}}}
+
+    test "retries once over IPv6 when the IPv4 lookup finds no address" do
+      ipv4_conn = spawn_link(fn -> Process.sleep(:infinity) end)
+      ipv6_conn = spawn_link(fn -> Process.sleep(:infinity) end)
+
+      expect(Pleroma.GunMock, :open, 2, fn
+        ~c"v6only.example", 443, %{tcp_opts: tcp_opts} = opts ->
+          assert :inet6 in tcp_opts
+          assert opts.transport == :tls
+          assert opts.tls_opts[:verify] == :verify_peer
+          {:ok, ipv6_conn}
+
+        ~c"v6only.example", 443, opts ->
+          refute Map.has_key?(opts, :tcp_opts)
+          # A linked Gun process would take the caller down with the lookup failure.
+          assert opts.supervise
+          {:ok, ipv4_conn}
+      end)
+
+      stub(Pleroma.GunMock, :await_up, fn
+        ^ipv4_conn, _ -> @nxdomain
+        ^ipv6_conn, _ -> {:ok, :http2}
+      end)
+
+      assert {:ok, ^ipv6_conn, :http2, nil} =
+               Conn.open(URI.parse("https://v6only.example/inbox"), [])
+
+      stop_conn(ipv4_conn)
+      stop_conn(ipv6_conn)
+    end
+
+    test "does not retry IP literals or other errors" do
+      expect(Pleroma.GunMock, :open, 2, fn _, _, _ ->
+        {:ok, spawn(fn -> Process.sleep(:infinity) end)}
+      end)
+
+      stub(Pleroma.GunMock, :await_up, fn _, _ -> @nxdomain end)
+      assert @nxdomain = Conn.open(URI.parse("https://192.0.2.1/inbox"), [])
+
+      stub(Pleroma.GunMock, :await_up, fn _, _ ->
+        {:error, {:down, {:shutdown, :econnrefused}}}
+      end)
+
+      assert {:error, _} = Conn.open(URI.parse("https://v6only.example/inbox"), [])
+    end
+
+    test "inet6_fallback/3 keeps configured TCP options and skips hosts already on IPv6" do
+      assert {:ok, %{tcp_opts: [:inet6, nodelay: true]}} =
+               Conn.inet6_fallback(@nxdomain, ~c"v6only.example", %{tcp_opts: [nodelay: true]})
+
+      assert {:ok, %{tcp_opts: [:inet6, send_timeout: 15_000, send_timeout_close: true]}} =
+               Conn.inet6_fallback(@nxdomain, ~c"v6only.example", %{})
+
+      assert :error = Conn.inet6_fallback(@nxdomain, ~c"v6only.example", %{tcp_opts: [:inet6]})
+      assert :error = Conn.inet6_fallback(@nxdomain, {192, 0, 2, 1}, %{})
+      assert :error = Conn.inet6_fallback({:error, :timeout}, ~c"v6only.example", %{})
+    end
   end
 
   defp stop_conn(conn) do

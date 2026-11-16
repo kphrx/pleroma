@@ -1,0 +1,1 @@
+SMTP over TLS (implicit TLS and STARTTLS) now checks the server certificate against the CAStore bundle, instead of failing with `cacerts: :undefined` on OTP 26+. For a self-signed relay set `sockopts`/`tls_options` to `[verify: :verify_none]`

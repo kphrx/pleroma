@@ -1,0 +1,1 @@
+Account search matches only accounts that have every word of the query, and ignores the server's gin_fuzzy_search_limit; a sentence no longer matches most accounts

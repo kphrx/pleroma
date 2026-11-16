@@ -182,64 +182,66 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       end
 
     reblog_rendering_opts = Map.put(opts, :activity, reblogged_parent_activity)
-    reblogged = render("show.json", reblog_rendering_opts)
+    # Without its Create activity (pruned or deleted) the post cannot be
+    # rendered, and a repeat of nothing is of no use to clients.
+    with %{} = reblogged <- render("show.json", reblog_rendering_opts) do
+      favorited = opts[:for] && opts[:for].ap_id in (object.data["likes"] || [])
 
-    favorited = opts[:for] && opts[:for].ap_id in (object.data["likes"] || [])
+      bookmark = Activity.get_bookmark(reblogged_parent_activity, opts[:for])
 
-    bookmark = Activity.get_bookmark(reblogged_parent_activity, opts[:for])
+      bookmark_folder =
+        if bookmark != nil do
+          bookmark.folder_id
+        else
+          nil
+        end
 
-    bookmark_folder =
-      if bookmark != nil do
-        bookmark.folder_id
-      else
-        nil
-      end
+      mentions =
+        activity.recipients
+        |> Enum.map(fn ap_id -> User.get_cached_by_ap_id(ap_id) end)
+        |> Enum.filter(& &1)
+        |> Enum.map(fn user -> AccountView.render("mention.json", %{user: user}) end)
 
-    mentions =
-      activity.recipients
-      |> Enum.map(fn ap_id -> User.get_cached_by_ap_id(ap_id) end)
-      |> Enum.filter(& &1)
-      |> Enum.map(fn user -> AccountView.render("mention.json", %{user: user}) end)
+      {pinned?, pinned_at} = pin_data(object, user)
 
-    {pinned?, pinned_at} = pin_data(object, user)
-
-    %{
-      id: to_string(activity.id),
-      uri: object.data["id"],
-      url: object.data["id"],
-      account:
-        AccountView.render("show.json", %{
-          user: user,
-          for: opts[:for]
-        }),
-      in_reply_to_id: nil,
-      in_reply_to_account_id: nil,
-      reblog: reblogged,
-      content: reblogged[:content] || "",
-      created_at: created_at,
-      reblogs_count: 0,
-      replies_count: 0,
-      favourites_count: 0,
-      reblogged: reblogged?(reblogged_parent_activity, opts[:for]),
-      favourited: present?(favorited),
-      bookmarked: present?(bookmark),
-      muted: false,
-      pinned: pinned?,
-      sensitive: false,
-      spoiler_text: "",
-      visibility: get_visibility(activity),
-      media_attachments: reblogged[:media_attachments] || [],
-      mentions: mentions,
-      tags: reblogged[:tags] || [],
-      application: build_application(object.data["generator"]),
-      language: get_language(object),
-      emojis: [],
-      pleroma: %{
-        local: activity.local,
-        pinned_at: pinned_at,
-        bookmark_folder: bookmark_folder
+      %{
+        id: to_string(activity.id),
+        uri: object.data["id"],
+        url: object.data["id"],
+        account:
+          AccountView.render("show.json", %{
+            user: user,
+            for: opts[:for]
+          }),
+        in_reply_to_id: nil,
+        in_reply_to_account_id: nil,
+        reblog: reblogged,
+        content: reblogged[:content] || "",
+        created_at: created_at,
+        reblogs_count: 0,
+        replies_count: 0,
+        favourites_count: 0,
+        reblogged: reblogged?(reblogged_parent_activity, opts[:for]),
+        favourited: present?(favorited),
+        bookmarked: present?(bookmark),
+        muted: false,
+        pinned: pinned?,
+        sensitive: false,
+        spoiler_text: "",
+        visibility: get_visibility(activity),
+        media_attachments: reblogged[:media_attachments] || [],
+        mentions: mentions,
+        tags: reblogged[:tags] || [],
+        application: build_application(object.data["generator"]),
+        language: get_language(object),
+        emojis: [],
+        pleroma: %{
+          local: activity.local,
+          pinned_at: pinned_at,
+          bookmark_folder: bookmark_folder
+        }
       }
-    }
+    end
   end
 
   def render("show.json", %{activity: %{data: %{"object" => _object}} = activity} = opts) do
@@ -302,7 +304,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       end
 
     attachment_data = object.data["attachment"] || []
-    attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
+    attachments = render_attachments(attachment_data)
 
     created_at = Utils.to_masto_date(object.data["published"])
 
@@ -455,6 +457,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       language: get_language(object),
       emojis: build_emojis(object.data["emoji"]),
       quotes_count: object.data["quotesCount"] || 0,
+      quote: build_quote(object, quote_activity, quote_post, opts),
       pleroma: %{
         local: activity.local,
         conversation_id: get_context_id(activity),
@@ -532,7 +535,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     sensitive = object.data["sensitive"] || Enum.member?(hashtags, "nsfw")
 
     attachment_data = object.data["attachment"] || []
-    attachments = render_many(attachment_data, StatusView, "attachment.json", as: :attachment)
+    attachments = render_attachments(attachment_data)
 
     created_at = Utils.to_masto_date(object.data["updated"] || object.data["published"])
 
@@ -676,7 +679,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   def render("attachment_meta.json", %{
         attachment: %{"url" => [%{"width" => width, "height" => height} | _]}
       })
-      when is_integer(width) and is_integer(height) do
+      when is_integer(width) and is_integer(height) and width > 0 and height > 0 do
     %{
       original: %{
         width: width,
@@ -692,7 +695,9 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
     %{ancestors: ancestors, descendants: descendants} =
       activities
       |> Enum.reverse()
-      |> Enum.group_by(fn %{id: id} -> if id < activity.id, do: :ancestors, else: :descendants end)
+      |> Enum.group_by(fn %{id: id} ->
+        if id < activity.id, do: :ancestors, else: :descendants
+      end)
       |> Map.put_new(:ancestors, [])
       |> Map.put_new(:descendants, [])
 
@@ -742,6 +747,26 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
       nil
     end
   end
+
+  # Mastodon (4.4+) quote entity. Quoted statuses get a shallow quote that only
+  # has the id, as quotes are only rendered one level deep.
+  defp build_quote(%Object{data: %{"quoteUrl" => url}}, quote_activity, quote_post, opts)
+       when is_binary(url) and url != "" do
+    state =
+      cond do
+        is_nil(quote_activity) -> "deleted"
+        visible_for_user?(quote_activity, opts[:for]) -> "accepted"
+        true -> "unauthorized"
+      end
+
+    if opts[:show_quote] == false do
+      %{state: state, quoted_status_id: if(state == "accepted", do: to_string(quote_activity.id))}
+    else
+      %{state: state, quoted_status: if(state == "accepted", do: quote_post)}
+    end
+  end
+
+  defp build_quote(_object, _quote_activity, _quote_post, _opts), do: nil
 
   def get_quote(activity, %{quoted_activities: quoted_activities}) do
     object = Object.normalize(activity, fetch: false)
@@ -851,6 +876,27 @@ defmodule Pleroma.Web.MastodonAPI.StatusView do
   defp build_image_url(%URI{} = image_url_data, %URI{} = page_url_data) do
     URI.merge(page_url_data, image_url_data) |> to_string
   end
+
+  # Mastodon puts the links of a post into `attachment` as `Link` objects without a
+  # media type. These are not media, so leave them out. PeerTube and Funkwhale media
+  # are also stored as `Link`, but with a media type, so keep those.
+  defp render_attachments(attachments) do
+    attachments
+    |> Enum.reject(&plain_link?/1)
+    |> render_many(StatusView, "attachment.json", as: :attachment)
+  end
+
+  defp plain_link?(%{"type" => "Link"} = attachment) do
+    media_type =
+      case attachment["url"] do
+        [%{} = url | _] -> url["mediaType"] || url["mimeType"]
+        _ -> nil
+      end
+
+    not (is_binary(media_type) and String.starts_with?(media_type, ["image/", "video/", "audio/"]))
+  end
+
+  defp plain_link?(_), do: false
 
   defp get_source_text(%{"content" => content} = _source) do
     content

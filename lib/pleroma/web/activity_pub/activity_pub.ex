@@ -11,6 +11,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Conversation.Participation
   alias Pleroma.Filter
   alias Pleroma.Hashtag
+  alias Pleroma.Instances.Instance
   alias Pleroma.Maps
   alias Pleroma.Notification
   alias Pleroma.Object
@@ -20,7 +21,9 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   alias Pleroma.Repo
   alias Pleroma.Upload
   alias Pleroma.User
+  alias Pleroma.Web.ActivityPub.HomeTimeline
   alias Pleroma.Web.ActivityPub.MRF
+  alias Pleroma.Web.ActivityPub.ObjectValidators.UserValidator
   alias Pleroma.Web.ActivityPub.Transmogrifier
   alias Pleroma.Web.Streamer
   alias Pleroma.Web.WebFinger
@@ -464,21 +467,28 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   def fetch_activities_for_context_query(context, opts) do
-    public = [Constants.as_public()]
+    user = opts[:user]
 
     recipients =
-      if opts[:user],
-        do: [opts[:user].ap_id | User.following(opts[:user])] ++ public,
-        else: public
+      cond do
+        user && user.local ->
+          [Constants.as_public(), as_local_public(), user.ap_id | User.following(user)]
+
+        user ->
+          [Constants.as_public(), user.ap_id | User.following(user)]
+
+        true ->
+          [Constants.as_public()]
+      end
 
     from(activity in Activity)
     |> maybe_preload_objects(opts)
     |> maybe_preload_bookmarks(opts)
     |> maybe_set_thread_muted_field(opts)
-    |> restrict_unauthenticated(opts[:user])
+    |> restrict_unauthenticated(user)
     |> restrict_blocked(opts)
     |> restrict_blockers_visibility(opts)
-    |> restrict_recipients(recipients, opts[:user])
+    |> restrict_recipients(recipients, user)
     |> restrict_filtered(opts)
     |> where(
       [activity],
@@ -545,6 +555,19 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   defp pagination_binding(%{favorited_by: _}), do: :favorited_activity
   defp pagination_binding(_), do: nil
+
+  def fetch_home_activities(recipients, opts) do
+    HomeTimeline.with_exact_queries(fn ->
+      list_memberships = Pleroma.List.memberships(opts[:user])
+      recipients = Enum.uniq(recipients ++ list_memberships)
+
+      HomeTimeline.fetch(recipients, opts, fn source, matching ->
+        fetch_activities_query(recipients, opts, source, matching)
+      end)
+      |> Enum.reverse()
+      |> maybe_update_cc(list_memberships, opts[:user])
+    end)
+  end
 
   def fetch_activities(recipients, opts \\ %{}, pagination \\ :keyset) do
     list_memberships = Pleroma.List.memberships(opts[:user])
@@ -961,19 +984,35 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     )
   end
 
+  defp restrict_recipients(query, recipients, user, :overlap) do
+    restrict_recipients(query, recipients, user)
+  end
+
+  defp restrict_recipients(query, recipients, user, :exists) do
+    from(activity in query,
+      where:
+        fragment(
+          "EXISTS (SELECT 1 FROM unnest(?) AS recipient WHERE recipient = ANY(?))",
+          activity.recipients,
+          type(^recipients, {:array, :string})
+        ),
+      or_where: activity.actor == ^user.ap_id
+    )
+  end
+
   # Essentially, either look for activities addressed to `recipients`, _OR_ ones
   # that reference a hashtag that the user follows
   # Firstly, two fallbacks in case there's no hashtag constraint, or the user doesn't
   # follow any
-  defp restrict_recipients_or_hashtags(query, recipients, user, nil) do
-    restrict_recipients(query, recipients, user)
+  defp restrict_recipients_or_hashtags(query, recipients, user, nil, matching) do
+    restrict_recipients(query, recipients, user, matching)
   end
 
-  defp restrict_recipients_or_hashtags(query, recipients, user, []) do
-    restrict_recipients(query, recipients, user)
+  defp restrict_recipients_or_hashtags(query, recipients, user, [], matching) do
+    restrict_recipients(query, recipients, user, matching)
   end
 
-  defp restrict_recipients_or_hashtags(query, recipients, _user, hashtag_ids) do
+  defp restrict_recipients_or_hashtags(query, recipients, _user, hashtag_ids, _matching) do
     from([activity, object] in query)
     |> join(:left, [activity, object], hto in "hashtags_objects",
       on: hto.object_id == object.id,
@@ -1546,6 +1585,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   end
 
   def fetch_activities_query(recipients, opts \\ %{}) do
+    fetch_activities_query(recipients, opts, Activity, :overlap)
+  end
+
+  defp fetch_activities_query(recipients, opts, source, matching) do
     opts = normalize_fetch_activities_query_opts(opts)
 
     {restrict_blocked_opts, restrict_muted_opts, restrict_muted_reblogs_opts} =
@@ -1556,14 +1599,19 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
     }
 
     query =
-      Activity
+      source
       |> maybe_preload_objects(opts)
       |> maybe_preload_bookmarks(opts)
       |> maybe_preload_report_notes(opts)
       |> maybe_set_thread_muted_field(opts)
       |> maybe_order(opts)
       |> maybe_restrict_unauthenticated(opts)
-      |> restrict_recipients_or_hashtags(recipients, opts[:user], opts[:followed_hashtags])
+      |> restrict_recipients_or_hashtags(
+        recipients,
+        opts[:user],
+        opts[:followed_hashtags],
+        matching
+      )
       |> restrict_replies(opts)
       |> restrict_since(opts)
       |> restrict_local(opts)
@@ -1924,6 +1972,7 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
   def user_data_from_user_object(data, additional \\ []) do
     with {:ok, data} <- MRF.filter(data),
+         {:ok, data, _} <- UserValidator.validate(data, []),
          {:ok, data} <- object_to_user_data(data, additional) do
       {:ok, data}
     else
@@ -1944,6 +1993,10 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
 
       {:error, {:reject, reason} = e} ->
         Logger.info("Rejected user #{ap_id}: #{inspect(reason)}")
+        {:error, e}
+
+      {:error, :ratelimit = e} ->
+        Logger.debug("Backing off from fetching user #{ap_id}")
         {:error, e}
 
       {:error, e} ->
@@ -2053,10 +2106,13 @@ defmodule Pleroma.Web.ActivityPub.ActivityPub do
   def enqueue_pin_fetches(_), do: nil
 
   def make_user_from_ap_id(ap_id, additional \\ []) do
-    user = User.get_cached_by_ap_id(ap_id)
-
     with {:ok, data} <- fetch_and_prepare_user_from_ap_id(ap_id, additional) do
       enqueue_pin_fetches(data)
+      # Keeps the instances table complete, so it can list our peers.
+      Instance.ensure_exists(data.ap_id)
+
+      # the fetched actor's id differs from ap_id when it was fetched from a display URL
+      user = User.get_cached_by_ap_id(data.ap_id)
 
       if user do
         user

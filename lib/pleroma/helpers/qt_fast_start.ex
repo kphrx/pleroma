@@ -4,29 +4,33 @@
 
 defmodule Pleroma.Helpers.QtFastStart do
   @moduledoc """
-  (WIP) Converts a "slow start" (data before metadatas) mov/mp4 file to a "fast start" one (metadatas before data).
+  Converts a "slow start" (data before metadata) MP4/MOV file to a "fast start" one
+  (metadata before data) by relocating the moov atom before the mdat atom and updating
+  chunk offset references in stco/co64 atoms accordingly.
   """
 
-  # TODO: Cleanup and optimizations
-  # Inspirations: https://www.ffmpeg.org/doxygen/3.4/qt-faststart_8c_source.html
-  #               https://github.com/danielgtaylor/qtfaststart/blob/master/qtfaststart/processor.py
-  #               ISO/IEC 14496-12:2015, ISO/IEC 15444-12:2015
-  #               Paracetamol
+  require Logger
 
-  def fix(<<0x00, 0x00, 0x00, _, 0x66, 0x74, 0x79, 0x70, _::bits>> = binary) do
+  def fix(<<size::integer-big-size(32), 0x66, 0x74, 0x79, 0x70, _::bits>> = binary)
+      when size >= 8 do
     index = fix(binary, 0, nil, nil, [])
 
     case index do
-      :abort -> binary
-      [{"ftyp", _, _, _, _}, {"mdat", _, _, _, _} | _] -> faststart(index)
-      [{"ftyp", _, _, _, _}, {"free", _, _, _, _}, {"mdat", _, _, _, _} | _] -> faststart(index)
-      _ -> binary
+      :abort ->
+        binary
+
+      [{"ftyp", _, _, _, _}, {"mdat", _, _, _, _} | _] ->
+        faststart(index, binary)
+
+      [{"ftyp", _, _, _, _}, {"free", _, _, _, _}, {"mdat", _, _, _, _} | _] ->
+        faststart(index, binary)
+
+      _ ->
+        binary
     end
   end
 
-  def fix(binary) do
-    binary
-  end
+  def fix(binary), do: binary
 
   # MOOV have been seen before MDAT- abort
   defp fix(<<_::bits>>, _, true, false, _) do
@@ -61,27 +65,37 @@ defmodule Pleroma.Helpers.QtFastStart do
     :lists.reverse(acc)
   end
 
-  defp faststart(index) do
+  # The original binary when it cannot be rewritten (no moov, a broken
+  # atom, an offset that would not fit).
+  defp faststart(index, binary) do
     {{_ftyp, _, _, _, ftyp}, index} = List.keytake(index, "ftyp", 0)
 
-    # Skip re-writing the free fourcc as it's kind of useless.
+    # Skip re-writing a free atom right after ftyp as it's kind of useless.
     # Why stream useless bytes when you can do without?
     {free_size, index} =
-      case List.keytake(index, "free", 0) do
-        {{_, _, _, size, _}, index} -> {size, index}
+      case index do
+        [{"free", _, _, size, _} | index] -> {size, index}
         _ -> {0, index}
       end
 
-    {{_moov, _, _, moov_size, moov}, index} = List.keytake(index, "moov", 0)
-    offset = -free_size + moov_size
-    rest = for {_, _, _, _, data} <- index, do: data, into: []
+    {{_moov, moov_start, _, moov_size, moov}, index} = List.keytake(index, "moov", 0)
+
+    # Data before the moov moves back by its size, data after it stays put;
+    # all of it moves forward by the dropped free atom.
+    shift = fn pos -> if(pos < moov_start, do: moov_size, else: 0) - free_size end
+
+    rest = Enum.map(index, fn {_, _, _, _, data} -> data end)
     <<moov_head::bits-size(64), moov_data::bits>> = moov
-    [ftyp, moov_head, fix_moov(moov_data, offset, []), rest]
+    IO.iodata_to_binary([ftyp, moov_head, fix_moov(moov_data, shift, []), rest])
+  rescue
+    e ->
+      Logger.warning("#{__MODULE__}: leaving the file as it is: #{inspect(e)}")
+      binary
   end
 
   defp fix_moov(
          <<size::integer-big-size(32), fourcc::bits-size(32), rest::bits>>,
-         offset,
+         shift,
          acc
        ) do
     full_size = (size - 8) * 8
@@ -90,8 +104,8 @@ defmodule Pleroma.Helpers.QtFastStart do
     data =
       cond do
         fourcc in ["trak", "mdia", "minf", "stbl"] ->
-          # Theses contains sto or co64 part
-          [<<size::integer-big-size(32), fourcc::bits-size(32)>>, fix_moov(data, offset, [])]
+          # These contain the stco or co64 part
+          [<<size::integer-big-size(32), fourcc::bits-size(32)>>, fix_moov(data, shift, [])]
 
         fourcc in ["stco", "co64"] ->
           # fix the damn thing
@@ -106,7 +120,7 @@ defmodule Pleroma.Helpers.QtFastStart do
           [
             <<size::integer-big-size(32), fourcc::bits-size(32), version::integer-big-size(32),
               count::integer-big-size(32)>>,
-            rewrite_entries(entry_size, offset, rest, [])
+            rewrite_entries(entry_size, shift, rest, [])
           ]
 
         true ->
@@ -114,7 +128,7 @@ defmodule Pleroma.Helpers.QtFastStart do
       end
 
     acc = [acc | data]
-    fix_moov(rest, offset, acc)
+    fix_moov(rest, shift, acc)
   end
 
   defp fix_moov(<<>>, _, acc), do: acc
@@ -122,19 +136,20 @@ defmodule Pleroma.Helpers.QtFastStart do
   for size <- [32, 64] do
     defp rewrite_entries(
            unquote(size),
-           offset,
+           shift,
            <<pos::integer-big-size(unquote(size)), rest::bits>>,
            acc
          ) do
-      rewrite_entries(
-        unquote(size),
-        offset,
-        rest,
-        acc ++
-          [
-            <<pos + offset::integer-big-size(unquote(size))>>
-          ]
-      )
+      new_pos = pos + shift.(pos)
+
+      # an offset that does not fit (a file near 4 GiB with stco) would be cut
+      if new_pos >= unquote(Bitwise.bsl(1, size)) do
+        raise ArgumentError, "chunk offset out of range"
+      end
+
+      rewrite_entries(unquote(size), shift, rest, [
+        acc | <<new_pos::integer-big-size(unquote(size))>>
+      ])
     end
   end
 

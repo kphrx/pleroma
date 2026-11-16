@@ -35,6 +35,11 @@ msgstr "Read and write user relationships"
 
 #, elixir-autogen, elixir-format
 #: lib/pleroma/web/api_spec/scopes/translator.ex:5
+msgid "profile"
+msgstr "Read only your public profile, to log in to other services"
+
+#, elixir-autogen, elixir-format
+#: lib/pleroma/web/api_spec/scopes/translator.ex:5
 msgid "push"
 msgstr "Push notifications"
 

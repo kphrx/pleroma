@@ -32,8 +32,26 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       refute Publisher.should_federate?(nil, true)
     end
 
-    test "it returns true when public is true" do
-      assert Publisher.should_federate?(false, true)
+    test "it returns true for public activities to quarantined instances" do
+      clear_config([:instance, :quarantined_instances], [{"quarantined.example", ""}])
+
+      assert Publisher.should_federate?("https://quarantined.example/inbox", true)
+      refute Publisher.should_federate?("https://quarantined.example/inbox", false)
+    end
+
+    test "it returns false for instances rejected by SimplePolicy, even for public activities" do
+      clear_config([:mrf, :policies], [Pleroma.Web.ActivityPub.MRF.SimplePolicy])
+      clear_config([:mrf_simple, :reject], [{"rejected.example", ""}])
+
+      refute Publisher.should_federate?("https://rejected.example/inbox", true)
+      refute Publisher.should_federate?("https://rejected.example/inbox", false)
+      assert Publisher.should_federate?("https://fine.example/inbox", true)
+    end
+
+    test "it returns false for inboxes without a host" do
+      clear_config([:instance, :quarantined_instances], [{"quarantined.example", ""}])
+
+      refute Publisher.should_federate?("inbox", false)
     end
   end
 
@@ -119,7 +137,7 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       assert Publisher.determine_inbox(activity, user) == "http://example.com/inbox"
     end
 
-    test "it returns inbox for messages involving single recipients in total" do
+    test "it returns sharedInbox for messages to a single recipient" do
       user =
         insert(:user, %{
           shared_inbox: "http://example.com/inbox",
@@ -129,6 +147,46 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
       activity = %Activity{
         data: %{"to" => [user.ap_id], "cc" => []}
       }
+
+      assert Publisher.determine_inbox(activity, user) == "http://example.com/inbox"
+    end
+
+    test "it returns sharedInbox for followers-only messages" do
+      user =
+        insert(:user, %{
+          shared_inbox: "http://example.com/inbox",
+          inbox: "http://example.com/personal-inbox"
+        })
+
+      author = insert(:user)
+
+      activity = %Activity{
+        data: %{"to" => [author.follower_address], "cc" => []}
+      }
+
+      assert Publisher.determine_inbox(activity, user) == "http://example.com/inbox"
+    end
+
+    test "it returns inbox for messages with bcc or bto, which needs personal inboxes" do
+      user =
+        insert(:user, %{
+          shared_inbox: "http://example.com/inbox",
+          inbox: "http://example.com/personal-inbox"
+        })
+
+      for field <- ["bcc", "bto"] do
+        activity = %Activity{
+          data: %{"to" => [@as_public], "cc" => [], field => [user.ap_id]}
+        }
+
+        assert Publisher.determine_inbox(activity, user) == "http://example.com/personal-inbox"
+      end
+    end
+
+    test "it returns inbox when the user has no sharedInbox" do
+      user = insert(:user, %{shared_inbox: nil, inbox: "http://example.com/personal-inbox"})
+
+      activity = %Activity{data: %{"to" => [@as_public], "cc" => []}}
 
       assert Publisher.determine_inbox(activity, user) == "http://example.com/personal-inbox"
     end
@@ -202,6 +260,32 @@ defmodule Pleroma.Web.ActivityPub.PublisherTest do
           }
         }
       )
+    end
+
+    test "doesn't publish a public activity to instances rejected by SimplePolicy" do
+      clear_config([:mrf, :policies], [Pleroma.Web.ActivityPub.MRF.SimplePolicy])
+      clear_config([:mrf_simple, :reject], [{"rejected.example", "spam"}])
+
+      actor = insert(:user)
+
+      for host <- ["rejected.example", "fine.example"] do
+        follower = insert(:user, local: false, inbox: "https://#{host}/users/nick/inbox")
+        {:ok, _, _} = Pleroma.User.follow(follower, actor)
+      end
+
+      actor = refresh_record(actor)
+
+      note_activity =
+        insert(:note_activity, user: actor, recipients: [@as_public, actor.follower_address])
+
+      assert :ok == Publisher.publish(actor, note_activity)
+
+      inboxes =
+        all_enqueued(worker: "Pleroma.Workers.PublisherWorker")
+        |> Enum.map(& &1.args["params"]["inbox"])
+
+      assert "https://fine.example/users/nick/inbox" in inboxes
+      refute "https://rejected.example/users/nick/inbox" in inboxes
     end
 
     test "Publishes a non-public activity to non-quarantined instances." do

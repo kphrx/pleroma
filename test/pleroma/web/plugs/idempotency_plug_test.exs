@@ -175,6 +175,73 @@ defmodule Pleroma.Web.Plugs.IdempotencyPlugTest do
     end
   end
 
+  test "rejects a duplicate request while the original is still in flight" do
+    key = Ecto.UUID.generate()
+
+    # The first request passed the plug and is still being processed; its
+    # response — and with it the cache entry — does not exist yet.
+    conn_one =
+      :post
+      |> conn("/cofe")
+      |> put_req_header("idempotency-key", key)
+      |> Conn.put_resp_header("x-request-id", "original-request")
+      |> Conn.put_resp_content_type("application/json")
+      |> IdempotencyPlug.call([])
+
+    refute conn_one.halted
+
+    conn_two =
+      :post
+      |> conn("/cofe")
+      |> put_req_header("idempotency-key", key)
+      |> Conn.put_resp_header("x-request-id", "duplicate-request")
+      |> Conn.put_resp_content_type("application/json")
+      |> IdempotencyPlug.call([])
+
+    assert conn_two.halted
+    assert conn_two.status == 409
+
+    # Once the original response has been sent, the key replays it again
+    Conn.send_resp(conn_one, 200, "testing")
+
+    conn_three =
+      :post
+      |> conn("/cofe")
+      |> put_req_header("idempotency-key", key)
+      |> Conn.put_resp_header("x-request-id", "third-request")
+      |> Conn.put_resp_content_type("application/json")
+      |> IdempotencyPlug.call([])
+
+    assert conn_three.halted
+    assert conn_three.status == 200
+    assert conn_three.resp_body == "testing"
+    assert ["true"] = Conn.get_resp_header(conn_three, "idempotent-replayed")
+    assert ["original-request"] = Conn.get_resp_header(conn_three, "x-original-request-id")
+  end
+
+  test "admits exactly one of several concurrent requests with the same key" do
+    key = Ecto.UUID.generate()
+
+    conns =
+      1..10
+      |> Task.async_stream(fn i ->
+        :post
+        |> conn("/cofe")
+        |> put_req_header("idempotency-key", key)
+        |> Conn.put_resp_header("x-request-id", "request-#{i}")
+        |> Conn.put_resp_content_type("application/json")
+        |> IdempotencyPlug.call([])
+      end)
+      |> Enum.map(fn {:ok, conn} -> conn end)
+
+    assert [winner] = Enum.reject(conns, & &1.halted)
+    refute winner.resp_body
+
+    losers = Enum.filter(conns, & &1.halted)
+    assert length(losers) == 9
+    assert Enum.all?(losers, &(&1.status == 409))
+  end
+
   test "scopes cached responses to configured staff privileges" do
     key = Ecto.UUID.generate()
     clear_config([:instance, :admin_privileges], [:users_delete])

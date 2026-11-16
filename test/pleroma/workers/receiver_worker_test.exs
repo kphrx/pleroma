@@ -133,6 +133,28 @@ defmodule Pleroma.Workers.ReceiverWorkerTest do
     end
   end
 
+  describe "rate-limited fetches" do
+    setup do
+      Cachex.put(:http_backoff_cache, "ratelimited.example", true)
+
+      params =
+        insert(:note_activity).data
+        |> Map.put("actor", "https://ratelimited.example/users/alice")
+
+      %{args: %{"op" => "incoming_ap_doc", "params" => params}}
+    end
+
+    test "snooze while the actor's host is backed off", %{args: args} do
+      assert {:snooze, 300} = perform_job(ReceiverWorker, args)
+    end
+
+    test "stop snoozing two hours after the job was inserted", %{args: args} do
+      inserted_at = DateTime.add(DateTime.utc_now(), -121, :minute)
+
+      assert {:error, :ratelimit} = perform_job(ReceiverWorker, args, inserted_at: inserted_at)
+    end
+  end
+
   test "cancels due to origin containment" do
     params =
       insert(:note_activity).data

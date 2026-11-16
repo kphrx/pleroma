@@ -6,6 +6,7 @@ defmodule Pleroma.HTML.Scrubber.Default do
   @doc "The default HTML scrubbing policy: no "
 
   require FastSanitize.Sanitizer.Meta
+  require Pleroma.HTML.URIAttributes
   alias FastSanitize.Sanitizer.Meta
 
   # credo:disable-for-previous-line
@@ -15,7 +16,11 @@ defmodule Pleroma.HTML.Scrubber.Default do
 
   Meta.strip_comments()
 
-  Meta.allow_tag_with_uri_attributes(:a, ["href", "data-user", "data-tag"], @valid_schemes)
+  Pleroma.HTML.URIAttributes.allow_tag_with_uri_attributes(
+    :a,
+    ["href", "data-user", "data-tag"],
+    @valid_schemes
+  )
 
   Meta.allow_tag_with_this_attribute_values(:a, "class", [
     "hashtag",
@@ -145,7 +150,7 @@ defmodule Pleroma.HTML.Scrubber.Default do
     Meta.allow_tag_with_this_attribute_values(:img, "class", ["emoji"])
 
     # restrict img tags to http/https only, because of MediaProxy.
-    Meta.allow_tag_with_uri_attributes(:img, ["src"], ["http", "https"])
+    Pleroma.HTML.URIAttributes.allow_tag_with_uri_attributes(:img, ["src"], ["http", "https"])
 
     Meta.allow_tag_with_these_attributes(:img, [
       "width",

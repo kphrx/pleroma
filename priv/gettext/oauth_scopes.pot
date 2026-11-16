@@ -222,6 +222,11 @@ msgstr ""
 
 #: lib/pleroma/web/api_spec/scopes/translator.ex:5
 #, elixir-autogen, elixir-format
+msgid "profile"
+msgstr ""
+
+#: lib/pleroma/web/api_spec/scopes/translator.ex:5
+#, elixir-autogen, elixir-format
 msgid "push"
 msgstr ""
 

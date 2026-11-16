@@ -147,6 +147,53 @@ defmodule Pleroma.Web.ActivityPub.TransmogrifierTest do
       assert activity.data["type"] == "Move"
     end
 
+    test "it refetches a cached remote Move target that lacks the alias" do
+      old_user = insert(:user, local: false, ap_id: "https://old.example/users/old")
+
+      new_user =
+        insert(:user,
+          local: false,
+          ap_id: "https://new.example/users/new",
+          nickname: "new@new.example",
+          last_refreshed_at: NaiveDateTime.utc_now()
+        )
+
+      actor = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => new_user.ap_id,
+        "type" => "Person",
+        "preferredUsername" => "new",
+        "inbox" => new_user.ap_id <> "/inbox",
+        "outbox" => new_user.ap_id <> "/outbox",
+        "followers" => new_user.ap_id <> "/followers",
+        "following" => new_user.ap_id <> "/following",
+        "alsoKnownAs" => [old_user.ap_id]
+      }
+
+      Tesla.Mock.mock(fn
+        %{method: :get, url: "https://new.example/users/new"} ->
+          %Tesla.Env{
+            status: 200,
+            headers: [{"content-type", "application/activity+json"}],
+            body: Jason.encode!(actor)
+          }
+
+        _ ->
+          %Tesla.Env{status: 404}
+      end)
+
+      message = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Move",
+        "actor" => old_user.ap_id,
+        "object" => old_user.ap_id,
+        "target" => new_user.ap_id
+      }
+
+      assert {:ok, %Activity{data: %{"type" => "Move"}}} = Transmogrifier.handle_incoming(message)
+      assert old_user.ap_id in User.get_cached_by_ap_id(new_user.ap_id).also_known_as
+    end
+
     test "it fixes both the Create and object contexts in a reply" do
       insert(:user, ap_id: "https://mk.absturztau.be/users/8ozbzjs3o8")
       insert(:user, ap_id: "https://p.helene.moe/users/helene")

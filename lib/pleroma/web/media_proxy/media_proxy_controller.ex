@@ -111,9 +111,6 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
         static and content_type == "image/gif" ->
           handle_jpeg_preview(conn, media_proxy_url, dimensions)
 
-        static ->
-          drop_param_and_redirect(conn, "static")
-
         content_type == "image/gif" ->
           conn
           |> put_status(301)

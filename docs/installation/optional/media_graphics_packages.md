@@ -2,9 +2,8 @@
 
 For specific Pleroma functionality (which is disabled by default) some or all of the below packages are required:
 
-* `ImageMagic`
+* `ImageMagick`
 * `ffmpeg`
-* `exiftool`
   
 Please refer to documentation in `docs/installation` on how to install them on specific OS.
   
@@ -26,12 +25,3 @@ It is required for the following Pleroma features:
 It is required for the following Pleroma features:
 
 * Media preview proxy for videos (related config: `media_preview_proxy/enabled` in `config/config.exs`)
-
-## `exiftool`
-
-`exiftool` is media files metadata reader/writer.
-
-It is required for the following Pleroma features:
-
-* `Pleroma.Upload.Filters.Exiftool.StripLocation` upload filter (related config: `Pleroma.Upload/filters` in `config/config.exs`)
-* `Pleroma.Upload.Filters.Exiftool.ReadDescription` upload filter (related config: `Pleroma.Upload/filters` in `config/config.exs`)

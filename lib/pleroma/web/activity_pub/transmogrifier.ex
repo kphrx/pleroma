@@ -799,7 +799,7 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
        ) do
     with %User{} = origin_user <- User.get_cached_by_ap_id(origin_actor),
          {:ok, %User{} = target_user} <- User.get_or_fetch_by_ap_id(target_actor),
-         true <- origin_actor in target_user.also_known_as do
+         {:ok, %User{} = target_user} <- refetch_unless_aliased(target_user, origin_actor) do
       ActivityPub.move(origin_user, target_user, false)
     else
       _e -> :error
@@ -1204,4 +1204,20 @@ defmodule Pleroma.Web.ActivityPub.Transmogrifier do
   def maybe_fix_user_url(data), do: data
 
   def maybe_fix_user_object(data), do: maybe_fix_user_url(data)
+
+  # A Move usually follows right after the alias was added, which the cached
+  # remote target may not have yet.
+  defp refetch_unless_aliased(%User{} = target, origin_ap_id, refetch? \\ true) do
+    cond do
+      origin_ap_id in target.also_known_as ->
+        {:ok, target}
+
+      refetch? and not target.local ->
+        with {:ok, %User{} = target} <- User.fetch_by_ap_id(target.ap_id),
+             do: refetch_unless_aliased(target, origin_ap_id, false)
+
+      true ->
+        :error
+    end
+  end
 end

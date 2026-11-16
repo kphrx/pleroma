@@ -333,12 +333,12 @@ defmodule Pleroma.Web.ActivityPub.MRF.SimplePolicy do
           %{
             key: :reject,
             description:
-              "List of instances to reject activities from (except deletes) and the reason for doing so"
+              "List of instances to reject activities from (except deletes) and the reason for doing so. We also do not deliver to them, and refuse their signed fetches in authorized fetch mode"
           },
           %{
             key: :accept,
             description:
-              "List of instances to only accept activities from (except deletes) and the reason for doing so"
+              "List of instances to only accept activities from (except deletes) and the reason for doing so. If set, we also only deliver to them, and refuse signed fetches from others in authorized fetch mode"
           },
           %{
             key: :followers_only,

@@ -1,0 +1,1 @@
+MRF domain rules now match dots literally, so a rule for `good.example` no longer also matches `goodxexample`, and wildcard rules no longer backtrack on hostile host names

@@ -1,0 +1,1 @@
+Update Bandit to version 1.14.1, which fixes an HTTP/2 request body memory amplification

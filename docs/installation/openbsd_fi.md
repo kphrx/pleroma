@@ -25,11 +25,10 @@ Asenna tarvittava ohjelmisto:
 [`docs/installation/optional/media_graphics_packages.md`](../installation/optional/media_graphics_packages.md):
   * ImageMagick
   * ffmpeg
-  * exiftool
 
 Asenna tarvittava ohjelmisto:
 
-`# pkg_add ImageMagick ffmpeg p5-Image-ExifTool`
+`# pkg_add ImageMagick ffmpeg`
 
 Luo postgresql-tietokanta:
 

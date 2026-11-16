@@ -2243,6 +2243,31 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
            |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
   end
 
+  describe "status_id_action rate limit" do
+    setup do: clear_config([:rate_limit, :status_id_action], {60_000, 2})
+    setup do: clear_config([:rate_limit, :statuses_actions], {60_000, 100})
+    setup do: oauth_access(["write:statuses", "write:favourites"])
+
+    for {action, undo} <- [{"favourite", "unfavourite"}, {"reblog", "unreblog"}],
+        strict <- [true, false] do
+      test "#{action} is limited per status, not per user (strict: #{strict})", %{conn: conn} do
+        clear_config([Pleroma.Web.ApiSpec.CastAndValidate, :strict], unquote(strict))
+        conn = put_req_header(conn, "content-type", "application/json")
+        statuses = insert_list(3, :note_activity)
+
+        assert Enum.map(
+                 statuses,
+                 &post(conn, "/api/v1/statuses/#{&1.id}/#{unquote(action)}").status
+               ) ==
+                 [200, 200, 200]
+
+        status = hd(statuses)
+        assert post(conn, "/api/v1/statuses/#{status.id}/#{unquote(undo)}").status == 200
+        assert post(conn, "/api/v1/statuses/#{status.id}/#{unquote(action)}").status == 429
+      end
+    end
+  end
+
   describe "pinned statuses" do
     setup do: oauth_access(["write:accounts"])
 
@@ -3066,6 +3091,30 @@ defmodule Pleroma.Web.MastodonAPI.StatusControllerTest do
              "ancestors" => [%{"id" => ^id1}, %{"id" => ^id2}],
              "descendants" => [%{"id" => ^id4}, %{"id" => ^id5}]
            } = response
+  end
+
+  test "context shows local-only replies to local users only" do
+    poster = insert(:user)
+    replier = insert(:user)
+    %{conn: conn} = oauth_access(["read:statuses"])
+    %{conn: remote_conn} = oauth_access(["read:statuses"], user: insert(:user, local: false))
+
+    {:ok, %{id: id1}} = CommonAPI.post(poster, %{status: "1"})
+
+    {:ok, %{id: id2}} =
+      CommonAPI.post(replier, %{status: "2", visibility: "local", in_reply_to_status_id: id1})
+
+    assert %{"descendants" => [%{"id" => ^id2}]} =
+             conn
+             |> get("/api/v1/statuses/#{id1}/context")
+             |> json_response_and_validate_schema(:ok)
+
+    for conn <- [build_conn(), remote_conn] do
+      assert %{"descendants" => []} =
+               conn
+               |> get("/api/v1/statuses/#{id1}/context")
+               |> json_response_and_validate_schema(:ok)
+    end
   end
 
   test "context doesn't leak priv posts" do

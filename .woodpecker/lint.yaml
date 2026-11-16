@@ -18,7 +18,7 @@ variables:
 steps:
   mix-format:
     image: &elixir-image
-      docker.io/elixir:1.15-alpine
+      docker.io/elixir:1.17-otp-27-alpine
     entrypoint: *script_file_entrypoint
     failure: ignore
     commands:

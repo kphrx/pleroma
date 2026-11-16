@@ -22,40 +22,44 @@ defmodule Pleroma.Config.DeprecationWarnings do
 
   @logger_formatter_config_knobs [:colors, :format, :metadata, :truncate, :utc_log]
 
+  @exiftool_filter_replacements %{
+    Pleroma.Upload.Filter.Exiftool => Pleroma.Upload.Filter.Exif.StripLocation,
+    Pleroma.Upload.Filter.Exiftool.StripLocation => Pleroma.Upload.Filter.Exif.StripLocation,
+    Pleroma.Upload.Filter.Exiftool.ReadDescription => Pleroma.Upload.Filter.Exif.ReadDescription
+  }
+
   def check_exiftool_filter do
     filters = Config.get([Pleroma.Upload]) |> Keyword.get(:filters, [])
 
-    if Pleroma.Upload.Filter.Exiftool in filters do
-      Logger.warning("""
-      !!!DEPRECATION WARNING!!!
-      Your config is using Exiftool as a filter instead of Exiftool.StripLocation. This should work for now, but you are advised to change to the new configuration to prevent possible issues later:
+    deprecated_filters =
+      filters
+      |> Enum.filter(&Map.has_key?(@exiftool_filter_replacements, &1))
+      |> Enum.uniq()
 
-      ```
-      config :pleroma, Pleroma.Upload,
-        filters: [Pleroma.Upload.Filter.Exiftool]
-      ```
+    case deprecated_filters do
+      [] ->
+        :ok
 
-      Is now
+      deprecated_filters ->
+        replacements =
+          Enum.map_join(deprecated_filters, fn filter ->
+            "\n* `#{inspect(filter)}` is now `#{inspect(@exiftool_filter_replacements[filter])}`"
+          end)
 
+        Logger.warning("""
+        !!!DEPRECATION WARNING!!!
+        Your config is using Exiftool upload filters. Pleroma no longer needs exiftool, the filters were replaced by built-in ones. The old names should work for now, but you are advised to change to the new configuration to prevent possible issues later:
+        #{replacements}
+        """)
 
-      ```
-      config :pleroma, Pleroma.Upload,
-        filters: [Pleroma.Upload.Filter.Exiftool.StripLocation]
-      ```
-      """)
+        new_config =
+          filters
+          |> Enum.map(&Map.get(@exiftool_filter_replacements, &1, &1))
+          |> Enum.uniq()
 
-      new_config =
-        filters
-        |> Enum.map(fn
-          Pleroma.Upload.Filter.Exiftool -> Pleroma.Upload.Filter.Exiftool.StripLocation
-          filter -> filter
-        end)
+        Config.put([Pleroma.Upload, :filters], new_config)
 
-      Config.put([Pleroma.Upload, :filters], new_config)
-
-      :error
-    else
-      :ok
+        :error
     end
   end
 

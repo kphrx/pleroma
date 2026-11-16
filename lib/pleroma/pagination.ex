@@ -68,7 +68,7 @@ defmodule Pleroma.Pagination do
     Enum.slice(list, offset, limit)
   end
 
-  @spec paginate(Ecto.Query.t(), map(), type(), atom() | nil) :: [Ecto.Schema.t()]
+  @spec paginate(Ecto.Query.t(), map(), type(), atom() | nil) :: Ecto.Query.t()
   def paginate(query, options, method \\ :keyset, table_binding \\ nil)
 
   def paginate(query, options, :keyset, table_binding) do
@@ -87,7 +87,11 @@ defmodule Pleroma.Pagination do
     |> restrict(:limit, options, table_binding)
   end
 
-  defp cast_params(params) do
+  @doc false
+  def page_size(options), do: min(Map.get(options, :limit, @default_limit), @max_limit)
+
+  @doc false
+  def cast_params(params) do
     param_types = %{
       min_id: params[:id_type] || :string,
       since_id: params[:id_type] || :string,
@@ -153,14 +157,7 @@ defmodule Pleroma.Pagination do
   end
 
   defp restrict(query, :limit, options, _table_binding) do
-    limit =
-      case Map.get(options, :limit, @default_limit) do
-        limit when limit < @max_limit -> limit
-        _ -> @max_limit
-      end
-
-    query
-    |> limit(^limit)
+    limit(query, ^page_size(options))
   end
 
   defp restrict(query, _, _, _), do: query

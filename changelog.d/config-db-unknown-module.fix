@@ -1,0 +1,1 @@
+Do not crash at boot or in the AdminAPI config listing when a ConfigDB setting refers to a module that no longer exists

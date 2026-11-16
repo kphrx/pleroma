@@ -7,8 +7,11 @@ defmodule Pleroma.NotificationTest do
 
   import Pleroma.Factory
 
+  require Pleroma.Constants
+
   alias Pleroma.FollowingRelationship
   alias Pleroma.Notification
+  alias Pleroma.Object
   alias Pleroma.Repo
   alias Pleroma.Tests.ObanHelpers
   alias Pleroma.User
@@ -274,6 +277,22 @@ defmodule Pleroma.NotificationTest do
       {:ok, status} = CommonAPI.post(user, %{status: "got cofe?"})
 
       assert {:ok, []} == Notification.create_notifications(status)
+    end
+
+    test "it creates notifications for objects without content when the user has filters" do
+      author = insert(:user)
+      user = insert(:user)
+      insert(:filter, user: user, phrase: "cofe", hide: true)
+
+      {:ok, status} = CommonAPI.post(author, %{status: "hey @#{user.nickname}"})
+      object = Object.normalize(status, fetch: false)
+
+      {:ok, _} =
+        object
+        |> Object.change(%{data: Map.delete(object.data, "content")})
+        |> Object.update_and_set_cache()
+
+      assert {:ok, [_]} = Notification.create_notifications(Pleroma.Activity.get_by_id(status.id))
     end
 
     test "it creates notifications if content matches with a not irreversible filter" do
@@ -609,6 +628,102 @@ defmodule Pleroma.NotificationTest do
       enabled_receivers = Notification.get_notified_from_activity(activity)
 
       assert other_user in enabled_receivers
+    end
+
+    defp incoming_note_tagging(author, to, tagged_ap_ids) do
+      tags = Enum.map(tagged_ap_ids, &%{"type" => "Mention", "href" => &1, "name" => &1})
+
+      {:ok, activity} =
+        Transmogrifier.handle_incoming(%{
+          "@context" => "https://www.w3.org/ns/activitystreams",
+          "type" => "Create",
+          "to" => to,
+          "actor" => author.ap_id,
+          "object" => %{
+            "type" => "Note",
+            "id" => Pleroma.Web.ActivityPub.Utils.generate_object_id(),
+            "to" => to,
+            "content" => "tagged",
+            "tag" => tags,
+            "attributedTo" => author.ap_id
+          }
+        })
+
+      activity
+    end
+
+    defp notified_ap_ids(activity),
+      do: activity |> Notification.get_notified_from_activity() |> Enum.map(& &1.ap_id)
+
+    test "it does not notify tagged users who cannot see a followers-only post" do
+      author = insert(:user)
+      tagged = insert(:user)
+
+      activity = incoming_note_tagging(author, [author.follower_address], [tagged.ap_id])
+
+      refute tagged.ap_id in notified_ap_ids(activity)
+    end
+
+    test "it notifies tagged followers of a followers-only post" do
+      author = insert(:user)
+      tagged = insert(:user)
+      {:ok, _, _} = Pleroma.User.follow(tagged, author)
+
+      activity = incoming_note_tagging(author, [author.follower_address], [tagged.ap_id])
+
+      assert tagged.ap_id in notified_ap_ids(activity)
+    end
+
+    test "it does not notify tagged users who are not addressed by a direct message" do
+      author = insert(:user)
+      addressed = insert(:user)
+      tagged = insert(:user)
+
+      activity = incoming_note_tagging(author, [addressed.ap_id], [tagged.ap_id])
+      receivers = notified_ap_ids(activity)
+
+      assert addressed.ap_id in receivers
+      refute tagged.ap_id in receivers
+    end
+
+    test "it notifies tagged users of a public post even if they are not addressed" do
+      author = insert(:user)
+      tagged = insert(:user)
+
+      activity =
+        incoming_note_tagging(author, [Pleroma.Constants.as_public()], [tagged.ap_id])
+
+      assert tagged.ap_id in notified_ap_ids(activity)
+    end
+
+    test "it does not notify tagged users with a pending follow request" do
+      author = insert(:user, is_locked: true)
+      tagged = insert(:user)
+      {:ok, _, _, _} = CommonAPI.follow(author, tagged)
+
+      activity = incoming_note_tagging(author, [author.follower_address], [tagged.ap_id])
+
+      refute tagged.ap_id in notified_ap_ids(activity)
+    end
+
+    test "it ignores tags of unknown users in a followers-only post" do
+      author = insert(:user)
+      tagged = insert(:user)
+
+      follower = insert(:user)
+      {:ok, _, _} = Pleroma.User.follow(follower, author)
+
+      activity =
+        incoming_note_tagging(author, [author.follower_address], [
+          "https://unknown.example/users/nobody",
+          tagged.ap_id,
+          follower.ap_id
+        ])
+
+      receivers = notified_ap_ids(activity)
+
+      refute tagged.ap_id in receivers
+      assert follower.ap_id in receivers
     end
 
     test "it does not send notifications to users who are only cc in new messages" do

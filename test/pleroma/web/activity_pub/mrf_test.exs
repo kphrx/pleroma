@@ -6,8 +6,6 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
   use ExUnit.Case
   use Pleroma.Tests.Helpers
 
-  import ExUnit.CaptureLog
-
   alias Pleroma.Web.ActivityPub.MRF
 
   defp regexes_match!([], []), do: true
@@ -21,14 +19,14 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
   test "subdomains_regex/1" do
     regexes = MRF.subdomains_regex(["unsafe.tld", "*.unsafe.tld"])
 
-    assert regexes_match!(regexes, [~r/^unsafe.tld$/i, ~r/^(.*\.)*unsafe.tld$/i])
+    assert regexes_match!(regexes, [~r/^unsafe\.tld$/i, ~r/^(.*\.)?unsafe\.tld$/i])
   end
 
   describe "subdomain_match/2" do
     test "common domains" do
       regexes = MRF.subdomains_regex(["unsafe.tld", "unsafe2.tld"])
 
-      assert regexes_match!(regexes, [~r/^unsafe.tld$/i, ~r/^unsafe2.tld$/i])
+      assert regexes_match!(regexes, [~r/^unsafe\.tld$/i, ~r/^unsafe2\.tld$/i])
 
       assert MRF.subdomain_match?(regexes, "unsafe.tld")
       assert MRF.subdomain_match?(regexes, "unsafe2.tld")
@@ -39,7 +37,7 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
     test "wildcard domains with one subdomain" do
       regexes = MRF.subdomains_regex(["*.unsafe.tld"])
 
-      assert regexes_match!(regexes, [~r/^(.*\.)*unsafe.tld$/i])
+      assert regexes_match!(regexes, [~r/^(.*\.)?unsafe\.tld$/i])
 
       assert MRF.subdomain_match?(regexes, "unsafe.tld")
       assert MRF.subdomain_match?(regexes, "sub.unsafe.tld")
@@ -50,7 +48,7 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
     test "wildcard domains with two subdomains" do
       regexes = MRF.subdomains_regex(["*.unsafe.tld"])
 
-      assert regexes_match!(regexes, [~r/^(.*\.)*unsafe.tld$/i])
+      assert regexes_match!(regexes, [~r/^(.*\.)?unsafe\.tld$/i])
 
       assert MRF.subdomain_match?(regexes, "unsafe.tld")
       assert MRF.subdomain_match?(regexes, "sub.sub.unsafe.tld")
@@ -61,7 +59,7 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
     test "matches are case-insensitive" do
       regexes = MRF.subdomains_regex(["UnSafe.TLD", "UnSAFE2.Tld"])
 
-      assert regexes_match!(regexes, [~r/^UnSafe.TLD$/i, ~r/^UnSAFE2.Tld$/i])
+      assert regexes_match!(regexes, [~r/^UnSafe\.TLD$/i, ~r/^UnSAFE2\.Tld$/i])
 
       assert MRF.subdomain_match?(regexes, "UNSAFE.TLD")
       assert MRF.subdomain_match?(regexes, "UNSAFE2.TLD")
@@ -72,11 +70,20 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
       refute MRF.subdomain_match?(regexes, "example.com")
     end
 
-    test "logs sensible error on accidental wildcard" do
-      assert_raise Regex.CompileError, fn ->
-        assert capture_log(MRF.subdomains_regex(["*unsafe.tld"])) =~
-                 "MRF: Invalid subdomain Regex: *unsafe.tld"
-      end
+    test "dots only match dots" do
+      regexes = MRF.subdomains_regex(["unsafe.tld", "*.other.tld"])
+
+      refute MRF.subdomain_match?(regexes, "unsafextld")
+      refute MRF.subdomain_match?(regexes, "otherxtld")
+      refute MRF.subdomain_match?(regexes, "sub.otherxtld")
+    end
+
+    test "accidental wildcards and regex syntax match nothing" do
+      regexes = MRF.subdomains_regex(["*unsafe.tld", "bad(.tld"])
+
+      refute MRF.subdomain_match?(regexes, "unsafe.tld")
+      refute MRF.subdomain_match?(regexes, "sub.unsafe.tld")
+      refute MRF.subdomain_match?(regexes, "bad.tld")
     end
   end
 
@@ -138,5 +145,38 @@ defmodule Pleroma.Web.ActivityPub.MRFTest do
              tab: :mrf,
              type: :group
            }
+  end
+
+  describe "instance_allowed?/1" do
+    setup do: clear_config([:mrf, :policies], [Pleroma.Web.ActivityPub.MRF.SimplePolicy])
+    setup do: clear_config([:mrf_simple, :reject], [{"rejected.example", "spam"}])
+    setup do: clear_config([:mrf_simple, :accept], [])
+
+    test "is false for hosts rejected by SimplePolicy, including subdomains" do
+      clear_config([:mrf_simple, :reject], [{"*.rejected.example", "spam"}])
+
+      refute MRF.instance_allowed?("rejected.example")
+      refute MRF.instance_allowed?("sub.rejected.example")
+      assert MRF.instance_allowed?("fine.example")
+    end
+
+    test "only allows accepted hosts when SimplePolicy has an accept list" do
+      clear_config([:mrf_simple, :accept], [{"friend.example", ""}])
+
+      assert MRF.instance_allowed?("friend.example")
+      refute MRF.instance_allowed?("stranger.example")
+    end
+
+    test "ignores the SimplePolicy lists when the policy is not enabled" do
+      clear_config([:mrf, :policies], [])
+      clear_config([:mrf_simple, :accept], [{"friend.example", ""}])
+
+      assert MRF.instance_allowed?("rejected.example")
+      assert MRF.instance_allowed?("stranger.example")
+    end
+
+    test "is false without a host" do
+      refute MRF.instance_allowed?(nil)
+    end
   end
 end

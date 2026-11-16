@@ -477,4 +477,53 @@ defmodule Pleroma.Web.PleromaAPI.EmojiReactionControllerTest do
            |> get("/api/v1/pleroma/statuses/#{activity_id}/reactions/🐈")
            |> json_response_and_validate_schema(404) == %{"error" => "Record not found"}
   end
+
+  describe "rate limiting" do
+    test "PUT and DELETE share a per-status limit", %{conn: conn} do
+      clear_config([:rate_limit, :status_id_action], {60_000, 2})
+      user = insert(:user)
+      %{id: activity_id} = insert(:note_activity)
+      %{id: other_activity_id} = insert(:note_activity)
+      conn = prepare_conn_of_user(conn, user)
+
+      conn
+      |> put("/api/v1/pleroma/statuses/#{activity_id}/reactions/☕")
+      |> json_response_and_validate_schema(200)
+
+      conn
+      |> delete("/api/v1/pleroma/statuses/#{activity_id}/reactions/☕")
+      |> json_response_and_validate_schema(200)
+
+      assert conn
+             |> put("/api/v1/pleroma/statuses/#{activity_id}/reactions/🐈")
+             |> json_response(429) == %{"error" => "Throttled"}
+
+      conn
+      |> put("/api/v1/pleroma/statuses/#{other_activity_id}/reactions/🐈")
+      |> json_response_and_validate_schema(200)
+    end
+
+    test "PUT and DELETE count against statuses_actions", %{conn: conn} do
+      clear_config([:rate_limit, :statuses_actions], {60_000, 2})
+      user = insert(:user)
+      [first, second, third] = insert_list(3, :note_activity)
+      conn = prepare_conn_of_user(conn, user)
+
+      conn
+      |> put("/api/v1/pleroma/statuses/#{first.id}/reactions/☕")
+      |> json_response_and_validate_schema(200)
+
+      conn
+      |> delete("/api/v1/pleroma/statuses/#{first.id}/reactions/☕")
+      |> json_response_and_validate_schema(200)
+
+      assert conn
+             |> put("/api/v1/pleroma/statuses/#{second.id}/reactions/☕")
+             |> json_response(429) == %{"error" => "Throttled"}
+
+      assert conn
+             |> delete("/api/v1/pleroma/statuses/#{third.id}/reactions/☕")
+             |> json_response(429) == %{"error" => "Throttled"}
+    end
+  end
 end

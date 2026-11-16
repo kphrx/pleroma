@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl libssl3 \
     libmagic1t64 file \
     postgresql-client \
-    ffmpeg imagemagick libimage-exiftool-perl \
+    ffmpeg imagemagick \
     libvips42t64 \
     unzip \
     curl \
