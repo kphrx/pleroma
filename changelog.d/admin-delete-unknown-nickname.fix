@@ -1,0 +1,1 @@
+Fix 500 when deleting users by a nickname that no longer resolves

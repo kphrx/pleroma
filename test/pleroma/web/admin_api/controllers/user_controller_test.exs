@@ -134,6 +134,28 @@ defmodule Pleroma.Web.AdminAPI.UserControllerTest do
       assert response -- [user_one.nickname, user_two.nickname] == []
     end
 
+    test "returns 404 for a nickname that does not resolve", %{conn: conn} do
+      clear_config([:instance, :admin_privileges], [:users_delete])
+
+      user = insert(:user)
+
+      response =
+        conn
+        |> put_req_header("accept", "application/json")
+        |> put_req_header("content-type", "application/json")
+        |> delete("/api/pleroma/admin/users", %{
+          nicknames: [user.nickname, "this-user-does-not-exist"]
+        })
+        |> json_response_and_validate_schema(404)
+
+      assert response == %{"error" => "Not found"}
+
+      # Fail closed: the resolvable user that was part of the request is left
+      # untouched and no moderation log entry is written.
+      assert Repo.get(User, user.id).is_active
+      refute Repo.one(ModerationLog)
+    end
+
     test "Needs privileged role", %{conn: conn} do
       clear_config([:instance, :admin_privileges], [])
 

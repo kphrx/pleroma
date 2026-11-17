@@ -1,0 +1,1 @@
+Search window token migration: do not announce a slow rebuild when objects_fts already has window tokens

@@ -110,16 +110,24 @@ defmodule Pleroma.Migrators.SearchWindowTokensMigrator do
   end
 
   defp build(data_migration, rebuild_opts) do
+    announce(data_migration, Index.status().form)
+
+    :tokens
+    |> Index.rebuild(Keyword.put_new(rebuild_opts, :log, &log/1))
+    |> finish(data_migration)
+  end
+
+  # With tokens already, the rebuild at most finishes an interrupted switch.
+  defp announce(data_migration, :tokens),
+    do: update(data_migration, :running, "Checking objects_fts, which already has window tokens.")
+
+  defp announce(data_migration, _form) do
     update(data_migration, :running, "Started the window token rebuild of objects_fts.")
 
     log(
       "Starting the window token rebuild of objects_fts in the background. " <>
         "Search is slow until it is done."
     )
-
-    :tokens
-    |> Index.rebuild(Keyword.put_new(rebuild_opts, :log, &log/1))
-    |> finish(data_migration)
   end
 
   defp finish({:ok, :rebuilt}, data_migration),

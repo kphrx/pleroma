@@ -1497,8 +1497,61 @@ defmodule HttpRequestMock do
     {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/oembed.html")}}
   end
 
+  def get("https://example.com/oembed-null-html", _, _, _) do
+    {:ok,
+     %Tesla.Env{
+       status: 200,
+       body: ~s(<link type="application/json+oembed" href="https://example.com/oembed-null.json">)
+     }}
+  end
+
+  def get("https://example.com/oembed-null.json", _, _, _) do
+    {:ok, %Tesla.Env{status: 200, body: ~s({"title": "Null", "html": null})}}
+  end
+
+  def get("https://example.com/oembed-internal", _, _, _) do
+    {:ok,
+     %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/oembed_internal.html")}}
+  end
+
+  def get("http://127.0.0.1:9200/internal.json", _, _, _) do
+    {:ok, %Tesla.Env{status: 200, body: ~s({"title": "secret", "html": "secret"})}}
+  end
+
   def get("https://example.com/oembed.json", _, _, _) do
-    {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/oembed.json")}}
+    {:ok,
+     %Tesla.Env{
+       status: 200,
+       headers: [{"content-type", "application/json; charset=utf-8"}],
+       body: File.read!("test/fixtures/rich_media/oembed.json")
+     }}
+  end
+
+  @youtube_oembed_json [
+    "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DYOUTUBETEST1&format=json",
+    "https://www.youtube.com/oembed?url=https%3A%2F%2Fyoutu.be%2FYOUTUBETEST1&format=json"
+  ]
+
+  def get(url, _, _, _) when url in @youtube_oembed_json do
+    {:ok,
+     %Tesla.Env{
+       status: 200,
+       headers: [{"content-type", "application/json"}],
+       body: File.read!("test/fixtures/rich_media/youtube_oembed.json")
+     }}
+  end
+
+  def get(
+        "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DNOOEMBED&format=json",
+        _,
+        _,
+        _
+      ) do
+    {:ok, %Tesla.Env{status: 404, body: "Not Found"}}
+  end
+
+  def get("https://www.youtube.com/watch?v=NOOEMBED", _, _, _) do
+    {:ok, %Tesla.Env{status: 200, body: File.read!("test/fixtures/rich_media/ogp.html")}}
   end
 
   def get("https://example.com/twitter-card", _, _, _) do
@@ -1763,11 +1816,15 @@ defmodule HttpRequestMock do
     "https://example.com/malformed",
     "https://example.com/non-ogp",
     "https://example.com/oembed",
-    "https://example.com/oembed.json",
+    "https://example.com/oembed-internal",
+    "https://example.com/oembed-null-html",
+    "https://example.com/oembed-null.json",
+    "http://127.0.0.1:9200/internal.json",
     "https://example.com/ogp",
     "https://example.com/ogp-missing-data",
     "https://example.com/ogp-missing-title",
     "https://example.com/twitter-card",
+    "https://www.youtube.com/watch?v=NOOEMBED",
     "https://google.com/",
     "https://pleroma.local/notice/9kCP7V",
     "https://yahoo.com/",
@@ -1776,6 +1833,23 @@ defmodule HttpRequestMock do
 
   def head(url, _query, _body, _headers) when url in @rich_media_mocks do
     {:ok, %Tesla.Env{status: 200, body: ""}}
+  end
+
+  def head(url, _, _, _) when url in @youtube_oembed_json do
+    {:ok, %Tesla.Env{status: 200, headers: [{"content-type", "application/json"}]}}
+  end
+
+  def head(
+        "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DNOOEMBED&format=json",
+        _,
+        _,
+        _
+      ) do
+    {:ok, %Tesla.Env{status: 404}}
+  end
+
+  def head("https://example.com/oembed.json", _, _, _) do
+    {:ok, %Tesla.Env{status: 200, headers: [{"content-type", "application/json; charset=utf-8"}]}}
   end
 
   def head("https://example.com/pdf-file", _, _, _) do

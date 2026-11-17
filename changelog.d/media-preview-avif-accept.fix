@@ -1,0 +1,1 @@
+Media preview proxy: honor the AVIF Accept quality value; `image/avif;q=0` no longer selects AVIF.

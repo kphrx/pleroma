@@ -392,6 +392,10 @@ This section describe PWA manifest instance-specific values. Currently this opti
 * `thumbnail_max_height`: Max height of preview thumbnail for images (video preview always has original dimensions).
 * `image_quality`: Quality of the output. Ranges from 0 (min quality) to 100 (max quality).
 * `min_content_length`: Min content length to perform preview, in bytes. If greater than 0, media smaller in size will be served as is, without thumbnailing.
+* `image_sizes`: Sizes of image previews besides the thumbnail, as the longer side in pixels (default: `[960, 1600, 2560]`). The API lists them on each image attachment (`pleroma.image_sizes`, only the sizes smaller than the image), so that clients can show an image fitting the screen instead of the original. A preview of such a size is `/proxy/preview/…?size=1600`; other sizes redirect to the thumbnail. An empty list turns them off. Every preview is made on request, so put a cache in front of `/proxy` (see the nginx example config) to resize each image only once per size.
+* `avif`: Serve the `image_sizes` as AVIF to clients whose `Accept` header includes `image/avif` (default: `false`). AVIF is about 40% smaller than JPEG at the same quality, but encoding takes several times longer, so a cache in front of `/proxy` matters even more. The responses carry `Vary: Accept`: a cache or CDN in front must honour it, or it would give one format to everyone. Needs a libvips with libheif and an AV1 encoder (on Alpine: `vips-heif`, also when compiling Vix); without one, the sizes stay JPEG or PNG. Thumbnails stay JPEG or PNG.
+* `avif_quality`: Quality of the AVIF previews, 0 to 100 (default: `55`).
+* `avif_effort`: CPU effort of the AVIF encoder, 0 (fastest) to 9 (smallest files) (default: `3`).
 
 ### Purge cache strategy
 

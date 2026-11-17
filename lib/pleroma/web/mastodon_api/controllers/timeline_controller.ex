@@ -64,7 +64,7 @@ defmodule Pleroma.Web.MastodonAPI.TimelineController do
 
     activities =
       [user.ap_id | User.following(user) -- excluded_list_members]
-      |> ActivityPub.fetch_activities(params)
+      |> ActivityPub.fetch_home_activities(params)
       |> Enum.reverse()
 
     conn

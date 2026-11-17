@@ -54,6 +54,32 @@ defmodule Pleroma.Web.ApiSpec.Schemas.Attachment do
           name: %Schema{
             type: :string,
             description: "Name of the attachment, typically the filename"
+          },
+          image_sizes: %Schema{
+            type: :array,
+            description:
+              "Previews of an image in the sizes the instance offers, for a client to pick from (as in srcset); only sizes smaller than the image. Absent when there are none (no media preview proxy, not an image, a GIF).",
+            items: %Schema{
+              type: :object,
+              required: [:size, :url],
+              properties: %{
+                size: %Schema{
+                  type: :integer,
+                  description: "The longer side of the preview's box, in pixels"
+                },
+                width: %Schema{
+                  type: :integer,
+                  description:
+                    "Width of the preview (approximate), when the image's dimensions are known"
+                },
+                height: %Schema{
+                  type: :integer,
+                  description:
+                    "Height of the preview (approximate), when the image's dimensions are known"
+                },
+                url: %Schema{type: :string, format: :uri, description: "The preview's URL"}
+              }
+            }
           }
         }
       }

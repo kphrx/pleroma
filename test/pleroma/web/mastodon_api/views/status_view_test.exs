@@ -17,6 +17,7 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
   alias Pleroma.Web.CommonAPI
   alias Pleroma.Web.MastodonAPI.AccountView
   alias Pleroma.Web.MastodonAPI.StatusView
+  alias Pleroma.Web.MediaProxy
   alias Pleroma.Web.RichMedia.Card
 
   require Bitwise
@@ -786,6 +787,73 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     end
   end
 
+  describe "attachment image sizes" do
+    setup do
+      clear_config([:media_proxy, :enabled], true)
+      clear_config([:media_preview_proxy, :enabled], true)
+      clear_config([:media_preview_proxy, :image_sizes], [960, 1600, 2560])
+
+      ConfigMock
+      |> stub_with(Pleroma.Test.StaticConfig)
+
+      :ok
+    end
+
+    defp image(media_type, dimensions \\ %{}) do
+      %{
+        "type" => "Image",
+        "url" => [
+          Map.merge(
+            %{"mediaType" => media_type, "href" => "https://remote.example/a.jpg"},
+            dimensions
+          )
+        ]
+      }
+    end
+
+    defp sizes(object) do
+      StatusView.render("attachment.json", %{attachment: object})[:pleroma][:image_sizes]
+    end
+
+    test "lists the sizes smaller than the image, with their dimensions" do
+      object = image("image/jpeg", %{"width" => 2000, "height" => 1000})
+      href = "https://remote.example/a.jpg"
+
+      assert sizes(object) == [
+               %{
+                 size: 960,
+                 width: 960,
+                 height: 480,
+                 url: MediaProxy.preview_url(href, size: 960)
+               },
+               %{
+                 size: 1600,
+                 width: 1600,
+                 height: 800,
+                 url: MediaProxy.preview_url(href, size: 1600)
+               }
+             ]
+
+      result = StatusView.render("attachment.json", %{attachment: object})
+      assert_schema(result, "Attachment", Pleroma.Web.ApiSpec.spec())
+    end
+
+    test "lists every size when the image's dimensions are unknown" do
+      assert [%{size: 960}, %{size: 1600}, %{size: 2560}] = sizes(image("image/png"))
+      refute Map.has_key?(hd(sizes(image("image/png"))), :width)
+    end
+
+    test "lists none for GIFs and APNGs, videos, small images, or without the preview proxy" do
+      assert sizes(image("image/gif")) == nil
+      assert sizes(image("image/apng")) == nil
+      assert sizes(image("video/mp4")) == nil
+      assert sizes(image("image/jpeg", %{"width" => 900, "height" => 600})) == nil
+
+      clear_config([:media_preview_proxy, :enabled], false)
+      assert sizes(image("image/jpeg")) == nil
+    end
+  end
+
   test "put the url advertised in the Activity in to the url attribute" do
     id = "https://wedistribute.org/wp-json/pterotype/v1/object/85810"
     [activity] = Activity.search(insert(:user), id, resolve: true)
@@ -810,6 +878,17 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     assert_schema(represented, "Status", Pleroma.Web.ApiSpec.spec())
   end
 
+  test "a reblog of a post whose Create activity is gone is not rendered" do
+    user = insert(:user)
+    activity = insert(:note_activity)
+
+    {:ok, reblog} = CommonAPI.repeat(activity.id, user)
+    Repo.delete!(activity)
+
+    assert StatusView.render("show.json", %{for: user, activity: reblog}) == nil
+    assert StatusView.render("index.json", %{for: user, activities: [reblog]}) == []
+  end
+
   test "a peertube video" do
     user = insert(:user)
 
@@ -825,6 +904,45 @@ defmodule Pleroma.Web.MastodonAPI.StatusViewTest do
     assert represented[:id] == to_string(activity.id)
     assert length(represented[:media_attachments]) == 1
     assert_schema(represented, "Status", Pleroma.Web.ApiSpec.spec())
+  end
+
+  test "hides Mastodon link attachments but keeps media" do
+    insert(:user, local: false, ap_id: "http://mastodon.example.org/users/admin")
+
+    data =
+      File.read!("test/fixtures/mastodon-post-activity.json")
+      |> Jason.decode!()
+      |> put_in(["object", "attachment"], [
+        %{"type" => "Link", "href" => "https://example.com/article"},
+        %{
+          "type" => "Document",
+          "mediaType" => "image/png",
+          "url" => "https://mastodon.example.org/media/image.png"
+        }
+      ])
+
+    {:ok, activity} = Pleroma.Web.ActivityPub.Transmogrifier.handle_incoming(data)
+
+    represented = StatusView.render("show.json", %{activity: activity})
+
+    assert [%{type: "image", remote_url: "https://mastodon.example.org/media/image.png"}] =
+             represented[:media_attachments]
+  end
+
+  test "keeps stored Link attachments that only have a mimeType" do
+    user = insert(:user)
+
+    attachment = %{
+      "type" => "Link",
+      "url" => [%{"href" => "https://example.com/clip.mp4", "mimeType" => "video/mp4"}]
+    }
+
+    note = insert(:note, user: user, data: %{"attachment" => [attachment]})
+    activity = insert(:note_activity, user: user, note: note)
+
+    represented = StatusView.render("show.json", %{activity: activity})
+
+    assert [%{type: "video"}] = represented[:media_attachments]
   end
 
   test "funkwhale audio" do
