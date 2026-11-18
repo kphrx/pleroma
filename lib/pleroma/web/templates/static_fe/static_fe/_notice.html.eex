@@ -31,7 +31,10 @@
       <% end %>
     <% end %>
     <%= if @quote do %>
-      <%= render("_notice.html", @quote) %>
+      <details>
+        <summary class="p-name">quoted post</summary>
+        <%= render("_notice.html", @quote) %>
+      </details>
     <% end %>
   </div>
   <%= if @selected do %>
