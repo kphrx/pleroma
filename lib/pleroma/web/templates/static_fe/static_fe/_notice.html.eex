@@ -8,7 +8,7 @@
   </p>
   <%= render("_user_card.html", %{user: @user}) %>
   <div class="activity-content">
-    <%= if @title != "" do %>
+    <%= if @title != "" and not is_nil(@title) do %>
       <details <%= if open_content?() do %>open<% end %>>
         <summary class="p-name"><%= raw @title %></summary>
         <div class="e-content"><%= raw @content %></div>
