@@ -138,6 +138,7 @@ defmodule Pleroma.Web.StaticFE.StaticFEController do
     }
   end
 
+  defp represent(nil), do: nil
   defp represent(%Activity{} = activity), do: represent(activity, false)
 
   defp represent(%Activity{object: %Object{data: data}} = activity, selected) do
