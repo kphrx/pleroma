@@ -8,7 +8,7 @@
   </p>
   <%= render("_user_card.html", %{user: @user}) %>
   <div class="activity-content">
-    <%= if @title != "" do %>
+    <%= if @title != "" and not is_nil(@title) do %>
       <details <%= if open_content?() do %>open<% end %>>
         <summary class="p-name"><%= raw @title %></summary>
         <div class="e-content"><%= raw @content %></div>
@@ -31,7 +31,10 @@
       <% end %>
     <% end %>
     <%= if @quote do %>
-      <%= render("_notice.html", @quote) %>
+      <details>
+        <summary class="p-name">quoted post</summary>
+        <%= render("_notice.html", @quote) %>
+      </details>
     <% end %>
   </div>
   <%= if @selected do %>
