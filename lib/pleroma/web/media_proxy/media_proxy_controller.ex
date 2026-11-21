@@ -118,19 +118,17 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
       static = conn.params["static"] in ["true", true]
 
       cond do
-        static and content_type == "image/gif" ->
-          handle_jpeg_preview(conn, media_proxy_url, dimensions)
+        # an animated WebP only shows after the download: a still WebP
+        # gets the same still preview
+        static and content_type in ["image/gif", "image/webp"] ->
+          handle_jpeg_preview(conn, media_proxy_url, dimensions, still: true)
 
         content_type == "image/gif" ->
-          conn
-          |> put_status(301)
-          |> redirect(external: media_proxy_url)
+          redirect_to_original(conn, media_proxy_url)
 
         min_content_length_for_preview() > 0 and content_length > 0 and
             content_length < min_content_length_for_preview() ->
-          conn
-          |> put_status(301)
-          |> redirect(external: media_proxy_url)
+          redirect_to_original(conn, media_proxy_url)
 
         true ->
           handle_preview(content_type, conn, media_proxy_url, dimensions)
@@ -159,6 +157,9 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
         conn
         |> put_preview_response_headers(["image/avif", "preview.avif"])
         |> send_resp(200, binary)
+
+      {:error, :animated} ->
+        redirect_to_original(conn, media_proxy_url)
 
       # an encoder that fails (a libheif without AV1): JPEG/PNG, not the
       # original
@@ -205,6 +206,9 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
       |> put_preview_response_headers(["image/png", "preview.png"])
       |> send_resp(200, thumbnail_binary)
     else
+      {:error, :animated} ->
+        redirect_to_original(conn, media_proxy_url)
+
       _ ->
         fallback_on_preview_error(conn, media_proxy_url)
     end
@@ -222,18 +226,31 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
     })
   end
 
-  defp handle_jpeg_preview(conn, media_proxy_url, {thumbnail_max_width, thumbnail_max_height}) do
+  defp handle_jpeg_preview(
+         conn,
+         media_proxy_url,
+         {thumbnail_max_width, thumbnail_max_height},
+         opts \\ []
+       ) do
     quality = Config.get!([:media_preview_proxy, :image_quality])
 
     with {:ok, thumbnail_binary} <-
            MediaHelper.image_resize(
              media_proxy_url,
-             %{max_width: thumbnail_max_width, max_height: thumbnail_max_height, quality: quality}
+             %{
+               max_width: thumbnail_max_width,
+               max_height: thumbnail_max_height,
+               quality: quality,
+               still: Keyword.get(opts, :still, false)
+             }
            ) do
       conn
       |> put_preview_response_headers()
       |> send_resp(200, thumbnail_binary)
     else
+      {:error, :animated} ->
+        redirect_to_original(conn, media_proxy_url)
+
       _ ->
         fallback_on_preview_error(conn, media_proxy_url)
     end
@@ -262,6 +279,13 @@ defmodule Pleroma.Web.MediaProxy.MediaProxyController do
 
   defp fallback_on_preview_error(conn, media_proxy_url) do
     redirect(conn, external: media_proxy_url)
+  end
+
+  # animated (GIF, animated WebP) or too small for a preview
+  defp redirect_to_original(conn, media_proxy_url) do
+    conn
+    |> put_status(301)
+    |> redirect(external: media_proxy_url)
   end
 
   defp put_preview_response_headers(
